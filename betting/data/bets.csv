@@ -18,3 +18,7 @@ id,date,sport,event,event_id,player,player_id,market,line,side,book,price,payout
 17,2026-10-12,cs2,Zomblers vs Chicken Coop,131388,jared,jared,cs_headshots_m12,14.5,under,Boom Pick&Spin,,,,0,0.61,,0.8,15,0.6281,High,bet,cs2:cs_headshots_m12:under,cce-short,pending,,,,
 18,2026-10-12,cs2,Zomblers vs Chicken Coop,131388,drop,drop,cs_headshots_m12,16,under,Boom Pick&Spin,,,,0,0.61,,0.786,14,0.6246,High,bet,cs2:cs_headshots_m12:under,cce-short,pending,,,,whole line: push possible
 19,2026-10-12,cs2,Zomblers vs Chicken Coop,131388,sml,sml,cs_kills_m12,32.5,under,Boom Pick&Spin,,,,0,0.62,,,0,0.62,Low,lean,cs2:cs_kills_m12:under,,pending,,,,raw KPR says over: disagreement
+20,2026-10-12,mlb,ALCS G1 CLE@TB,849820,Drew Rasmussen,656876,pitcher_walks,1.5,under,DraftKings,-164,,,,0.657,0.581,0.677,31,0.627,High,bet,mlb:pitcher_walks:under,,pending,,,,
+21,2026-10-12,mlb,ALCS G1 CLE@TB,849820,Foster Griffin,656492,pitcher_walks,1.5,under,DraftKings,-191,,,,0.673,0.614,0.531,32,0.632,Medium,lean,mlb:pitcher_walks:under,,pending,,,,history only 17/32 under
+22,2026-10-12,mlb,NLCS G2 LAD@MIL,849812,Logan Henderson,701656,pitcher_walks,1.5,under,DraftKings,-137,,,,0.600,0.541,0.737,19,0.588,Medium,lean,mlb:pitcher_walks:under,,pending,,,,3 BB in each of last 2 outings
+23,2026-10-12,mlb,NLCS G2 LAD@MIL,849812,Yoshinobu Yamamoto,808967,pitcher_walks,1.5,over,DraftKings,-151,,,,0.537,0.563,0.448,29,0.538,Low,pass,mlb:pitcher_walks:over,,pending,,,,
