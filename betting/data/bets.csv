@@ -22,3 +22,4 @@ id,date,sport,event,event_id,player,player_id,market,line,side,book,price,payout
 21,2026-10-12,mlb,ALCS G1 CLE@TB,849820,Foster Griffin,656492,pitcher_walks,1.5,under,DraftKings,-191,,,,0.673,0.614,0.531,32,0.632,Medium,lean,mlb:pitcher_walks:under,,pending,,,,history only 17/32 under
 22,2026-10-12,mlb,NLCS G2 LAD@MIL,849812,Logan Henderson,701656,pitcher_walks,1.5,under,DraftKings,-137,,,,0.600,0.541,0.737,19,0.588,Medium,lean,mlb:pitcher_walks:under,,pending,,,,3 BB in each of last 2 outings
 23,2026-10-12,mlb,NLCS G2 LAD@MIL,849812,Yoshinobu Yamamoto,808967,pitcher_walks,1.5,over,DraftKings,-151,,,,0.537,0.563,0.448,29,0.538,Low,pass,mlb:pitcher_walks:over,,pending,,,,
+24,2026-10-12,mlb,NLCS G2 LAD@MIL,849812,Yoshinobu Yamamoto,808967,pitcher_pitches,93.5,over,pickem,,,,,0.598,,0.655,29,0.602,Medium,lean,mlb:pitcher_pitches:over,yamamoto-deep,pending,,,,no sportsbook price found; correlated with outs over 17.5
