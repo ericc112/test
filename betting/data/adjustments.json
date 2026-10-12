@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "updated": "2026-10-12",
+  "blend_prior": {
+    "intercept": 0.0,
+    "w_model": 0.45,
+    "w_market": 0.4,
+    "w_hist": 0.15
+  },
+  "blend": {
+    "intercept": 0.0,
+    "w_model": 0.45,
+    "w_market": 0.4,
+    "w_hist": 0.15
+  },
+  "blend_fit": {
+    "n_fit": 0,
+    "note": "fewer than 10 graded bets with model+market: kept prior"
+  },
+  "model_bias_logit": {
+    "mlb:batter_hits:over": -0.145,
+    "mlb:batter_hits:under": 0.145,
+    "mlb:batter_singles:over": -0.08,
+    "mlb:batter_singles:under": 0.08,
+    "mlb:batter_walks:over": 0.05,
+    "mlb:batter_walks:under": -0.05
+  },
+  "model_bias_source": "2026-10-12 NLCS/ALCS hitter scan: model ran +3.6 pts (hits), +2.0 (singles), -1.2 (walks) vs DraftKings no-vig across all hitters. Re-measure each scan.",
+  "outcome_bias_logit": {},
+  "avoid_segments": [],
+  "gates": {
+    "high": 0.62,
+    "medium": 0.56,
+    "max_spread_high": 0.12,
+    "min_hist_n_high": 10
+  }
+}
