@@ -132,6 +132,14 @@ class Grading(unittest.TestCase):
         self.assertEqual(grade.mlb_value("1", "9", "pitcher_outs", cache), ("final", 15))
         self.assertEqual(grade.mlb_value("1", "8", "pitcher_outs", cache), ("void", None))
 
+    def test_cs2_unparsed_stats_stay_pending(self):
+        orig = grade._get
+        grade._get = lambda url: [] if "players_stats" in url else {"results": [{"id": 1, "number": 1, "status": "finished"}, {"id": 2, "number": 2, "status": "finished"}]}
+        try:
+            self.assertEqual(grade.cs2_value("9", "divine", "cs_kills_m12", {}), ("pending", None))
+        finally:
+            grade._get = orig
+
     def test_grade_rows_updates_status(self):
         rows = [{"status": "pending", "sport": "nhl", "event_id": "5", "player_id": "7", "market": "skater_sog", "line": "3.5", "side": "under", "notes": ""}]
         orig = grade.GRADERS["nhl"]

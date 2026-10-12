@@ -139,7 +139,10 @@ def cs2_value(event_id: str, player_id: str, market: str, cache: dict):
     field = {"cs_kills_m12": "kills", "cs_headshots_m12": "headshots"}[market]
     total, seen = 0, 0
     for g in m12:
-        for p in _get(f"https://api.bo3.gg/api/v1/games/{g['id']}/players_stats"):
+        stats = _get(f"https://api.bo3.gg/api/v1/games/{g['id']}/players_stats")
+        if not stats:  # map finished but demo not parsed yet: wait, don't void
+            return "pending", None
+        for p in stats:
             nick = ((p.get("steam_profile") or {}).get("player") or {}).get("nickname") or (p.get("steam_profile") or {}).get("nickname")
             if _norm(nick) == _norm(player_id):
                 total += p[field]
