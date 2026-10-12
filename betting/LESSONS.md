@@ -19,6 +19,8 @@ Each lesson came from a real mistake or near-miss. Before publishing a number, c
 | L13 | Griffin outs 12.5 vs 13.5 were treated as meaningfully different | Exits cluster at inning boundaries | Value alt lines by the mass at exact values (13 outs: 1 of 31 starts) |
 | L14 | Conflicting odds in search summaries (LAD −110/MIL −102 at one source) | Summaries/pages can be wrong or stale | Use primary feeds for prices; record pull time |
 | L15 | Henderson K under 5.5 was offered at ~55% while his history said over in 12 of 18 starts | History source not checked | Three-source agreement rule: model, market and history must agree for Medium/High |
+| L16 | Yamamoto was pulled after 2.2 IP / 75 pitches; one blow-up sank five legs (his outs over, pitches over, ER under, Yelich and Hamilton H+R+RBI unders) | Correlation was checked per pair, never across the whole card | Cap total exposure to any single game script (e.g. "starter dominates") at 2% of bankroll across all entries; list each card's scripts before adding legs |
+| L17 | Yamamoto outs over rated ~69% partly on 18+ outs in 26/29 regular-season starts; in the playoffs the Dodgers hooked him at 75 pitches | Regular-season leash history overstates playoff leash (deep, rested bullpens; must-win games) | In the postseason, shrink outs/pitch-count history halfway toward the market and cap starter-length props at Medium |
 
 ## Miss-tag taxonomy
 `variance` · `role/lineup` · `data error` · `model bias` · `market info` · `format misread` · `stale line`
