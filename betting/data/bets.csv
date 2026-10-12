@@ -23,3 +23,7 @@ id,date,sport,event,event_id,player,player_id,market,line,side,book,price,payout
 22,2026-10-12,mlb,NLCS G2 LAD@MIL,849812,Logan Henderson,701656,pitcher_walks,1.5,under,DraftKings,-137,,,,0.600,0.541,0.737,19,0.588,Medium,lean,mlb:pitcher_walks:under,,pending,,,,3 BB in each of last 2 outings
 23,2026-10-12,mlb,NLCS G2 LAD@MIL,849812,Yoshinobu Yamamoto,808967,pitcher_walks,1.5,over,DraftKings,-151,,,,0.537,0.563,0.448,29,0.538,Low,pass,mlb:pitcher_walks:over,,pending,,,,
 24,2026-10-12,mlb,NLCS G2 LAD@MIL,849812,Yoshinobu Yamamoto,808967,pitcher_pitches,93.5,over,pickem,,,,,0.598,,0.655,29,0.602,Medium,lean,mlb:pitcher_pitches:over,yamamoto-deep,pending,,,,no sportsbook price found; correlated with outs over 17.5
+25,2026-10-12,mlb,NLCS G2 LAD@MIL,849812,Yoshinobu Yamamoto,808967,pitcher_earned_runs,1.5,over,DraftKings,-137,,,,0.585,0.540,0.483,29,0.554,Low,pass,mlb:pitcher_earned_runs:over,,pending,,,,user holds Under in Boom 5x entry
+26,2026-10-12,mlb,NLCS G2 LAD@MIL,849812,Logan Henderson,701656,pitcher_earned_runs,1.5,over,DraftKings,-138,,,,0.497,0.542,0.474,19,0.515,Low,pass,mlb:pitcher_earned_runs:over,,pending,,,,
+27,2026-10-12,mlb,ALCS G1 CLE@TB,849820,Foster Griffin,656492,pitcher_earned_runs,1.5,over,DraftKings,-128,,,,0.519,0.525,0.438,32,0.513,Low,pass,mlb:pitcher_earned_runs:over,,pending,,,,
+28,2026-10-12,mlb,ALCS G1 CLE@TB,849820,Drew Rasmussen,656876,pitcher_earned_runs,1.5,under,DraftKings,-116,,,,0.542,0.501,0.581,31,0.528,Low,pass,mlb:pitcher_earned_runs:under,,pending,,,,
