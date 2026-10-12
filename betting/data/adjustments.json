@@ -23,9 +23,11 @@
     "mlb:batter_singles:over": -0.08,
     "mlb:batter_singles:under": 0.08,
     "mlb:batter_walks:over": 0.05,
-    "mlb:batter_walks:under": -0.05
+    "mlb:batter_walks:under": -0.05,
+    "mlb:batter_hrr:over": 0.31,
+    "mlb:batter_hrr:under": -0.31
   },
-  "model_bias_source": "2026-10-12 NLCS/ALCS hitter scan: model ran +3.6 pts (hits), +2.0 (singles), -1.2 (walks) vs DraftKings no-vig across all hitters. Re-measure each scan.",
+  "model_bias_source": "2026-10-12 NLCS/ALCS hitter scan: model ran +3.6 pts (hits), +2.0 (singles), -1.2 (walks) vs DraftKings no-vig across all hitters. Re-measure each scan. | 2026-10-12 H+R+RBI 1.5 scan: model ran -7.6 pts vs DK no-vig across 18 hitters (run-environment scaling too strong).",
   "outcome_bias_logit": {},
   "avoid_segments": [],
   "gates": {
