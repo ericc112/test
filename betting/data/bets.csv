@@ -12,9 +12,9 @@ id,date,sport,event,event_id,player,player_id,market,line,side,book,price,payout
 11,2026-10-12,mlb,ALCS G1 CLE@TB,849820,Victor Mesa Jr.,683748,batter_walks,0.5,over,DraftKings,321,,,0.5,0.297,0.223,,0,0.2656,Low,lean,mlb:batter_walks:over,tb-walks,pending,,,,only if in top 8
 12,2026-10-12,nfl,BUF@LAR,401872994,Josh Allen,3918298,rush_yds,36.5,under,Boom Pick&Spin,,5,boom-ps5x-1012,50,0.54,0.5,0.75,4,0.5288,Low,user_entry,nfl:rush_yds:under,,pending,,,,"user entry 11:27am, $50 at 5x"
 13,2026-10-12,mlb,NLCS G2 LAD@MIL,849812,Yoshinobu Yamamoto,808967,pitcher_earned_runs,1.5,under,Boom Pick&Spin,,5,boom-ps5x-1012,50,,0.46,0.517,29,0.4715,Low,user_entry,mlb:pitcher_earned_runs:under,,pending,,,,
-14,2026-10-12,cs2,ex-Keyd vs LP,131288,divine,divine,cs_kills_m12,29.5,under,Boom Pick&Spin,,,,0,0.65,,0.667,12,0.6356,High,bet,cs2:cs_kills_m12:under,lp-no-sweep,pending,,,,needs LP not to sweep maps 1-2
-15,2026-10-12,cs2,ex-Keyd vs LP,131288,lash,lash,cs_headshots_m12,10.5,over,Boom Pick&Spin,,,,0,0.64,,0.8,5,0.6302,Medium,lean,cs2:cs_headshots_m12:over,lp-no-sweep,pending,,,,small sample
-16,2026-10-12,cs2,ex-Keyd vs LP,131288,drg,drg,cs_headshots_m12,16.5,under,Boom Pick&Spin,,,,0,0.65,,,0,0.65,Low,lean,cs2:cs_headshots_m12:under,,pending,,,,raw average says coin flip
+14,2026-10-12,cs2,ex-Keyd vs LP,131288,divine,divine,cs_kills_m12,29.5,under,Boom Pick&Spin,,,,0,0.65,,0.667,12,0.6356,High,bet,cs2:cs_kills_m12:under,lp-no-sweep,void,,,,needs LP not to sweep maps 1-2
+15,2026-10-12,cs2,ex-Keyd vs LP,131288,lash,lash,cs_headshots_m12,10.5,over,Boom Pick&Spin,,,,0,0.64,,0.8,5,0.6302,Medium,lean,cs2:cs_headshots_m12:over,lp-no-sweep,void,,,,small sample
+16,2026-10-12,cs2,ex-Keyd vs LP,131288,drg,drg,cs_headshots_m12,16.5,under,Boom Pick&Spin,,,,0,0.65,,,0,0.65,Low,lean,cs2:cs_headshots_m12:under,,void,,,,raw average says coin flip
 17,2026-10-12,cs2,Zomblers vs Chicken Coop,131388,jared,jared,cs_headshots_m12,14.5,under,Boom Pick&Spin,,,,0,0.61,,0.8,15,0.6281,High,bet,cs2:cs_headshots_m12:under,cce-short,pending,,,,
 18,2026-10-12,cs2,Zomblers vs Chicken Coop,131388,drop,drop,cs_headshots_m12,16,under,Boom Pick&Spin,,,,0,0.61,,0.786,14,0.6246,High,bet,cs2:cs_headshots_m12:under,cce-short,pending,,,,whole line: push possible
 19,2026-10-12,cs2,Zomblers vs Chicken Coop,131388,sml,sml,cs_kills_m12,32.5,under,Boom Pick&Spin,,,,0,0.62,,,0,0.62,Low,lean,cs2:cs_kills_m12:under,,pending,,,,raw KPR says over: disagreement
