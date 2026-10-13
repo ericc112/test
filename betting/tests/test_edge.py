@@ -263,6 +263,24 @@ class SoccerFeedIntegrity(unittest.TestCase):
             soccer.soccer_player_stats = orig
 
 
+class KeeperPasses(unittest.TestCase):
+    def test_keeper_priced_from_same_competition(self):
+        cup = [{"starter": True, "minutes": 90, "passes": v, "league": "uefa.champions", "position": "G"} for v in (35, 40, 38, 42, 36)]
+        dom = [{"starter": True, "minutes": 90, "passes": v, "league": "nor.1", "position": "G"} for v in (20, 22, 19, 24, 21, 23)]
+        it = iter(cup + dom)
+        orig = soccer.team_matches, soccer.player_match, soccer.summary
+        try:
+            soccer.team_matches = lambda team, n=10: list(range(11))
+            soccer.player_match = lambda m, t, p: next(it)
+            soccer.summary = lambda eid: {"header": {"league": {"slug": "uefa.champions"}}}
+            m = soccer.keeper_passes("1", "2", {"home": True, "opp_id": "3", "wdl": None, "opp_name": None}, "9", 27.5)
+        finally:
+            soccer.team_matches, soccer.player_match, soccer.summary = orig
+        self.assertEqual(m["sample"], "European cup")
+        self.assertGreater(m["p_over"], 0.85)       # his cup rate, not his domestic one
+        self.assertEqual(m["hist_n"], 5)
+
+
 class CS2Model(unittest.TestCase):
     def test_names_and_series_inversion(self):
         self.assertTrue(cs2.same_name("dev1ce", "device"))

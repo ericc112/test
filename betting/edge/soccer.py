@@ -40,6 +40,7 @@ LEAGUE_PPP = {"eng.1": 8.69, "esp.1": 9.13, "fra.1": 9.61, "ita.1": 9.24}   # pa
 BASE_PATH = os.path.join(HERE, "data", "soccer_baselines.json")
 MIN_TEAM_PASSES = 150          # below this a box score is partial
 PRESS_CLIP = (0.75, 1.25)      # outside this the opponent sample is broken, not the press
+KEEPER_CV = 0.12               # match-to-match noise on a keeper's per-90 rate, on top of his own spread
 
 
 # ------------------------------------------------------------------ pure model
@@ -188,7 +189,8 @@ def player_match(m: dict, team_id: str, player_id: str) -> dict | None:
                     if st.get("accuratePasses") is None and st.get("inaccuratePasses") is None or not st.get("minutes"):
                         return None  # the stats feed sometimes returns an empty split: missing, never zero passes
                     return {"date": m["date"], "starter": bool(p.get("starter")), "minutes": st.get("minutes") or 0,
-                            "passes": (st.get("accuratePasses") or 0) + (st.get("inaccuratePasses") or 0), "team_passes": m["passes"]}
+                            "passes": (st.get("accuratePasses") or 0) + (st.get("inaccuratePasses") or 0), "team_passes": m["passes"],
+                            "league": m["league"], "position": (p.get("position") or {}).get("abbreviation")}
     return None
 
 
@@ -203,6 +205,8 @@ def passes_model(player_id: str, team_id: str, opp_id: str | None = None, line: 
     starts = [g for g in games if g["starter"] and g["minutes"] >= 45]
     if not starts:
         raise ValueError("no recent starts with passing data for this player")
+    if any(g.get("position") == "G" for g in starts):
+        return keeper_passes(player_id, team_id, ctx, event_id, line, hist_n)
     share = sum(g["passes"] for g in starts) / sum(g["team_passes"] * g["minutes"] / 90 for g in starts)
     t_poss, o_poss = float(np.mean([m["poss"] for m in tm])), float(np.mean([m["poss"] for m in om]))
     t_dom, o_dom = tm[0]["domestic"], om[0]["domestic"]
@@ -229,3 +233,32 @@ def passes_model(player_id: str, team_id: str, opp_id: str | None = None, line: 
         out["hist_vals"] = vals
     out["days_rest"] = (dt.date.today() - dt.date.fromisoformat(max(m["date"] for m in tm))).days
     return out
+
+
+def keeper_passes(player_id: str, team_id: str, ctx: dict, event_id: str | None, line: float | None, hist_n: int = 25,
+                  n: int = 200_000, seed: int = 7) -> dict:
+    """Goalkeepers don't follow the outfield model: their passes go UP when the team has less of the ball (goal kicks,
+    back-passes under a press). Haikin: 19-27 in Norway at 55-78% possession, 29-44 in the Champions League at 29-48%.
+    So price a keeper from his own per-90 rate in the same kind of competition (European cup vs domestic), not from
+    team possession x share."""
+    rng = np.random.default_rng(seed)
+    cup = bool(event_id) and (summary(event_id).get("header", {}).get("league", {}).get("slug") in CUPS)
+    with cf.ThreadPoolExecutor(8) as ex:
+        rows = [g for g in ex.map(lambda m: player_match(m, team_id, player_id), team_matches(team_id, max(hist_n, 40))) if g]
+    rows = [g for g in rows if g["starter"] and g["minutes"] >= 60]
+    same = [g for g in rows if (g["league"] in CUPS) == cup]
+    sample = same if len(same) >= 5 else rows
+    if not sample:
+        raise ValueError("no recent keeper starts with passing data")
+    rates = np.array([g["passes"] * 90 / g["minutes"] for g in sample])
+    x = rng.poisson(rng.choice(rates, n) * rng.gamma(1 / KEEPER_CV ** 2, KEEPER_CV ** 2, n))
+    out = {**ctx, "keeper": True, "sample": ("European cup" if cup else "domestic") if sample is same else "all competitions",
+           "starts": sample, "share": None, "possession": float("nan"), "press_factor": float("nan"), "team_passes": None,
+           "mean": float(x.mean()), "median": float(np.median(x)), "p10": float(np.percentile(x, 10)), "p90": float(np.percentile(x, 90))}
+    if line is not None:
+        vals = [g["passes"] for g in sample]
+        out.update(p_over=float((x > line).mean()), p_under=float((x < line).mean()), p_push=float((x == line).mean()),
+                   hist_over=sum(v > line for v in vals) / len(vals), hist_n=len(vals), hist_vals=vals)
+    out["days_rest"] = None
+    return out
+
