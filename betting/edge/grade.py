@@ -150,7 +150,42 @@ def cs2_value(event_id: str, player_id: str, market: str, cache: dict):
     return ("final", total) if seen == 2 else ("void", None)
 
 
-GRADERS = {"mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cs2": cs2_value}
+# ------------------------------------------------------------------ Soccer (event_id = ESPN event, player_id = ESPN athlete id)
+SOCCER_STATS = {
+    "passes_att": lambda s: (s.get("accuratePasses") or 0) + (s.get("inaccuratePasses") or 0),
+    "gk_saves": lambda s: s.get("saves"),
+    "shots": lambda s: s.get("totalShots"),
+    "sot": lambda s: s.get("shotsOnTarget"),
+    "tackles": lambda s: s.get("totalTackles"),
+    "fouls": lambda s: s.get("foulsCommitted"),
+}
+
+
+def soccer_player_stats(league: str, event_id: str, team_id: str, player_id: str) -> dict:
+    d = _get(f"https://sports.core.api.espn.com/v2/sports/soccer/leagues/{league}/events/{event_id}/competitions/{event_id}"
+             f"/competitors/{team_id}/roster/{player_id}/statistics/0")
+    return {s["name"]: s.get("value") for c in d["splits"]["categories"] for s in c["stats"]}
+
+
+def soccer_value(event_id: str, player_id: str, market: str, cache: dict):
+    key = ("soccer", event_id)
+    if key not in cache:
+        cache[key] = _get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event={event_id}")
+    s = cache[key]
+    if not s["header"]["competitions"][0]["status"]["type"].get("completed"):
+        return "pending", None
+    for r in s.get("rosters", []):
+        for p in r.get("roster", []):
+            if str(p["athlete"]["id"]) == str(player_id):
+                if not (p.get("starter") or p.get("subbedIn")):
+                    return "void", None  # didn't play: pick'em apps void the pick
+                st = soccer_player_stats(s["header"]["league"]["slug"], event_id, r["team"]["id"], player_id)
+                v = SOCCER_STATS[market](st)
+                return ("final", v) if v is not None else ("void", None)
+    return "void", None
+
+
+GRADERS = {"mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cs2": cs2_value, "soccer": soccer_value}
 
 
 def settle(value: float, line: float, side: str) -> str:

@@ -22,6 +22,7 @@ Pricing helpers:
 ```bash
 python -m edge prob --model .65 --market .60 --hist .80 --hist-n 15 --segment cs2:cs_headshots_m12:under
 python -m edge breakeven
+python -m edge passes --player 393432 --team 175 --opp 2250 --line 50.5 --home   # soccer passes attempted (ESPN ids)
 python -m edge squad --means 245 283 207 --sds 70 78 65 --milestones 807 977 1044 --pair-corr 0 1 0.3
 python -m edge add sport=mlb event_id=849812 player="Logan Henderson" player_id=701656 \
     market=pitcher_outs line=15.5 side=under p_model=.58 p_market=.567 p_hist=.526 hist_n=19 proj=14 opp_proj=19
@@ -64,6 +65,9 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 | `edge/odds.py` | De-vig (multiplicative/power), fair odds, EV, quarter-Kelly with 2% cap |
 | `edge/pickem.py` | Break-evens, correlated entry odds (Gaussian copula), best-entry search, Squad Ride milestones |
 | `edge/grade.py` | Auto-grading by `sport` + `market` (see the stat keys at the top of the file) |
+| `edge/pp.py` | PrizePicks board fetch and routing to pricers; More-only and goblin/demon handling |
+| `edge/cs2.py` | CS2 maps 1-2 kills/headshots model from bo3.gg, with roster-era detection and newcomer flags |
+| `edge/soccer.py` | Soccer passes attempted: possession × match passes × share × minutes, from ESPN |
 | `edge/review.py` | Post-mortem for every loss: feed detail, linked legs, suggested root cause |
 | `edge/card.py` | One leg per game script, best entry, entry-leg pricing check |
 | `data/postmortems.csv` | One diagnosis per loss, with the lesson recorded for it |
@@ -75,6 +79,47 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 - **nhl** (`event_id` = NHL gameId, `player_id` = NHL id): `skater_sog`, `skater_points`, `skater_goals`, `goalie_saves`
 - **nfl** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `pass_yds`, `pass_att`, `rush_yds`, `rush_att`, `rec_yds`, `receptions`, `anytime_td`
 - **cs2** (`event_id` = bo3.gg match id, `player_id` = nickname): `cs_kills_m12`, `cs_headshots_m12`
+- **soccer** (`event_id` = ESPN event, `player_id` = ESPN athlete id; any league): `passes_att`, `gk_saves`, `shots`, `sot`, `tackles`, `fouls`. A player who doesn't play is voided, as the apps do.
+
+## Price a PrizePicks board (`edge/pp.py`)
+```bash
+python -m edge pp --league CS2                       # every standard CS2 prop, ranked by final probability
+python -m edge pp --league CS2 --match Liquid --log  # one match, and log each priced prop to bets.csv
+python -m edge pp --league UCL --match Inter --types standard,goblin,demon
+```
+- **Board source:** the PrizePicks partner API, which needs no captcha. Responses are cached for 2 minutes, with backoff when it rate-limits (429).
+- **More-only lines:** goblins, demons and some standard lines only allow More. They're marked `MORE-ONLY` and priced on the over side only.
+- **CS2 maps 1–2 kills and headshots** (`edge/cs2.py`, bo3.gg):
+  - The map winner is drawn from the series moneyline.
+  - Rounds come from each team's maps with that result.
+  - Each player has a kill rate for map wins and one for map losses, plus a headshot rate. The current roster means maps with at least 4 of today's 5.
+  - Players new to the team, or with fewer than 8 maps on it, are flagged and capped at Low (L5).
+  - Finished games are cached in `.cache/`.
+- **Soccer** (ESPN + DraftKings):
+  - Passes attempted use the passes model below.
+  - Shots, shots on target and keeper saves use the DraftKings milestone ladder, fitted to a Poisson with about 7% hold removed, plus the player's last 10 matches.
+  - A missing ladder usually means DraftKings doesn't expect him to start. A keeper with no ladder borrows his team's listed keeper.
+- **Not priced yet:** other stats and leagues are listed as unpriced.
+- **Output:** a ranked table, then the best 2-leg entry from High legs in different matches, or "sit out".
+
+## Soccer passes attempted (`edge/soccer.py`)
+```bash
+python -m edge passes --player 393432 --team 175 --event 401915418 --line 50.5   # ESPN ids; --opp/--home without an event
+```
+**player passes = team passes × his share per 90 × minutes**, and **team passes = possession × 100 × team passes per possession point × opponent press factor**.
+
+| Factor | How it's measured | Why |
+|---|---|---|
+| Possession | Half stats (log5 of both teams' recent possession, ±2 pts home), half market (0.5 + 0.21 × (P(win) − P(loss)) − 0.02 home, from the DraftKings 3-way line) | The blend beats either alone: 6.8 pts error vs 7.2 stats-only, 9.5 for 50/50 |
+| Team tempo | The team's passes per point of possession | Some teams pass more with the same share of the ball |
+| Press / defensive block | Passes the opponent allows per point of possession, vs its league | A high press or compact block cuts passes per minute on the ball |
+| Game script | Result drawn from the 3-way line; winners end ~2.9 pts below forecast possession, losers ~2.9 above | Teams that lead sit deeper |
+| Share and minutes | His passes ÷ team passes per 90 over recent starts; minutes drawn from those starts | Captures role and sub risk |
+| Spread | Team passes ±19% (forecast error) × share ±14.5% × Poisson | Calibrated on 190 starter-matches (PIT sd 0.284, ideal 0.289) |
+
+The backtest covered 250 top-four-league matches, using each team's other matches only. Team-pass error was 70.6, against 74.2 for possession × tempo and 81.1 for the team average.
+
+It also flags a team that played 3 or fewer days ago (rotation risk). Confirm the lineup about an hour before kickoff.
 
 ## Limitations
 - Entry grading assumes power-style entries, where every leg must hit. Flex and Squad Ride payouts need manual entry for now.

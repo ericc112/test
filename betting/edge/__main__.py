@@ -11,10 +11,14 @@
   review [--all] [--accept]    post-mortem on every graded loss: feed detail, linked legs, suggested tag
   best  [--date D] [--min-p .65] [--legs 2]   top-tier legs, one per game script, best entry
   card  [--date D]               exposure check: legs riding on the same game script
+  pp    --league CS2 [--match Liquid] [--player X] [--types standard,goblin] [--log]   price a PrizePicks board
+  passes --player ID --team ID (--event ID | --opp ID [--home|--away]) --line 50.5   soccer passes attempted
 """
 from __future__ import annotations
 
 import argparse
+import collections
+import datetime as dt
 import sys
 
 import numpy as np
@@ -23,6 +27,8 @@ from . import card as C
 from . import grade as G
 from . import learn as L
 from . import review as R
+from . import pp as P
+from . import soccer as S
 from .blend import final_probability, segment_key
 from .odds import fair_american
 from .pickem import PAYOUTS, breakeven, squad_ride
@@ -55,6 +61,23 @@ def main(argv=None):
     c = sub.add_parser("card")
     c.add_argument("--date")
     c.add_argument("--breakeven", type=float, default=0.577, help="per-leg break-even of the entry (2-pick power 0.577)")
+    ps = sub.add_parser("passes")
+    ps.add_argument("--player", required=True)
+    ps.add_argument("--team", required=True)
+    ps.add_argument("--opp")
+    ps.add_argument("--event", help="ESPN event id: home/away, opponent and the 3-way line come from it")
+    ps.add_argument("--line", type=float)
+    ha = ps.add_mutually_exclusive_group()
+    ha.add_argument("--home", dest="home", action="store_true", default=None)
+    ha.add_argument("--away", dest="home", action="store_false")
+    ps.add_argument("--n", type=int, default=10, help="recent matches per team")
+    ps.add_argument("--poss", type=float, help="override projected possession (0-1)")
+    pb = sub.add_parser("pp")
+    pb.add_argument("--league", required=True, help="PrizePicks league name: CS2, UCL, EPL, ...")
+    pb.add_argument("--match", help="only props whose team or opponent contains this text")
+    pb.add_argument("--player")
+    pb.add_argument("--types", default="standard", help="odds types to include: standard,goblin,demon")
+    pb.add_argument("--log", action="store_true", help="log every priced prop to bets.csv (skips ones already logged)")
     t = sub.add_parser("tag")
     t.add_argument("id")
     t.add_argument("reason")
@@ -144,6 +167,82 @@ def main(argv=None):
             print("Every loss already has a post-mortem (use --all to re-diagnose).")
         else:
             _review(rows, ids, accept=args.accept)
+    elif args.cmd == "passes":
+        m = S.passes_model(args.player, args.team, args.opp, args.line, args.home, args.event, args.n, args.poss)
+        st = m["starts"]
+        print(f"history ({len(st)} recent starts): " + " ".join(str(int(g['passes'])) for g in st)
+              + f" | avg {np.mean([g['passes'] for g in st]):.1f} | share {m['share']:.1%} of team passes per 90")
+        mk = f", market {m['market']:.1%}" if m["market"] is not None else " (no 3-way line: stats only)"
+        print(f"possession: {m['team_poss']:.0%} vs opp {m['opp_poss']:.0%} -> stats {m['stats']:.1%}{mk} -> {m['possession']:.1%}"
+              + ("" if m["home"] is None else " (home)" if m["home"] else " (away)"))
+        print(f"tempo: team {m['team_ppp']:.2f} passes per possession pt x opponent press factor {m['press_factor']:.2f}"
+              f" ({'presses / compact' if m['press_factor'] < 0.97 else 'lets teams pass' if m['press_factor'] > 1.03 else 'neutral'})")
+        if m["wdl"]:
+            print(f"game script: win/draw/loss {m['wdl'][0]:.0%}/{m['wdl'][1]:.0%}/{m['wdl'][2]:.0%} (winners keep ~3 pts less of the ball)")
+        print(f"team passes ~{m['team_passes']:.0f} -> projection mean {m['mean']:.1f}, median {m['median']:.0f}, 80% range {m['p10']:.0f}-{m['p90']:.0f}")
+        if m["days_rest"] is not None and m["days_rest"] <= 3:
+            print(f"rotation flag: team played {m['days_rest']} day(s) ago")
+        if args.line is not None:
+            print(f"P(over {args.line}) {m['p_over']:.1%} | P(under) {m['p_under']:.1%}"
+                  + (f" | P(push) {m['p_push']:.1%}" if m["p_push"] else "")
+                  + f" | history over {m['hist_over']:.0%} of {m['hist_n']}")
+            print(f"next: python -m edge prob --model {m['p_over']:.3f} --hist {m['hist_over']:.3f} --hist-n {m['hist_n']} "
+                  f"--segment soccer:passes_att:over   (confirm the lineup ~1 hour before kickoff)")
+    elif args.cmd == "pp":
+        props = P.board(args.league, tuple(args.types.split(",")))
+        if args.match:
+            props = [p for p in props if args.match.lower() in f"{p['team']} {p['team_name']} {p['opp']}".lower()]
+        if args.player:
+            props = [p for p in props if args.player.lower() in str(p["player"]).lower()]
+        if not props:
+            print("No props on the board match that filter.")
+            return
+        print(f"Pricing {len(props)} prop(s)...")
+        rows = P.price_board(props)
+        ok = sorted([r for r in rows if "error" not in r], key=lambda r: -r["p_final"])
+        bad = [r for r in rows if "error" in r]
+        f = lambda v: "  - " if v is None else f"{v:.2f}"
+        print(f"\n{'p':>5} {'conf':6s} {'player':16s} {'team':12s} {'stat':18s} {'side':5s} {'line':>5} {'type':8s} model mrkt hist(n)  notes")
+        for r in ok:
+            print(f"{r['p_final']:.3f} {r['confidence']:6s} {str(r['player'])[:16]:16s} {str(r['team'])[:12]:12s} {r['stat'][:18]:18s} {r['side']:5s} "
+                  f"{r['line']:>5} {r['odds_type'][:8]:8s} {f(r['p_model'])} {f(r['p_market'])} {f(r['p_hist'])}({r['hist_n']})  "
+                  + ("MORE-ONLY; " if r["over_only"] else "") + (f"push {r['push']:.0%}; " if r['push'] > 0.005 else "") + r["notes"])
+        if bad:
+            why = collections.Counter(r["error"] for r in bad)
+            print(f"\nNot priced: {len(bad)} (" + "; ".join(f"{k} x{v}" for k, v in why.most_common()) + ")")
+        high = [r for r in ok if r["confidence"] == "High" and r["p_final"] >= 0.65 and not r.get("newcomer")]
+        best = {}
+        for r in high:
+            best.setdefault(r["script"], r)
+        legs = list(best.values())[:2]
+        if len(legs) == 2:
+            print(f"\nBest 2-leg entry (High legs, different matches): {legs[0]['player']} {legs[0]['side']} {legs[0]['line']} + "
+                  f"{legs[1]['player']} {legs[1]['side']} {legs[1]['line']} -> P(both) {legs[0]['p_final'] * legs[1]['p_final']:.1%}")
+        else:
+            print("\nNo 2-leg entry clears the High gate (>= 65%, one leg per match). Sitting out beats forcing it.")
+        if any(r["over_only"] for r in ok):
+            print("MORE-ONLY lines can't be played under on PrizePicks; goblins/demons also pay differently, so check the payout.")
+        if args.log:
+            bets = L.read_bets()
+            seen = {(b["event_id"], str(b["player"]).lower(), b["market"], str(float(b["line"])) if b["line"] else "", b["side"]) for b in bets}
+            nid = max(int(b["id"]) for b in bets if b["id"].isdigit()) + 1
+            added = 0
+            for r in ok:
+                k = (str(r["event_id"]), str(r["player"]).lower(), r["market_key"], str(float(r["line"])), r["side"])
+                if k in seen:
+                    continue
+                bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": r["sport"], "event": f"{r['team']} vs {r['opp']}",
+                             "event_id": r["event_id"], "player": r["player"], "player_id": r["player_id"], "market": r["market_key"],
+                             "line": r["line"], "side": r["side"], "book": f"PrizePicks {r['odds_type']}", "p_model": "" if r["p_model"] is None else round(r["p_model"], 3),
+                             "p_market": "" if r["p_market"] is None else round(r["p_market"], 3), "p_hist": "" if r["p_hist"] is None else round(r["p_hist"], 3),
+                             "hist_n": r["hist_n"], "p_final": r["p_final"], "confidence": r["confidence"],
+                             "action": "lean" if r["confidence"] in ("High", "Medium") and not r.get("newcomer") else "pass",
+                             "segment": f"{r['sport']}:{r['market_key']}:{r['side']}", "group": r["script"], "status": "pending",
+                             "proj": "" if r.get("proj") is None else round(r["proj"], 1), "notes": f"edge pp; {r['notes']}"})
+                nid += 1
+                added += 1
+            L.write_bets(bets)
+            print(f"Logged {added} new prop(s) to bets.csv.")
     elif args.cmd == "tag":
         if L.base_tag(args.reason) not in R.TAGS:
             print(f"note: '{args.reason}' is not a standard tag ({', '.join(R.TAGS)}); recorded anyway")
