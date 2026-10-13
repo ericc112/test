@@ -16,7 +16,9 @@ DEFAULT_ADJ = {
     "model_bias_logit": {},     # systematic model-vs-market gaps found in scans (applied to p_model only)
     "outcome_bias_logit": {},   # learned from graded results (applied to the final probability)
     "avoid_segments": [],
-    "gates": {"high": 0.62, "medium": 0.56, "max_spread_high": 0.12, "min_hist_n_high": 10},
+    "gates": {"high": 0.65, "medium": 0.58, "max_spread_high": 0.12, "min_hist_n_high": 10,
+              "no_market_min_hist_n": 20, "no_market_max_spread": 0.10},
+    "hist_weight_scale": {},   # e.g. {"mlb:pitcher_outs": 0.5}: trust history less for these segments (postseason leash)
 }
 
 
@@ -72,6 +74,10 @@ def final_probability(p_model: float | None, p_market: float | None = None, p_hi
         # regress small-sample history toward the market (or 0.5) before using it
         anchor = p_market if p_market is not None else 0.5
         w = hist_n / (hist_n + 10) if hist_n else 0.5
+        scale = _lookup(adj.get("hist_weight_scale", {}), segment) or 1.0
+        if scale != 1.0:
+            notes.append(f"history weight scaled x{scale} for {segment}")
+        w *= scale
         comps["hist"] = w * p_hist + (1 - w) * anchor
     if not comps:
         raise ValueError("need at least one probability")
@@ -92,7 +98,8 @@ def final_probability(p_model: float | None, p_market: float | None = None, p_hi
     if segment and any(segment.startswith(s) for s in adj["avoid_segments"]):
         conf = "Avoid"
         notes.append("segment is on the avoid list (losing history)")
-    elif p >= g["high"] and agreement and spread <= g["max_spread_high"] and len(comps) >= 2 and hist_n >= g["min_hist_n_high"]:
+    elif (p >= g["high"] and agreement and spread <= g["max_spread_high"] and len(comps) >= 2 and hist_n >= g["min_hist_n_high"]
+          and ("market" in comps or (hist_n >= g.get("no_market_min_hist_n", 20) and spread <= g.get("no_market_max_spread", 0.10)))):
         conf = "High"
     elif p >= g["medium"] and agreement and len(comps) >= 2:
         conf = "Medium"

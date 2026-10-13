@@ -199,6 +199,12 @@ def report(rows: list[dict]) -> str:
     ent = entry_results(rows)
     if ent:
         lines.append(f"Entries: {sum(e['won'] for e in ent)}/{len(ent)} cashed | profit {sum(e['profit'] for e in ent):+.2f} on {sum(e['stake'] for e in ent):.2f}")
+    for key in ("confidence", "action"):
+        tiers = defaultdict(list)
+        for r, y in zip(g, ys):
+            tiers[r.get(key) or "?"].append((_f(r["p_final"]), y))
+        lines.append(f"Hit rate by {key}: " + " | ".join(
+            f"{t} {np.mean([y for _, y in v]):.0%} of {len(v)} (pred {np.mean([p for p, _ in v]):.0%})" for t, v in sorted(tiers.items())))
     lines.append("Calibration (predicted -> actual):")
     for c in calibration_table(ps, ys):
         flag = "  <-- off by >8 pts" if c["n"] >= 15 and abs(c["actual"] - c["predicted"]) > 0.08 else ""

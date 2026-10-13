@@ -55,8 +55,8 @@ class Pickem(unittest.TestCase):
 
 class Blend(unittest.TestCase):
     def test_missing_components_and_agreement(self):
-        e = final_probability(0.65, 0.60, 0.70, "mlb:pitcher_outs:over", hist_n=20, adj=DEFAULT_ADJ)
-        self.assertTrue(0.6 < e.p < 0.7)
+        e = final_probability(0.71, 0.66, 0.74, "mlb:pitcher_outs:over", hist_n=20, adj=DEFAULT_ADJ)
+        self.assertTrue(0.65 < e.p < 0.75)
         self.assertTrue(e.agreement)
         self.assertEqual(e.confidence, "High")
         d = final_probability(0.6, 0.45, None, "x:y:z", adj=DEFAULT_ADJ)
@@ -119,6 +119,30 @@ class Learning(unittest.TestCase):
     def test_report_runs(self):
         txt = learn.report(_synthetic(80))
         self.assertIn("Calibration", txt)
+
+
+class HitRateDiscipline(unittest.TestCase):
+    def test_no_market_needs_deep_history_for_high(self):
+        thin = final_probability(0.72, None, 0.75, "lol:kills_m123:under", hist_n=12, adj=DEFAULT_ADJ)
+        deep = final_probability(0.72, None, 0.74, "lol:kills_m123:under", hist_n=40, adj=DEFAULT_ADJ)
+        self.assertNotEqual(thin.confidence, "High")
+        self.assertEqual(deep.confidence, "High")
+
+    def test_postseason_history_shrink(self):
+        adj = {**DEFAULT_ADJ, "hist_weight_scale": {"mlb:pitcher_outs": 0.5}}
+        full = final_probability(None, 0.63, 0.90, "mlb:pitcher_outs:over", hist_n=29, adj=DEFAULT_ADJ)
+        half = final_probability(None, 0.63, 0.90, "mlb:pitcher_outs:over", hist_n=29, adj=adj)
+        self.assertLess(half.p, full.p)
+
+    def test_best_legs_one_per_script(self):
+        from edge import card
+        base = {"status": "pending", "date": "d", "p_market": 0.68, "hist_n": 30, "segment": "x:y:over", "sport": "mlb"}
+        rows = [{**base, "player": "A", "event_id": "1", "p_model": 0.75, "p_hist": 0.74},
+                {**base, "player": "B", "event_id": "1", "p_model": 0.73, "p_hist": 0.72},
+                {**base, "player": "C", "event_id": "2", "p_model": 0.74, "p_hist": 0.73}]
+        legs = card.best_legs(rows, min_p=0.6)
+        self.assertEqual(sorted(r["player"] for r in legs), ["A", "C"])
+        self.assertAlmostEqual(card.best_entry(legs, 2)["p_all"], legs[0]["p_now"] * legs[1]["p_now"], delta=0.01)
 
 
 class Grading(unittest.TestCase):

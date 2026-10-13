@@ -13,6 +13,8 @@ python -m edge report        # where we stand: CLV, skill vs market, ROI, calibr
 python -m edge grade         # settle pending bets from MLB Stats API / NHL API / ESPN / bo3.gg
 python -m edge learn         # refit blend + segment biases, update avoid list, append LESSONS.md
 python -m edge tag 14 "role/lineup"   # root-cause any high-confidence miss
+python -m edge best --date 2026-10-12  # High legs >= 65%, one per game script, best 2-leg entry
+python -m edge card --date 2026-10-12  # which of your legs ride on the same game script
 ```
 
 Pricing helpers:

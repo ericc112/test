@@ -8,6 +8,8 @@
   squad --means 245 283 207 --sds 70 78 65 --milestones 807 977 1044 --pair-corr 0 1 0.3
   add   key=value ...          append a bet (fields: see data/bets.csv header)
   tag   ID "reason"            record why a high-confidence pick missed
+  best  [--date D] [--min-p .65] [--legs 2]   top-tier legs, one per game script, best entry
+  card  [--date D]               exposure check: legs riding on the same game script
 """
 from __future__ import annotations
 
@@ -16,6 +18,7 @@ import sys
 
 import numpy as np
 
+from . import card as C
 from . import grade as G
 from . import learn as L
 from .blend import final_probability, segment_key
@@ -43,6 +46,12 @@ def main(argv=None):
     s.add_argument("--pair-corr", type=float, nargs=3, action="append", default=[], metavar=("I", "J", "RHO"))
     a = sub.add_parser("add")
     a.add_argument("pairs", nargs="+")
+    b = sub.add_parser("best")
+    b.add_argument("--date")
+    b.add_argument("--min-p", type=float, default=0.65)
+    b.add_argument("--legs", type=int, default=2)
+    c = sub.add_parser("card")
+    c.add_argument("--date")
     t = sub.add_parser("tag")
     t.add_argument("id")
     t.add_argument("reason")
@@ -91,6 +100,22 @@ def main(argv=None):
         rows.append(new)
         L.write_bets(rows)
         print("added bet", new["id"])
+    elif args.cmd == "best":
+        legs = C.best_legs(L.read_bets(), args.min_p, date=args.date)
+        if not legs:
+            print(f"No pending legs pass the gate (High, >= {args.min_p:.0%}). Better to sit out than force a play.")
+        for r in legs:
+            print(f"{r['p_now']:.1%}  {r['player']:22s} {r['side']:5s} {r['line']:>5} {r['market']:22s} {r['event'][:34]:34s} [{C.script_key(r)}]")
+        e = C.best_entry(legs, args.legs)
+        if e:
+            print(f"\nBest {args.legs}-leg entry (one leg per script): P(all hit) = {e['p_all']:.1%}")
+    elif args.cmd == "card":
+        rows = [r for r in L.read_bets() if r.get("status") in ("pending", "") and (not args.date or r.get("date") == args.date)]
+        for k, legs in sorted(C.exposure(rows).items(), key=lambda kv: -len(kv[1])):
+            flag = "  <-- same script: these win or lose together" if len(legs) > 1 else ""
+            print(f"{k:34s} {len(legs)} leg(s){flag}")
+            for r in legs:
+                print(f"    {r['player']:22s} {r['side']:5s} {r['line']:>5} {r['market']}")
     elif args.cmd == "tag":
         rows = L.read_bets()
         for r in rows:

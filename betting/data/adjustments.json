@@ -31,9 +31,16 @@
   "outcome_bias_logit": {},
   "avoid_segments": [],
   "gates": {
-    "high": 0.62,
-    "medium": 0.56,
+    "high": 0.65,
+    "medium": 0.58,
     "max_spread_high": 0.12,
-    "min_hist_n_high": 10
-  }
+    "min_hist_n_high": 10,
+    "no_market_min_hist_n": 20,
+    "no_market_max_spread": 0.1
+  },
+  "hist_weight_scale": {
+    "mlb:pitcher_outs": 0.5,
+    "mlb:pitcher_pitches": 0.5
+  },
+  "hist_weight_scale_note": "Postseason only (LESSONS L17): playoff hooks are quicker than regular-season history implies. Reset to {} on opening day."
 }
