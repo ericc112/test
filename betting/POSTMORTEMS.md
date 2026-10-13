@@ -77,7 +77,7 @@ Detail from the feeds:
 - #157 leakz: de_nuke: 22 rds, W, 21 K / 12 HS; de_mirage: 21 rds, L, 16 K / 6 HS
 - #158 EliGe: de_nuke: 22 rds, L, 9 K / 5 HS; de_mirage: 21 rds, W, 17 K / 12 HS
 
-## 2026-10-12: 27 losses from 16 independent causes
+## 2026-10-12: 33 losses from 18 independent causes
 
 | # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
 |---|---|---|---|---|---|---|---|---|
@@ -101,12 +101,18 @@ Detail from the feeds:
 | 33 | Brice Turang batter_hrr under 1.5 | 6 | 0.553 (Low) | pass | model 58%, market 57%, hist 43% (against) | variance | variance | logged as a PASS: no money on it; reviewed for calibration; 5 PA from the 2 slot; opposing starter Yoshinobu Yamamoto went 8 outs / 3 ER; 3 of 6 H+R+RBI came off the starter, 3 off the bullpen (the bullpen part alone beat the line: not just the starter's fault) |
 | 36 | Mookie Betts batter_hrr under 1.5 | 2 | 0.5146 (Low) | pass | model 57%, market 52%, hist 55% | variance | variance | logged as a PASS: no money on it; reviewed for calibration; 4 PA from the 1 slot; opposing starter Logan Henderson went 12 outs / 2 ER; 2 of 2 H+R+RBI came off the starter, 0 off the bullpen; closest possible loss (missed by the minimum) |
 | 41 | David Hamilton batter_hrr under 1.5 | 5 | 0.6837 (High) | lean | model 76%, hist 65% | variance | model bias | 4 PA from the 9 slot; opposing starter Yoshinobu Yamamoto went 8 outs / 3 ER; 2 of 5 H+R+RBI came off the starter, 3 off the bullpen (the bullpen part alone beat the line: not just the starter's fault) |
+| 47 | Tangyuan kills_m123 over 11.5 | 9 | 0.7151 (High) | bet | model 72%, hist 74% | variance | data error | root leg of a 2-leg script loss: #47, #73; 9 kills vs 13.8 expected for the actual game results; games had 23/34/20 total kills |
 | 52 | Quad kills_m123 under 8 | 16 | 0.6634 (Medium) | lean | model 68%, hist 57% | variance | variance | root leg of a 4-leg script loss: #52, #62, #64, #76; 16 kills vs 6.8 expected for the actual game results; games had 33/37/43 total kills |
 | 55 | Cube kills_m123 under 7.5 | 15 | 0.6204 (Medium) | bet | model 60%, hist 74% | variance | correlated | root leg of a 3-leg script loss: #55, #56, #81; 15 kills vs 7.0 expected for the actual game results; games had 33/37/43 total kills |
 | 56 | About kills_m123 under 14.5 | 16 | 0.6077 (Medium) | lean | model 59%, hist 74% | correlated | correlated | same game script as #55 (variance); own read: variance; 16 kills vs 13.8 expected for the actual game results; games had 33/37/43 total kills |
 | 62 | Gakgos kills_m123 under 6.5 | 8 | 0.5865 (Medium) | lean | model 60%, hist 50% (against) | correlated | correlated | same game script as #52 (variance); own read: variance; 8 kills vs 5.9 expected for the actual game results; games had 33/37/43 total kills |
 | 64 | Cryogen kills_m123 over 1.5 | 1 | 0.5596 (Low) | pass | model 55%, hist 61% | correlated | correlated | same game script as #52 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; 1 kills vs 2.1 expected for the actual game results; games had 33/37/43 total kills; closest possible loss (missed by the minimum) |
+| 65 | Gideon kills_m123 under 10 | 12 | 0.5597 (Low) | pass | model 56%, hist 56% | variance | variance | root leg of a 4-leg script loss: #65, #66, #75, #80; logged as a PASS: no money on it; reviewed for calibration; 12 kills vs 11.0 expected for the actual game results; games had 23/34/20 total kills |
+| 66 | Roamer kills_m123 under 9.5 | 10 | 0.5533 (Low) | pass | model 55%, hist 55% | correlated | correlated | same game script as #65 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; 10 kills vs 10.9 expected for the actual game results; games had 23/34/20 total kills; closest possible loss (missed by the minimum) |
+| 73 | Burdol kills_m123 over 7.5 | 6 | 0.5345 (Low) | pass | model 53%, hist 54% | correlated | correlated | same game script as #47 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; 6 kills vs 7.3 expected for the actual game results; games had 23/34/20 total kills |
+| 75 | Casting kills_m123 over 7.5 | 4 | 0.5208 (Low) | pass | model 52%, hist 51% | correlated | correlated | same game script as #65 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; 4 kills vs 8.5 expected for the actual game results; games had 23/34/20 total kills |
 | 76 | Gryffinn kills_m123 under 9.5 | 14 | 0.5238 (Low) | pass | model 53%, hist 46% (against) | correlated | correlated | same game script as #52 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; 14 kills vs 9.6 expected for the actual game results; games had 33/37/43 total kills |
+| 80 | Teddy kills_m123 under 12.5 | 14 | 0.5084 (Low) | pass | model 50%, hist 50% | correlated | correlated | same game script as #65 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; 14 kills vs 14.9 expected for the actual game results; games had 23/34/20 total kills |
 | 81 | Monki kills_m123 under 10.5 | 21 | 0.4972 (Low) | pass | model 47% (against), hist 64% | correlated | correlated | same game script as #55 (variance); own read: variance; we priced this side at 50%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; 21 kills vs 11.5 expected for the actual game results; games had 33/37/43 total kills |
 
 Lessons:
@@ -130,8 +136,10 @@ Lessons:
 - #33: Correct pass: his history leaned over (57%). Half his production came off the bullpen.
 - #36: Correct pass. Lost by the minimum (walk and run in the 1st, single in the 3rd).
 - #41: Rated High with no sportsbook price, on a market where our model runs about 7.6 points toward unders and needs a -0.31 logit fix. 9-hole hitter reached 4 of 4; 3 of his 5 H+R+RBI came off the bullpen, so it wasn't the Yamamoto script. Now capped at Medium without a market (L19).
+- #47: Published High on per-game history (L23). Series-level history was 10 of 23 over (43%) against the model's 72%: the correct pre-game label was Low and it would not have gone out. Result fit the history: 9 kills (2 in a G1 win where LGD had 16, then 5 and 2 in losses; expected 13.8 for W-L-L). Already fixed by L23 recount + L24 edge verify, which flags it NOT VERIFIED.
 - #52: Tail game script: WE-FQ games ran 33/37/43 combined kills; Quad 16 vs 6.8 expected for the actual results (W,L,L). Spread re-checked on 967 past series (var z 0.92, mean -0.02, Demacia Cup -0.02): calibrated, no model change. Every leg on this series lost together: one leg per LoL series, never stack unders on one match.
 - #55: Same WE-FQ series as #52: WE won games 2-3 with 25 and 27 kills; Cube 15 vs 7.0 expected. Root cause on #52.
+- #73: Same LGD script as #47: LGD scored 16/15/5 kills in G1-3; Burdol 6 vs 7.3 expected.
 
 Detail from the feeds:
 - #1 Kirill Kaprizov: toi=19.7, sog=4, shifts=18, pp_goals=0, score=2-4
@@ -153,10 +161,16 @@ Detail from the feeds:
 - #33 Brice Turang: inn 1 vs Yamamoto: Double; scored inn 1 (starter); inn 3 vs Yamamoto: Walk; scored inn 3 (starter); inn 5 vs Bubic: Strikeout; inn 6 vs Stewart: Intent Walk; inn 8 vs Henriquez: Single, 1 RBI; scored inn 8 (bullpen)
 - #36 Mookie Betts: inn 1 vs Henderson: Walk; scored inn 1 (starter); inn 3 vs Henderson: Single; inn 5 vs May: Groundout; inn 8 vs Uribe: Strikeout
 - #41 David Hamilton: inn 3 vs Yamamoto: Single; scored inn 3 (starter); inn 4 vs Sasaki: Forceout; inn 6 vs Stewart: Hit By Pitch; scored inn 6 (bullpen); inn 8 vs Henriquez: Single; scored inn 8 (bullpen)
+- #47 Tangyuan: G1 W: 2 K (expected 7.1); HANJIN BRION 7 - LGD Gaming 16, 23 total; G2 L: 5 K (expected 3.3); LGD Gaming 15 - HANJIN BRION 19, 34 total; G3 L: 2 K (expected 3.3); HANJIN BRION 15 - LGD Gaming 5, 20 total
 - #52 Quad: G1 W: 7 K (expected 3.6); Team WE 9 - FlyQuest 24, 33 total; G2 L: 4 K (expected 1.6); FlyQuest 12 - Team WE 25, 37 total; G3 L: 5 K (expected 1.6); Team WE 27 - FlyQuest 16, 43 total
 - #55 Cube: G1 L: 2 K (expected 1.0); Team WE 9 - FlyQuest 24, 33 total; G2 W: 6 K (expected 3.0); FlyQuest 12 - Team WE 25, 37 total; G3 W: 7 K (expected 3.0); Team WE 27 - FlyQuest 16, 43 total
 - #56 About: G1 L: 4 K (expected 2.1); Team WE 9 - FlyQuest 24, 33 total; G2 W: 5 K (expected 5.8); FlyQuest 12 - Team WE 25, 37 total; G3 W: 7 K (expected 5.8); Team WE 27 - FlyQuest 16, 43 total
 - #62 Gakgos: G1 W: 3 K (expected 3.3); Team WE 9 - FlyQuest 24, 33 total; G2 L: 0 K (expected 1.3); FlyQuest 12 - Team WE 25, 37 total; G3 L: 5 K (expected 1.3); Team WE 27 - FlyQuest 16, 43 total
 - #64 Cryogen: G1 W: 0 K (expected 1.1); Team WE 9 - FlyQuest 24, 33 total; G2 L: 1 K (expected 0.5); FlyQuest 12 - Team WE 25, 37 total; G3 L: 0 K (expected 0.5); Team WE 27 - FlyQuest 16, 43 total
+- #65 Gideon: G1 L: 2 K (expected 2.4); HANJIN BRION 7 - LGD Gaming 16, 23 total; G2 W: 6 K (expected 4.3); LGD Gaming 15 - HANJIN BRION 19, 34 total; G3 W: 4 K (expected 4.3); HANJIN BRION 15 - LGD Gaming 5, 20 total
+- #66 Roamer: G1 L: 3 K (expected 1.8); HANJIN BRION 7 - LGD Gaming 16, 23 total; G2 W: 4 K (expected 4.5); LGD Gaming 15 - HANJIN BRION 19, 34 total; G3 W: 3 K (expected 4.5); HANJIN BRION 15 - LGD Gaming 5, 20 total
+- #73 Burdol: G1 W: 3 K (expected 3.3); HANJIN BRION 7 - LGD Gaming 16, 23 total; G2 L: 3 K (expected 2.0); LGD Gaming 15 - HANJIN BRION 19, 34 total; G3 L: 0 K (expected 2.0); HANJIN BRION 15 - LGD Gaming 5, 20 total
+- #75 Casting: G1 L: 1 K (expected 2.0); HANJIN BRION 7 - LGD Gaming 16, 23 total; G2 W: 2 K (expected 3.3); LGD Gaming 15 - HANJIN BRION 19, 34 total; G3 W: 1 K (expected 3.3); HANJIN BRION 15 - LGD Gaming 5, 20 total
 - #76 Gryffinn: G1 W: 8 K (expected 4.5); Team WE 9 - FlyQuest 24, 33 total; G2 L: 4 K (expected 2.6); FlyQuest 12 - Team WE 25, 37 total; G3 L: 2 K (expected 2.6); Team WE 27 - FlyQuest 16, 43 total
+- #80 Teddy: G1 L: 1 K (expected 2.5); HANJIN BRION 7 - LGD Gaming 16, 23 total; G2 W: 6 K (expected 6.2); LGD Gaming 15 - HANJIN BRION 19, 34 total; G3 W: 7 K (expected 6.2); HANJIN BRION 15 - LGD Gaming 5, 20 total
 - #81 Monki: G1 L: 2 K (expected 1.5); Team WE 9 - FlyQuest 24, 33 total; G2 W: 8 K (expected 5.0); FlyQuest 12 - Team WE 25, 37 total; G3 W: 11 K (expected 5.0); Team WE 27 - FlyQuest 16, 43 total
