@@ -25,6 +25,7 @@ Every pick you name to the user, at any confidence, must pass `python3 -m edge v
   - It re-runs the model on current odds (LoL, CS2).
   - It confirms the line and side are on the PrizePicks board.
   - It applies the lesson rules, and flags other open legs on the same script.
+  - Soccer passes (L26): it FAILS a goalkeeper priced with the outfield model, and recounts history in tonight's kind of competition (European cup vs domestic). A FAIL there means re-price, not override.
 - **NOT VERIFIED means not published.** Either fix it with `--fix` (not-started picks only) or withdraw it, and tell the user which.
 - **Started or finished picks are never rewritten.** Their audit result is added as a note.
 - **Show the verdict next to every pick.** Include each WARN, e.g. "Boom line not readable automatically: confirm 8.5 Less on your screen".
@@ -33,6 +34,13 @@ Every pick you name to the user, at any confidence, must pass `python3 -m edge v
 
 ## User preference: High only
 The user wants **only High-confidence picks** reported back. List VERIFIED High legs (with their verdict and WARNs) and nothing else; if there are none, say so in one line. Don't list Medium or Low leans unless asked. Keep logging every evaluated prop as usual.
+
+## Role and competition check (L26, mandatory)
+Before naming any prop, ask two questions the pricer may not: **is this player's role one the model was built for**, and **does his history come from the same kind of game as tonight?**
+- Goalkeepers' passes go up when their team has less of the ball (goal kicks, back-passes under a press). Haikin: 19-27 passes in Norway at 55-78% possession, 22-44 in the Champions League. They are priced by `soccer.keeper_passes` from same-competition starts, never by team possession x share.
+- Any player whose competition level tonight differs from most of his history (European cup vs domestic, playoffs vs regular season, international vs regional esports) is recounted in that competition. If the two disagree by more than 20 points, the same-competition sample wins or the pick is withdrawn.
+- Same idea elsewhere: a CS2 AWPer's headshots, an NHL goalie in a rotation, a backup or rookie on a new role (L5), a returning player on a minutes cap. If the model doesn't know the role, say so and don't publish above Low.
+- When the user questions a number, dig in with the raw match-by-match data before defending it.
 
 ## While working
 - For a PrizePicks board, start with `python3 -m edge pp --league <CS2|UCL|...> [--match TEAM] --log`: it prices every supported prop with the same blend and gates, marks MORE-ONLY lines (no under available) and thin or new-to-team players. Read the flagged legs yourself before recommending anything.

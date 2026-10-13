@@ -235,6 +235,49 @@ def check_mlb_history(rep: Report):
     rep.add("FAIL" if abs(ph - logged) > TOL_HIST else "PASS", "recount", f"this season's game log gives {ph:.2f} over {o + u} games (logged {logged})")
 
 
+def check_soccer(rep: Report):
+    """Soccer passes (L26): a keeper must be priced with the keeper model, and history is recounted in the SAME kind of
+    competition as tonight's match (European cup vs domestic): a keeper or a possession side can look completely
+    different in Europe than at home."""
+    from . import soccer
+    r = rep.row
+    if r.get("market") != "passes_att":
+        rep.add("WARN", "recount", f"no automatic recount for soccer {r.get('market')} yet: recount history by hand before publishing")
+        return
+    s = soccer.summary(r["event_id"])
+    team_id, pos = None, None
+    for ro in s.get("rosters", []):
+        for p in ro.get("roster", []):
+            if str(p["athlete"]["id"]) == str(r["player_id"]):
+                team_id, pos = str(ro["team"]["id"]), (p.get("position") or {}).get("abbreviation")
+    if team_id is None:  # rosters not out yet: find his team from recent matches
+        for c in s["header"]["competitions"][0]["competitors"]:
+            if any(g for g in [soccer.player_match(m, c["team"]["id"], r["player_id"]) for m in soccer.team_matches(str(c["team"]["id"]), 6)] if g):
+                team_id = str(c["team"]["id"])
+                break
+    if team_id is None:
+        rep.add("FAIL", "recount", "player not found on either team's recent matches: can't back-check")
+        return
+    rows = [g for g in (soccer.player_match(m, team_id, r["player_id"]) for m in soccer.team_matches(team_id, 40)) if g]
+    starts = [g for g in rows if g["starter"] and g["minutes"] >= 60]
+    keeper = pos == "G" or any(g.get("position") == "G" for g in starts)
+    if keeper and "keeper" not in (r.get("notes") or "").lower():
+        rep.add("FAIL", "rule L26", "goalkeeper priced with the outfield passes model: re-price with soccer.keeper_passes")
+    cup = s.get("header", {}).get("league", {}).get("slug") in soccer.CUPS
+    same = [g for g in starts if (g["league"] in soccer.CUPS) == cup]
+    line, side = float(r["line"]), r.get("side", "over")
+    rate = lambda gs: (sum((g["passes"] > line) if side == "over" else (g["passes"] < line) for g in gs) / len(gs)) if gs else None
+    p_same, p_all, logged = rate(same), rate(starts), _f(r.get("p_hist"))
+    kind = "European-cup" if cup else "domestic"
+    msg = f"{kind} starts {p_same if p_same is None else round(p_same, 2)} over {len(same)}; all starts {p_all if p_all is None else round(p_all, 2)} over {len(starts)} (logged {logged})"
+    if p_same is not None and len(same) >= 6 and logged is not None and abs(p_same - logged) > 0.20:
+        rep.add("FAIL", "recount", f"{msg}: this competition tells a different story (L26)")
+    elif p_same is not None and len(same) >= 3 and logged is not None and abs(p_same - logged) > 0.20:
+        rep.add("WARN", "recount", f"{msg}: few {kind} starts, but they disagree with the logged history")
+    else:
+        rep.add("PASS", "recount", msg)
+
+
 def refresh(rows: list[dict], adj: dict | None = None) -> list[tuple]:
     """Re-score pending, not-yet-started picks with today's weights and gates (after `edge learn` changes them)."""
     adj = adj or load_adjustments()
@@ -271,6 +314,8 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
                 check_cs2(rep, adj)
             elif sport == "mlb":
                 check_mlb_history(rep)
+            elif sport == "soccer":
+                check_soccer(rep)
             else:
                 rep.add("WARN", "recount", f"no automatic recount for {sport} yet: recount history by hand before publishing")
         except Exception as e:

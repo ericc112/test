@@ -281,6 +281,37 @@ class KeeperPasses(unittest.TestCase):
         self.assertEqual(m["hist_n"], 5)
 
 
+class SoccerBackCheck(unittest.TestCase):
+    """L26: the back-check fails a keeper priced the outfield way, and recounts history in tonight's competition."""
+    def _run(self, notes, p_hist):
+        cup = [{"starter": True, "minutes": 90, "passes": v, "league": "uefa.champions", "position": "G"} for v in (35, 40, 38, 42, 36, 30)]
+        dom = [{"starter": True, "minutes": 90, "passes": v, "league": "nor.1", "position": "G"} for v in (20, 22, 19, 24, 21, 23)]
+        it = iter(cup + dom)
+        summ = {"header": {"league": {"slug": "uefa.champions"}, "competitions": [{"competitors": []}]},
+                "rosters": [{"team": {"id": "2"}, "roster": [{"athlete": {"id": "1"}, "position": {"abbreviation": "G"}}]}]}
+        orig = soccer.summary, soccer.team_matches, soccer.player_match
+        try:
+            soccer.summary = lambda eid: summ
+            soccer.team_matches = lambda team, n=10: list(range(12))
+            soccer.player_match = lambda m, t, p: next(it)
+            rep = verify.Report({"id": "9", "sport": "soccer", "market": "passes_att", "event_id": "5", "player_id": "1", "player": "K",
+                                 "line": "27.5", "side": "over", "p_hist": str(p_hist), "notes": notes})
+            verify.check_soccer(rep)
+        finally:
+            soccer.summary, soccer.team_matches, soccer.player_match = orig
+        return {(name, st) for st, name, _ in rep.checks}
+
+    def test_outfield_priced_keeper_fails(self):
+        got = self._run("median 21, possession 52%", 0.154)        # how Haikin was first priced
+        self.assertIn(("rule L26", "FAIL"), got)
+        self.assertIn(("recount", "FAIL"), got)                     # cup history 6/6 over vs logged 15%
+
+    def test_keeper_model_passes(self):
+        got = self._run("KEEPER: priced from his own European cup starts", 1.0)
+        self.assertNotIn(("rule L26", "FAIL"), got)
+        self.assertIn(("recount", "PASS"), got)
+
+
 class CS2Model(unittest.TestCase):
     def test_names_and_series_inversion(self):
         self.assertTrue(cs2.same_name("dev1ce", "device"))
