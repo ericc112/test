@@ -306,6 +306,25 @@ class SoccerBackCheck(unittest.TestCase):
         self.assertIn(("rule L26", "FAIL"), got)
         self.assertIn(("recount", "FAIL"), got)                     # cup history 6/6 over vs logged 15%
 
+    def test_possession_regime_recount(self):
+        """L27: a centre-back's history at 70% possession says nothing about a 48% night."""
+        big = [{"starter": True, "minutes": 90, "passes": v, "league": "eng.1", "position": "CD-R", "poss": 0.72} for v in (110, 120, 105, 98, 115, 102)]
+        tight = [{"starter": True, "minutes": 90, "passes": v, "league": "eng.1", "position": "CD-R", "poss": 0.48} for v in (45, 50, 38, 61, 47, 52)]
+        it = iter(big + tight)
+        summ = {"header": {"league": {"slug": "eng.1"}, "competitions": [{"competitors": []}]},
+                "rosters": [{"team": {"id": "2"}, "roster": [{"athlete": {"id": "1"}, "position": {"abbreviation": "CD-R"}}]}]}
+        orig = soccer.summary, soccer.team_matches, soccer.player_match
+        try:
+            soccer.summary = lambda eid: summ
+            soccer.team_matches = lambda team, n=10: list(range(12))
+            soccer.player_match = lambda m, t, p: next(it)
+            rep = verify.Report({"id": "9", "sport": "soccer", "market": "passes_att", "event_id": "5", "player_id": "1", "player": "D",
+                                 "line": "62.5", "side": "under", "p_hist": "0.5", "notes": "median 65, possession 48%"})
+            verify.check_soccer(rep)
+        finally:
+            soccer.summary, soccer.team_matches, soccer.player_match = orig
+        self.assertIn(("rule L27", "FAIL"), {(name, st) for st, name, _ in rep.checks})   # 6/6 under at 48% vs logged 50%
+
     def test_keeper_model_passes(self):
         got = self._run("KEEPER: priced from his own European cup starts", 1.0)
         self.assertNotIn(("rule L26", "FAIL"), got)

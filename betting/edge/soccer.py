@@ -40,6 +40,8 @@ LEAGUE_PPP = {"eng.1": 8.69, "esp.1": 9.13, "fra.1": 9.61, "ita.1": 9.24}   # pa
 BASE_PATH = os.path.join(HERE, "data", "soccer_baselines.json")
 MIN_TEAM_PASSES = 150          # below this a box score is partial
 PRESS_CLIP = (0.75, 1.25)      # outside this the opponent sample is broken, not the press
+POSS_BAND, MIN_COMPARABLE = 0.07, 6   # L27: compare like with like (team possession within 7 points)
+COMPARABLE_REACH = 40                  # team matches searched for comparable-possession starts
 KEEPER_CV = 0.12               # match-to-match noise on a keeper's per-90 rate, on top of his own spread
 
 
@@ -190,7 +192,7 @@ def player_match(m: dict, team_id: str, player_id: str) -> dict | None:
                         return None  # the stats feed sometimes returns an empty split: missing, never zero passes
                     return {"date": m["date"], "starter": bool(p.get("starter")), "minutes": st.get("minutes") or 0,
                             "passes": (st.get("accuratePasses") or 0) + (st.get("inaccuratePasses") or 0), "team_passes": m["passes"],
-                            "league": m["league"], "position": (p.get("position") or {}).get("abbreviation")}
+                            "league": m["league"], "event_id": m["event_id"], "position": (p.get("position") or {}).get("abbreviation"), "poss": m.get("poss")}
     return None
 
 
@@ -219,15 +221,31 @@ def passes_model(player_id: str, team_id: str, opp_id: str | None = None, line: 
     if t_dom != o_dom:  # measured against the opponent's own league, whose sides differ in quality: half weight
         press = 1 + 0.5 * (press - 1)
     press = min(max(press, PRESS_CLIP[0]), PRESS_CLIP[1])
+    # L27: a player's share of team passes and his history both depend on how much of the ball his team has. A
+    # centre-back's 100-pass games come at 70% possession; at 45-50% (big games) he makes half that. Measure share
+    # and history in starts at a possession close to tonight's forecast whenever there are enough of them.
+    pool = starts
+    if hist_n > n:  # history reaches further back than the rate sample
+        with cf.ThreadPoolExecutor(8) as ex:
+            wide = [g for g in ex.map(lambda m: player_match(m, team_id, player_id), team_matches(team_id, COMPARABLE_REACH)) if g]
+        wide = [g for g in wide if g["starter"] and g["minutes"] >= 45]
+        pool = sorted(wide, key=lambda g: g["date"], reverse=True)
+        recent = {m["event_id"] for m in team_matches(team_id, hist_n)}
+    else:
+        recent = None
+    target = pos["possession"]
+    comp = [g for g in pool if g.get("poss") is not None and abs(g["poss"] - target) <= POSS_BAND]
+    if recent is not None:  # the plain-history fallback keeps its usual window
+        pool = [g for g in pool if g.get("event_id") in recent] or pool
+    basis = f"all {len(pool)} recent starts"
+    if len(comp) >= MIN_COMPARABLE:
+        share = sum(g["passes"] for g in comp) / sum(g["team_passes"] * g["minutes"] / 90 for g in comp)
+        basis = f"{len(comp)} starts at {target - POSS_BAND:.0%}-{target + POSS_BAND:.0%} possession"
     proj = project(pos["possession"], team_ppp * press, share, [g["minutes"] for g in starts], ctx["wdl"], line)
     out = {**ctx, "starts": starts, "share": share, "team_poss": t_poss, "opp_poss": o_poss, **pos,
-           "team_ppp": team_ppp, "opp_allowed_ppp": opp_allowed, "press_factor": press, **proj}
+           "team_ppp": team_ppp, "opp_allowed_ppp": opp_allowed, "press_factor": press, "basis": basis, **proj}
     if line is not None:
-        hist = starts
-        if hist_n > n:  # history reaches further back than the rate sample
-            with cf.ThreadPoolExecutor(8) as ex:
-                hist = [g for g in ex.map(lambda m: player_match(m, team_id, player_id), team_matches(team_id, hist_n)) if g]
-            hist = [g for g in hist if g["starter"] and g["minutes"] >= 45]
+        hist = comp if len(comp) >= MIN_COMPARABLE else pool
         vals = [g["passes"] for g in hist]
         out["hist_over"], out["hist_n"] = sum(h > line for h in vals) / len(vals), len(vals)
         out["hist_vals"] = vals

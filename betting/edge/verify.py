@@ -270,6 +270,17 @@ def check_soccer(rep: Report):
     p_same, p_all, logged = rate(same), rate(starts), _f(r.get("p_hist"))
     kind = "European-cup" if cup else "domestic"
     msg = f"{kind} starts {p_same if p_same is None else round(p_same, 2)} over {len(same)}; all starts {p_all if p_all is None else round(p_all, 2)} over {len(starts)} (logged {logged})"
+    # L27: also recount in starts at a team possession close to tonight's forecast (logged in the notes)
+    import re as _re
+    mp = _re.search(r"possession (\d+)%", r.get("notes") or "")
+    if mp and not keeper:
+        target = int(mp.group(1)) / 100
+        comp = [g for g in starts if g.get("poss") is not None and abs(g["poss"] - target) <= soccer.POSS_BAND]
+        p_comp = rate(comp)
+        if p_comp is not None and len(comp) >= soccer.MIN_COMPARABLE and logged is not None and abs(p_comp - logged) > 0.20:
+            rep.add("FAIL", "rule L27", f"in {len(comp)} starts at {target:.0%}+/-7 possession the {side} hit {p_comp:.0%} vs logged {logged:.0%}: re-price on comparable games")
+        elif p_comp is not None:
+            rep.add("PASS", "rule L27", f"comparable-possession starts ({target:.0%}+/-7): {side} {p_comp:.0%} over {len(comp)}")
     if p_same is not None and len(same) >= 6 and logged is not None and abs(p_same - logged) > 0.20:
         rep.add("FAIL", "recount", f"{msg}: this competition tells a different story (L26)")
     elif p_same is not None and len(same) >= 3 and logged is not None and abs(p_same - logged) > 0.20:

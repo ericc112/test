@@ -38,6 +38,7 @@ The user wants **only High-confidence picks** reported back. List VERIFIED High 
 ## Role and competition check (L26, mandatory)
 Before naming any prop, ask two questions the pricer may not: **is this player's role one the model was built for**, and **does his history come from the same kind of game as tonight?**
 - Goalkeepers' passes go up when their team has less of the ball (goal kicks, back-passes under a press). Haikin: 19-27 passes in Norway at 55-78% possession, 22-44 in the Champions League. They are priced by `soccer.keeper_passes` from same-competition starts, never by team possession x share.
+- **Game state, not just competition (L27):** a centre-back's or midfielder's passes swing with his team's possession. History and share of team passes come from starts at a possession close to tonight's forecast (within 7 points). A big game against an equal side is not his average league game.
 - Any player whose competition level tonight differs from most of his history (European cup vs domestic, playoffs vs regular season, international vs regional esports) is recounted in that competition. If the two disagree by more than 20 points, the same-competition sample wins or the pick is withdrawn.
 - Same idea elsewhere: a CS2 AWPer's headshots, an NHL goalie in a rotation, a backup or rookie on a new role (L5), a returning player on a minutes cap. If the model doesn't know the role, say so and don't publish above Low.
 - When the user questions a number, dig in with the raw match-by-match data before defending it.
