@@ -31,6 +31,9 @@ Every pick you name to the user, at any confidence, must pass `python3 -m edge v
 - **After `edge learn` changes weights,** run `python3 -m edge verify --open --refresh` before recommending anything.
 - **Never type a number into `edge prob` by hand when a pricer exists** (`edge pp`, `edge passes`, `edge/lol.py`, `edge/cs2.py`). Copy-typing is how 0.728 became 0.78.
 
+## User preference: High only
+The user wants **only High-confidence picks** reported back. List VERIFIED High legs (with their verdict and WARNs) and nothing else; if there are none, say so in one line. Don't list Medium or Low leans unless asked. Keep logging every evaluated prop as usual.
+
 ## While working
 - For a PrizePicks board, start with `python3 -m edge pp --league <CS2|UCL|...> [--match TEAM] --log`: it prices every supported prop with the same blend and gates, marks MORE-ONLY lines (no under available) and thin or new-to-team players. Read the flagged legs yourself before recommending anything.
 - Final probabilities come from `python3 -m edge prob --model .. --market .. --hist .. --hist-n .. --segment sport:market:side`. Report the confidence it returns; don't override it upward.
