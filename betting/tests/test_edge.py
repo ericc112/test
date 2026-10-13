@@ -202,22 +202,26 @@ class LossReview(unittest.TestCase):
 
 
 class SoccerPasses(unittest.TestCase):
-    def test_possession_log5_home_and_cross_league(self):
-        self.assertAlmostEqual(soccer.log5(0.5, 0.5), 0.5)
+    def test_possession_stats_market_blend(self):
         self.assertAlmostEqual(soccer.log5(0.6, 0.6), 0.5)          # two 60% teams split the ball
         self.assertGreater(soccer.log5(0.6, 0.4), 0.6)
-        same = soccer.possession(0.51, 0.57, home=None)
-        cross = soccer.possession(0.51, 0.57, home=None, same_league=False)
-        self.assertLess(same, cross)                                  # cross-league gap is shrunk toward 50%
-        self.assertAlmostEqual(soccer.possession(0.5, 0.5, home=True), 0.52)
+        even = soccer.possession(0.5, 0.5, home=None, wdl=(0.35, 0.3, 0.35))
+        self.assertAlmostEqual(even["possession"], 0.5, places=3)
+        fav = soccer.possession(0.5, 0.5, home=None, wdl=(0.7, 0.2, 0.1))
+        self.assertAlmostEqual(fav["market"], 0.5 + 0.21 * 0.6, places=3)   # market says the favourite has the ball
+        self.assertGreater(fav["possession"], 0.55)
+        cross = soccer.possession(0.51, 0.62, home=None, same_league=False)
+        self.assertGreater(cross["possession"], cross["stats"])    # no market: cross-league gap shrunk
 
-    def test_projection_centres_on_share_times_team_passes(self):
-        out = soccer.project(450, 0.112, [90.0], line=50.5)
-        self.assertAlmostEqual(out["mean"], 50.4, delta=0.5)
-        self.assertAlmostEqual(out["p_over"] + out["p_under"], 1, places=6)
-        self.assertTrue(0.4 < out["p_over"] < 0.55)
-        subbed = soccer.project(450, 0.112, [60.0], line=50.5)
-        self.assertLess(subbed["p_over"], 0.15)                      # 60 minutes kills the over
+    def test_projection_press_and_script(self):
+        base = soccer.project(0.5, 9.0, 0.11, [90.0], line=49.5)
+        self.assertAlmostEqual(base["mean"], 0.5 * 100 * 9.0 * 0.11, delta=1.0)
+        pressed = soccer.project(0.5, 9.0 * 0.85, 0.11, [90.0], line=49.5)   # a pressing opponent cuts passes
+        self.assertLess(pressed["p_over"], base["p_over"] - 0.1)
+        fav = soccer.project(0.5, 9.0, 0.11, [90.0], wdl=(0.8, 0.15, 0.05), line=49.5)
+        self.assertLess(fav["mean"], base["mean"])                            # expected to lead -> cedes some ball
+        subbed = soccer.project(0.5, 9.0, 0.11, [60.0], line=49.5)
+        self.assertLess(subbed["p_over"], 0.2)
 
     def test_soccer_grader(self):
         orig_get, orig_stats = grade._get, grade.soccer_player_stats

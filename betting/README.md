@@ -80,11 +80,23 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 - **soccer** (`event_id` = ESPN event, `player_id` = ESPN athlete id; any league): `passes_att`, `gk_saves`, `shots`, `sot`, `tackles`, `fouls`. A player who doesn't play is voided, as the apps do.
 
 ## Soccer passes attempted (`edge/soccer.py`)
-One line of logic: **player passes = team passes × his share × minutes / 90**, where team passes = possession × match passes (both teams).
-- Possession: log5 of the two teams' average possession over their last 10 matches, ±2 pts home/away. When the teams play in different leagues it's shrunk halfway to 50%, because dominating a weaker league inflates possession. Override with `--poss`.
-- Share: his passes ÷ his team's passes per 90 over his recent starts. Minutes are drawn from those same starts.
-- Spread: gamma-Poisson with 17% game-to-game variation, measured on regular starters.
-- Output: median, 80% range, P(over/under/push) and history at the line, plus the `edge prob` command to run next.
+```bash
+python -m edge passes --player 393432 --team 175 --event 401915418 --line 50.5   # ESPN ids; --opp/--home without an event
+```
+**player passes = team passes × his share per 90 × minutes**, and **team passes = possession × 100 × team passes per possession point × opponent press factor**.
+
+| Factor | How it's measured | Why |
+|---|---|---|
+| Possession | Half stats (log5 of both teams' recent possession, ±2 pts home), half market (0.5 + 0.21 × (P(win) − P(loss)) − 0.02 home, from the DraftKings 3-way line) | The blend beats either alone: 6.8 pts error vs 7.2 stats-only, 9.5 for 50/50 |
+| Team tempo | The team's passes per point of possession | Some teams pass more with the same share of the ball |
+| Press / defensive block | Passes the opponent allows per point of possession, vs its league | A high press or compact block cuts passes per minute on the ball |
+| Game script | Result drawn from the 3-way line; winners end ~2.9 pts below forecast possession, losers ~2.9 above | Teams that lead sit deeper |
+| Share and minutes | His passes ÷ team passes per 90 over recent starts; minutes drawn from those starts | Captures role and sub risk |
+| Spread | Team passes ±19% (forecast error) × share ±14.5% × Poisson | Calibrated on 190 starter-matches (PIT sd 0.284, ideal 0.289) |
+
+The backtest covered 250 top-four-league matches, using each team's other matches only. Team-pass error was 70.6, against 74.2 for possession × tempo and 81.1 for the team average.
+
+It also flags a team that played 3 or fewer days ago (rotation risk). Confirm the lineup about an hour before kickoff.
 
 ## Limitations
 - Entry grading assumes power-style entries, where every leg must hit. Flex and Squad Ride payouts need manual entry for now.
