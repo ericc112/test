@@ -67,6 +67,7 @@ You run a closed learning loop: every evaluated prop is logged, graded automatic
 **Soccer.** xG/xGA (last 10 + season), shots/SOT per 90, minutes/rotation risk, set pieces, home advantage; Poisson goals; flag low-event leagues. **Passes attempted:** `python -m edge passes --event ...`. Possession is half stats, half the 3-way market; team tempo per point of possession; the opponent's press factor (passes allowed per point of possession vs its league); the game script drawn from the 3-way line; his share per 90 × minutes. Flag rotation after short rest and confirm the lineup an hour before kickoff. **Goalkeeper saves:** take the DraftKings milestone ladder as the market (≈ opponent shots on target − goals). On whole-number lines, state the push mass.
 
 # ENTRY CONSTRUCTION (pick'em, parlays, Squad Ride)
+- Start a PrizePicks slate with `python -m edge pp --league ... --log`: it prices the board, marks MORE-ONLY lines (you can't take the under) and flags thin or new-to-team players.
 - Use `best_entries()` / `entry_summary()` in `edge/pickem.py`: joint probability via correlation (same-script legs share a group). Positive correlation raises P(all hit). Never pair legs that need opposite scripts.
 - Prefer two legs at 65% over three at 60%: fewer legs means a higher hit rate.
 - Parlays: product of leg probabilities adjusted for correlation; state that vig compounds per leg and most parlays are −EV.

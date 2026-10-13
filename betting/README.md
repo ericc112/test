@@ -65,6 +65,8 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 | `edge/odds.py` | De-vig (multiplicative/power), fair odds, EV, quarter-Kelly with 2% cap |
 | `edge/pickem.py` | Break-evens, correlated entry odds (Gaussian copula), best-entry search, Squad Ride milestones |
 | `edge/grade.py` | Auto-grading by `sport` + `market` (see the stat keys at the top of the file) |
+| `edge/pp.py` | PrizePicks board fetch and routing to pricers; More-only and goblin/demon handling |
+| `edge/cs2.py` | CS2 maps 1-2 kills/headshots model from bo3.gg, with roster-era detection and newcomer flags |
 | `edge/soccer.py` | Soccer passes attempted: possession × match passes × share × minutes, from ESPN |
 | `edge/review.py` | Post-mortem for every loss: feed detail, linked legs, suggested root cause |
 | `edge/card.py` | One leg per game script, best entry, entry-leg pricing check |
@@ -78,6 +80,27 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 - **nfl** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `pass_yds`, `pass_att`, `rush_yds`, `rush_att`, `rec_yds`, `receptions`, `anytime_td`
 - **cs2** (`event_id` = bo3.gg match id, `player_id` = nickname): `cs_kills_m12`, `cs_headshots_m12`
 - **soccer** (`event_id` = ESPN event, `player_id` = ESPN athlete id; any league): `passes_att`, `gk_saves`, `shots`, `sot`, `tackles`, `fouls`. A player who doesn't play is voided, as the apps do.
+
+## Price a PrizePicks board (`edge/pp.py`)
+```bash
+python -m edge pp --league CS2                       # every standard CS2 prop, ranked by final probability
+python -m edge pp --league CS2 --match Liquid --log  # one match, and log each priced prop to bets.csv
+python -m edge pp --league UCL --match Inter --types standard,goblin,demon
+```
+- **Board source:** the PrizePicks partner API, which needs no captcha. Responses are cached for 2 minutes, with backoff when it rate-limits (429).
+- **More-only lines:** goblins, demons and some standard lines only allow More. They're marked `MORE-ONLY` and priced on the over side only.
+- **CS2 maps 1–2 kills and headshots** (`edge/cs2.py`, bo3.gg):
+  - The map winner is drawn from the series moneyline.
+  - Rounds come from each team's maps with that result.
+  - Each player has a kill rate for map wins and one for map losses, plus a headshot rate. The current roster means maps with at least 4 of today's 5.
+  - Players new to the team, or with fewer than 8 maps on it, are flagged and capped at Low (L5).
+  - Finished games are cached in `.cache/`.
+- **Soccer** (ESPN + DraftKings):
+  - Passes attempted use the passes model below.
+  - Shots, shots on target and keeper saves use the DraftKings milestone ladder, fitted to a Poisson with about 7% hold removed, plus the player's last 10 matches.
+  - A missing ladder usually means DraftKings doesn't expect him to start. A keeper with no ladder borrows his team's listed keeper.
+- **Not priced yet:** other stats and leagues are listed as unpriced.
+- **Output:** a ranked table, then the best 2-leg entry from High legs in different matches, or "sit out".
 
 ## Soccer passes attempted (`edge/soccer.py`)
 ```bash

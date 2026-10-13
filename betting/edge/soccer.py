@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import concurrent.futures as cf
 import datetime as dt
+import functools
 import json
 import os
 
@@ -80,6 +81,7 @@ def project(poss: float, rate: float, share: float, minutes=None, wdl=None, line
 
 
 # ------------------------------------------------------------------ ESPN data
+@functools.lru_cache(maxsize=512)
 def summary(event_id: str) -> dict:
     return _get(f"{SITE}/all/summary?event={event_id}")
 
@@ -106,6 +108,7 @@ def match_context(event_id: str, team_id: str) -> dict:
     return {"home": me["homeAway"] == "home", "opp_id": str(opp["team"]["id"]), "opp_name": opp["team"].get("displayName"), "wdl": wdl}
 
 
+@functools.lru_cache(maxsize=64)   # one fetch per team per run, however many of its players are on the board
 def team_matches(team_id: str, n: int = 10, seasons=("2026", "2025")) -> list[dict]:
     """Last n completed matches (domestic league + European cups), with both sides' passes and possession."""
     dom = (_get(f"{SITE}/all/teams/{team_id}").get("team") or {}).get("defaultLeague", {}).get("slug")

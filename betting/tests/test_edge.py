@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from edge import grade, learn, review, soccer  # noqa: E402
+from edge import cs2, grade, learn, pp, review, soccer  # noqa: E402
 from edge.blend import DEFAULT_ADJ, final_probability  # noqa: E402
 from edge.odds import devig, fair_american, kelly_fraction, stake  # noqa: E402
 from edge.pickem import PAYOUTS, Leg, best_entries, breakeven, entry_summary, squad_ride  # noqa: E402
@@ -234,6 +234,81 @@ class SoccerPasses(unittest.TestCase):
             self.assertEqual(grade.soccer_value("1", "8", "passes_att", {}), ("void", None))   # unused sub: voided
         finally:
             grade._get, grade.soccer_player_stats = orig_get, orig_stats
+
+
+def _maps(nick, team, games, win, kills, hs, rounds=21, date="2026-09-01"):
+    return [{"date": date, "match": g // 2, "bo": 3, "game": g, "num": 1 + g % 2, "rounds": rounds, "team_id": team,
+             "nick": nick, "kills": kills, "hs": hs, "win": win} for g in games]
+
+
+class CS2Model(unittest.TestCase):
+    def test_names_and_series_inversion(self):
+        self.assertTrue(cs2.same_name("dev1ce", "device"))
+        self.assertTrue(cs2.same_name("EliGE", "EliGe"))
+        self.assertFalse(cs2.same_name("JT", "NAF"))
+        self.assertAlmostEqual(cs2.map_p_from_series(0.5), 0.5, places=4)
+        p = cs2.map_p_from_series(0.683)
+        self.assertAlmostEqual(p * p * (3 - 2 * p), 0.683, places=4)
+
+    def test_current_era_keeps_four_of_five(self):
+        five = ["a", "b", "c", "d", "e"]
+        rows = []
+        for n in five:
+            rows += _maps(n, 1, [10, 11], True, 20, 10, date="2026-10-01")          # today's roster
+        for n in ["a", "b", "c", "d", "x"]:
+            rows += _maps(n, 1, [8, 9], True, 20, 10, date="2026-09-20")           # stand-in game: 4 of 5
+        for n in ["a", "b", "c", "y", "z"]:
+            rows += _maps(n, 1, [6, 7], True, 20, 10, date="2026-08-01")           # old roster: 3 of 5
+        got, era = cs2.current_era(rows, 1)
+        self.assertEqual(got, set(five))
+        self.assertEqual({r["game"] for r in era}, {8, 9, 10, 11})
+
+    def test_map_winner_effect(self):
+        me = _maps("p", 1, range(0, 20), True, 22, 11) + _maps("p", 1, range(20, 40), False, 13, 6)
+        rw, rl = np.array([21]), np.array([21])
+        fav = cs2.price(me, me, 0.8, rw, rl, "kills", 30.5)
+        dog = cs2.price(me, me, 0.2, rw, rl, "kills", 30.5)
+        self.assertGreater(fav["mean"], dog["mean"] + 8)
+        self.assertGreater(fav["p_over"], dog["p_over"])
+
+
+class PrizePicksBoard(unittest.TestCase):
+    FIXTURE = {"data": [
+        {"attributes": {"description": "BBL MAPS 1-2", "stat_type": "MAPS 1-2 Kills", "line_score": 32, "odds_type": "standard",
+                        "allowed_wager_types": "over", "start_time": "2026-10-13T06:00:00-04:00"},
+         "relationships": {"new_player": {"data": {"id": "1"}}, "game": {"data": {"id": "g"}}}},
+        {"attributes": {"description": "BBL MAPS 1-2", "stat_type": "MAPS 1-2 Kills", "line_score": 40.5, "odds_type": "demon",
+                        "start_time": "2026-10-13T06:00:00-04:00"},
+         "relationships": {"new_player": {"data": {"id": "1"}}, "game": {"data": {"id": "g"}}}}],
+        "included": [{"type": "new_player", "id": "1", "attributes": {"display_name": "malbsMd", "team": "Liquid"}},
+                     {"type": "game", "id": "g", "attributes": {"metadata": {"game_info": {"teams": {"home": {"abbreviation": "Liquid"}, "away": {"abbreviation": "BBL"}}}}}}]}
+
+    def test_board_parsing(self):
+        orig_get, orig_leagues = pp.pp_get, pp.leagues
+        pp.pp_get, pp.leagues = (lambda url, max_age=120: self.FIXTURE), (lambda: {"CS2": "265"})
+        try:
+            std = pp.board("CS2")
+            both = pp.board("CS2", ("standard", "demon"))
+        finally:
+            pp.pp_get, pp.leagues = orig_get, orig_leagues
+        self.assertEqual(len(std), 1)
+        self.assertEqual(len(both), 2)
+        self.assertEqual(std[0]["opp"], "BBL")
+        self.assertTrue(std[0]["over_only"])           # More-only standard line
+        self.assertTrue(both[1]["over_only"])          # demons are always over-only
+
+    def test_ladder_fit_and_over_only_side(self):
+        import math
+        sf = lambda lam, k: 1 - sum(math.exp(-lam) * lam ** j / math.factorial(j) for j in range(k))
+        to_am = lambda p: -100 * p / (1 - p) if p >= 0.5 else 100 * (1 - p) / p
+        ladder = {k: to_am(min(sf(2.0, k) / pp.MILESTONE_HOLD, 0.99)) for k in (1, 2, 3, 4)}
+        self.assertAlmostEqual(pp.ladder_lambda(ladder), 2.0, delta=0.1)
+        o, u, push = pp.poisson_sides(2.0, 2)
+        self.assertAlmostEqual(push, 2 * math.exp(-2), places=6)
+        self.assertAlmostEqual(o + u + push, 1, places=6)
+        leg = {"over_only": True}
+        row = pp._finish(leg, "cs_kills_m12", "cs2", 0.3, 0.7, 0.0, 2, 8)
+        self.assertEqual(row["side"], "over")          # can't take the under even though it's likelier
 
 
 class Grading(unittest.TestCase):
