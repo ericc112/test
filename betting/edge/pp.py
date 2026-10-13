@@ -353,12 +353,16 @@ def price_lol(props: list[dict]) -> list[dict]:
 
 
 def price_board(props: list[dict]) -> list[dict]:
-    if not props:
-        return []
-    if props[0]["league"] == "CS2":
-        return price_cs2(props)
-    if props[0]["league"] in SOCCER:
-        return price_soccer(props)
-    if props[0]["league"] == "LOL":
-        return price_lol(props)
-    return [{**p, "error": "league not priced yet"} for p in props]
+    """Price props from any mix of leagues: each league goes to its own pricer."""
+    out = []
+    for lg in dict.fromkeys(p["league"] for p in props):
+        batch = [p for p in props if p["league"] == lg]
+        if lg == "CS2":
+            out += price_cs2(batch)
+        elif lg in SOCCER:
+            out += price_soccer(batch)
+        elif lg == "LOL":
+            out += price_lol(batch)
+        else:
+            out += [{**p, "error": "league not priced yet"} for p in batch]
+    return out
