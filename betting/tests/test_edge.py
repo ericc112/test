@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from edge import cs2, grade, learn, pp, review, soccer  # noqa: E402
+from edge import cs2, grade, learn, pp, review, soccer, verify  # noqa: E402
 from edge.blend import DEFAULT_ADJ, final_probability  # noqa: E402
 from edge.odds import devig, fair_american, kelly_fraction, stake  # noqa: E402
 from edge.pickem import PAYOUTS, Leg, best_entries, breakeven, entry_summary, squad_ride  # noqa: E402
@@ -309,6 +309,38 @@ class PrizePicksBoard(unittest.TestCase):
         leg = {"over_only": True}
         row = pp._finish(leg, "cs_kills_m12", "cs2", 0.3, 0.7, 0.0, 2, 8)
         self.assertEqual(row["side"], "over")          # can't take the under even though it's likelier
+
+
+class PrePublishVerify(unittest.TestCase):
+    """Every pick is back-checked before it is published; these are the offline checks."""
+    def _row(self, **kw):
+        e = final_probability(0.72, 0.68, None, "nhl:skater_sog:under", 0, DEFAULT_ADJ)
+        base = {"id": "1", "date": "2026-10-13", "sport": "nhl", "event_id": "9", "player": "P", "market": "skater_sog", "line": "2.5",
+                "side": "under", "p_model": "0.72", "p_market": "0.68", "p_hist": "", "hist_n": "0", "p_final": str(e.p),
+                "confidence": e.confidence, "action": "lean", "segment": "nhl:skater_sog:under", "group": "g", "status": "pending", "notes": ""}
+        return {**base, **kw}
+
+    def test_consistent_pick_passes_offline(self):
+        r = self._row()
+        rep = verify.verify(r, [r], DEFAULT_ADJ, fetch=False)
+        self.assertNotEqual(rep.verdict, "NOT VERIFIED")
+
+    def test_mistyped_number_fails(self):
+        r = self._row(p_final="0.78")          # the 0.78-vs-0.728 kind of slip
+        self.assertEqual(verify.verify(r, [r], DEFAULT_ADJ, fetch=False).verdict, "NOT VERIFIED")
+
+    def test_rules_block(self):
+        new = self._row(notes="NEW TO TEAM: priced from previous team")
+        self.assertEqual(verify.verify(new, [new], DEFAULT_ADJ, fetch=False).verdict, "NOT VERIFIED")      # L5
+        e = final_probability(0.7, 0.66, None, "mlb:pitcher_outs:over", 0, DEFAULT_ADJ)
+        outs = self._row(sport="mlb", market="pitcher_outs", side="over", segment="mlb:pitcher_outs:over",
+                         p_model="0.7", p_market="0.66", p_final=str(e.p), confidence=e.confidence)
+        self.assertEqual(verify.verify(outs, [outs], DEFAULT_ADJ, fetch=False).verdict, "NOT VERIFIED")   # L17
+
+    def test_same_script_warns(self):
+        a, b = self._row(id="1"), self._row(id="2", player="Q")
+        rep = verify.verify(a, [a, b], DEFAULT_ADJ, fetch=False)
+        self.assertTrue(any(st == "WARN" and n == "correlation" for st, n, _ in rep.checks))
 
 
 class Grading(unittest.TestCase):

@@ -14,6 +14,7 @@ python -m edge grade         # settle pending bets from MLB Stats API / NHL API 
 python -m edge review        # post-mortem any loss without one (--all re-diagnoses, --accept records suggested tags)
 python -m edge tag 14 "opportunity" --lesson "pulled at 75 pitches"   # confirm the cause of every loss
 python -m edge learn         # refit blend + segment biases, avoid list, Medium caps, append LESSONS.md
+python -m edge verify 46 45           # back-check picks before publishing (also --open, --refresh, --fix)
 python -m edge best --date 2026-10-12  # High legs >= 65%, one per game script, best 2-leg entry
 python -m edge card --date 2026-10-12  # same-script legs, and any leg unpriced or under break-even (--breakeven .577)
 ```
@@ -65,6 +66,8 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 | `edge/odds.py` | De-vig (multiplicative/power), fair odds, EV, quarter-Kelly with 2% cap |
 | `edge/pickem.py` | Break-evens, correlated entry odds (Gaussian copula), best-entry search, Squad Ride milestones |
 | `edge/grade.py` | Auto-grading by `sport` + `market` (see the stat keys at the top of the file) |
+| `edge/verify.py` | Pre-publish back-check: recompute, recount at the prop's unit, re-price, line offered, lesson rules, correlation |
+| `edge/lol.py` | LoL maps 1-3 kills: gol.gg games (current season), bo3.gg series odds, series-level history |
 | `edge/pp.py` | PrizePicks board fetch and routing to pricers; More-only and goblin/demon handling |
 | `edge/cs2.py` | CS2 maps 1-2 kills/headshots model from bo3.gg, with roster-era detection and newcomer flags |
 | `edge/soccer.py` | Soccer passes attempted: possession × match passes × share × minutes, from ESPN |
@@ -77,7 +80,7 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 ## Market keys the grader understands
 - **mlb** (`event_id` = gamePk, `player_id` = MLBAM id): `pitcher_strikeouts`, `pitcher_outs`, `pitcher_hits_allowed`, `pitcher_earned_runs`, `pitcher_walks`, `pitcher_pitches`, `first_inning_pitches`, `batter_hits`, `batter_walks`, `batter_strikeouts`, `batter_total_bases`, `batter_home_runs`, `batter_singles`, `batter_hrr`
 - **nhl** (`event_id` = NHL gameId, `player_id` = NHL id): `skater_sog`, `skater_points`, `skater_goals`, `goalie_saves`
-- **nfl** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `pass_yds`, `pass_att`, `rush_yds`, `rush_att`, `rec_yds`, `receptions`, `anytime_td`
+- **nfl** and **cfb** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `pass_yds`, `pass_att`, `rush_yds`, `rush_att`, `rec_yds`, `receptions`, `anytime_td`
 - **cs2** (`event_id` = bo3.gg match id, `player_id` = nickname): `cs_kills_m12`, `cs_headshots_m12`
 - **soccer** (`event_id` = ESPN event, `player_id` = ESPN athlete id; any league): `passes_att`, `gk_saves`, `shots`, `sot`, `tackles`, `fouls`. A player who doesn't play is voided, as the apps do.
 
