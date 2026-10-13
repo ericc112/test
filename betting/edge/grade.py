@@ -36,6 +36,11 @@ MLB_STATS = {
     "batter_home_runs": ("batting", lambda s: s.get("homeRuns")),
     "batter_singles": ("batting", lambda s: None if s.get("hits") is None else s["hits"] - s.get("doubles", 0) - s.get("triples", 0) - s.get("homeRuns", 0)),
     "batter_hrr": ("batting", lambda s: None if s.get("hits") is None else s["hits"] + s.get("runs", 0) + s.get("rbi", 0)),
+    # PrizePicks hitter fantasy score: 1B 3, 2B 5, 3B 8, HR 10, R 2, RBI 2, BB 2, HBP 2, SB 5
+    "batter_fs_pp": ("batting", lambda s: None if s.get("hits") is None else
+                     3 * (s["hits"] - s.get("doubles", 0) - s.get("triples", 0) - s.get("homeRuns", 0)) + 5 * s.get("doubles", 0)
+                     + 8 * s.get("triples", 0) + 10 * s.get("homeRuns", 0) + 2 * (s.get("runs", 0) + s.get("rbi", 0) + s.get("baseOnBalls", 0)
+                     + s.get("hitByPitch", 0)) + 5 * s.get("stolenBases", 0)),
 }
 
 
