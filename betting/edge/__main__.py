@@ -11,6 +11,7 @@
   review [--all] [--accept]    post-mortem on every graded loss: feed detail, linked legs, suggested tag
   best  [--date D] [--min-p .65] [--legs 2]   top-tier legs, one per game script, best entry
   card  [--date D]               exposure check: legs riding on the same game script
+  passes --player ID --team ID --opp ID --line 50.5 [--home|--away]   soccer passes attempted (ESPN ids)
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from . import card as C
 from . import grade as G
 from . import learn as L
 from . import review as R
+from . import soccer as S
 from .blend import final_probability, segment_key
 from .odds import fair_american
 from .pickem import PAYOUTS, breakeven, squad_ride
@@ -55,6 +57,16 @@ def main(argv=None):
     c = sub.add_parser("card")
     c.add_argument("--date")
     c.add_argument("--breakeven", type=float, default=0.577, help="per-leg break-even of the entry (2-pick power 0.577)")
+    ps = sub.add_parser("passes")
+    ps.add_argument("--player", required=True)
+    ps.add_argument("--team", required=True)
+    ps.add_argument("--opp", required=True)
+    ps.add_argument("--line", type=float)
+    ha = ps.add_mutually_exclusive_group()
+    ha.add_argument("--home", dest="home", action="store_true", default=None)
+    ha.add_argument("--away", dest="home", action="store_false")
+    ps.add_argument("--n", type=int, default=10, help="recent matches per team")
+    ps.add_argument("--poss", type=float, help="override projected possession (0-1)")
     t = sub.add_parser("tag")
     t.add_argument("id")
     t.add_argument("reason")
@@ -144,6 +156,21 @@ def main(argv=None):
             print("Every loss already has a post-mortem (use --all to re-diagnose).")
         else:
             _review(rows, ids, accept=args.accept)
+    elif args.cmd == "passes":
+        m = S.passes_model(args.player, args.team, args.opp, args.line, args.home, args.n, args.poss)
+        st = m["starts"]
+        print(f"history ({len(st)} recent starts): " + " ".join(str(int(g['passes'])) for g in st)
+              + f" | avg {np.mean([g['passes'] for g in st]):.1f} | share {m['share']:.1%} of team passes per 90")
+        print(f"possession: team {m['team_poss']:.0%} vs opponent {m['opp_poss']:.0%}"
+              + ("" if m["same_league"] else " (different leagues: shrunk halfway to 50%)")
+              + f" -> {m['possession']:.1%} | match passes {m['match_passes']:.0f} -> team passes {m['team_passes']:.0f}")
+        print(f"projection: mean {m['mean']:.1f}, median {m['median']:.0f}, 80% range {m['p10']:.0f}-{m['p90']:.0f}")
+        if args.line is not None:
+            print(f"P(over {args.line}) {m['p_over']:.1%} | P(under) {m['p_under']:.1%}"
+                  + (f" | P(push) {m['p_push']:.1%}" if m["p_push"] else "")
+                  + f" | history over {m['hist_over']:.0%} of {m['hist_n']}")
+            print(f"next: python -m edge prob --model {m['p_over']:.3f} --hist {m['hist_over']:.3f} --hist-n {m['hist_n']} "
+                  f"--segment soccer:passes_att:over")
     elif args.cmd == "tag":
         if L.base_tag(args.reason) not in R.TAGS:
             print(f"note: '{args.reason}' is not a standard tag ({', '.join(R.TAGS)}); recorded anyway")

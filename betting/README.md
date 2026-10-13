@@ -22,6 +22,7 @@ Pricing helpers:
 ```bash
 python -m edge prob --model .65 --market .60 --hist .80 --hist-n 15 --segment cs2:cs_headshots_m12:under
 python -m edge breakeven
+python -m edge passes --player 393432 --team 175 --opp 2250 --line 50.5 --home   # soccer passes attempted (ESPN ids)
 python -m edge squad --means 245 283 207 --sds 70 78 65 --milestones 807 977 1044 --pair-corr 0 1 0.3
 python -m edge add sport=mlb event_id=849812 player="Logan Henderson" player_id=701656 \
     market=pitcher_outs line=15.5 side=under p_model=.58 p_market=.567 p_hist=.526 hist_n=19 proj=14 opp_proj=19
@@ -64,6 +65,7 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 | `edge/odds.py` | De-vig (multiplicative/power), fair odds, EV, quarter-Kelly with 2% cap |
 | `edge/pickem.py` | Break-evens, correlated entry odds (Gaussian copula), best-entry search, Squad Ride milestones |
 | `edge/grade.py` | Auto-grading by `sport` + `market` (see the stat keys at the top of the file) |
+| `edge/soccer.py` | Soccer passes attempted: possession × match passes × share × minutes, from ESPN |
 | `edge/review.py` | Post-mortem for every loss: feed detail, linked legs, suggested root cause |
 | `edge/card.py` | One leg per game script, best entry, entry-leg pricing check |
 | `data/postmortems.csv` | One diagnosis per loss, with the lesson recorded for it |
@@ -75,6 +77,14 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 - **nhl** (`event_id` = NHL gameId, `player_id` = NHL id): `skater_sog`, `skater_points`, `skater_goals`, `goalie_saves`
 - **nfl** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `pass_yds`, `pass_att`, `rush_yds`, `rush_att`, `rec_yds`, `receptions`, `anytime_td`
 - **cs2** (`event_id` = bo3.gg match id, `player_id` = nickname): `cs_kills_m12`, `cs_headshots_m12`
+- **soccer** (`event_id` = ESPN event, `player_id` = ESPN athlete id; any league): `passes_att`, `gk_saves`, `shots`, `sot`, `tackles`, `fouls`. A player who doesn't play is voided, as the apps do.
+
+## Soccer passes attempted (`edge/soccer.py`)
+One line of logic: **player passes = team passes × his share × minutes / 90**, where team passes = possession × match passes (both teams).
+- Possession: log5 of the two teams' average possession over their last 10 matches, ±2 pts home/away. When the teams play in different leagues it's shrunk halfway to 50%, because dominating a weaker league inflates possession. Override with `--poss`.
+- Share: his passes ÷ his team's passes per 90 over his recent starts. Minutes are drawn from those same starts.
+- Spread: gamma-Poisson with 17% game-to-game variation, measured on regular starters.
+- Output: median, 80% range, P(over/under/push) and history at the line, plus the `edge prob` command to run next.
 
 ## Limitations
 - Entry grading assumes power-style entries, where every leg must hit. Flex and Squad Ride payouts need manual entry for now.

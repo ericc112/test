@@ -132,7 +132,26 @@ def _cs2_detail(r: dict, cache: dict) -> dict:
     return {"role": "cs2", "maps": maps, "opportunity": rounds} if maps else {}
 
 
-DETAIL = {"mlb": _mlb_detail, "nhl": _nhl_detail, "cs2": _cs2_detail}
+def _soccer_detail(r: dict, cache: dict) -> dict:
+    from .grade import soccer_player_stats
+    eid = r["event_id"]
+    if ("soccer_sum", eid) not in cache:
+        cache[("soccer_sum", eid)] = _get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event={eid}")
+    s = cache[("soccer_sum", eid)]
+    for ro in s.get("rosters", []):
+        for p in ro.get("roster", []):
+            if str(p["athlete"]["id"]) == str(r["player_id"]):
+                st = soccer_player_stats(s["header"]["league"]["slug"], eid, ro["team"]["id"], r["player_id"])
+                team = next(({x["name"]: x.get("displayValue") for x in t.get("statistics", [])}
+                             for t in s["boxscore"]["teams"] if str(t["team"]["id"]) == str(ro["team"]["id"])), {})
+                score = " - ".join(f"{c['team']['abbreviation']} {c.get('score')}" for c in s["header"]["competitions"][0]["competitors"])
+                return {"role": "soccer", "minutes": st.get("minutes"), "passes": (st.get("accuratePasses") or 0) + (st.get("inaccuratePasses") or 0),
+                        "team_passes": team.get("totalPasses"), "possession": team.get("possessionPct"), "saves": st.get("saves"),
+                        "score": score, "opportunity": st.get("minutes")}
+    return {}
+
+
+DETAIL = {"mlb": _mlb_detail, "nhl": _nhl_detail, "cs2": _cs2_detail, "soccer": _soccer_detail}
 
 
 # ------------------------------------------------------------------ diagnosis

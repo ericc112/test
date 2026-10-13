@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from edge import grade, learn, review  # noqa: E402
+from edge import grade, learn, review, soccer  # noqa: E402
 from edge.blend import DEFAULT_ADJ, final_probability  # noqa: E402
 from edge.odds import devig, fair_american, kelly_fraction, stake  # noqa: E402
 from edge.pickem import PAYOUTS, Leg, best_entries, breakeven, entry_summary, squad_ride  # noqa: E402
@@ -199,6 +199,37 @@ class LossReview(unittest.TestCase):
         self.assertEqual(e.confidence, "Medium")
         ok = final_probability(0.72, None, 0.73, "lol:kills_m123:under", hist_n=40, adj=DEFAULT_ADJ)
         self.assertEqual(ok.confidence, "High")  # no correction needed in that market: rule doesn't fire
+
+
+class SoccerPasses(unittest.TestCase):
+    def test_possession_log5_home_and_cross_league(self):
+        self.assertAlmostEqual(soccer.log5(0.5, 0.5), 0.5)
+        self.assertAlmostEqual(soccer.log5(0.6, 0.6), 0.5)          # two 60% teams split the ball
+        self.assertGreater(soccer.log5(0.6, 0.4), 0.6)
+        same = soccer.possession(0.51, 0.57, home=None)
+        cross = soccer.possession(0.51, 0.57, home=None, same_league=False)
+        self.assertLess(same, cross)                                  # cross-league gap is shrunk toward 50%
+        self.assertAlmostEqual(soccer.possession(0.5, 0.5, home=True), 0.52)
+
+    def test_projection_centres_on_share_times_team_passes(self):
+        out = soccer.project(450, 0.112, [90.0], line=50.5)
+        self.assertAlmostEqual(out["mean"], 50.4, delta=0.5)
+        self.assertAlmostEqual(out["p_over"] + out["p_under"], 1, places=6)
+        self.assertTrue(0.4 < out["p_over"] < 0.55)
+        subbed = soccer.project(450, 0.112, [60.0], line=50.5)
+        self.assertLess(subbed["p_over"], 0.15)                      # 60 minutes kills the over
+
+    def test_soccer_grader(self):
+        orig_get, orig_stats = grade._get, grade.soccer_player_stats
+        grade._get = lambda url: {"header": {"league": {"slug": "fra.1"}, "competitions": [{"status": {"type": {"completed": True}}}]},
+                                  "rosters": [{"team": {"id": "175"}, "roster": [{"athlete": {"id": "9"}, "starter": True},
+                                                                               {"athlete": {"id": "8"}, "starter": False}]}]}
+        grade.soccer_player_stats = lambda *a: {"accuratePasses": 50, "inaccuratePasses": 4, "saves": 3}
+        try:
+            self.assertEqual(grade.soccer_value("1", "9", "passes_att", {}), ("final", 54))
+            self.assertEqual(grade.soccer_value("1", "8", "passes_att", {}), ("void", None))   # unused sub: voided
+        finally:
+            grade._get, grade.soccer_player_stats = orig_get, orig_stats
 
 
 class Grading(unittest.TestCase):
