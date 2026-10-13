@@ -71,7 +71,16 @@ def mlb_value(event_id: str, player_id: str, market: str, cache: dict):
 
 
 # ------------------------------------------------------------------ NHL (event_id = gameId, player_id = NHL id)
-NHL_STATS = {"skater_sog": "sog", "skater_points": "points", "skater_goals": "goals", "skater_assists": "assists", "goalie_saves": "saves"}
+NHL_STATS = {"skater_sog": "sog", "skater_points": "points", "skater_goals": "goals", "skater_assists": "assists", "goalie_saves": "saves",
+             "skater_hits": "hits", "skater_toi": "toi"}
+
+
+def _nhl_num(v):
+    """Box-score values: plain numbers, or 'mm:ss' for time on ice (returned in minutes)."""
+    if isinstance(v, str) and ":" in v:
+        m, s = v.split(":")
+        return round(int(m) + int(s) / 60, 2)
+    return v
 
 
 def nhl_value(event_id: str, player_id: str, market: str, cache: dict):
@@ -85,7 +94,7 @@ def nhl_value(event_id: str, player_id: str, market: str, cache: dict):
         for grp in ("forwards", "defense", "goalies"):
             for p in b["playerByGameStats"][side].get(grp, []):
                 if str(p["playerId"]) == str(player_id):
-                    return "final", p.get(NHL_STATS[market])
+                    return "final", _nhl_num(p.get(NHL_STATS[market]))
     return "void", None
 
 
