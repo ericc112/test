@@ -43,5 +43,7 @@
     "mlb:pitcher_outs": 0.5,
     "mlb:pitcher_pitches": 0.5
   },
-  "hist_weight_scale_note": "Postseason only (LESSONS L17): playoff hooks are quicker than regular-season history implies. Reset to {} on opening day."
+  "hist_weight_scale_note": "Postseason only (LESSONS L17): playoff hooks are quicker than regular-season history implies. Reset to {} on opening day.",
+  "cap_medium_segments": {},
+  "rule_flags": []
 }

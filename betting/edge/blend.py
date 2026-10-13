@@ -17,8 +17,9 @@ DEFAULT_ADJ = {
     "outcome_bias_logit": {},   # learned from graded results (applied to the final probability)
     "avoid_segments": [],
     "gates": {"high": 0.65, "medium": 0.58, "max_spread_high": 0.12, "min_hist_n_high": 10,
-              "no_market_min_hist_n": 20, "no_market_max_spread": 0.10},
+              "no_market_min_hist_n": 20, "no_market_max_spread": 0.10, "max_model_bias_without_market": 0.25},
     "hist_weight_scale": {},   # e.g. {"mlb:pitcher_outs": 0.5}: trust history less for these segments (postseason leash)
+    "cap_medium_segments": {},  # set by `edge learn` from post-mortems: repeated same-cause losses -> no High legs
 }
 
 
@@ -105,6 +106,15 @@ def final_probability(p_model: float | None, p_market: float | None = None, p_hi
         conf = "Medium"
     else:
         conf = "Low"
+    cap = next((s for s in adj.get("cap_medium_segments", {}) if segment and segment.startswith(s)), None)
+    if conf == "High" and cap:
+        conf = "Medium"
+        notes.append(f"capped at Medium: {adj['cap_medium_segments'][cap]}")
+    # LESSONS L19: a model that needed a large correction in this market can't carry a High label unchecked by a price
+    if conf == "High" and "market" not in comps and "model" in comps and \
+            abs(_lookup(adj["model_bias_logit"], segment)) >= g.get("max_model_bias_without_market", 0.25):
+        conf = "Medium"
+        notes.append("capped at Medium: model is known to run off the market here and there is no market price to check it (L19)")
     if not agreement:
         notes.append("components disagree on the side: downgrade or pass")
     if len(comps) == 1:

@@ -7,7 +7,8 @@
   breakeven                    per-leg break-even for pick'em payout tables
   squad --means 245 283 207 --sds 70 78 65 --milestones 807 977 1044 --pair-corr 0 1 0.3
   add   key=value ...          append a bet (fields: see data/bets.csv header)
-  tag   ID "reason"            record why a high-confidence pick missed
+  tag   ID "tag" [--lesson ".."] confirm the root cause of a loss (every loss) and what to change
+  review [--all] [--accept]    post-mortem on every graded loss: feed detail, linked legs, suggested tag
   best  [--date D] [--min-p .65] [--legs 2]   top-tier legs, one per game script, best entry
   card  [--date D]               exposure check: legs riding on the same game script
 """
@@ -21,6 +22,7 @@ import numpy as np
 from . import card as C
 from . import grade as G
 from . import learn as L
+from . import review as R
 from .blend import final_probability, segment_key
 from .odds import fair_american
 from .pickem import PAYOUTS, breakeven, squad_ride
@@ -52,17 +54,27 @@ def main(argv=None):
     b.add_argument("--legs", type=int, default=2)
     c = sub.add_parser("card")
     c.add_argument("--date")
+    c.add_argument("--breakeven", type=float, default=0.577, help="per-leg break-even of the entry (2-pick power 0.577)")
     t = sub.add_parser("tag")
     t.add_argument("id")
     t.add_argument("reason")
+    t.add_argument("--lesson", default="")
+    v = sub.add_parser("review")
+    v.add_argument("--all", action="store_true", help="re-diagnose every loss, not only new ones")
+    v.add_argument("--accept", action="store_true", help="record the suggested tag on losses that have none")
     args = ap.parse_args(argv)
 
     if args.cmd == "report":
         print(L.report(L.read_bets()))
     elif args.cmd == "grade":
         rows = L.read_bets()
+        before = {r["id"]: r.get("status") for r in rows}
         print(G.grade_rows(rows))
         L.write_bets(rows)
+        new_losses = [r["id"] for r in rows if r.get("status") == "lost" and before.get(r["id"]) != "lost"]
+        if new_losses:  # every loss gets a post-mortem straight away
+            print(f"\nPost-mortems for {len(new_losses)} new loss(es):")
+            _review(rows, new_losses, accept=False)
         print(L.report(rows))
     elif args.cmd == "learn":
         out = L.update()
@@ -111,18 +123,57 @@ def main(argv=None):
             print(f"\nBest {args.legs}-leg entry (one leg per script): P(all hit) = {e['p_all']:.1%}")
     elif args.cmd == "card":
         rows = [r for r in L.read_bets() if r.get("status") in ("pending", "") and (not args.date or r.get("date") == args.date)]
+        priced = {r["id"]: r for r in C.rescore([r for r in rows if any(r.get(k) for k in ("p_model", "p_market", "p_hist"))])}
+        weak = 0
         for k, legs in sorted(C.exposure(rows).items(), key=lambda kv: -len(kv[1])):
             flag = "  <-- same script: these win or lose together" if len(legs) > 1 else ""
             print(f"{k:34s} {len(legs)} leg(s){flag}")
             for r in legs:
-                print(f"    {r['player']:22s} {r['side']:5s} {r['line']:>5} {r['market']}")
+                p = priced.get(r["id"])
+                tag = "UNPRICED: run it through `edge prob` first" if not p else (
+                    f"{p['p_now']:.0%} {p['conf_now']}" + ("  <-- below break-even: take it out (L20)" if p["p_now"] < args.breakeven else ""))
+                weak += (not p) or p["p_now"] < args.breakeven
+                print(f"    {r['player']:22s} {r['side']:5s} {r['line']:>5} {r['market']:22s} {tag}")
+        if weak:
+            print(f"\n{weak} leg(s) are unpriced or under the {args.breakeven:.1%} break-even. Fix them before submitting.")
+    elif args.cmd == "review":
+        rows = L.read_bets()
+        done = R.read_pm()
+        ids = None if args.all else [r["id"] for r in R.losses(rows) if r["id"] not in done]
+        if ids == []:
+            print("Every loss already has a post-mortem (use --all to re-diagnose).")
+        else:
+            _review(rows, ids, accept=args.accept)
     elif args.cmd == "tag":
+        if L.base_tag(args.reason) not in R.TAGS:
+            print(f"note: '{args.reason}' is not a standard tag ({', '.join(R.TAGS)}); recorded anyway")
         rows = L.read_bets()
         for r in rows:
             if r["id"] == args.id:
                 r["miss_reason"] = args.reason
         L.write_bets(rows)
+        pms = R.read_pm()
+        if args.lesson and args.id in pms:
+            pms[args.id]["lesson"] = args.lesson
+            R.write_pm(pms)
+        R.render_md(pms, rows)
         print("tagged", args.id)
+
+
+def _review(rows, ids, accept):
+    pms = R.review(rows, ids)
+    print(R.summary(pms))
+    merged = R.merge(pms, R.read_pm())
+    if accept:
+        for pm in pms:
+            for r in rows:
+                if r["id"] == pm["id"] and not r.get("miss_reason"):
+                    r["miss_reason"] = pm["auto_tag"]
+        L.write_bets(rows)
+    R.write_pm(merged)
+    R.render_md(merged, rows)
+    print(f"\nWrote {len(pms)} post-mortem(s) to data/postmortems.csv and POSTMORTEMS.md."
+          + ("" if accept else " Confirm each cause: python -m edge tag <id> \"tag\" --lesson \"...\""))
 
 
 if __name__ == "__main__":

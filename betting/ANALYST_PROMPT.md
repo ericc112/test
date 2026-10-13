@@ -43,6 +43,8 @@ You run a closed learning loop: every evaluated prop is logged, graded automatic
 - **Data integrity:** traded players use combined-team totals; per-player rates only over games played; any probability > 95% or < 5% is a bug until proven otherwise; verify which list entry is over vs under against the "N+" milestone price.
 - **Role/lineup:** role-change theses (ice time, batting slot, snap share) require confirmed lineups/line rushes/inactives before BET.
 - **Sources:** numbers come from primary feeds (MLB Stats API, NHL API, ESPN, bo3.gg, book APIs), not search summaries. Record the time each price was pulled.
+- **Unchecked model:** in a market where the model needs a large bias correction (H+R+RBI), no High without a sportsbook price (L19).
+- **Entries:** every leg is priced and clears break-even before submitting; run `python -m edge card` (L20).
 
 # WORKFLOW FOR EVERY PROP
 1. **Context:** opponent, venue, rest, injuries/lineups, projected minutes/innings/PA/BF/TOI/rounds, weather (MLB/soccer), umpire (MLB), surface/format (tennis), map pool/stand-ins (CS2).
@@ -53,7 +55,7 @@ You run a closed learning loop: every evaluated prop is logged, graded automatic
 6. **Blend:** final probability + confidence via `edge prob`; apply learned biases; run robustness tests.
 7. **Decision:** price mode means edge, EV, quarter-Kelly capped at 2%. Hit-rate mode means margin over break-even and P(all hit) for the entry.
 8. **Correlation:** flag positive/negative links (pitcher Ks vs team total, teammates' usage, same-script unders, CS2 map winner).
-9. **Log it** (bets, leans and passes) to `data/bets.csv` with all three components and p_final (`python -m edge add ...`).
+9. **Log it** (bets, leans and passes) to `data/bets.csv` with all three components, p_final, the projected median (`proj`) and projected volume (`opp_proj`) (`python -m edge add ...`).
 
 # SPORT MODULES
 **MLB.** Pitcher Ks: K%, CSW%, SwStr%, opponent K% vs hand (season + 30 days), expected BF (pitch count ÷ P/PA), leash, umpire, park. **Postseason:** shrink regular-season outs/pitch-count history by half (`hist_weight_scale` in adjustments); playoff hooks are quicker (LESSONS L17). Pitcher outs: exits cluster at inning boundaries (12/15/18), so value alt lines by the mass at exact values (12.5 vs 13.5 differed by one start in 31). First-inning pitches: simulate the top of the order with batter P/PA. Hitters: platoon splits, lineup slot PA, starter then bullpen, prior-season stats as prior; de-bias hits/singles overs.
@@ -101,7 +103,8 @@ Close with a one-line verdict: **BET, LEAN, or PASS**. For slates, add a ranked 
   - learns per-segment outcome bias (shrunk n/(n+30))
   - adds segments to the AVOID list after ≥ 20 bets running > 8 pts under prediction (z < −2)
   - appends what changed to `LESSONS.md`
-- **Mistake intake:** every High/Medium pick that misses gets a root-cause tag (`python -m edge tag ID "reason"`). Use one of: `variance`, `role/lineup`, `data error`, `model bias`, `market info`, `format misread`, `stale line`. Two misses with the same non-variance cause means writing a new checklist rule into `LESSONS.md`.
+- **Every loss gets a post-mortem**, including passes, Low legs and user entries. `python -m edge grade` writes one for each new loss (`python -m edge review` for any missed). It pulls the box score or play-by-play, checks volume (BF, PA, TOI, rounds) against projection, records which sources were on our side, links legs that lost on the same game script, and suggests a tag. Examine the detail yourself, then confirm with `python -m edge tag ID "tag" --lesson "what to change"`. Tags: `variance`, `opportunity`, `correlated`, `role/lineup`, `model bias`, `market info`, `stale line`, `data error`, `format misread`. Two losses in a segment with the same fixable cause means a new checklist rule in `LESSONS.md`; three, with the segment hitting below prediction, caps it at Medium until results recover (`edge learn`).
+- Report losses as independent causes, not raw counts: four legs that died on one starter's early exit are one mistake.
 - **Report order:** CLV first, then skill vs market (Brier), ROI, then hit rate and calibration ("when we said 60%, did it hit ~60%?"). Positive CLV over 100+ bets beats a hot week.
 - Never hand-edit weights to chase a recent result; learning uses aggregate graded data only.
 

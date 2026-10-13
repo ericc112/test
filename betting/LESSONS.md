@@ -19,13 +19,21 @@ Each lesson came from a real mistake or near-miss. Before publishing a number, c
 | L13 | Griffin outs 12.5 vs 13.5 were treated as meaningfully different | Exits cluster at inning boundaries | Value alt lines by the mass at exact values (13 outs: 1 of 31 starts) |
 | L14 | Conflicting odds in search summaries (LAD −110/MIL −102 at one source) | Summaries/pages can be wrong or stale | Use primary feeds for prices; record pull time |
 | L15 | Henderson K under 5.5 was offered at ~55% while his history said over in 12 of 18 starts | History source not checked | Three-source agreement rule: model, market and history must agree for Medium/High |
-| L16 | Yamamoto was pulled after 2.2 IP / 75 pitches; one blow-up sank five legs (his outs over, pitches over, ER under, Yelich and Hamilton H+R+RBI unders) | Correlation was checked per pair, never across the whole card | Cap total exposure to any single game script (e.g. "starter dominates") at 2% of bankroll across all entries; list each card's scripts before adding legs |
-| L18 | Rasmussen hits-allowed U4.5 (~59%, Medium) gave up 4 hits to the first 7 batters vs a low-strikeout Cleveland lineup | Hits model used his overall H/BF with a light opponent tweak; ignored that low-K opponents put more balls in play; single-game hits are BABIP-luck heavy | Model hits allowed as BF × (1 − K% − BB%) × hit-rate-on-contact with opponent contact rate; cap hits-allowed unders at Medium and never play them vs bottom-third-K% lineups in hit-rate mode |
+| L16 | Yamamoto was pulled after 2.2 IP / 75 pitches; one blow-up sank four legs (his outs over, pitches over and ER under, plus Yelich's H+R+RBI under: 3 of his 4 came off Yamamoto) | Correlation was checked per pair, never across the whole card | Cap total exposure to any single game script (e.g. "starter dominates") at 2% of bankroll across all entries; list each card's scripts before adding legs |
 | L17 | Yamamoto outs over rated ~69% partly on 18+ outs in 26/29 regular-season starts; in the playoffs the Dodgers hooked him at 75 pitches | Regular-season leash history overstates playoff leash (deep, rested bullpens; must-win games) | In the postseason, shrink outs/pitch-count history halfway toward the market and cap starter-length props at Medium |
+| L18 | Rasmussen hits-allowed U4.5 (~59%, Medium) gave up 4 hits to the first 7 batters vs a low-strikeout Cleveland lineup | Hits model used his overall H/BF with a light opponent tweak; ignored that low-K opponents put more balls in play; single-game hits are BABIP-luck heavy | Model hits allowed as BF × (1 − K% − BB%) × hit-rate-on-contact with opponent contact rate; cap hits-allowed unders at Medium and never play them vs bottom-third-K% lineups in hit-rate mode |
+| L19 | David Hamilton H+R+RBI U1.5 was rated High (68%) with no sportsbook price; he reached base 4 of 4 and 3 of his 5 came off the bullpen | Our H+R+RBI model runs ~7.6 pts toward unders (needs a -0.31 logit fix), and with no market nothing checked it | A segment whose model needs a correction of 0.25 logit or more can't be High without a sportsbook price (enforced in `blend.py`) |
+| L20 | Yamamoto ER U1.5 sat in a $50 Boom entry while we priced that side at 47% (we had the over at 55%) | Entry legs weren't run through the model before submitting | Price every leg of an entry before it's submitted; `python -m edge card` flags any leg that is unpriced or under the entry's break-even |
+
+## Every loss gets a post-mortem
+`python -m edge grade` writes one for each new loss, and `python -m edge review` covers any that were missed. That includes passes, Low legs and user entries, not just High picks. Each post-mortem pulls the box score or play-by-play, finds which input failed (volume, rate, price, script), links legs that lost on the same game script, and suggests a tag. Confirm it with `python -m edge tag ID "tag" --lesson "what to change"`. The readable log is `POSTMORTEMS.md`.
 
 ## Miss-tag taxonomy
-`variance` · `role/lineup` · `data error` · `model bias` · `market info` · `format misread` · `stale line`
+`variance` · `opportunity` · `correlated` · `role/lineup` · `model bias` · `market info` · `stale line` · `data error` · `format misread`
 
-Two misses with the same non-variance tag means adding a rule above.
+- `opportunity`: far less volume than projected (early hook, ice-time cut, blowout, lost plate appearances).
+- `correlated`: lost because another leg's script failed; the cause is recorded on that leg.
+
+Two losses in a segment with the same tag (other than `variance` or `correlated`) means adding a rule above; `edge learn` flags it. Three, with the segment hitting below prediction, caps that segment at Medium until results recover.
 
 ## Auto-learned

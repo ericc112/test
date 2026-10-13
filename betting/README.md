@@ -10,11 +10,12 @@ Requirements: Python 3.10+ and numpy. Run every command from this `betting/` dir
 ## Daily loop
 ```bash
 python -m edge report        # where we stand: CLV, skill vs market, ROI, calibration, misses
-python -m edge grade         # settle pending bets from MLB Stats API / NHL API / ESPN / bo3.gg
-python -m edge learn         # refit blend + segment biases, update avoid list, append LESSONS.md
-python -m edge tag 14 "role/lineup"   # root-cause any high-confidence miss
+python -m edge grade         # settle pending bets from MLB Stats API / NHL API / ESPN / bo3.gg; post-mortem each new loss
+python -m edge review        # post-mortem any loss without one (--all re-diagnoses, --accept records suggested tags)
+python -m edge tag 14 "opportunity" --lesson "pulled at 75 pitches"   # confirm the cause of every loss
+python -m edge learn         # refit blend + segment biases, avoid list, Medium caps, append LESSONS.md
 python -m edge best --date 2026-10-12  # High legs >= 65%, one per game script, best 2-leg entry
-python -m edge card --date 2026-10-12  # which of your legs ride on the same game script
+python -m edge card --date 2026-10-12  # same-script legs, and any leg unpriced or under break-even (--breakeven .577)
 ```
 
 Pricing helpers:
@@ -23,7 +24,7 @@ python -m edge prob --model .65 --market .60 --hist .80 --hist-n 15 --segment cs
 python -m edge breakeven
 python -m edge squad --means 245 283 207 --sds 70 78 65 --milestones 807 977 1044 --pair-corr 0 1 0.3
 python -m edge add sport=mlb event_id=849812 player="Logan Henderson" player_id=701656 \
-    market=pitcher_outs line=15.5 side=under p_model=.58 p_market=.567 p_hist=.526 hist_n=19
+    market=pitcher_outs line=15.5 side=under p_model=.58 p_market=.567 p_hist=.526 hist_n=19 proj=14 opp_proj=19
 ```
 
 ## How the probability is built (`edge/blend.py`)
@@ -38,8 +39,8 @@ final = sigmoid(intercept + w_model·logit(model) + w_market·logit(market) + w_
 - **history**: the player's hit rate at the line, regressed toward the market by n/(n+10).
 
 Missing sources hand their weight to the ones present. Confidence comes from the agreement rule:
-- **High**: all sources on one side, ≥ 62%, spread ≤ 12 pts, history n ≥ 10.
-- **Medium**: sources agree, ≥ 2 sources, ≥ 56%.
+- **High**: all sources on one side, ≥ 65%, spread ≤ 12 pts, history n ≥ 10, and a sportsbook price or 20+ games of history within 10 pts of the model. Never High without a price where the model needs a big correction (L19), or in a segment capped by `learn`.
+- **Medium**: sources agree, ≥ 2 sources, ≥ 58%.
 - **Low**: everything else, including any single-source estimate.
 - **Avoid**: the segment is on the losing-history list.
 
@@ -49,7 +50,9 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 | Blend refit | Penalized logistic regression of outcomes on the three logits | Pulled toward a fixed prior (strength 25 bets); refit from the prior every run so results are never double-counted; needs ≥ 10 graded bets with model + market |
 | Segment bias | One-step logistic correction per `sport:market:side` after the blend | Shrunk by n/(n+30), clipped to ±0.4 logit, needs ≥ 5 bets |
 | Avoid list | Segment ≥ 20 bets, hit rate > 8 pts under prediction, z < −2 | Sticky; remove by hand once fixed |
-| Lessons | Material changes are appended to `LESSONS.md`; tagged misses are tallied | Two same-cause misses mean a new checklist rule |
+| Post-mortems | Every loss: feed detail, volume vs projection, sources, same-script links, suggested tag (`review.py`) | Root cause confirmed by hand; `variance` and `correlated` never trigger rules |
+| Medium caps | Segment with 3+ losses from the same fixable cause and hitting below prediction gets no High legs | Recomputed every run, so the cap lifts once results recover |
+| Lessons | Material changes are appended to `LESSONS.md`; 2 same-cause losses in a segment are flagged once | A flagged cause means writing a new checklist rule |
 
 ## Files
 | Path | Purpose |
@@ -61,6 +64,10 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 | `edge/odds.py` | De-vig (multiplicative/power), fair odds, EV, quarter-Kelly with 2% cap |
 | `edge/pickem.py` | Break-evens, correlated entry odds (Gaussian copula), best-entry search, Squad Ride milestones |
 | `edge/grade.py` | Auto-grading by `sport` + `market` (see the stat keys at the top of the file) |
+| `edge/review.py` | Post-mortem for every loss: feed detail, linked legs, suggested root cause |
+| `edge/card.py` | One leg per game script, best entry, entry-leg pricing check |
+| `data/postmortems.csv` | One diagnosis per loss, with the lesson recorded for it |
+| `POSTMORTEMS.md` | Readable post-mortem log, grouped by date and independent cause |
 | `tests/test_edge.py` | `python -m unittest discover -s tests` |
 
 ## Market keys the grader understands

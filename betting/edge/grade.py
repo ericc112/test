@@ -161,18 +161,20 @@ def settle(value: float, line: float, side: str) -> str:
 
 
 def grade_rows(rows: list[dict]) -> dict:
-    cache, counts = {}, {"graded": 0, "still_pending": 0, "void": 0, "errors": 0}
+    cache, counts = {}, {"graded": 0, "still_pending": 0, "void": 0, "manual": 0, "errors": 0}
     for r in rows:
         if r.get("status") not in ("pending", ""):
             continue
         fn = GRADERS.get(r.get("sport", "").lower())
         if not fn or not r.get("event_id") or not r.get("player_id"):
-            counts["errors"] += 1
+            counts["manual"] += 1  # no auto-grader for this sport/market: grade by hand
             continue
         try:
             state, value = fn(r["event_id"], r["player_id"], r["market"], cache)
         except Exception as e:  # network/parse problems leave the bet pending
-            r["notes"] = (r.get("notes", "") + f" | grade error: {type(e).__name__}").strip(" |")
+            msg = f"grade error: {type(e).__name__}"
+            if msg not in r.get("notes", ""):
+                r["notes"] = (r.get("notes", "") + f" | {msg}").strip(" |")
             counts["errors"] += 1
             continue
         if state == "pending":
