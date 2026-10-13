@@ -241,8 +241,8 @@ def price_soccer(props: list[dict]) -> list[dict]:
             base = {"event_id": ev["id"], "player_id": pid, "script": f"soccer:{ev['id']}"}
             if p["stat"] == "Passes Attempted":
                 m = soccer.passes_model(pid, tid, line=p["line"], event_id=ev["id"])
-                ho = sum(g["passes"] > p["line"] for g in m["starts"])
-                hu = sum(g["passes"] < p["line"] for g in m["starts"])
+                ho = sum(v > p["line"] for v in m["hist_vals"])
+                hu = sum(v < p["line"] for v in m["hist_vals"])
                 note = f"median {m['median']:.0f}, possession {m['possession']:.0%}, press factor {m['press_factor']:.2f}; confirm lineup"
                 out.append({**_finish(p, "passes_att", "soccer", m["p_over"], m["p_under"], m["p_push"], ho, hu, notes=note), **base, "proj": m["median"]})
                 continue

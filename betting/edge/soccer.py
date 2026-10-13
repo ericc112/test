@@ -38,6 +38,8 @@ GAME_STATE = 0.029                                          # possession shift b
 CV_TEAM, CV_SHARE = 0.19, 0.145
 LEAGUE_PPP = {"eng.1": 8.69, "esp.1": 9.13, "fra.1": 9.61, "ita.1": 9.24}   # passes per possession point
 BASE_PATH = os.path.join(HERE, "data", "soccer_baselines.json")
+MIN_TEAM_PASSES = 150          # below this a box score is partial
+PRESS_CLIP = (0.75, 1.25)      # outside this the opponent sample is broken, not the press
 
 
 # ------------------------------------------------------------------ pure model
@@ -130,10 +132,13 @@ def team_matches(team_id: str, n: int = 10, seasons=("2026", "2025")) -> list[di
         me = teams.get(str(team_id), {})
         opp = next((v for k, v in teams.items() if k != str(team_id)), {})
         try:
-            return {"date": date[:10], "league": lg, "domestic": dom, "event_id": eid, "summary": s,
-                    "poss": float(me["possessionPct"]) / 100, "passes": float(me["totalPasses"]), "opp_passes": float(opp["totalPasses"])}
+            row = {"date": date[:10], "league": lg, "domestic": dom, "event_id": eid, "summary": s,
+                   "poss": float(me["possessionPct"]) / 100, "passes": float(me["totalPasses"]), "opp_passes": float(opp["totalPasses"])}
         except (KeyError, TypeError, ValueError):
             return None
+        # partial feeds come back as zeros or a few dozen passes: a top-flight side never has fewer than MIN_TEAM_PASSES
+        ok = row["passes"] >= MIN_TEAM_PASSES and row["opp_passes"] >= MIN_TEAM_PASSES and 0.15 <= row["poss"] <= 0.85
+        return row if ok else None
 
     with cf.ThreadPoolExecutor(8) as ex:
         return [m for m in ex.map(one, sorted(evs, reverse=True)[:n]) if m]
@@ -180,13 +185,15 @@ def player_match(m: dict, team_id: str, player_id: str) -> dict | None:
             for p in r.get("roster", []):
                 if str(p["athlete"]["id"]) == str(player_id) and (p.get("starter") or p.get("subbedIn")):
                     st = soccer_player_stats(m["league"], m["event_id"], team_id, player_id)
+                    if st.get("accuratePasses") is None and st.get("inaccuratePasses") is None or not st.get("minutes"):
+                        return None  # the stats feed sometimes returns an empty split: missing, never zero passes
                     return {"date": m["date"], "starter": bool(p.get("starter")), "minutes": st.get("minutes") or 0,
                             "passes": (st.get("accuratePasses") or 0) + (st.get("inaccuratePasses") or 0), "team_passes": m["passes"]}
     return None
 
 
 def passes_model(player_id: str, team_id: str, opp_id: str | None = None, line: float | None = None, home: bool | None = None,
-                 event_id: str | None = None, n: int = 10, poss: float | None = None) -> dict:
+                 event_id: str | None = None, n: int = 10, poss: float | None = None, hist_n: int = 25) -> dict:
     ctx = match_context(event_id, team_id) if event_id else {"home": home, "opp_id": opp_id, "wdl": None, "opp_name": None}
     if ctx["opp_id"] is None:
         raise ValueError("give --opp or --event")
@@ -205,11 +212,20 @@ def passes_model(player_id: str, team_id: str, opp_id: str | None = None, line: 
     team_ppp = float(np.mean([m["passes"] / (m["poss"] * 100) for m in tm]))
     opp_allowed = float(np.mean([m["opp_passes"] / ((1 - m["poss"]) * 100) for m in om]))
     press = opp_allowed / league_ppp(o_dom) if o_dom else 1.0
+    if t_dom != o_dom:  # measured against the opponent's own league, whose sides differ in quality: half weight
+        press = 1 + 0.5 * (press - 1)
+    press = min(max(press, PRESS_CLIP[0]), PRESS_CLIP[1])
     proj = project(pos["possession"], team_ppp * press, share, [g["minutes"] for g in starts], ctx["wdl"], line)
     out = {**ctx, "starts": starts, "share": share, "team_poss": t_poss, "opp_poss": o_poss, **pos,
            "team_ppp": team_ppp, "opp_allowed_ppp": opp_allowed, "press_factor": press, **proj}
     if line is not None:
-        hist = [g["passes"] for g in starts]
-        out["hist_over"], out["hist_n"] = sum(h > line for h in hist) / len(hist), len(hist)
+        hist = starts
+        if hist_n > n:  # history reaches further back than the rate sample
+            with cf.ThreadPoolExecutor(8) as ex:
+                hist = [g for g in ex.map(lambda m: player_match(m, team_id, player_id), team_matches(team_id, hist_n)) if g]
+            hist = [g for g in hist if g["starter"] and g["minutes"] >= 45]
+        vals = [g["passes"] for g in hist]
+        out["hist_over"], out["hist_n"] = sum(h > line for h in vals) / len(vals), len(vals)
+        out["hist_vals"] = vals
     out["days_rest"] = (dt.date.today() - dt.date.fromisoformat(max(m["date"] for m in tm))).days
     return out

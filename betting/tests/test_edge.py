@@ -249,6 +249,20 @@ def _maps(nick, team, games, win, kills, hs, rounds=21, date="2026-09-01"):
              "nick": nick, "kills": kills, "hs": hs, "win": win} for g in games]
 
 
+class SoccerFeedIntegrity(unittest.TestCase):
+    def test_empty_stats_split_is_missing_not_zero(self):
+        m = {"date": "2026-10-10", "league": "eng.1", "event_id": "1", "passes": 500.0,
+             "summary": {"rosters": [{"team": {"id": "7"}, "roster": [{"athlete": {"id": "9"}, "starter": True}]}]}}
+        orig = soccer.soccer_player_stats
+        try:
+            soccer.soccer_player_stats = lambda *a: {}
+            self.assertIsNone(soccer.player_match(m, "7", "9"))            # feed hiccup: skip the match
+            soccer.soccer_player_stats = lambda *a: {"minutes": 90, "accuratePasses": 40, "inaccuratePasses": 5}
+            self.assertEqual(soccer.player_match(m, "7", "9")["passes"], 45)
+        finally:
+            soccer.soccer_player_stats = orig
+
+
 class CS2Model(unittest.TestCase):
     def test_names_and_series_inversion(self):
         self.assertTrue(cs2.same_name("dev1ce", "device"))
