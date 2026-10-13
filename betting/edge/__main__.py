@@ -8,6 +8,7 @@
   squad --means 245 283 207 --sds 70 78 65 --milestones 807 977 1044 --pair-corr 0 1 0.3
   add   key=value ...          append a bet (fields: see data/bets.csv header)
   tag   ID "tag" [--lesson ".."] confirm the root cause of a loss (every loss) and what to change
+  verify ID [ID ...] | --open  back-check picks before publishing (recompute, recount, reprice, offered, rules)
   review [--all] [--accept]    post-mortem on every graded loss: feed detail, linked legs, suggested tag
   best  [--date D] [--min-p .65] [--legs 2]   top-tier legs, one per game script, best entry
   card  [--date D]               exposure check: legs riding on the same game script
@@ -29,6 +30,7 @@ from . import learn as L
 from . import review as R
 from . import pp as P
 from . import soccer as S
+from . import verify as V
 from .blend import final_probability, segment_key
 from .odds import fair_american
 from .pickem import PAYOUTS, breakeven, squad_ride
@@ -82,6 +84,12 @@ def main(argv=None):
     t.add_argument("id")
     t.add_argument("reason")
     t.add_argument("--lesson", default="")
+    vf = sub.add_parser("verify")
+    vf.add_argument("ids", nargs="*")
+    vf.add_argument("--open", action="store_true", help="every pending pick that is High/Medium or played (bet, lean, user_entry)")
+    vf.add_argument("--offline", action="store_true", help="skip the network checks (recompute and rules only)")
+    vf.add_argument("--refresh", action="store_true", help="first re-score pending, not-started picks with today's weights")
+    vf.add_argument("--fix", action="store_true", help="write the freshly recounted/re-priced numbers onto not-started picks that failed")
     v = sub.add_parser("review")
     v.add_argument("--all", action="store_true", help="re-diagnose every loss, not only new ones")
     v.add_argument("--accept", action="store_true", help="record the suggested tag on losses that have none")
@@ -159,6 +167,35 @@ def main(argv=None):
                 print(f"    {r['player']:22s} {r['side']:5s} {r['line']:>5} {r['market']:22s} {tag}")
         if weak:
             print(f"\n{weak} leg(s) are unpriced or under the {args.breakeven:.1%} break-even. Fix them before submitting.")
+    elif args.cmd == "verify":
+        rows = L.read_bets()
+        if args.refresh:
+            ch = V.refresh(rows)
+            L.write_bets(rows)
+            print(f"Re-scored {len(ch)} pending pick(s) with today's weights:")
+            for c in ch:
+                print(f"   #{c[0]} {c[1]}: {c[2]} {c[3]} -> {c[4]} {c[5]}")
+            print()
+        pick = [r for r in rows if r["id"] in args.ids] if args.ids else [
+            r for r in rows if r.get("status") in ("pending", "") and (r.get("confidence") in ("High", "Medium") or r.get("action") in ("bet", "lean", "user_entry"))] if args.open else []
+        if not pick:
+            print("Give pick ids or --open.")
+            return
+        bad = 0
+        for r in pick:
+            rep = V.verify(r, rows, fetch=not args.offline)
+            if args.fix and rep.verdict == "NOT VERIFIED" and getattr(rep, "fresh", None) and not rep.locked and not rep.start_unknown:
+                f = rep.fresh
+                r["notes"] = (r.get("notes", "") + f" | corrected by verify: {r.get('p_final')} {r.get('confidence')} -> {f['p_final']} {f['confidence']}; {f['side_note']}").strip(" |")
+                r.update({k: f[k] for k in ("p_model", "p_hist", "hist_n", "p_final", "confidence")})
+                if f["confidence"] not in ("High",) and r.get("action") in ("bet", "lean"):
+                    r["action"] = "pass"
+                L.write_bets(rows)
+                rep = V.verify(r, rows, fetch=not args.offline)
+                print("   (corrected from fresh data, re-verified below)")
+            print(rep.text() + "\n")
+            bad += rep.verdict == "NOT VERIFIED"
+        print(f"{len(pick) - bad} of {len(pick)} verified. Anything NOT VERIFIED is not published; fix it or withdraw it.")
     elif args.cmd == "review":
         rows = L.read_bets()
         done = R.read_pm()

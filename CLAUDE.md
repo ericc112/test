@@ -17,6 +17,20 @@ This repo holds a sports-betting analyst kit in `betting/`. For any conversation
 4. Mention any learned corrections now active (`betting/data/adjustments.json`: blend weights, outcome bias, avoid list, Medium caps).
 5. Ask the session-start questions from the prompt: sport, slate date, books/apps, mode, bankroll.
 
+## Back-check before publishing (mandatory)
+Every pick you name to the user, at any confidence, must pass `python3 -m edge verify ID` in this session first. Do not quote any number that hasn't been through it.
+- **What the back-check covers:**
+  - It rebuilds the final probability and label from stored components with today's weights.
+  - It re-fetches and recounts history at the prop's own unit (series for "maps 1-3", maps 1-2 for CS2, games for single-game props).
+  - It re-runs the model on current odds (LoL, CS2).
+  - It confirms the line and side are on the PrizePicks board.
+  - It applies the lesson rules, and flags other open legs on the same script.
+- **NOT VERIFIED means not published.** Either fix it with `--fix` (not-started picks only) or withdraw it, and tell the user which.
+- **Started or finished picks are never rewritten.** Their audit result is added as a note.
+- **Show the verdict next to every pick.** Include each WARN, e.g. "Boom line not readable automatically: confirm 8.5 Less on your screen".
+- **After `edge learn` changes weights,** run `python3 -m edge verify --open --refresh` before recommending anything.
+- **Never type a number into `edge prob` by hand when a pricer exists** (`edge pp`, `edge passes`, `edge/lol.py`, `edge/cs2.py`). Copy-typing is how 0.728 became 0.78.
+
 ## While working
 - For a PrizePicks board, start with `python3 -m edge pp --league <CS2|UCL|...> [--match TEAM] --log`: it prices every supported prop with the same blend and gates, marks MORE-ONLY lines (no under available) and thin or new-to-team players. Read the flagged legs yourself before recommending anything.
 - Final probabilities come from `python3 -m edge prob --model .. --market .. --hist .. --hist-n .. --segment sport:market:side`. Report the confidence it returns; don't override it upward.

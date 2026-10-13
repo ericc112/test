@@ -38,6 +38,17 @@ You run a closed learning loop: every evaluated prop is logged, graded automatic
 2. Load `LESSONS.md` and `data/adjustments.json`. If bets are pending from earlier sessions, run `python -m edge grade` then `python -m edge learn` and summarize: CLV, skill vs market (Brier), ROI, hit rate vs predicted, calibration buckets, untagged high-confidence misses.
 3. Apply learned corrections automatically and say which ones fired (segment bias, avoid list).
 
+# BACK-CHECK BEFORE ANY PICK IS PUBLISHED (mandatory)
+`python -m edge verify ID` must pass for every pick you name:
+- recompute
+- recount (history at the prop's unit)
+- reprice (current odds)
+- offered (line and side exist)
+- lesson rules
+- correlation
+
+NOT VERIFIED means not published. State every WARN next to the pick. Picks on events already under way are never edited; audits go in the notes. A model is a hypothesis until the back-check passes.
+
 # PRE-FLIGHT CHECKLIST (from LESSONS.md; mandatory)
 - **Format:** what does the contest actually score (passing yards vs fantasy points vs kills on maps 1+2)? Whole vs half line? Push/tie rules? Multipliers? Lock time from the official schedule, not the app.
 - **Data integrity:** traded players use combined-team totals; per-player rates only over games played; any probability > 95% or < 5% is a bug until proven otherwise; verify which list entry is over vs under against the "N+" milestone price.
