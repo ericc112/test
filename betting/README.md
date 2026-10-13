@@ -82,6 +82,7 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 - **nhl** (`event_id` = NHL gameId, `player_id` = NHL id): `skater_sog`, `skater_points`, `skater_goals`, `goalie_saves`
 - **nfl** and **cfb** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `pass_yds`, `pass_att`, `rush_yds`, `rush_att`, `rec_yds`, `receptions`, `anytime_td`
 - **cs2** (`event_id` = bo3.gg match id, `player_id` = nickname): `cs_kills_m12`, `cs_headshots_m12`
+- **lol** (`event_id` = bo3.gg match id, `player_id` = gol.gg player id): `kills_m123` (graded from gol.gg a few hours after the series; void if fewer than 3 games are played)
 - **soccer** (`event_id` = ESPN event, `player_id` = ESPN athlete id; any league): `passes_att`, `gk_saves`, `shots`, `sot`, `tackles`, `fouls`. A player who doesn't play is voided, as the apps do.
 
 ## Price a PrizePicks board (`edge/pp.py`)

@@ -151,7 +151,32 @@ def _soccer_detail(r: dict, cache: dict) -> dict:
     return {}
 
 
-DETAIL = {"mlb": _mlb_detail, "nhl": _nhl_detail, "cs2": _cs2_detail, "soccer": _soccer_detail}
+def _lol_detail(r: dict, cache: dict) -> dict:
+    """Game by game: result, his kills vs what the model expected for that result, and the game's total kills."""
+    import re
+    from . import lol
+    need = len(re.search(r"_m(\d+)$", r["market"]).group(1))
+    m = cache.get(("lol", r["event_id"])) or lol.match_by_id(int(r["event_id"]))
+    allg = lol.player_games(r["player_id"])
+    games = lol.series_games(allg, m["start_date"])[:need]
+    if not games:
+        return {}
+    prior = [g for g in allg if g["date"] < games[0]["date"]][:40]  # the model's sample: his 40 games before the series
+    mw = sum(g["k"] for g in prior if g["win"]) / max(1, sum(g["win"] for g in prior))
+    ml = sum(g["k"] for g in prior if not g["win"]) / max(1, sum(not g["win"] for g in prior))
+    maps, exp, tot = [], 0.0, []
+    for i, g in enumerate(games, 1):
+        teams = lol.game_teams(g["game"])
+        both = sum(k for _, _, k in teams)
+        tot.append(both)
+        e = mw if g["win"] else ml
+        exp += e
+        maps.append(f"G{i} {'W' if g['win'] else 'L'}: {g['k']} K (expected {e:.1f}); "
+                    + " - ".join(f"{t} {k}" for t, _, k in teams) + f", {both} total")
+    return {"role": "lol", "maps": maps, "expected": round(exp, 1), "game_kills": tot, "opportunity": None}
+
+
+DETAIL = {"mlb": _mlb_detail, "nhl": _nhl_detail, "cs2": _cs2_detail, "soccer": _soccer_detail, "lol": _lol_detail}
 
 
 # ------------------------------------------------------------------ diagnosis
@@ -211,6 +236,9 @@ def diagnose(r: dict, detail: dict) -> dict:
             pen = detail["hrr_total"] - detail["hrr_vs_starter"]
             ev.append(f"{detail['hrr_vs_starter']} of {detail['hrr_total']} H+R+RBI came off the starter, {pen} off the bullpen"
                       + (" (the bullpen part alone beat the line: not just the starter's fault)" if _sign(side) < 0 and pen > (line or 0) else ""))
+    if detail.get("role") == "lol" and detail.get("expected") is not None:
+        ev.append(f"{result:g} kills vs {detail['expected']} expected for the actual game results; "
+                  f"games had {'/'.join(str(k) for k in detail.get('game_kills', []))} total kills")
     if tag is None and against_market and (_f(r.get("p_model")) or 0) > 0.5:
         tag = "model bias"
         ev.append("model was on our side, the market was against it, and the market was right")

@@ -1,4 +1,4 @@
-"""Auto-grade pending bets from official/free stat feeds (MLB Stats API, NHL API, ESPN, bo3.gg)."""
+"""Auto-grade pending bets from official/free stat feeds (MLB Stats API, NHL API, ESPN, bo3.gg, gol.gg)."""
 from __future__ import annotations
 
 import json
@@ -128,6 +128,7 @@ def nfl_value(event_id: str, player_id: str, market: str, cache: dict, league: s
 
 # ------------------------------------------------------------------ CS2 (event_id = bo3.gg match id, player_id = nickname)
 def cs2_value(event_id: str, player_id: str, market: str, cache: dict):
+    from . import cs2
     key = ("cs2", event_id)
     if key not in cache:
         games = _get(f"https://api.bo3.gg/api/v1/games?filter%5Bgames.match_id%5D%5Beq%5D={event_id}")["results"]
@@ -144,7 +145,7 @@ def cs2_value(event_id: str, player_id: str, market: str, cache: dict):
             return "pending", None
         for p in stats:
             nick = ((p.get("steam_profile") or {}).get("player") or {}).get("nickname") or (p.get("steam_profile") or {}).get("nickname")
-            if _norm(nick) == _norm(player_id):
+            if cs2.norm(nick) == cs2.norm(player_id):   # 'dev1ce' on the server is 'device' on the board
                 total += p[field]
                 seen += 1
     return ("final", total) if seen == 2 else ("void", None)
@@ -190,7 +191,28 @@ def cfb_value(event_id: str, player_id: str, market: str, cache: dict):
     return nfl_value(event_id, player_id, market, cache, league="college-football")
 
 
-GRADERS = {"mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value}
+# ------------------------------------------------------------------ LoL (event_id = bo3.gg match id, player_id = gol.gg id)
+def lol_value(event_id: str, player_id: str, market: str, cache: dict):
+    """Kills over maps 1..n (market kills_m123 -> games 1-3) from gol.gg once the series is posted there."""
+    import re
+    from . import lol
+    need = len(re.search(r"_m(\d+)$", market).group(1))
+    key = ("lol", event_id)
+    if key not in cache:
+        cache[key] = lol.match_by_id(int(event_id))
+    m = cache[key]
+    if not m or m.get("status") != "finished":
+        return "pending", None
+    played = (m.get("team1_score") or 0) + (m.get("team2_score") or 0)
+    if played < need:
+        return "void", None  # fewer maps than the prop covers: pick'em apps void it
+    games = lol.series_games(lol.player_games(player_id), m["start_date"])
+    if len(games) < need:
+        return "pending", None  # gol.gg posts a few hours after the series
+    return "final", sum(g["k"] for g in games[:need])
+
+
+GRADERS = {"mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value, "lol": lol_value}
 
 
 def settle(value: float, line: float, side: str) -> str:

@@ -95,6 +95,41 @@ def find_match(match_id: int) -> dict | None:
     return None
 
 
+def match_by_id(match_id: int) -> dict | None:
+    """A bo3.gg LoL match by id, whatever its status (the single-match endpoint 404s for LoL)."""
+    for st, sort in (("finished", "-start_date"), ("current", "start_date"), ("upcoming", "start_date")):
+        for off in ((0, 100, 200) if st == "finished" else (0,)):
+            d = _get(f"{BO3}/matches?page%5Blimit%5D=100&page%5Boffset%5D={off}&sort={sort}&filter%5Bmatches.status%5D%5Bin%5D={st}"
+                     f"&filter%5Bmatches.discipline_id%5D%5Beq%5D=3&with=teams")
+            for m in d.get("results", []):
+                if m.get("id") == int(match_id):
+                    return m
+            if len(d.get("results", [])) < 100:
+                break
+    return None
+
+
+def series_games(games: list[dict], start_date: str) -> list[dict]:
+    """The player's games from the series that started on start_date (gol.gg dates are local: allow a day either side)."""
+    import datetime as dt
+    d0 = dt.date.fromisoformat(start_date[:10])
+    near = {(d0 + dt.timedelta(days=k)).isoformat() for k in (-1, 0, 1)}
+    by = collections.defaultdict(list)
+    for g in games:
+        if g["date"] in near:
+            by[(g["date"], g["title"])].append(g)
+    if not by:
+        return []
+    return sorted(max(by.values(), key=len), key=lambda g: g["game"])
+
+
+def game_teams(game_id: int) -> list[tuple[str, bool, int]]:
+    """(team, won, team kills) for both sides of a finished gol.gg game."""
+    h = html.unescape(re.sub(r"<[^>]+>", " ", _page(f"https://gol.gg/game/stats/{game_id}/page-game/")))
+    h = re.sub(r"\s+", " ", h)
+    return [(re.sub(r"^.*v\d+\.\d+\s+", "", t).strip(), r == "WIN", int(k)) for t, r, k in re.findall(r"([A-Za-z0-9][\w .'&-]{1,40}?) - (WIN|LOSS) (\d+) ", h)][:2]
+
+
 def team_series_p(match: dict, games: list[dict]) -> tuple[float, str]:
     """Series win probability for the player's team: the bo3 team whose name appears in his recent series titles."""
     bu = match.get("bet_updates") or {}

@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from edge import cs2, grade, learn, pp, review, soccer, verify  # noqa: E402
+from edge import cs2, grade, learn, lol, pp, review, soccer, verify  # noqa: E402
 from edge.blend import DEFAULT_ADJ, final_probability  # noqa: E402
 from edge.odds import devig, fair_american, kelly_fraction, stake  # noqa: E402
 from edge.pickem import PAYOUTS, Leg, best_entries, breakeven, entry_summary, squad_ride  # noqa: E402
@@ -98,6 +98,14 @@ class Learning(unittest.TestCase):
 
     def test_small_sample_keeps_prior(self):
         self.assertEqual(learn.fit_blend(_synthetic(5), {**DEFAULT_ADJ})["w_model"], DEFAULT_ADJ["blend"]["w_model"])
+
+    def test_one_game_script_counts_once(self):
+        leg = lambda i, ev: {"id": str(i), "segment": "lol:kills_m123:under", "event_id": ev, "status": "lost",
+                             "p_model": "0.66", "p_hist": "0.66", "hist_n": "20"}
+        same = [leg(i, "S1") for i in range(7)]                    # seven unders on one series
+        self.assertEqual(learn.learn_segment_bias(same, {**DEFAULT_ADJ}), {})
+        apart = [leg(i, f"S{i}") for i in range(7)]                # seven series
+        self.assertLess(learn.learn_segment_bias(apart, {**DEFAULT_ADJ})["lol:kills_m123:under"], 0)
 
     def test_segment_bias_and_avoid(self):
         rows = _synthetic(600)
@@ -361,6 +369,24 @@ class Grading(unittest.TestCase):
             self.assertEqual(grade.cs2_value("9", "divine", "cs_kills_m12", {}), ("pending", None))
         finally:
             grade._get = orig
+
+    def test_lol_maps_1_3_from_gol(self):
+        g = lambda gid, date, title, k, w=True: {"game": gid, "date": date, "title": title, "k": k, "win": w}
+        games = [g(7, "2026-10-13", "WE vs FQ", 5, False), g(5, "2026-10-13", "WE vs FQ", 7), g(6, "2026-10-13", "WE vs FQ", 4, False),
+                 g(8, "2026-10-13", "WE vs FQ", 12), g(1, "2026-10-06", "FQ vs SR", 9)]
+        orig = lol.match_by_id, lol.player_games
+        try:
+            lol.player_games = lambda pid: games
+            lol.match_by_id = lambda i: {"status": "finished", "team1_score": 3, "team2_score": 1, "start_date": "2026-10-13T06:00:00Z"}
+            self.assertEqual(grade.lol_value("1", "2", "kills_m123", {}), ("final", 16))   # games 1-3 in game-id order
+            lol.match_by_id = lambda i: {"status": "finished", "team1_score": 2, "team2_score": 0, "start_date": "2026-10-13T06:00:00Z"}
+            self.assertEqual(grade.lol_value("1", "2", "kills_m123", {}), ("void", None))   # a 2-0 Bo3 never plays map 3
+            lol.match_by_id = lambda i: {"status": "finished", "team1_score": 3, "team2_score": 0, "start_date": "2026-10-20T06:00:00Z"}
+            self.assertEqual(grade.lol_value("1", "2", "kills_m123", {}), ("pending", None))  # not on gol.gg yet
+            lol.match_by_id = lambda i: {"status": "current", "team1_score": 1, "team2_score": 1, "start_date": "2026-10-13T06:00:00Z"}
+            self.assertEqual(grade.lol_value("1", "2", "kills_m123", {}), ("pending", None))
+        finally:
+            lol.match_by_id, lol.player_games = orig
 
     def test_grade_rows_updates_status(self):
         rows = [{"status": "pending", "sport": "nhl", "event_id": "5", "player_id": "7", "market": "skater_sog", "line": "3.5", "side": "under", "notes": ""}]

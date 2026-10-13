@@ -131,11 +131,21 @@ def fit_blend(rows: list[dict], adj: dict) -> dict:
             "w_hist": round(float(th[3]), 4), "n_fit": int(len(y))}
 
 
+def script_weights(rows: list[dict]) -> dict:
+    """Legs on one game script are one piece of evidence, not k: each (segment, event) splits a weight of 1.
+    Seven unders on one bloody LoL series must not count as seven independent misses."""
+    k = Counter((r.get("segment", ""), r.get("event_id") or r["id"]) for r in rows)
+    return {r["id"]: 1.0 / k[(r.get("segment", ""), r.get("event_id") or r["id"])] for r in rows}
+
+
 def learn_segment_bias(rows: list[dict], adj: dict) -> dict:
-    """Shrunk one-step logistic correction per segment, measured after the blend (excluding old outcome bias)."""
+    """Shrunk one-step logistic correction per segment, measured after the blend (excluding old outcome bias).
+    n is the number of independent game scripts in the segment (see script_weights)."""
     base = {**adj, "outcome_bias_logit": {}}
-    acc = defaultdict(lambda: [0.0, 0.0, 0])
-    for r in graded(rows):
+    acc = defaultdict(lambda: [0.0, 0.0, 0.0])
+    gr = graded(rows)
+    wt = script_weights(gr)
+    for r in gr:
         seg = r.get("segment", "")
         if not seg:
             continue
@@ -144,10 +154,11 @@ def learn_segment_bias(rows: list[dict], adj: dict) -> dict:
             continue
         p = final_probability(pm, pk, ph, seg, int(_f(r.get("hist_n")) or 0), base).p
         y = 1.0 if r["status"] == "won" else 0.0
+        w = wt[r["id"]]
         a = acc[seg]
-        a[0] += y - p
-        a[1] += p * (1 - p)
-        a[2] += 1
+        a[0] += w * (y - p)
+        a[1] += w * p * (1 - p)
+        a[2] += w
     out = {}
     for seg, (res, info, n) in acc.items():
         if n < 5 or info <= 0:
@@ -159,17 +170,19 @@ def learn_segment_bias(rows: list[dict], adj: dict) -> dict:
 
 def find_avoid_segments(rows: list[dict]) -> list[str]:
     acc = defaultdict(list)
-    for r in graded(rows):
+    gr = graded(rows)
+    wt = script_weights(gr)
+    for r in gr:
         p = _f(r.get("p_final"))
         if p is not None and r.get("segment"):
-            acc[r["segment"]].append((p, 1.0 if r["status"] == "won" else 0.0))
+            acc[r["segment"]].append((p, 1.0 if r["status"] == "won" else 0.0, wt[r["id"]]))
     bad = []
     for seg, v in acc.items():
-        n = len(v)
+        n = sum(w for _, _, w in v)   # independent game scripts
         if n < 20:
             continue
-        mp = np.mean([p for p, _ in v])
-        hr = np.mean([y for _, y in v])
+        mp = sum(p * w for p, _, w in v) / n
+        hr = sum(y * w for _, y, w in v) / n
         z = (hr - mp) / math.sqrt(max(mp * (1 - mp) / n, 1e-9))
         if hr - mp < -0.08 and z < -2:
             bad.append(seg)
