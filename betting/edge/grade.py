@@ -90,10 +90,10 @@ NFL_STATS = {
 }
 
 
-def nfl_value(event_id: str, player_id: str, market: str, cache: dict):
-    key = ("nfl", event_id)
+def nfl_value(event_id: str, player_id: str, market: str, cache: dict, league: str = "nfl"):
+    key = (league, event_id)
     if key not in cache:
-        cache[key] = _get(f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event={event_id}")
+        cache[key] = _get(f"https://site.api.espn.com/apis/site/v2/sports/football/{league}/summary?event={event_id}")
     s = cache[key]
     if s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_FINAL":
         return "pending", None
@@ -185,7 +185,12 @@ def soccer_value(event_id: str, player_id: str, market: str, cache: dict):
     return "void", None
 
 
-GRADERS = {"mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cs2": cs2_value, "soccer": soccer_value}
+def cfb_value(event_id: str, player_id: str, market: str, cache: dict):
+    """College football: same ESPN box score format as the NFL."""
+    return nfl_value(event_id, player_id, market, cache, league="college-football")
+
+
+GRADERS = {"mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value}
 
 
 def settle(value: float, line: float, side: str) -> str:
