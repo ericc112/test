@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from edge import grade, learn  # noqa: E402
+from edge import grade, learn, review  # noqa: E402
 from edge.blend import DEFAULT_ADJ, final_probability  # noqa: E402
 from edge.odds import devig, fair_american, kelly_fraction, stake  # noqa: E402
 from edge.pickem import PAYOUTS, Leg, best_entries, breakeven, entry_summary, squad_ride  # noqa: E402
@@ -55,8 +55,8 @@ class Pickem(unittest.TestCase):
 
 class Blend(unittest.TestCase):
     def test_missing_components_and_agreement(self):
-        e = final_probability(0.65, 0.60, 0.70, "mlb:pitcher_outs:over", hist_n=20, adj=DEFAULT_ADJ)
-        self.assertTrue(0.6 < e.p < 0.7)
+        e = final_probability(0.71, 0.66, 0.74, "mlb:pitcher_outs:over", hist_n=20, adj=DEFAULT_ADJ)
+        self.assertTrue(0.65 < e.p < 0.75)
         self.assertTrue(e.agreement)
         self.assertEqual(e.confidence, "High")
         d = final_probability(0.6, 0.45, None, "x:y:z", adj=DEFAULT_ADJ)
@@ -121,6 +121,86 @@ class Learning(unittest.TestCase):
         self.assertIn("Calibration", txt)
 
 
+class HitRateDiscipline(unittest.TestCase):
+    def test_no_market_needs_deep_history_for_high(self):
+        thin = final_probability(0.72, None, 0.75, "lol:kills_m123:under", hist_n=12, adj=DEFAULT_ADJ)
+        deep = final_probability(0.72, None, 0.74, "lol:kills_m123:under", hist_n=40, adj=DEFAULT_ADJ)
+        self.assertNotEqual(thin.confidence, "High")
+        self.assertEqual(deep.confidence, "High")
+
+    def test_postseason_history_shrink(self):
+        adj = {**DEFAULT_ADJ, "hist_weight_scale": {"mlb:pitcher_outs": 0.5}}
+        full = final_probability(None, 0.63, 0.90, "mlb:pitcher_outs:over", hist_n=29, adj=DEFAULT_ADJ)
+        half = final_probability(None, 0.63, 0.90, "mlb:pitcher_outs:over", hist_n=29, adj=adj)
+        self.assertLess(half.p, full.p)
+
+    def test_best_legs_one_per_script(self):
+        from edge import card
+        base = {"status": "pending", "date": "d", "p_market": 0.68, "hist_n": 30, "segment": "x:y:over", "sport": "mlb"}
+        rows = [{**base, "player": "A", "event_id": "1", "p_model": 0.75, "p_hist": 0.74},
+                {**base, "player": "B", "event_id": "1", "p_model": 0.73, "p_hist": 0.72},
+                {**base, "player": "C", "event_id": "2", "p_model": 0.74, "p_hist": 0.73}]
+        legs = card.best_legs(rows, min_p=0.6)
+        self.assertEqual(sorted(r["player"] for r in legs), ["A", "C"])
+        self.assertAlmostEqual(card.best_entry(legs, 2)["p_all"], legs[0]["p_now"] * legs[1]["p_now"], delta=0.01)
+
+
+def _loss(i, event, pid, market, side, line, result, **kw):
+    return {"id": str(i), "date": "d", "sport": "mlb", "event_id": event, "player": f"p{pid}", "player_id": str(pid),
+            "market": market, "side": side, "line": str(line), "result_value": str(result), "status": "lost",
+            "p_final": "0.6", "action": "lean", "group": "", "segment": f"mlb:{market}:{side}", **kw}
+
+
+class LossReview(unittest.TestCase):
+    """Every loss gets a post-mortem; legs that rode one script point to a single root cause."""
+    def setUp(self):
+        self.rows = [
+            _loss(1, "9", 100, "pitcher_outs", "over", 17.5, 8, p_market="0.63", p_hist="0.9"),
+            _loss(2, "9", 100, "pitcher_pitches", "over", 93.5, 75, p_model="0.6"),
+            _loss(3, "9", 200, "batter_hrr", "under", 1.5, 4),
+            _loss(4, "9", 300, "batter_hrr", "under", 1.5, 5),
+            _loss(5, "7", 400, "pitcher_walks", "under", 1.5, 2, p_model="0.6", p_market="0.54"),
+            _loss(6, "8", 500, "pitcher_strikeouts", "under", 5.5, 7, p_model="0.6", p_market="0.45"),
+        ]
+        pit = {"role": "pitcher", "outs": 8, "bf": 14, "pitches": 75, "p_per_pa": 5.4}
+        self.details = {"1": {**pit, "opportunity": 8}, "2": {**pit, "opportunity": 14},
+                        "3": {"role": "batter", "pa": 5, "opp_starter_id": 100, "opp_starter_outs": 8, "opp_starter_er": 3, "hrr_total": 4, "hrr_vs_starter": 3},
+                        "4": {"role": "batter", "pa": 4, "opp_starter_id": 100, "opp_starter_outs": 8, "opp_starter_er": 3, "hrr_total": 5, "hrr_vs_starter": 2},
+                        "5": {"role": "pitcher", "outs": 12, "bf": 18, "pitches": 64}, "6": {"role": "pitcher", "outs": 18}}
+
+    def test_every_loss_reviewed_and_script_linked(self):
+        pms = {p["id"]: p for p in review.review(self.rows, details=self.details, fetch=False)}
+        self.assertEqual(set(pms), {"1", "2", "3", "4", "5", "6"})
+        self.assertEqual(pms["1"]["auto_tag"], "opportunity")       # starter pulled early: the root leg
+        self.assertEqual(pms["2"]["auto_tag"], "correlated")        # his pitches over rode the same script
+        self.assertEqual(pms["3"]["auto_tag"], "correlated")        # hitter under lost on damage off that starter
+        self.assertEqual(pms["4"]["auto_tag"], "variance")          # bullpen damage alone beat the line
+        self.assertTrue(pms["5"]["near_miss"])
+        self.assertEqual(pms["6"]["auto_tag"], "model bias")        # sided with the model against the market
+
+    def test_caps_and_rule_flags(self):
+        rows = [dict(r, miss_reason="opportunity", segment="mlb:pitcher_outs:over", p_final="0.66") for r in self.rows[:4]]
+        rows.append(dict(self.rows[0], id="9", status="won", segment="mlb:pitcher_outs:over", p_final="0.66"))
+        caps = learn.find_caps(rows)
+        self.assertIn("mlb:pitcher_outs:over", caps)
+        adj = {**DEFAULT_ADJ, "cap_medium_segments": caps}
+        e = final_probability(0.71, 0.66, 0.74, "mlb:pitcher_outs:over", hist_n=20, adj=adj)
+        self.assertEqual(e.confidence, "Medium")
+        with tempfile.TemporaryDirectory() as d:
+            a, l = os.path.join(d, "a.json"), os.path.join(d, "L.md")
+            first = learn.update(rows, a, l, today="x")
+            self.assertTrue(any("share the cause" in n for n in first["lessons_added"]))
+            again = learn.update(rows, a, l, today="y")
+            self.assertFalse(any("share the cause" in n for n in again["lessons_added"]))  # flagged once
+
+    def test_l19_no_high_without_market_when_model_known_off(self):
+        adj = {**DEFAULT_ADJ, "model_bias_logit": {"mlb:batter_hrr:under": -0.31}}
+        e = final_probability(0.76, None, 0.647, "mlb:batter_hrr:under", hist_n=116, adj=adj)
+        self.assertEqual(e.confidence, "Medium")
+        ok = final_probability(0.72, None, 0.73, "lol:kills_m123:under", hist_n=40, adj=DEFAULT_ADJ)
+        self.assertEqual(ok.confidence, "High")  # no correction needed in that market: rule doesn't fire
+
+
 class Grading(unittest.TestCase):
     def test_settle(self):
         self.assertEqual(grade.settle(3, 3.5, "under"), "won")
@@ -131,6 +211,14 @@ class Grading(unittest.TestCase):
         cache = {("mlb", "1"): {"final": True, "box": {"teams": {"home": {"players": {"ID9": {"stats": {"pitching": {"outs": 15, "strikeOuts": 4}}}}}, "away": {"players": {}}}}}}
         self.assertEqual(grade.mlb_value("1", "9", "pitcher_outs", cache), ("final", 15))
         self.assertEqual(grade.mlb_value("1", "8", "pitcher_outs", cache), ("void", None))
+
+    def test_cs2_unparsed_stats_stay_pending(self):
+        orig = grade._get
+        grade._get = lambda url: [] if "players_stats" in url else {"results": [{"id": 1, "number": 1, "status": "finished"}, {"id": 2, "number": 2, "status": "finished"}]}
+        try:
+            self.assertEqual(grade.cs2_value("9", "divine", "cs_kills_m12", {}), ("pending", None))
+        finally:
+            grade._get = orig
 
     def test_grade_rows_updates_status(self):
         rows = [{"status": "pending", "sport": "nhl", "event_id": "5", "player_id": "7", "market": "skater_sog", "line": "3.5", "side": "under", "notes": ""}]

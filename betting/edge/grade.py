@@ -139,7 +139,10 @@ def cs2_value(event_id: str, player_id: str, market: str, cache: dict):
     field = {"cs_kills_m12": "kills", "cs_headshots_m12": "headshots"}[market]
     total, seen = 0, 0
     for g in m12:
-        for p in _get(f"https://api.bo3.gg/api/v1/games/{g['id']}/players_stats"):
+        stats = _get(f"https://api.bo3.gg/api/v1/games/{g['id']}/players_stats")
+        if not stats:  # map finished but demo not parsed yet: wait, don't void
+            return "pending", None
+        for p in stats:
             nick = ((p.get("steam_profile") or {}).get("player") or {}).get("nickname") or (p.get("steam_profile") or {}).get("nickname")
             if _norm(nick) == _norm(player_id):
                 total += p[field]
@@ -158,18 +161,20 @@ def settle(value: float, line: float, side: str) -> str:
 
 
 def grade_rows(rows: list[dict]) -> dict:
-    cache, counts = {}, {"graded": 0, "still_pending": 0, "void": 0, "errors": 0}
+    cache, counts = {}, {"graded": 0, "still_pending": 0, "void": 0, "manual": 0, "errors": 0}
     for r in rows:
         if r.get("status") not in ("pending", ""):
             continue
         fn = GRADERS.get(r.get("sport", "").lower())
         if not fn or not r.get("event_id") or not r.get("player_id"):
-            counts["errors"] += 1
+            counts["manual"] += 1  # no auto-grader for this sport/market: grade by hand
             continue
         try:
             state, value = fn(r["event_id"], r["player_id"], r["market"], cache)
         except Exception as e:  # network/parse problems leave the bet pending
-            r["notes"] = (r.get("notes", "") + f" | grade error: {type(e).__name__}").strip(" |")
+            msg = f"grade error: {type(e).__name__}"
+            if msg not in r.get("notes", ""):
+                r["notes"] = (r.get("notes", "") + f" | {msg}").strip(" |")
             counts["errors"] += 1
             continue
         if state == "pending":

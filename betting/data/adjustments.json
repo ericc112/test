@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-12",
+  "updated": "2026-10-13",
   "blend_prior": {
     "intercept": 0.0,
     "w_model": 0.45,
@@ -8,14 +8,13 @@
     "w_hist": 0.15
   },
   "blend": {
-    "intercept": 0.0,
-    "w_model": 0.45,
-    "w_market": 0.4,
-    "w_hist": 0.15
+    "intercept": 0.0885,
+    "w_model": 0.4549,
+    "w_market": 0.4088,
+    "w_hist": 0.1207
   },
   "blend_fit": {
-    "n_fit": 0,
-    "note": "fewer than 10 graded bets with model+market: kept prior"
+    "n_fit": 14
   },
   "model_bias_logit": {
     "mlb:batter_hits:over": -0.145,
@@ -23,15 +22,28 @@
     "mlb:batter_singles:over": -0.08,
     "mlb:batter_singles:under": 0.08,
     "mlb:batter_walks:over": 0.05,
-    "mlb:batter_walks:under": -0.05
+    "mlb:batter_walks:under": -0.05,
+    "mlb:batter_hrr:over": 0.31,
+    "mlb:batter_hrr:under": -0.31
   },
-  "model_bias_source": "2026-10-12 NLCS/ALCS hitter scan: model ran +3.6 pts (hits), +2.0 (singles), -1.2 (walks) vs DraftKings no-vig across all hitters. Re-measure each scan.",
-  "outcome_bias_logit": {},
+  "model_bias_source": "2026-10-12 NLCS/ALCS hitter scan: model ran +3.6 pts (hits), +2.0 (singles), -1.2 (walks) vs DraftKings no-vig across all hitters. Re-measure each scan. | 2026-10-12 H+R+RBI 1.5 scan: model ran -7.6 pts vs DK no-vig across 18 hitters (run-environment scaling too strong).",
+  "outcome_bias_logit": {
+    "mlb:batter_hrr:under": -0.061
+  },
   "avoid_segments": [],
   "gates": {
-    "high": 0.62,
-    "medium": 0.56,
+    "high": 0.65,
+    "medium": 0.58,
     "max_spread_high": 0.12,
-    "min_hist_n_high": 10
-  }
+    "min_hist_n_high": 10,
+    "no_market_min_hist_n": 20,
+    "no_market_max_spread": 0.1
+  },
+  "hist_weight_scale": {
+    "mlb:pitcher_outs": 0.5,
+    "mlb:pitcher_pitches": 0.5
+  },
+  "hist_weight_scale_note": "Postseason only (LESSONS L17): playoff hooks are quicker than regular-season history implies. Reset to {} on opening day.",
+  "cap_medium_segments": {},
+  "rule_flags": []
 }

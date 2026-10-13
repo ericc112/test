@@ -6,19 +6,21 @@ import datetime as dt
 import json
 import math
 import os
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 import numpy as np
 
 from .blend import ADJ_PATH, DEFAULT_ADJ, HERE, final_probability, load_adjustments, _lookup
 from .odds import american_to_decimal, implied, logit, sigmoid
+from .review import NO_RULE_TAGS, read_pm
 
 BETS_PATH = os.path.join(HERE, "data", "bets.csv")
 LESSONS_PATH = os.path.join(HERE, "LESSONS.md")
 
 FIELDS = ["id", "date", "sport", "event", "event_id", "player", "player_id", "market", "line", "side", "book",
           "price", "payout_mult", "entry_id", "stake", "p_model", "p_market", "p_hist", "hist_n", "p_final",
-          "confidence", "action", "segment", "group", "status", "result_value", "closing_price", "miss_reason", "notes"]
+          "confidence", "action", "segment", "group", "status", "result_value", "closing_price", "miss_reason", "notes",
+          "proj", "opp_proj"]  # proj = projected median of the stat; opp_proj = projected BF / PA / TOI / rounds
 
 PRIOR_STRENGTH = 25.0   # how hard the blend weights are pulled back to their prior (in "bets" of evidence)
 SEGMENT_K = 30.0        # shrinkage for per-segment bias: weight = n / (n + K)
@@ -174,8 +176,42 @@ def find_avoid_segments(rows: list[dict]) -> list[str]:
     return sorted(bad)
 
 
+def base_tag(reason: str) -> str:
+    """'model bias: playoff leash' -> 'model bias'."""
+    return (reason or "").split(":")[0].strip().lower()
+
+
+def cause_counts(rows: list[dict]) -> dict:
+    """Confirmed root causes per segment, ignoring variance and correlated legs."""
+    out = defaultdict(Counter)
+    for r in graded(rows):
+        t = base_tag(r.get("miss_reason", ""))
+        if r["status"] == "lost" and t and t not in NO_RULE_TAGS and r.get("segment"):
+            out[r["segment"]][t] += 1
+    return out
+
+
+def find_caps(rows: list[dict], min_losses: int = 3) -> dict:
+    """Cap a segment at Medium while it has >= 3 losses from the same fixable cause AND hits below prediction.
+    Recomputed from all graded bets every run, so the cap lifts itself once results recover."""
+    acc = defaultdict(list)
+    for r in graded(rows):
+        p = _f(r.get("p_final"))
+        if p is not None and r.get("segment"):
+            acc[r["segment"]].append((p, 1.0 if r["status"] == "won" else 0.0))
+    caps = {}
+    for seg, c in cause_counts(rows).items():
+        tag, n = c.most_common(1)[0]
+        v = acc.get(seg, [])
+        if n >= min_losses and v:
+            hr, mp = np.mean([y for _, y in v]), np.mean([p for p, _ in v])
+            if hr < mp:
+                caps[seg] = f"{n} losses tagged '{tag}'; hit {hr:.0%} vs {mp:.0%} predicted over {len(v)}"
+    return caps
+
+
 # ---------------------------------------------------------------- report + update
-def report(rows: list[dict]) -> str:
+def report(rows: list[dict], pms: dict | None = None) -> str:
     g = graded(rows)
     lines = [f"Bets logged: {len(rows)} | graded: {len(g)} | pending: {sum(r.get('status') == 'pending' for r in rows)}"]
     if not g:
@@ -199,6 +235,12 @@ def report(rows: list[dict]) -> str:
     ent = entry_results(rows)
     if ent:
         lines.append(f"Entries: {sum(e['won'] for e in ent)}/{len(ent)} cashed | profit {sum(e['profit'] for e in ent):+.2f} on {sum(e['stake'] for e in ent):.2f}")
+    for key in ("confidence", "action"):
+        tiers = defaultdict(list)
+        for r, y in zip(g, ys):
+            tiers[r.get(key) or "?"].append((_f(r["p_final"]), y))
+        lines.append(f"Hit rate by {key}: " + " | ".join(
+            f"{t} {np.mean([y for _, y in v]):.0%} of {len(v)} (pred {np.mean([p for p, _ in v]):.0%})" for t, v in sorted(tiers.items())))
     lines.append("Calibration (predicted -> actual):")
     for c in calibration_table(ps, ys):
         flag = "  <-- off by >8 pts" if c["n"] >= 15 and abs(c["actual"] - c["predicted"]) > 0.08 else ""
@@ -209,15 +251,26 @@ def report(rows: list[dict]) -> str:
     lines.append("By segment (n, predicted, actual):")
     for s, v in sorted(seg.items(), key=lambda kv: -len(kv[1])):
         lines.append(f"  {s:38s} n={len(v):3d}  {np.mean([p for p, _ in v]):.1%} -> {np.mean([y for _, y in v]):.1%}")
-    misses = [r for r in g if r["status"] == "lost" and (_f(r["p_final"]) or 0) >= 0.62]
-    if misses:
-        lines.append("High-confidence misses (tag a root cause with `python -m edge tag <id> \"reason\"`):")
-        for r in misses:
-            lines.append(f"  #{r['id']} {r['player']} {r['market']} {r['side']} {r['line']} p={r['p_final']} result={r['result_value']} reason={r.get('miss_reason') or 'UNTAGGED'}")
+    lost = [r for r in g if r["status"] == "lost"]
+    if lost:
+        pm = read_pm() if pms is None else pms
+        untagged = [r for r in lost if not r.get("miss_reason")]
+        roots = {pm[r["id"]]["linked"] for r in lost if r["id"] in pm and pm[r["id"]].get("linked")}
+        solo = sum(1 for r in lost if not (r["id"] in pm and pm[r["id"]].get("linked")))
+        lines.append(f"Losses: {len(lost)} from {solo + len(roots)} independent causes | post-mortem written {sum(r['id'] in pm for r in lost)} "
+                     f"| root cause confirmed {len(lost) - len(untagged)}")
+        if any(r["id"] not in pm for r in lost):
+            lines.append("  Some losses have no post-mortem yet: run `python -m edge review`.")
+        if untagged:
+            lines.append("Losses needing a root cause (`python -m edge tag <id> \"tag\" --lesson \"...\"`; every loss, not just High):")
+            for r in untagged:
+                auto = pm.get(r["id"], {}).get("auto_tag", "?")
+                lines.append(f"  #{r['id']} {r['player']} {r['market']} {r['side']} {r['line']} p={r['p_final']} ({r.get('confidence')}, {r.get('action')}) "
+                             f"result={r['result_value']} auto={auto}")
     reasons = defaultdict(int)
     for r in g:
         if r.get("miss_reason"):
-            reasons[r["miss_reason"]] += 1
+            reasons[base_tag(r["miss_reason"])] += 1
     if reasons:
         lines.append("Miss reasons so far: " + ", ".join(f"{k} x{v}" for k, v in sorted(reasons.items(), key=lambda kv: -kv[1])))
     return "\n".join(lines)
@@ -235,9 +288,8 @@ def update(rows: list[dict] | None = None, adj_path: str = ADJ_PATH, lessons_pat
     adj["outcome_bias_logit"] = learn_segment_bias(rows, adj)
     new_avoid = find_avoid_segments(rows)
     adj["avoid_segments"] = sorted(set(old.get("avoid_segments", [])) | set(new_avoid))
+    adj["cap_medium_segments"] = find_caps(rows)
     adj["updated"] = today or dt.date.today().isoformat()
-    with open(adj_path, "w") as f:
-        json.dump(adj, f, indent=2)
 
     notes = []
     for k in ("w_model", "w_market", "w_hist"):
@@ -249,6 +301,22 @@ def update(rows: list[dict] | None = None, adj_path: str = ADJ_PATH, lessons_pat
     for seg in new_avoid:
         if seg not in old.get("avoid_segments", []):
             notes.append(f"Segment {seg} added to AVOID list: hit rate >8 pts under prediction over 20+ bets.")
+    for seg, why in adj["cap_medium_segments"].items():
+        if seg not in old.get("cap_medium_segments", {}):
+            notes.append(f"Segment {seg} capped at Medium (no High legs) until results recover: {why}.")
+    for seg in old.get("cap_medium_segments", {}):
+        if seg not in adj["cap_medium_segments"]:
+            notes.append(f"Segment {seg}: Medium cap lifted, results back in line.")
+    flagged = set(old.get("rule_flags", []))
+    for seg, c in cause_counts(rows).items():
+        for tag, n in c.items():
+            key = f"{seg}|{tag}"
+            if n >= 2 and key not in flagged:
+                flagged.add(key)
+                notes.append(f"{n} losses in {seg} share the cause '{tag}': write a checklist rule for it in the table above.")
+    adj["rule_flags"] = sorted(flagged)
+    with open(adj_path, "w") as f:
+        json.dump(adj, f, indent=2)
     if notes and lessons_path:
         with open(lessons_path, "a") as f:
             f.write(f"\n### Auto-learned {adj['updated']}\n" + "".join(f"- {n}\n" for n in notes))
