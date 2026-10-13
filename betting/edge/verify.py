@@ -79,7 +79,7 @@ def check_rules(rep: Report):
     strong = conf in ("High", "Medium") or r.get("action") in ("bet", "lean")
     if ("NEW TO TEAM" in notes or "THIN SAMPLE" in notes) and strong:
         rep.add("FAIL", "rule L5", "player new to the team or thin sample: role unconfirmed")
-    if sport == "mlb" and mk in ("pitcher_outs", "pitcher_pitches") and side == "over" and r.get("date", "")[5:7] in ("10", "11"):
+    if sport == "mlb" and mk in ("pitcher_outs", "pitcher_pitches", "pitcher_bf") and side == "over" and r.get("date", "")[5:7] in ("10", "11"):
         rep.add("FAIL", "rule L17", "postseason starter-length over: no playoff leash bets in hit-rate mode")
     if sport == "mlb" and mk == "pitcher_hits_allowed" and side == "under" and conf == "High":
         rep.add("FAIL", "rule L18", "hits-allowed unders are capped at Medium")

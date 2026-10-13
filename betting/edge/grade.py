@@ -29,6 +29,7 @@ MLB_STATS = {
     "pitcher_earned_runs": ("pitching", lambda s: s.get("earnedRuns")),
     "pitcher_walks": ("pitching", lambda s: s.get("baseOnBalls")),
     "pitcher_pitches": ("pitching", lambda s: s.get("numberOfPitches")),
+    "pitcher_bf": ("pitching", lambda s: s.get("battersFaced")),
     "batter_hits": ("batting", lambda s: s.get("hits")),
     "batter_walks": ("batting", lambda s: s.get("baseOnBalls")),
     "batter_strikeouts": ("batting", lambda s: s.get("strikeOuts")),
