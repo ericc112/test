@@ -86,7 +86,10 @@ def board(league: str, odds_types=("standard",)) -> list[dict]:
         out.append({"league": league.upper(), "player": pl.get("display_name") or pl.get("name"), "team": pl.get("team"),
                     "team_name": pl.get("team_name"), "position": pl.get("position"), "opp": re.sub(r"\s*MAPS.*$", "", a.get("description") or ""),
                     "stat": a.get("stat_type"), "line": float(a.get("line_score")), "odds_type": a.get("odds_type"),
-                    "over_only": a.get("allowed_wager_types") == "over" or a.get("odds_type") in ("goblin", "demon"),
+                    # goblins and demons are More-only in the app. The partner feed's allowed_wager_types says "over" on
+                    # almost every standard line too, but the app shows Less on them (Rice passes 79.5, 10/13): not trusted
+                    "over_only": a.get("odds_type") in ("goblin", "demon"),
+                    "feed_over_only": a.get("allowed_wager_types") == "over",
                     "start": a.get("start_time"), "home": (teams.get("home") or {}).get("abbreviation"),
                     "away": (teams.get("away") or {}).get("abbreviation")})
     return out

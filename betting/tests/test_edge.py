@@ -316,7 +316,8 @@ class PrizePicksBoard(unittest.TestCase):
         self.assertEqual(len(std), 1)
         self.assertEqual(len(both), 2)
         self.assertEqual(std[0]["opp"], "BBL")
-        self.assertTrue(std[0]["over_only"])           # More-only standard line
+        self.assertFalse(std[0]["over_only"])          # the feed says "over" but the app shows Less on standard lines
+        self.assertTrue(std[0]["feed_over_only"])
         self.assertTrue(both[1]["over_only"])          # demons are always over-only
 
     def test_ladder_fit_and_over_only_side(self):

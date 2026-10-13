@@ -137,11 +137,17 @@ def check_offered(rep: Report):
             rep.add("WARN", "offered", f"couldn't load the PrizePicks board ({type(e).__name__}): confirm the line on screen")
             return
         from .cs2 import same_name
-        hits = [p for p in board if same_name(p["player"], r["player"]) and abs(p["line"] - float(r["line"])) < 1e-9]
-        if not hits:
-            rep.add("FAIL", "offered", f"no {r['player']} line at {r['line']} on the PrizePicks board now (moved or pulled)")
+        mine = [p for p in board if same_name(p["player"], r["player"])]
+        hits = [p for p in mine if abs(p["line"] - float(r["line"])) < 1e-9]
+        if not mine:
+            # the partner feed lags the app and drops lines the app still shows: absence is not proof the line was pulled
+            rep.add("WARN", "offered", f"{r['player']} is not in the PrizePicks partner feed now: confirm {r['line']} {r['side']} is on your screen")
+        elif not hits:
+            rep.add("FAIL", "offered", f"no {r['player']} line at {r['line']} on the PrizePicks board now (now {sorted({p['line'] for p in mine})})")
         elif r.get("side") == "under" and all(p["over_only"] for p in hits):
-            rep.add("FAIL", "offered", "line is MORE-ONLY on PrizePicks: the under can't be played")
+            rep.add("FAIL", "offered", "only a goblin/demon line at this number: More-only, the under can't be played")
+        elif r.get("side") == "under" and all(p.get("feed_over_only") for p in hits):
+            rep.add("WARN", "offered", f"on the board at {r['line']}; the feed marks it More-only but the app usually shows Less: confirm Less on screen")
         else:
             rep.add("PASS", "offered", f"on the PrizePicks board at {r['line']}" + (" (under available)" if r.get("side") == "under" else ""))
     else:
