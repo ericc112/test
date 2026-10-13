@@ -65,7 +65,7 @@ def mlb_value(event_id: str, player_id: str, market: str, cache: dict):
 
 
 # ------------------------------------------------------------------ NHL (event_id = gameId, player_id = NHL id)
-NHL_STATS = {"skater_sog": "sog", "skater_points": "points", "skater_goals": "goals", "goalie_saves": "saves"}
+NHL_STATS = {"skater_sog": "sog", "skater_points": "points", "skater_goals": "goals", "skater_assists": "assists", "goalie_saves": "saves"}
 
 
 def nhl_value(event_id: str, player_id: str, market: str, cache: dict):
