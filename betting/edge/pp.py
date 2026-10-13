@@ -25,7 +25,7 @@ import urllib.error
 
 import numpy as np
 
-from . import cs2, soccer
+from . import cs2, lol, soccer
 from .blend import HERE, final_probability
 from .grade import _get
 
@@ -282,6 +282,73 @@ def price_soccer(props: list[dict]) -> list[dict]:
     return out
 
 
+_GOL_IDS: dict = {}
+
+
+def gol_id(name: str) -> str | None:
+    """gol.gg player id from the player list embedded in every gol.gg page."""
+    if not _GOL_IDS:
+        h = lol._page("https://gol.gg/tournament/list/")
+        for pid, nm in re.findall(r"value:\s*'p_(\d+)',\s*name:\s*'([^']+?) - [A-Z]{2}'", h):
+            _GOL_IDS.setdefault(nm.lower(), pid)
+    return _GOL_IDS.get(str(name).lower())
+
+
+def price_lol(props: list[dict]) -> list[dict]:
+    """LoL 'MAPS 1-3 Kills': lol.py model (bo3.gg series odds, gol.gg games) + series-level history."""
+    out, matches = [], None
+    for p in props:
+        if p["stat"] != "MAPS 1-3 Kills" or "+" in str(p["player"]):
+            out.append({**p, "error": "stat not priced yet"})
+            continue
+        try:
+            pid = gol_id(p["player"])
+            if not pid:
+                out.append({**p, "error": "player not found on gol.gg"})
+                continue
+            games = lol.player_games(pid)
+            if matches is None:
+                matches = []
+                for st in ("upcoming", "current"):
+                    matches += _get(f"{lol.BO3}/matches?page%5Blimit%5D=100&sort=start_date&filter%5Bmatches.status%5D%5Bin%5D={st}"
+                                    f"&filter%5Bmatches.discipline_id%5D%5Beq%5D=3&with=teams").get("results", [])
+            # his team = the bo3 side whose name runs through his recent series titles; the opponent must
+            # then match PrizePicks' opponent tag (an abbreviation like 'BFX' or a name like 'Galions')
+            titles = " ".join(g["title"].lower() for g in games[:15])
+            words = lambda n: [w for w in re.findall(r"[a-z0-9]+", (n or "").lower()) if len(w) > 1]
+            hits = lambda n: sum(titles.count(w) for w in words(n))
+            opp = str(p["opp"]).lower()
+            def opp_ok(n):
+                n = (n or "").lower()
+                initials = "".join(w[0] for w in words(n))
+                compact = re.sub(r"[^a-z0-9]", "", n)
+                it = iter(compact)
+                abbrev = bool(opp) and opp[0] == compact[:1] and all(ch in it for ch in re.sub(r"[^a-z0-9]", "", opp))  # 'bfx' in 'bnkfearx'
+                return opp in n or any(opp in w or w in opp for w in words(n) if len(w) > 2) or opp == initials or abbrev or \
+                    difflib.SequenceMatcher(None, opp, compact).ratio() > 0.6
+            def score(m):
+                a, b = (m.get("team1") or {}).get("name"), (m.get("team2") or {}).get("name")
+                return max((hits(a) > 0) + opp_ok(b), (hits(b) > 0) + opp_ok(a))
+            m = max(matches, key=score) if matches else None
+            if not m or score(m) < 2 or not (m.get("bet_updates") or {}).get("team_1", {}).get("coeff"):
+                out.append({**p, "error": "match/odds not found on bo3.gg"})
+                continue
+            if m.get("status") != "upcoming":
+                out.append({**p, "error": "match already under way"})
+                continue
+            bo = m.get("bo_type") or 5
+            ps, team = lol.team_series_p(m, games)
+            pg = lol.per_game_p(ps, bo)
+            r = lol.price(games, pg, bo, p["line"])
+            o, u, n = lol.history(games, p["line"])
+            note = f"median {r['median']:.0f}, {team} series {ps:.0%} (per game {pg:.0%}), Bo{bo}; {n} series of history"
+            row = _finish(p, "kills_m123", "lol", r["p_over"], r["p_under"], r["p_push"], o, u, notes=note)
+            out.append({**row, "event_id": str(m["id"]), "player_id": pid, "proj": r["median"], "script": f"lol:{m['id']}"})
+        except Exception as e:
+            out.append({**p, "error": f"{type(e).__name__}: {str(e)[:60]}"})
+    return out
+
+
 def price_board(props: list[dict]) -> list[dict]:
     if not props:
         return []
@@ -289,4 +356,6 @@ def price_board(props: list[dict]) -> list[dict]:
         return price_cs2(props)
     if props[0]["league"] in SOCCER:
         return price_soccer(props)
+    if props[0]["league"] == "LOL":
+        return price_lol(props)
     return [{**p, "error": "league not priced yet"} for p in props]
