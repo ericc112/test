@@ -8,13 +8,13 @@
     "w_hist": 0.15
   },
   "blend": {
-    "intercept": 0.0885,
-    "w_model": 0.4549,
-    "w_market": 0.4088,
-    "w_hist": 0.1207
+    "intercept": 0.0252,
+    "w_model": 0.465,
+    "w_market": 0.4276,
+    "w_hist": 0.0852
   },
   "blend_fit": {
-    "n_fit": 14
+    "n_fit": 30
   },
   "model_bias_logit": {
     "mlb:batter_hits:over": -0.145,
@@ -28,7 +28,9 @@
   },
   "model_bias_source": "2026-10-12 NLCS/ALCS hitter scan: model ran +3.6 pts (hits), +2.0 (singles), -1.2 (walks) vs DraftKings no-vig across all hitters. Re-measure each scan. | 2026-10-12 H+R+RBI 1.5 scan: model ran -7.6 pts vs DK no-vig across 18 hitters (run-environment scaling too strong).",
   "outcome_bias_logit": {
-    "mlb:batter_hrr:under": -0.061
+    "cs2:cs_kills_m12:under": -0.095,
+    "cs2:cs_headshots_m12:under": 0.015,
+    "mlb:batter_hrr:under": -0.072
   },
   "avoid_segments": [],
   "gates": {
@@ -44,6 +46,12 @@
     "mlb:pitcher_pitches": 0.5
   },
   "hist_weight_scale_note": "Postseason only (LESSONS L17): playoff hooks are quicker than regular-season history implies. Reset to {} on opening day.",
-  "cap_medium_segments": {},
-  "rule_flags": []
+  "cap_medium_segments": {
+    "mlb:batter_hrr:under": "3 losses tagged 'model bias'; hit 50% vs 57% predicted over 12"
+  },
+  "rule_flags": [
+    "cs2:cs_kills_m12:under|model bias",
+    "mlb:batter_hrr:under|model bias",
+    "mlb:pitcher_outs:over|opportunity"
+  ]
 }
