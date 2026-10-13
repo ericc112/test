@@ -40,7 +40,8 @@ LEAGUE_PPP = {"eng.1": 8.69, "esp.1": 9.13, "fra.1": 9.61, "ita.1": 9.24}   # pa
 BASE_PATH = os.path.join(HERE, "data", "soccer_baselines.json")
 MIN_TEAM_PASSES = 150          # below this a box score is partial
 PRESS_CLIP = (0.75, 1.25)      # outside this the opponent sample is broken, not the press
-POSS_BAND, MIN_COMPARABLE = 0.07, 6   # L27: compare like with like (team possession within 7 points)
+POSS_BAND, MIN_COMPARABLE = 0.07, 4   # L27: compare like with like (team possession within 7 points)
+SHARE_SHRINK = 4                        # comparable-start share gets weight n / (n + 4)
 COMPARABLE_REACH = 40                  # team matches searched for comparable-possession starts
 KEEPER_CV = 0.12               # match-to-match noise on a keeper's per-90 rate, on top of his own spread
 
@@ -212,6 +213,13 @@ def passes_model(player_id: str, team_id: str, opp_id: str | None = None, line: 
     share = sum(g["passes"] for g in starts) / sum(g["team_passes"] * g["minutes"] / 90 for g in starts)
     t_poss, o_poss = float(np.mean([m["poss"] for m in tm])), float(np.mean([m["poss"] for m in om]))
     t_dom, o_dom = tm[0]["domestic"], om[0]["domestic"]
+    if t_dom != o_dom:
+        # L28: a cross-league tie can't use season possession: Bodø's 63% comes from dominating Norwegian sides. Use each
+        # team's possession in European-cup matches (the same level as tonight) when both have 3+ of them.
+        tc = [m["poss"] for m in team_matches(team_id, COMPARABLE_REACH) if m["league"] in CUPS]
+        oc = [m["poss"] for m in team_matches(ctx["opp_id"], COMPARABLE_REACH) if m["league"] in CUPS]
+        if len(tc) >= 3 and len(oc) >= 3:
+            t_poss, o_poss = float(np.mean(tc)), float(np.mean(oc))
     pos = possession(t_poss, o_poss, ctx["home"], ctx["wdl"], same_league=t_dom == o_dom)
     if poss is not None:
         pos["possession"] = poss
@@ -238,9 +246,11 @@ def passes_model(player_id: str, team_id: str, opp_id: str | None = None, line: 
     if recent is not None:  # the plain-history fallback keeps its usual window
         pool = [g for g in pool if g.get("event_id") in recent] or pool
     basis = f"all {len(pool)} recent starts"
-    if len(comp) >= MIN_COMPARABLE:
-        share = sum(g["passes"] for g in comp) / sum(g["team_passes"] * g["minutes"] / 90 for g in comp)
-        basis = f"{len(comp)} starts at {target - POSS_BAND:.0%}-{target + POSS_BAND:.0%} possession"
+    if comp:  # shrink toward the all-starts share instead of an all-or-nothing cutoff
+        w = len(comp) / (len(comp) + SHARE_SHRINK)
+        share_c = sum(g["passes"] for g in comp) / sum(g["team_passes"] * g["minutes"] / 90 for g in comp)
+        share = w * share_c + (1 - w) * share
+        basis = f"{len(comp)} starts at {target - POSS_BAND:.0%}-{target + POSS_BAND:.0%} possession (weight {w:.0%})"
     proj = project(pos["possession"], team_ppp * press, share, [g["minutes"] for g in starts], ctx["wdl"], line)
     out = {**ctx, "starts": starts, "share": share, "team_poss": t_poss, "opp_poss": o_poss, **pos,
            "team_ppp": team_ppp, "opp_allowed_ppp": opp_allowed, "press_factor": press, "basis": basis, **proj}
