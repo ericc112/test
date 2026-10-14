@@ -80,6 +80,10 @@ def main(argv=None):
     pb.add_argument("--player")
     pb.add_argument("--types", default="standard", help="odds types to include: standard,goblin,demon")
     pb.add_argument("--log", action="store_true", help="log every priced prop to bets.csv (skips ones already logged)")
+    tr = sub.add_parser("tier", help="PrizePicks props with a DraftKings price behind them (NHL, MLB), rated; 8+ = the 80% tier")
+    tr.add_argument("--league", default="NHL,MLB")
+    tr.add_argument("--min-rating", type=int, default=8)
+    tr.add_argument("--log", action="store_true", help="log every priced non-demon prop")
     lw = sub.add_parser("lowline", help="standard PrizePicks lines at 0.5-1.5 where Less is offered, unders priced from game logs")
     lw.add_argument("--league", default="NHL,MLB,NFL")
     lw.add_argument("--max-line", type=float, default=1.5)
@@ -298,6 +302,37 @@ def main(argv=None):
                              "action": "lean" if r["confidence"] in ("High", "Medium") and not r.get("newcomer") else "pass",
                              "segment": f"{r['sport']}:{r['market_key']}:{r['side']}", "group": r["script"], "status": "pending",
                              "proj": "" if r.get("proj") is None else round(r["proj"], 1), "notes": f"edge pp; {r['notes']}"})
+                nid += 1
+                added += 1
+            L.write_bets(bets)
+            print(f"Logged {added} new prop(s) to bets.csv.")
+    elif args.cmd == "tier":
+        from . import tier as TR
+        res = TR.scan(tuple(x.strip().upper() for x in args.league.split(",")))
+        ok = sorted([r for r in res if "error" not in r], key=lambda r: -r["p_final"])
+        shown = [r for r in ok if r["rating"] >= args.min_rating]
+        print(f"\n{len(ok)} priced; {len(shown)} rated {args.min_rating}+ (8+ = High, blended 80%+, DraftKings 75%+ on its own)")
+        for r in shown:
+            ph = "-" if r["p_hist"] is None else f"{r['p_hist']:.2f}"
+            print(f"{r['rating']:>2}/10 {r['p_final']:.3f} {r['league']} {r['player'][:22]:22s} {r['team']:4s} {r['stat'][:18]:18s} {'More' if r['side'] == 'over' else 'Less'} "
+                  f"{r['line']:<5} {r['odds_type']:8s} market {r['p_market']:.2f} hist {ph}({r['hist_n']}) {r['notes'][:24]}")
+        if args.log:
+            bets = L.read_bets()
+            seen = {(b["event_id"], b["player"].lower(), b["market"], str(float(b["line"])) if b["line"] else "", b["side"]) for b in bets}
+            nid = max(int(b["id"]) for b in bets if b["id"].isdigit()) + 1
+            added = 0
+            for r in ok:
+                k = (str(r["event_id"]), r["player"].lower(), r["market_key"], str(float(r["line"])), r["side"])
+                if r["odds_type"] == "demon" or k in seen:
+                    continue
+                bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": r["league"].lower(),
+                             "event": f"{r['team']} vs {r['opp']}", "event_id": TR.grade_id(r),
+                             "player": r["player"], "player_id": r["player_id"] or "", "market": r["market_key"], "line": r["line"],
+                             "side": r["side"], "book": f"PrizePicks {r['odds_type']}", "p_model": "", "p_market": round(r["p_market"], 4),
+                             "p_hist": "" if r["p_hist"] is None else round(r["p_hist"], 4), "hist_n": r["hist_n"], "p_final": round(r["p_final"], 4),
+                             "confidence": r["confidence"], "action": "lean" if r["rating"] >= 8 else "pass",
+                             "segment": f"{r['league'].lower()}:{r['market_key']}:{r['side']}", "group": f"{r['league'].lower()}:{r['event_id']}",
+                             "status": "pending", "notes": f"edge tier; {r['notes']}; start {r.get('start')}"})
                 nid += 1
                 added += 1
             L.write_bets(bets)

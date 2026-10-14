@@ -532,6 +532,14 @@ class MlbLineupCheck(unittest.TestCase):
         self.assertEqual(self._run({"awayPlayers": [{"id": 8}], "homePlayers": []}), "FAIL")
 
 
+class TierScan(unittest.TestCase):
+    def test_devig_and_rungs(self):
+        from edge import tier
+        self.assertAlmostEqual(tier.devig_one_way(0.5), 0.465, places=3)        # mid prices: ~7% hold
+        self.assertGreater(tier.devig_one_way(0.95), 0.92)                      # heavy favourites: ~3%
+        self.assertLess(tier.devig_one_way(0.95), 0.95)
+
+
 class Grading(unittest.TestCase):
     def test_settle(self):
         self.assertEqual(grade.settle(3, 3.5, "under"), "won")
