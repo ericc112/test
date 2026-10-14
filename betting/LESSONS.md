@@ -62,3 +62,13 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 - Segment soccer:gk_saves:over: results run above our probabilities; now auto-adjusting +0.18 logit.
 - Segment soccer:shots:over: results run below our probabilities; now auto-adjusting -0.35 logit.
 - Segment soccer:passes_att:under: results run below our probabilities; now auto-adjusting -0.17 logit.
+
+### Auto-learned 2026-10-14
+- Segment soccer:passes_att:over capped at Medium (no High legs) until results recover: 4 losses tagged 'model bias'; hit 37% vs 54% predicted over 19.
+- Segment soccer:shots:over capped at Medium (no High legs) until results recover: 7 losses tagged 'opportunity'; hit 24% vs 53% predicted over 29.
+- Segment soccer:passes_att:under capped at Medium (no High legs) until results recover: 10 losses tagged 'model bias'; hit 54% vs 70% predicted over 35.
+- 4 losses in soccer:passes_att:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 2 losses in soccer:passes_att:over share the cause 'opportunity': write a checklist rule for it in the table above.
+- 7 losses in soccer:shots:over share the cause 'opportunity': write a checklist rule for it in the table above.
+- 10 losses in soccer:passes_att:under share the cause 'model bias': write a checklist rule for it in the table above.
+- Covered (checked 2026-10-14): the 14 passes 'model bias' losses are 9 keepers priced the outfield way (L26) and 5 possession-forecast misses (L27/L28); the 9 'opportunity' losses are subs and early withdrawals (L29). All were priced before those rules existed; `edge verify` now enforces each.

@@ -51,11 +51,18 @@
   },
   "hist_weight_scale_note": "Postseason only (LESSONS L17): playoff hooks are quicker than regular-season history implies. Reset to {} on opening day.",
   "cap_medium_segments": {
-    "mlb:batter_hrr:under": "3 losses tagged 'model bias'; hit 50% vs 57% predicted over 12"
+    "mlb:batter_hrr:under": "3 losses tagged 'model bias'; hit 50% vs 57% predicted over 12",
+    "soccer:passes_att:over": "4 losses tagged 'model bias'; hit 37% vs 54% predicted over 19",
+    "soccer:shots:over": "7 losses tagged 'opportunity'; hit 24% vs 53% predicted over 29",
+    "soccer:passes_att:under": "10 losses tagged 'model bias'; hit 54% vs 70% predicted over 35"
   },
   "rule_flags": [
     "cs2:cs_kills_m12:under|model bias",
     "mlb:batter_hrr:under|model bias",
-    "mlb:pitcher_outs:over|opportunity"
+    "mlb:pitcher_outs:over|opportunity",
+    "soccer:passes_att:over|model bias",
+    "soccer:passes_att:over|opportunity",
+    "soccer:passes_att:under|model bias",
+    "soccer:shots:over|opportunity"
   ]
 }
