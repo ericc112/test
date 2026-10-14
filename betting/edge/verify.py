@@ -235,16 +235,34 @@ def check_mlb_history(rep: Report):
     rep.add("FAIL" if abs(ph - logged) > TOL_HIST else "PASS", "recount", f"this season's game log gives {ph:.2f} over {o + u} games (logged {logged})")
 
 
+def check_lineup(rep: Report, s: dict):
+    """L29: soccer props are priced for a full start. Nine overs lost on 10/13 to players who got 10-38 minutes."""
+    r = rep.row
+    ros = s.get("rosters") or []
+    if not any(p.get("starter") for ro in ros for p in ro.get("roster", [])):
+        rep.add("WARN", "lineup", "starting XI not out yet: confirm he starts before publishing (L29)")
+        return
+    me = next((p for ro in ros for p in ro.get("roster", []) if str(p["athlete"]["id"]) == str(r.get("player_id"))), None)
+    if me is not None and me.get("starter"):
+        rep.add("PASS", "lineup", "named in the starting XI")
+        return
+    where = "not in the matchday squad" if me is None else "on the bench"
+    over = r.get("side") == "over"
+    rep.add("FAIL" if over else "WARN", "lineup",
+            f"{where}: " + ("an over needs a full start, withdraw it (L29)" if over else "a sub's minutes are a guess, re-price or withdraw (L29)"))
+
+
 def check_soccer(rep: Report):
     """Soccer passes (L26): a keeper must be priced with the keeper model, and history is recounted in the SAME kind of
     competition as tonight's match (European cup vs domestic): a keeper or a possession side can look completely
     different in Europe than at home."""
     from . import soccer
     r = rep.row
+    s = soccer.summary(r["event_id"])
+    check_lineup(rep, s)
     if r.get("market") != "passes_att":
         rep.add("WARN", "recount", f"no automatic recount for soccer {r.get('market')} yet: recount history by hand before publishing")
         return
-    s = soccer.summary(r["event_id"])
     team_id, pos = None, None
     for ro in s.get("rosters", []):
         for p in ro.get("roster", []):

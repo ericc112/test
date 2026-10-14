@@ -330,6 +330,23 @@ class SoccerBackCheck(unittest.TestCase):
             soccer.summary, soccer.team_matches, soccer.player_match = orig
         self.assertIn(("rule L27", "FAIL"), {(name, st) for st, name, _ in rep.checks})   # 6/6 under at 48% vs logged 50%
 
+    def test_bench_player_over_fails(self):
+        """L29: an over on a player named on the bench is withdrawn; before the XI is out it is a WARN."""
+        def run(roster):
+            summ = {"header": {"league": {"slug": "uefa.champions"}, "competitions": [{"competitors": []}]}, "rosters": roster}
+            rep = verify.Report({"id": "9", "sport": "soccer", "market": "shots", "event_id": "5", "player_id": "1", "side": "over"})
+            orig = soccer.summary
+            try:
+                soccer.summary = lambda eid: summ
+                verify.check_soccer(rep)
+            finally:
+                soccer.summary = orig
+            return {(name, st) for st, name, _ in rep.checks}
+        xi = lambda me: [{"team": {"id": "2"}, "roster": [{"athlete": {"id": "7"}, "starter": True}, {"athlete": {"id": "1"}, "starter": me}]}]
+        self.assertIn(("lineup", "FAIL"), run(xi(False)))
+        self.assertIn(("lineup", "PASS"), run(xi(True)))
+        self.assertIn(("lineup", "WARN"), run([]))
+
     def test_keeper_model_passes(self):
         got = self._run("KEEPER: priced from his own European cup starts", 1.0)
         self.assertNotIn(("rule L26", "FAIL"), got)

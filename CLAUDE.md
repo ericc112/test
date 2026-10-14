@@ -26,6 +26,7 @@ Every pick you name to the user, at any confidence, must pass `python3 -m edge v
   - It confirms the line and side are on the PrizePicks board.
   - It applies the lesson rules, and flags other open legs on the same script.
   - Soccer passes (L26): it FAILS a goalkeeper priced with the outfield model, and recounts history in tonight's kind of competition (European cup vs domestic). A FAIL there means re-price, not override.
+  - Soccer lineups (L29): it FAILS an over on a player who isn't in the starting XI, and WARNS until the XI is out.
 - **NOT VERIFIED means not published.** Either fix it with `--fix` (not-started picks only) or withdraw it, and tell the user which.
 - **Started or finished picks are never rewritten.** Their audit result is added as a note.
 - **Show the verdict next to every pick.** Include each WARN, e.g. "Boom line not readable automatically: confirm 8.5 Less on your screen".
