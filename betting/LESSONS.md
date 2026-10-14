@@ -72,3 +72,7 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 - 7 losses in soccer:shots:over share the cause 'opportunity': write a checklist rule for it in the table above.
 - 10 losses in soccer:passes_att:under share the cause 'model bias': write a checklist rule for it in the table above.
 - Covered (checked 2026-10-14): the 14 passes 'model bias' losses are 9 keepers priced the outfield way (L26) and 5 possession-forecast misses (L27/L28); the 9 'opportunity' losses are subs and early withdrawals (L29). All were priced before those rules existed; `edge verify` now enforces each.
+
+### Auto-learned 2026-10-14
+- Calibration (market picks): an 80% now reads 81% (a +0.03, b 1.01, n 167).
+- Calibration (no market picks): an 80% now reads 73% (a -0.27, b 0.91, n 206).
