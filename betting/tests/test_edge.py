@@ -515,5 +515,46 @@ class Grading(unittest.TestCase):
         self.assertEqual(rows[0]["result_value"], 2)
 
 
+class Tennis(unittest.TestCase):
+    """The live chain against textbook values, the serve solver, score parsing and the no-look-ahead feature walk."""
+    def test_chain_known_values(self):
+        from edge import tennis as T
+        self.assertAlmostEqual(T.p_game(0.6), 0.7357, places=4)                 # hold at 60% of serve points
+        self.assertAlmostEqual(T.p_tiebreak(0.65, 0.65, "A"), 0.5, places=9)
+        self.assertAlmostEqual(T.p_prematch(0.62, 0.62), 0.5, places=9)
+        self.assertGreater(T.p_prematch(0.66, 0.62, 5), T.p_prematch(0.66, 0.62, 3))   # best of 5 favours the better player
+        self.assertGreater(T.p_match(0.64, 0.64, 3, 1, 0, 5, 4, "A", (3, 0)), 0.99)  # serving for it at 40-0
+        self.assertLess(T.p_match(0.64, 0.64, 3, 0, 1, 0, 5, "B", (3, 0)), 0.01)
+
+    def test_serve_solver_inverts_the_chain(self):
+        from edge import tennis as T
+        pa, pb = T.solve_serve(0.7, 1.28)
+        self.assertAlmostEqual(pa + pb, 1.28, places=6)
+        self.assertAlmostEqual(T.p_prematch(pa, pb), 0.7, places=3)
+
+    def test_momentum_lifts_the_set_leader(self):
+        from edge import tennis as T
+        self.assertGreater(T.p_match(0.62, 0.62, 3, 1, 0, srv="A", form=0.015), T.p_match(0.62, 0.62, 3, 1, 0, srv="A"))
+
+    def test_score_and_points(self):
+        from edge import tennis as T
+        self.assertEqual(T.parse_score("4-6 1-0"), ((0, 1), (1, 0)))
+        self.assertEqual(T.parse_score("7-6(5) 3-6 2-2"), ((1, 1), (2, 2)))
+        self.assertEqual(T.parse_points("40-AD", False), (3, 4))
+        self.assertEqual(T.parse_points("5-6", True), (5, 6))
+        self.assertEqual(T.surface("Roland Garros", "Paris, France", "2025-06-01"), "clay")
+        self.assertEqual(T.surface("Rolex Paris Masters", "Paris, France", "2025-11-01"), "hard")
+        self.assertEqual(T.surface("Lexus Birmingham Open", "Birmingham", "2025-05-30"), "grass")
+
+    def test_features_never_see_the_match(self):
+        from edge import tennis as T
+        rows = [{"date": f"2025-01-{d:02d}", "tour": "atp", "comp_id": str(d), "event_id": "e", "event": "X", "round": "R1",
+                 "city": "", "surface": "hard", "bo": "3", "w_id": "1", "w_name": "A", "l_id": "2", "l_name": "B",
+                 "w_games": "6,6", "l_games": "3,4", "tb": "0", "retired": "0"} for d in range(1, 6)]
+        R, out = T.walk(rows)
+        self.assertAlmostEqual(out[0][3]["p_elo"], 0.5)                          # first meeting: no information yet
+        self.assertGreater(R.p_elo("1", "2", "hard"), 0.6)                       # after five wins
+
+
 if __name__ == "__main__":
     unittest.main()

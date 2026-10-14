@@ -64,6 +64,7 @@ Cloud containers are temporary. After any `grade`, `review`, `learn`, `add` or `
 - Odds and DraftKings props: `https://sports.core.api.espn.com/v2/sports/{sport}/leagues/{league}/events/{id}/competitions/{id}/odds/100/propBets`. Over/under order is not labelled: verify sides against the "N+" milestone price (LESSONS L2).
 - Soccer: ESPN `site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=ID` (any league), plus per-player match stats (passes, saves, minutes) from `sports.core.api.espn.com/v2/sports/soccer/leagues/{league}/events/{id}/competitions/{id}/competitors/{team}/roster/{player}/statistics/0`. DraftKings soccer props are on the same propBets endpoint (league `uefa.champions`, `eng.1`, ...).
 - PrizePicks boards: `https://partner-api.prizepicks.com/projections?league_id=ID&per_page=10000` (league ids from `/leagues`; the main api.prizepicks.com is captcha-blocked). It rate-limits: `edge pp` caches and backs off.
+- Tennis: ESPN `site.api.espn.com/apis/site/v2/sports/tennis/{atp|wta}/scoreboard[?dates=YYYYMMDD]` (results, set scores, live games and server; no point score, no odds). `python3 -m edge tennis refresh` updates `betting/data/tennis/` and refits; for a live match run `edge tennis live NAME --odds A B --points X-Y` (add `--pre-odds` when you have the pre-match price) and rate it like any other pick.
 - MLB: `statsapi.mlb.com`. NHL: `api-web.nhle.com` and `api.nhle.com/stats` (send a User-Agent header). NFL: ESPN `site.api.espn.com`. CS2: `api.bo3.gg` (HLTV blocks scripted access).
 
 ## Tests

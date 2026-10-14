@@ -80,6 +80,23 @@ def main(argv=None):
     pb.add_argument("--player")
     pb.add_argument("--types", default="standard", help="odds types to include: standard,goblin,demon")
     pb.add_argument("--log", action="store_true", help="log every priced prop to bets.csv (skips ones already logged)")
+    tn = sub.add_parser("tennis", help="match winner, pre-match and live (ESPN scores; your book's odds)")
+    tn.add_argument("action", choices=["refresh", "backtest", "list", "pre", "live"])
+    tn.add_argument("player", nargs="?", help="the player you're pricing (A)")
+    tn.add_argument("opponent", nargs="?", help="pre-match only")
+    tn.add_argument("--tour", choices=["atp", "wta"])
+    tn.add_argument("--surface", choices=["hard", "clay", "grass"])
+    tn.add_argument("--bo", type=int, choices=[3, 5])
+    tn.add_argument("--event", default="")
+    tn.add_argument("--odds", nargs=2, type=float, metavar=("A", "B"), help="American odds, A first (live price for `live`)")
+    tn.add_argument("--pre-odds", nargs=2, type=float, metavar=("A", "B"), help="pre-match odds: anchor the live model")
+    tn.add_argument("--score", help="from A's side, e.g. '4-6 1-0' (overrides ESPN)")
+    tn.add_argument("--points", default="0-0", help="current game A-B: 0/15/30/40/AD, or tiebreak points")
+    tn.add_argument("--server", choices=["A", "B"])
+    tn.add_argument("--srv-a", help="A's serve points won/played so far, e.g. 31/45")
+    tn.add_argument("--srv-b", help="B's serve points won/played so far")
+    tn.add_argument("--book", default="")
+    tn.add_argument("--log", action="store_true")
     t = sub.add_parser("tag")
     t.add_argument("id")
     t.add_argument("reason")
@@ -280,6 +297,9 @@ def main(argv=None):
                 added += 1
             L.write_bets(bets)
             print(f"Logged {added} new prop(s) to bets.csv.")
+    elif args.cmd == "tennis":
+        from . import tennis
+        tennis.cli(args)
     elif args.cmd == "tag":
         if L.base_tag(args.reason) not in R.TAGS:
             print(f"note: '{args.reason}' is not a standard tag ({', '.join(R.TAGS)}); recorded anyway")

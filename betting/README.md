@@ -84,6 +84,7 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 - **cs2** (`event_id` = bo3.gg match id, `player_id` = nickname): `cs_kills_m12`, `cs_headshots_m12`
 - **lol** (`event_id` = bo3.gg match id, `player_id` = gol.gg player id): `kills_m123` (graded from gol.gg a few hours after the series; void if fewer than 3 games are played)
 - **soccer** (`event_id` = ESPN event, `player_id` = ESPN athlete id; any league): `passes_att`, `gk_saves`, `shots`, `sot`, `tackles`, `fouls`. A player who doesn't play is voided, as the apps do.
+- **tennis** (`event_id` = `tour/event/competition` from ESPN, `player_id` = ESPN athlete id): `ml_pre`, `ml_live` (line 0.5, side over = the backed player wins). Graded on ESPN's winner flag; a retirement counts as ESPN posts it, so check your book's retirement rule.
 
 ## Price a PrizePicks board (`edge/pp.py`)
 ```bash
@@ -124,6 +125,27 @@ python -m edge passes --player 393432 --team 175 --event 401915418 --line 50.5  
 The backtest covered 250 top-four-league matches, using each team's other matches only. Team-pass error was 70.6, against 74.2 for possession × tempo and 81.1 for the team average.
 
 It also flags a team that played 3 or fewer days ago (rotation risk). Confirm the lineup about an hour before kickoff.
+
+## Tennis match winner, pre-match and live (`edge/tennis.py`)
+```bash
+python -m edge tennis refresh                      # pull new ESPN results (ATP, WTA, Challengers, WTA 125), refit, print the backtest
+python -m edge tennis list [NAME]                   # today's matches, live first
+python -m edge tennis pre "Zverev" "de Minaur" --event "Shanghai" --odds -160 +130
+python -m edge tennis live "Pegula" --pre-odds -250 +200 --odds -400 +300 --points 30-15 [--srv-a 31/45 --srv-b 22/40] [--log]
+```
+`live` reads the set and game score and the server from ESPN. ESPN doesn't publish the point score, so pass `--points` (A-B, or tiebreak points), or the game is priced from 0-0. `--score "4-6 1-0"` overrides ESPN.
+
+| Piece | How | Evidence |
+|---|---|---|
+| Strength | Elo, half overall and half surface (FiveThirtyEight K = 250/(n+5)^0.4), from 28k ESPN results since 2024 | Elo alone: 63.4% correct on 2026 |
+| Fitted layer | Logistic on Elo, Elo × best-of-5, sets in the last 3 and 7 days (fatigue), form vs Elo (last 10), head-to-head vs Elo (shrunk), rust (45+ days out) | Fit on 2025, scored on 9,164 matches of 2026: 64.0% correct, log loss 0.632 vs 0.634; favourites' predicted -> actual 55->55, 65->66, 74->75, 84->87% |
+| Price anchor | With pre-match odds (`--pre-odds`, or `--odds` for `pre`), the prior is 75% market, 25% model in logit | Closing tennis prices beat Elo-type models |
+| Score | Exact point -> game -> tiebreak -> set -> match chain; serve-point probabilities solved so the chain gives the prior; 10-point final-set tiebreak at the Slams | Textbook values in the tests (hold 73.6% at 60% of serve points) |
+| Serve style | The sum of the two serve levels moves with each player's tiebreak index (tiebreak sets vs the tour rate, shrunk 6 sets): big servers make each break worth more | |
+| Momentum | Serve probabilities shift 1.5 points per set of lead, fitted on who won after set one | Score-only chain under-rates set-one winners (84.5% predicted, 90.3% won); with the shift 84.8 -> 84.8%, log loss 0.457 -> 0.450 on 2026 |
+| Live serve stats | `--srv-a won/played` updates each serve level (prior worth 80 points) | |
+
+The blend, gates and 1-10 rating are the same as every other market (`tennis:ml_live:<tour>` segments). A pick needs a price (`--odds`) to rate above 4. Not modelled: injuries and medical time-outs, weather, and the live point-by-point form that the score doesn't capture.
 
 ## Limitations
 - Entry grading assumes power-style entries, where every leg must hit. Flex and Squad Ride payouts need manual entry for now.

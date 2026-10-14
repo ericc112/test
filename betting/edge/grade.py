@@ -227,7 +227,13 @@ def lol_value(event_id: str, player_id: str, market: str, cache: dict):
     return "final", sum(g["k"] for g in games[:need])
 
 
-GRADERS = {"mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value, "lol": lol_value}
+def tennis_value(event_id: str, player_id: str, market: str, cache: dict):
+    """Match winner: 1 if the backed player won (line 0.5, side over). ESPN's winner flag; retirements count as ESPN posts them."""
+    from . import tennis
+    return tennis.result(event_id, player_id)
+
+
+GRADERS = {"tennis": tennis_value, "mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value, "lol": lol_value}
 
 
 def settle(value: float, line: float, side: str) -> str:
