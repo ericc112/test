@@ -815,23 +815,28 @@ def cli(args) -> None:
                      + ("" if args.points != "0-0" else " (ESPN has no point score: pass --points)"))
         print(f"Live ({state_txt}): {na} {p:.1%} (without momentum {lv['p_no_form']:.1%})" + (f"; {', '.join(lv['updates'])}" if lv["updates"] else ""))
     hist_n = min(f["n_a"], f["n_b"])
-    e = final_probability(p, p_mkt, None, f"tennis:ml_{'live' if args.action == 'live' else 'pre'}:{tour}", hist_n)
-    side_p = e.p if e.p >= 0.5 else 1 - e.p
-    who = na if e.p >= 0.5 else nb
-    print(f"Blend: {na} {e.p:.1%}" + (f" (market no-vig {p_mkt:.1%})" if p_mkt is not None else " (no market price: pass --odds)")
-          + f" -> {who} {rating(side_p, e.confidence)}/10 {e.confidence}, fair {_fmt_odds(e.p)} / {nb} {_fmt_odds(1 - e.p)}")
+    seg = f"tennis:ml_{'live' if args.action == 'live' else 'pre'}:{tour}"
+    # blend from each player's side (the blend has an intercept, so it isn't exactly symmetric) and back the stronger:
+    # the logged row must recompute to the same number from the backed player's components
+    flip = lambda x: None if x is None else 1 - x
+    ea, eb = final_probability(p, p_mkt, None, seg, hist_n), final_probability(1 - p, flip(p_mkt), None, seg, hist_n)
+    backed = "A" if ea.p >= eb.p else "B"
+    e = ea if backed == "A" else eb
+    who = na if backed == "A" else nb
+    p_a = ea.p if backed == "A" else 1 - eb.p                  # A's chance as displayed
+    print(f"Blend: {who} {e.p:.1%}" + (f" (market no-vig {p_mkt if backed == 'A' else 1 - p_mkt:.1%})" if p_mkt is not None else " (no market price: pass --odds)")
+          + f" -> {rating(e.p, e.confidence)}/10 {e.confidence}; fair odds {na} {_fmt_odds(p_a)} / {nb} {_fmt_odds(1 - p_a)}")
     if args.odds:
-        for nm, pp, o in ((na, e.p, args.odds[0]), (nb, 1 - e.p, args.odds[1])):
+        for nm, pp, o in ((na, p_a, args.odds[0]), (nb, 1 - p_a, args.odds[1])):
             dec = 1 + (o / 100 if o > 0 else 100 / -o)
-            print(f"   {nm} {o:+.0f}: EV {pp * dec - 1:+.1%}")
+            print(f"   {nm} {o:+.0f}: EV {pp * dec - 1:+.1%} (break-even {1 / dec:.1%})")
     for n in e.notes:
         print(f"   note: {n}")
     if args.log:
         bets = L.read_bets()
         nid = max(int(x["id"]) for x in bets if x["id"].isdigit()) + 1
-        backed = "A" if e.p >= 0.5 else "B"
         pid, pname = (a, na) if backed == "A" else (b, nb)
-        pf = e.p if backed == "A" else 1 - e.p
+        pf = e.p
         pm = p if backed == "A" else 1 - p
         pk = None if p_mkt is None else (p_mkt if backed == "A" else 1 - p_mkt)
         price = "" if not args.odds else args.odds[0 if backed == "A" else 1]
