@@ -539,6 +539,17 @@ class TierScan(unittest.TestCase):
         self.assertGreater(tier.devig_one_way(0.95), 0.92)                      # heavy favourites: ~3%
         self.assertLess(tier.devig_one_way(0.95), 0.95)
 
+    def test_whole_line_removes_push(self):
+        from edge import tier
+        lad = {2: -190, 3: 150}                                                  # Rantanen SOG, PrizePicks 2.0
+        half, _ = tier.market_over(lad, 2.5)
+        whole, note = tier.market_over(lad, 2.0)
+        self.assertAlmostEqual(half, tier.devig_one_way(0.4), places=4)          # 2.5 reads the 3+ rung as is
+        self.assertGreater(whole, 0.45)                                          # 0-1 vs 3+: near a coin flip,
+        self.assertLess(whole, 0.52)                                             # not the 63% under that 1 - P(3+) gave
+        self.assertIn("push", note)
+        self.assertIsNone(tier.market_over({3: 150}, 2.0)[0])                    # can't price the push without the 2+ rung
+
 
 class Grading(unittest.TestCase):
     def test_settle(self):

@@ -44,6 +44,25 @@ def devig_one_way(p: float) -> float:
     return min(0.99, p * hold)
 
 
+def market_over(lad: dict, line: float) -> tuple[float | None, str]:
+    """De-vigged chance of the over at a PrizePicks line from a DraftKings 'k+' ladder.
+
+    Half lines read one rung ('More 1.5' = 2+). A whole line pushes when the stat lands on it, so the over is
+    P(L+1 or more) out of the non-push outcomes: 'Less 2.0' wins on 0-1 only, not 0-2.
+    """
+    k = int(math.floor(line)) + 1
+    if k not in lad:
+        return None, f"no {k}+ rung"
+    over = devig_one_way(implied(lad[k]))
+    if line != int(line) or int(line) <= 0:
+        return over, f"DK {k}+ {lad[k]:+.0f}"
+    if int(line) not in lad:
+        return None, f"whole line {line:g}: no {int(line)}+ rung to price the push"
+    at = max(over, devig_one_way(implied(lad[int(line)])))
+    push = at - over
+    return over / (1 - push), f"DK {k}+ {lad[k]:+.0f}, {int(line)}+ {lad[int(line)]:+.0f}; push {push:.0%} removed"
+
+
 def scoreboard(sport: str, day: dt.date) -> list[dict]:
     return _get(f"{SITE}/{SPORT[sport][0]}/scoreboard?dates={day:%Y%m%d}").get("events", [])
 
@@ -161,10 +180,9 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print) -> list[
         lad_p = lad.get((lg, eid), {}).get((ladder_name, aid or ""))
         if not lad_p:
             return {**p, "error": "no DraftKings ladder"}
-        k = int(math.floor(p["line"])) + 1                         # 'More 1.5' = k+ at 2
-        if k not in lad_p:
-            return {**p, "error": f"no {k}+ rung"}
-        mk_over = devig_one_way(implied(lad_p[k]))
+        mk_over, mnote = market_over(lad_p, p["line"])
+        if mk_over is None:
+            return {**p, "error": mnote}
         h_over, n, pid = history(lg, p["stat"], p["team"], p["player"], p["line"])
         best = None
         for side in (["over"] if p["over_only"] else ["over", "under"]):
@@ -174,7 +192,7 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print) -> list[
             e = final_probability(None, pk, ph, seg, n)
             r = {**p, "side": side, "market_key": mk, "p_market": pk, "p_hist": ph, "hist_n": n, "p_final": e.p,
                  "confidence": e.confidence, "rating": rating(e.p, e.confidence, pk), "player_id": pid, "event_id": eid,
-                 "notes": f"DK {k}+ {lad_p[k]:+.0f}; " + "; ".join(e.notes)}
+                 "notes": f"{mnote}; " + "; ".join(e.notes)}
             if best is None or r["p_final"] > best["p_final"]:
                 best = r
         return best
