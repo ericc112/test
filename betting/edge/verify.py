@@ -222,6 +222,12 @@ def check_mlb_history(rep: Report):
     if _f(r.get("p_hist")) is None:
         rep.add("PASS", "recount", "no history component used")
         return
+    if r["market"] == "game_total":
+        check_mlb_game_total(rep)
+        return
+    if r["market"] not in MLB_STATS:
+        rep.add("WARN", "recount", f"no automatic recount for mlb {r['market']}: recount by hand before publishing")
+        return
     group, fn = MLB_STATS[r["market"]]
     vals = []
     for gt in ("R", "P"):
@@ -235,6 +241,32 @@ def check_mlb_history(rep: Report):
     ph = (o if r["side"] == "over" else u) / max(o + u, 1)
     logged = _f(r.get("p_hist"))
     rep.add("FAIL" if abs(ph - logged) > TOL_HIST else "PASS", "recount", f"this season's game log gives {ph:.2f} over {o + u} games (logged {logged})")
+
+
+def check_mlb_game_total(rep: Report):
+    """Game totals: recount both teams' finished games this season of the same kind as tonight's (L26: a playoff game
+    is recounted in playoff games once there are 6+, else in all games)."""
+    from .grade import _get
+    r = rep.row
+    api = "https://statsapi.mlb.com/api/v1"
+    gm = _get(f"{api}/schedule?sportId=1&gamePk={r['event_id']}")["dates"][0]["games"][0]
+    post = gm.get("gameType") not in ("R", "S", "E")
+    tot = {}
+    for side in ("away", "home"):
+        sc = _get(f"{api}/schedule?sportId=1&teamId={gm['teams'][side]['team']['id']}&season={r['date'][:4]}&gameType=R,F,D,L,W")
+        for d in sc["dates"]:
+            for g in d["games"]:
+                if g["status"].get("codedGameState") == "F" and g["gamePk"] != gm["gamePk"]:
+                    tot[g["gamePk"]] = (g.get("gameType") != "R", (g["teams"]["away"].get("score") or 0) + (g["teams"]["home"].get("score") or 0))
+    same = [t for p, t in tot.values() if p == post]
+    vals = same if (post and len(same) >= 6) or not post else [t for _, t in tot.values()]
+    line = float(r["line"])
+    o, u = sum(v > line for v in vals), sum(v < line for v in vals)
+    ph = (o if r["side"] == "over" else u) / max(o + u, 1)
+    logged = _f(r.get("p_hist"))
+    kind = "postseason" if post and vals is same else "season"
+    rep.add("FAIL" if logged is None or abs(ph - logged) > TOL_HIST else "PASS", "recount",
+            f"both teams' {kind} games give {ph:.2f} over {o + u} (logged {logged})")
 
 
 def check_lineup(rep: Report, s: dict):

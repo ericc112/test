@@ -469,6 +469,28 @@ class PrePublishVerify(unittest.TestCase):
         self.assertTrue(any(st == "WARN" and n == "correlation" for st, n, _ in rep.checks))
 
 
+class GameTotalBackCheck(unittest.TestCase):
+    """A playoff total is recounted in both teams' playoff games (L26), not their regular season."""
+    def test_postseason_recount(self):
+        from edge import grade
+        def game(pk, gt, a, h, tid=None):
+            return {"gamePk": pk, "gameType": gt, "status": {"codedGameState": "F"},
+                    "teams": {"away": {"score": a, "team": {"id": 1}}, "home": {"score": h, "team": {"id": 2}}}}
+        tonight = {"dates": [{"games": [{**game(99, "L", 0, 0), "status": {"codedGameState": "S"}}]}]}
+        season = {"dates": [{"games": [game(i, "R", 6, 6) for i in range(20)] + [game(100 + i, "L", 2, 2) for i in range(6)]}]}
+        orig = grade._get
+        try:
+            grade._get = lambda url: tonight if "gamePk=99" in url else season
+            rep = verify.Report({"id": "1", "sport": "mlb", "market": "game_total", "event_id": "99", "line": "9.5", "side": "under",
+                                 "p_hist": "1.0", "date": "2026-10-14"})
+            verify.check_mlb_history(rep)
+        finally:
+            grade._get = orig
+        st, name, detail = rep.checks[-1]
+        self.assertEqual(st, "PASS")                      # 6/6 playoff games under, not 0/20 regular-season
+        self.assertIn("postseason", detail)
+
+
 class Grading(unittest.TestCase):
     def test_settle(self):
         self.assertEqual(grade.settle(3, 3.5, "under"), "won")
