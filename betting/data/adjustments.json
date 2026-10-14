@@ -64,5 +64,6 @@
     "soccer:passes_att:over|opportunity",
     "soccer:passes_att:under|model bias",
     "soccer:shots:over|opportunity"
-  ]
+  ],
+  "rating_floor": 0.8
 }

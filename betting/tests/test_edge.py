@@ -57,7 +57,10 @@ class Blend(unittest.TestCase):
     def test_rating_keeps_the_gates(self):
         """1-10 score: the label sets the band, so a big number that misses a gate can't score like a High."""
         from edge.blend import rating
-        self.assertEqual([rating(p, "High") for p in (0.65, 0.72, 0.80)], [8, 9, 10])
+        self.assertEqual([rating(p, "High", 0.85, floor=0.80) for p in (0.80, 0.85, 0.90)], [8, 9, 10])
+        self.assertEqual(rating(0.79, "High", 0.85, floor=0.80), 7)     # under the 80% floor
+        self.assertEqual(rating(0.88, "High", None, floor=0.80), 7)     # no sportsbook price: model-only 80%s hit 56%
+        self.assertEqual(rating(0.86, "High", 0.70, floor=0.80), 7)     # the market itself under 75%
         self.assertEqual([rating(p, "Medium") for p in (0.58, 0.63, 0.90)], [5, 6, 7])     # 90% that failed a gate is a 7 at most
         self.assertEqual([rating(p, "Low") for p in (0.45, 0.52, 0.56, 0.95)], [1, 2, 3, 4])
         self.assertEqual(rating(0.9, "Avoid"), 1)
@@ -137,6 +140,14 @@ class Learning(unittest.TestCase):
     def test_report_runs(self):
         txt = learn.report(_synthetic(80))
         self.assertIn("Calibration", txt)
+
+    def test_rating_floor_tightens_until_tier_hits_80(self):
+        rows = [{"id": str(i), "status": "won" if i % 10 < 7 else "lost", "p_final": "0.85", "p_market": "0.86",
+                 "confidence": "High", "segment": "x:y:over"} for i in range(30)]     # 70% < 80%
+        fl, _ = learn.tune_rating_floor(rows, {"rating_floor": 0.80})
+        self.assertGreater(fl, 0.80)
+        fl, _ = learn.tune_rating_floor(rows[:10], {"rating_floor": 0.80})          # too few to move it
+        self.assertEqual(fl, 0.80)
 
     def test_report_has_rating_scorecard(self):
         self.assertIn("Scorecard by rating", learn.report(_synthetic(80)))

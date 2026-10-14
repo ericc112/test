@@ -58,16 +58,32 @@ class Estimate:
 
     @property
     def rating(self) -> int:
-        return rating(self.p, self.confidence)
+        return rating(self.p, self.confidence, self.components.get("market"))
 
 
-def rating(p: float | None, confidence: str | None) -> int:
+RATING_FLOOR = 0.80      # the 8-10 tier must hit 80%: learn raises this while graded 8+ picks fall short
+TIER_MARKET_MIN = 0.75   # ... and the sportsbook itself must make it a 75%+ shot (model-only 80%+ picks hit 56%, n=9)
+
+
+def rating_floor(adj: dict | None = None) -> float:
+    try:
+        return float((adj or load_adjustments()).get("rating_floor", RATING_FLOOR))
+    except Exception:
+        return RATING_FLOOR
+
+
+def rating(p: float | None, confidence: str | None, p_market: float | None = None, floor: float | None = None) -> int:
     """1-10 confidence score. The label decides the band and the probability places it inside the band, so no number
-    can buy its way past a gate: 8-10 only for High (every gate passed), 5-7 Medium, 1-4 Low, 1 for Avoid."""
+    can buy its way past a gate. 8-10 is the 80% tier: High (every gate passed) AND blended chance >= the floor (0.80,
+    raised by `edge learn` if graded 8+ picks hit less) AND a sportsbook price that makes it a 75%+ shot on its own.
+    A High without all three is a 7. 5-7 Medium, 1-4 Low, 1 for Avoid."""
     if p is None or not confidence or confidence == "Avoid":
         return 1
     if confidence == "High":
-        return 10 if p >= 0.78 else 9 if p >= 0.72 else 8
+        fl = rating_floor() if floor is None else floor
+        if p_market is not None and p_market >= TIER_MARKET_MIN and p >= fl:
+            return 10 if p >= round(fl + 0.10, 4) else 9 if p >= round(fl + 0.05, 4) else 8
+        return 7
     if confidence == "Medium":
         return 7 if p >= 0.66 else 6 if p >= 0.62 else 5
     return 4 if p >= 0.58 else 3 if p >= 0.54 else 2 if p >= 0.50 else 1

@@ -263,7 +263,7 @@ def main(argv=None):
         f = lambda v: "  - " if v is None else f"{v:.2f}"
         print(f"\n{'rate':>4} {'p':>5} {'conf':6s} {'player':16s} {'team':12s} {'stat':18s} {'side':5s} {'line':>5} {'type':8s} model mrkt hist(n)  notes")
         for r in ok:
-            print(f"{rating(r['p_final'], r['confidence']):>2}/10 {r['p_final']:.3f} {r['confidence']:6s} {str(r['player'])[:16]:16s} {str(r['team'])[:12]:12s} {r['stat'][:18]:18s} {r['side']:5s} "
+            print(f"{rating(r['p_final'], r['confidence'], r.get('p_market')):>2}/10 {r['p_final']:.3f} {r['confidence']:6s} {str(r['player'])[:16]:16s} {str(r['team'])[:12]:12s} {r['stat'][:18]:18s} {r['side']:5s} "
                   f"{r['line']:>5} {r['odds_type'][:8]:8s} {f(r['p_model'])} {f(r['p_market'])} {f(r['p_hist'])}({r['hist_n']})  "
                   + ("MORE-ONLY; " if r["over_only"] else "") + (f"push {r['push']:.0%}; " if r['push'] > 0.005 else "") + r["notes"])
         if bad:

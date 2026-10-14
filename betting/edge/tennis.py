@@ -831,7 +831,7 @@ def cli(args) -> None:
     who = na if backed == "A" else nb
     p_a = ea.p if backed == "A" else 1 - eb.p                  # A's chance as displayed
     print(f"Blend: {who} {e.p:.1%}" + (f" (market no-vig {p_mkt if backed == 'A' else 1 - p_mkt:.1%})" if p_mkt is not None else " (no market price: pass --odds)")
-          + f" -> {rating(e.p, e.confidence)}/10 {e.confidence}; fair odds {na} {_fmt_odds(p_a)} / {nb} {_fmt_odds(1 - p_a)}")
+          + f" -> {e.rating}/10 {e.confidence}; fair odds {na} {_fmt_odds(p_a)} / {nb} {_fmt_odds(1 - p_a)}")
     if args.odds:
         for nm, pp, o in ((na, p_a, args.odds[0]), (nb, 1 - p_a, args.odds[1])):
             dec = 1 + (o / 100 if o > 0 else 100 / -o)
