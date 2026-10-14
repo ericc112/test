@@ -255,6 +255,15 @@ def report(rows: list[dict], pms: dict | None = None) -> str:
             tiers[r.get(key) or "?"].append((_f(r["p_final"]), y))
         lines.append(f"Hit rate by {key}: " + " | ".join(
             f"{t} {np.mean([y for _, y in v]):.0%} of {len(v)} (pred {np.mean([p for p, _ in v]):.0%})" for t, v in sorted(tiers.items())))
+    # the 1-10 scorecard: does an 8 actually hit more than a 5? (proves or disproves every rating given)
+    from .blend import rating
+    bands = defaultdict(list)
+    for r, y in zip(g, ys):
+        rt = rating(_f(r["p_final"]), r.get("confidence"))
+        bands["8-10" if rt >= 8 else "5-7" if rt >= 5 else "1-4"].append((_f(r["p_final"]), y))
+    lines.append("Scorecard by rating: " + " | ".join(
+        f"{b}: {np.mean([y for _, y in bands[b]]):.0%} of {len(bands[b])} (pred {np.mean([p for p, _ in bands[b]]):.0%})"
+        for b in ("8-10", "5-7", "1-4") if bands[b]))
     lines.append("Calibration (predicted -> actual):")
     for c in calibration_table(ps, ys):
         flag = "  <-- off by >8 pts" if c["n"] >= 15 and abs(c["actual"] - c["predicted"]) > 0.08 else ""

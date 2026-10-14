@@ -138,6 +138,9 @@ class Learning(unittest.TestCase):
         txt = learn.report(_synthetic(80))
         self.assertIn("Calibration", txt)
 
+    def test_report_has_rating_scorecard(self):
+        self.assertIn("Scorecard by rating", learn.report(_synthetic(80)))
+
     def test_report_skips_unpriced_rows(self):
         rows = _synthetic(80)
         rows.append({**rows[0], "id": "999", "p_final": "", "status": "won"})   # a user's leg nobody priced

@@ -40,6 +40,9 @@ The user wants **every prop rated 1-10** (`blend.rating`, shown by `edge pp`, `e
 - **1-4 = Low**: sources disagree, single source, role unknown (L5/L26), or under 58%. Avoid-list segments are 1.
 Show the rating next to every prop. A prop rated 8+ must pass `edge verify` this session, with its verdict and WARNs shown; a NOT VERIFIED or judgment-downgraded prop (role check) drops to its new label's band. Ratings of 7 or below come straight from the pricer: mark them as ratings, not picks. Recommend only 8+.
 
+## User preference: prove the takes (be proactive)
+Don't wait to be asked whether a take worked. After every slate, grade it, then report the results of every prop rated today, grouped by rating band. The source is the "Scorecard by rating" line of `edge report`: does an 8 actually hit more than a 5, and does each band hit what it predicted? Call out each 8+ that missed, with its post-mortem tag. When a pick is in a live game the user is following, check in with the live state before being asked. Every take shows its evidence: the raw game-by-game numbers and the market price, not just the rating. Schedule the post-slate check-in yourself (`send_later`) when the user has open picks and the games finish after the conversation pauses.
+
 ## Role and competition check (L26, mandatory)
 Before naming any prop, ask two questions the pricer may not: **is this player's role one the model was built for**, and **does his history come from the same kind of game as tonight?**
 - Goalkeepers' passes go up when their team has less of the ball (goal kicks, back-passes under a press). Haikin: 19-27 passes in Norway at 55-78% possession, 22-44 in the Champions League. They are priced by `soccer.keeper_passes` from same-competition starts, never by team possession x share.
