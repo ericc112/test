@@ -80,6 +80,11 @@ def main(argv=None):
     pb.add_argument("--player")
     pb.add_argument("--types", default="standard", help="odds types to include: standard,goblin,demon")
     pb.add_argument("--log", action="store_true", help="log every priced prop to bets.csv (skips ones already logged)")
+    lw = sub.add_parser("lowline", help="standard PrizePicks lines at 0.5-1.5 where Less is offered, unders priced from game logs")
+    lw.add_argument("--league", default="NHL,MLB,NFL")
+    lw.add_argument("--max-line", type=float, default=1.5)
+    lw.add_argument("--min-rating", type=int, default=1)
+    lw.add_argument("--log", action="store_true")
     tn = sub.add_parser("tennis", help="match winner, pre-match and live (ESPN scores; your book's odds)")
     tn.add_argument("action", choices=["refresh", "backtest", "list", "pre", "live"])
     tn.add_argument("player", nargs="?", help="the player you're pricing (A)")
@@ -293,6 +298,42 @@ def main(argv=None):
                              "action": "lean" if r["confidence"] in ("High", "Medium") and not r.get("newcomer") else "pass",
                              "segment": f"{r['sport']}:{r['market_key']}:{r['side']}", "group": r["script"], "status": "pending",
                              "proj": "" if r.get("proj") is None else round(r["proj"], 1), "notes": f"edge pp; {r['notes']}"})
+                nid += 1
+                added += 1
+            L.write_bets(bets)
+            print(f"Logged {added} new prop(s) to bets.csv.")
+    elif args.cmd == "lowline":
+        from . import lowline as LW
+        res = LW.scan(tuple(x.strip().upper() for x in args.league.split(",")), args.max_line)
+        ok = sorted([r for r in res if "error" not in r], key=lambda r: -r["p_final"])
+        print(f"\n{'rate':>4} {'p':>5} {'conf':6s} {'lg':3s} {'player':20s} {'team':4s} {'stat':14s} {'line':>5} model hist(n)   mean  notes")
+        for r in ok:
+            if r["rating"] < args.min_rating:
+                continue
+            print(f"{r['rating']:>2}/10 {r['p_final']:.3f} {r['confidence']:6s} {r['league']:3s} {r['player'][:20]:20s} {r['team'] or '':4s} {r['stat'][:14]:14s} "
+                  f"U{r['line']:<4} {r['p_model']:.2f}  {r['p_hist']:.2f}({r['hist_n']:>2}) {r['mean']:5.2f}  "
+                  + (f"ROLE CHANGE: workload x{r['scale']:.2f} lately, capped at Low (L5); " if r["role_shift"] else "") + f"last {r['last']}")
+        bad = [r for r in res if "error" in r]
+        if bad:
+            print(f"\nNot priced: {len(bad)} (" + "; ".join(f"{k} x{v}" for k, v in collections.Counter(r['error'] for r in bad).most_common()) + ")")
+        if args.log:
+            bets = L.read_bets()
+            seen = {(b["player"].lower(), b["market"], str(float(b["line"])) if b["line"] else "", b["side"], b["date"]) for b in bets}
+            nid = max(int(b["id"]) for b in bets if b["id"].isdigit()) + 1
+            added = 0
+            for r in ok:
+                k = (r["player"].lower(), r["market"], str(float(r["line"])), "under", dt.date.today().isoformat())
+                if k in seen:
+                    continue
+                bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": r["league"].lower(),
+                             "event": f"{r['team']} vs {r['opp']}", "event_id": "", "player": r["player"], "player_id": r["player_id"],
+                             "market": r["market"], "line": r["line"], "side": "under", "book": "PrizePicks standard",
+                             "p_model": round(r["p_model"], 4), "p_hist": round(r["p_hist"], 4), "hist_n": r["hist_n"],
+                             "p_final": round(r["p_final"], 4), "confidence": r["confidence"],
+                             "action": "lean" if r["confidence"] == "High" else "pass", "segment": r["segment"],
+                             "group": f"{r['league'].lower()}:{r['team']}-{r['opp']}", "status": "pending", "proj": round(r["mean"], 2),
+                             "notes": f"edge lowline; per game {r['per_game']:.2f}, workload x{r['scale']:.2f}" + ("; ROLE CHANGE (L5)" if r["role_shift"] else "")
+                                      + f"; last {r['last']}; start {r.get('start')}"})
                 nid += 1
                 added += 1
             L.write_bets(bets)
