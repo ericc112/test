@@ -33,8 +33,12 @@ Every pick you name to the user, at any confidence, must pass `python3 -m edge v
 - **After `edge learn` changes weights,** run `python3 -m edge verify --open --refresh` before recommending anything.
 - **Never type a number into `edge prob` by hand when a pricer exists** (`edge pp`, `edge passes`, `edge/lol.py`, `edge/cs2.py`). Copy-typing is how 0.728 became 0.78.
 
-## User preference: High only
-The user wants **only High-confidence picks** reported back. List VERIFIED High legs (with their verdict and WARNs) and nothing else; if there are none, say so in one line. Don't list Medium or Low leans unless asked. Keep logging every evaluated prop as usual.
+## User preference: 1-10 rating on every prop
+The user wants **every prop rated 1-10** (`blend.rating`, shown by `edge pp`, `edge prob` and `edge verify`). The gates don't change; the label sets the band and the probability places it inside:
+- **8-10 = High** (super confident): passed every High gate. 8 at 65%+, 9 at 72%+, 10 at 78%+.
+- **5-7 = Medium**: a good number that missed a gate (no market price, thin history, sources too far apart, a learned cap). Never above 7, however high the probability.
+- **1-4 = Low**: sources disagree, single source, role unknown (L5/L26), or under 58%. Avoid-list segments are 1.
+Show the rating next to every prop. A prop rated 8+ must pass `edge verify` this session, with its verdict and WARNs shown; a NOT VERIFIED or judgment-downgraded prop (role check) drops to its new label's band. Ratings of 7 or below come straight from the pricer: mark them as ratings, not picks. Recommend only 8+.
 
 ## Role and competition check (L26, mandatory)
 Before naming any prop, ask two questions the pricer may not: **is this player's role one the model was built for**, and **does his history come from the same kind of game as tonight?**

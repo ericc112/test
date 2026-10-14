@@ -56,6 +56,22 @@ class Estimate:
     components: dict
     notes: list
 
+    @property
+    def rating(self) -> int:
+        return rating(self.p, self.confidence)
+
+
+def rating(p: float | None, confidence: str | None) -> int:
+    """1-10 confidence score. The label decides the band and the probability places it inside the band, so no number
+    can buy its way past a gate: 8-10 only for High (every gate passed), 5-7 Medium, 1-4 Low, 1 for Avoid."""
+    if p is None or not confidence or confidence == "Avoid":
+        return 1
+    if confidence == "High":
+        return 10 if p >= 0.78 else 9 if p >= 0.72 else 8
+    if confidence == "Medium":
+        return 7 if p >= 0.66 else 6 if p >= 0.62 else 5
+    return 4 if p >= 0.58 else 3 if p >= 0.54 else 2 if p >= 0.50 else 1
+
 
 def final_probability(p_model: float | None, p_market: float | None = None, p_hist: float | None = None,
                       segment: str = "", hist_n: int = 0, adj: dict | None = None) -> Estimate:

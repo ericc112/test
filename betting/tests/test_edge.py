@@ -54,6 +54,16 @@ class Pickem(unittest.TestCase):
 
 
 class Blend(unittest.TestCase):
+    def test_rating_keeps_the_gates(self):
+        """1-10 score: the label sets the band, so a big number that misses a gate can't score like a High."""
+        from edge.blend import rating
+        self.assertEqual([rating(p, "High") for p in (0.65, 0.72, 0.80)], [8, 9, 10])
+        self.assertEqual([rating(p, "Medium") for p in (0.58, 0.63, 0.90)], [5, 6, 7])     # 90% that failed a gate is a 7 at most
+        self.assertEqual([rating(p, "Low") for p in (0.45, 0.52, 0.56, 0.95)], [1, 2, 3, 4])
+        self.assertEqual(rating(0.9, "Avoid"), 1)
+        thin = final_probability(0.80, None, 0.85, "cs2:cs_kills_m12:under", hist_n=8, adj=DEFAULT_ADJ)  # no market, thin history
+        self.assertLessEqual(thin.rating, 7)
+
     def test_missing_components_and_agreement(self):
         e = final_probability(0.71, 0.66, 0.74, "mlb:pitcher_outs:over", hist_n=20, adj=DEFAULT_ADJ)
         self.assertTrue(0.65 < e.p < 0.75)

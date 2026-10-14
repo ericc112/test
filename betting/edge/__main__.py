@@ -31,7 +31,7 @@ from . import review as R
 from . import pp as P
 from . import soccer as S
 from . import verify as V
-from .blend import final_probability, segment_key
+from .blend import final_probability, rating, segment_key
 from .odds import fair_american
 from .pickem import PAYOUTS, breakeven, squad_ride
 
@@ -118,7 +118,7 @@ def main(argv=None):
         print(L.report(L.read_bets()))
     elif args.cmd == "prob":
         e = final_probability(args.model, args.market, args.hist, args.segment.lower(), args.hist_n)
-        print(f"p={e.p:.3f} (fair {fair_american(e.p):+d}) confidence={e.confidence} agreement={e.agreement} spread={e.spread:.3f}")
+        print(f"p={e.p:.3f} (fair {fair_american(e.p):+d}) rating={e.rating}/10 confidence={e.confidence} agreement={e.agreement} spread={e.spread:.3f}")
         print("components:", e.components)
         for n in e.notes:
             print("note:", n)
@@ -239,9 +239,9 @@ def main(argv=None):
         ok = sorted([r for r in rows if "error" not in r], key=lambda r: -r["p_final"])
         bad = [r for r in rows if "error" in r]
         f = lambda v: "  - " if v is None else f"{v:.2f}"
-        print(f"\n{'p':>5} {'conf':6s} {'player':16s} {'team':12s} {'stat':18s} {'side':5s} {'line':>5} {'type':8s} model mrkt hist(n)  notes")
+        print(f"\n{'rate':>4} {'p':>5} {'conf':6s} {'player':16s} {'team':12s} {'stat':18s} {'side':5s} {'line':>5} {'type':8s} model mrkt hist(n)  notes")
         for r in ok:
-            print(f"{r['p_final']:.3f} {r['confidence']:6s} {str(r['player'])[:16]:16s} {str(r['team'])[:12]:12s} {r['stat'][:18]:18s} {r['side']:5s} "
+            print(f"{rating(r['p_final'], r['confidence']):>2}/10 {r['p_final']:.3f} {r['confidence']:6s} {str(r['player'])[:16]:16s} {str(r['team'])[:12]:12s} {r['stat'][:18]:18s} {r['side']:5s} "
                   f"{r['line']:>5} {r['odds_type'][:8]:8s} {f(r['p_model'])} {f(r['p_market'])} {f(r['p_hist'])}({r['hist_n']})  "
                   + ("MORE-ONLY; " if r["over_only"] else "") + (f"push {r['push']:.0%}; " if r['push'] > 0.005 else "") + r["notes"])
         if bad:

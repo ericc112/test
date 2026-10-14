@@ -50,7 +50,9 @@ class Report:
 
     def text(self) -> str:
         r = self.row
-        head = f"#{r['id']} {r['player']} {r['market']} {r['side']} {r['line']} | p {r.get('p_final')} {r.get('confidence')} -> {self.verdict}"
+        from .blend import rating
+        head = (f"#{r['id']} {r['player']} {r['market']} {r['side']} {r['line']} | {rating(_f(r.get('p_final')), r.get('confidence'))}/10 "
+                f"p {r.get('p_final')} {r.get('confidence')} -> {self.verdict}")
         return "\n".join([head] + [f"   {s:4s} {n:11s} {d}" for s, n, d in self.checks])
 
 
