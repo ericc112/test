@@ -141,6 +141,16 @@ class Learning(unittest.TestCase):
         txt = learn.report(_synthetic(80))
         self.assertIn("Calibration", txt)
 
+    def test_calibration_pulls_overconfident_model_only_picks_down(self):
+        from edge.blend import DEFAULT_ADJ, final_probability
+        rows = [{"id": str(i), "status": "won" if i % 10 < 6 else "lost", "p_model": "0.80", "p_market": "", "p_hist": "",
+                 "hist_n": "0", "segment": f"s{i % 7}:m:over", "event_id": str(i)} for i in range(200)]   # "80%" hitting 60%
+        cal = learn.fit_calibration(rows, dict(DEFAULT_ADJ))
+        self.assertIn("no_market", cal)
+        adj = {**DEFAULT_ADJ, "calibration": cal}
+        self.assertLess(final_probability(0.80, None, None, "x:y:over", 0, adj).p, 0.75)
+        self.assertNotIn("market", cal)                    # no priced rows: priced picks stay uncalibrated
+
     def test_rating_floor_tightens_until_tier_hits_80(self):
         rows = [{"id": str(i), "status": "won" if i % 10 < 7 else "lost", "p_final": "0.85", "p_market": "0.86",
                  "confidence": "High", "segment": "x:y:over"} for i in range(30)]     # 70% < 80%
@@ -500,6 +510,26 @@ class GameTotalBackCheck(unittest.TestCase):
         st, name, detail = rep.checks[-1]
         self.assertEqual(st, "PASS")                      # 6/6 playoff games under, not 0/20 regular-season
         self.assertIn("postseason", detail)
+
+
+class MlbLineupCheck(unittest.TestCase):
+    """An 80% call on a hitter who sits is worthless: verify FAILs a batter prop missing from the posted lineup."""
+    def _run(self, lineups, pid="7"):
+        from edge import grade
+        sched = {"dates": [{"games": [{"lineups": lineups, "teams": {"away": {"probablePitcher": {"id": 1}}, "home": {"probablePitcher": {"id": 2}}}}]}]}
+        orig = grade._get
+        try:
+            grade._get = lambda url: sched
+            rep = verify.Report({"id": "1", "sport": "mlb", "market": "batter_hits", "event_id": "9", "player_id": pid, "line": "0.5", "side": "over"})
+            verify.check_mlb_lineup(rep)
+        finally:
+            grade._get = orig
+        return rep.checks[-1][0]
+
+    def test_lineup_states(self):
+        self.assertEqual(self._run({}), "WARN")                                            # not posted yet
+        self.assertEqual(self._run({"awayPlayers": [{"id": 7}], "homePlayers": []}), "PASS")
+        self.assertEqual(self._run({"awayPlayers": [{"id": 8}], "homePlayers": []}), "FAIL")
 
 
 class Grading(unittest.TestCase):

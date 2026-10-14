@@ -122,6 +122,13 @@ def final_probability(p_model: float | None, p_market: float | None = None, p_hi
     if ob:
         notes.append(f"outcome bias {ob:+.2f} logit learned for {segment}")
     p = sigmoid(z + ob)
+    # calibration learned from graded results (`edge learn`): a model-only 80% has hit ~73%; priced picks are honest
+    cal = (adj.get("calibration") or {}).get("market" if "market" in comps else "no_market")
+    if cal:
+        raw = p
+        p = sigmoid(cal["a"] + cal["b"] * logit(min(0.995, max(0.005, raw))))
+        if abs(p - raw) >= 0.005:
+            notes.append(f"calibrated {raw:.3f} -> {p:.3f} ({'priced' if 'market' in comps else 'no market'} picks' record)")
 
     vals = list(comps.values())
     leaning = [v for v in vals if abs(v - 0.5) >= 0.01]  # a component at ~50% is neutral, not a disagreement

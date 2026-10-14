@@ -65,5 +65,19 @@
     "soccer:passes_att:under|model bias",
     "soccer:shots:over|opportunity"
   ],
-  "rating_floor": 0.8
+  "rating_floor": 0.8,
+  "calibration": {
+    "market": {
+      "a": 0.0252,
+      "b": 1.0061,
+      "n": 167,
+      "eff_n": 63.3
+    },
+    "no_market": {
+      "a": -0.2658,
+      "b": 0.9088,
+      "n": 206,
+      "eff_n": 64.5
+    }
+  }
 }

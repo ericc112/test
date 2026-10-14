@@ -27,6 +27,7 @@ Every pick you name to the user, at any confidence, must pass `python3 -m edge v
   - It applies the lesson rules, and flags other open legs on the same script.
   - Soccer passes (L26): it FAILS a goalkeeper priced with the outfield model, and recounts history in tonight's kind of competition (European cup vs domestic). A FAIL there means re-price, not override.
   - Soccer lineups (L29): it FAILS an over on a player who isn't in the starting XI, and WARNS until the XI is out.
+  - MLB lineups: it FAILS a batter prop on a player missing from the posted lineup and a pitcher prop on anyone but the listed starter, and WARNS until lineups post (about 3 hours before first pitch). An 8+ isn't published on a WARN here.
 - **NOT VERIFIED means not published.** Either fix it with `--fix` (not-started picks only) or withdraw it, and tell the user which.
 - **Started or finished picks are never rewritten.** Their audit result is added as a note.
 - **Show the verdict next to every pick.** Include each WARN, e.g. "Boom line not readable automatically: confirm 8.5 Less on your screen".
@@ -35,6 +36,7 @@ Every pick you name to the user, at any confidence, must pass `python3 -m edge v
 
 ## User preference: 1-10 rating on every prop
 The user wants **every prop rated 1-10** (`blend.rating`, shown by `edge pp`, `edge prob` and `edge verify`). The gates don't change; the label sets the band and the probability places it inside:
+- Every probability passes through a calibration map that `edge learn` fits from graded results, separately for priced and unpriced picks (`adjustments.json` "calibration"). A model-only 80% currently reads 73%.
 - **8-10 = the 80% tier.** The user's bar: these must hit at least 80%. Requires every High gate, a blended chance at or above the rating floor (0.80; `edge learn` raises it while graded 8+ picks hit under 80% over 20+), AND a sportsbook price that makes it a 75%+ shot on its own. Model-only picks (no market: CS2, CFB, game-log scans) can't reach 8: at 80%+ they hit 56% (n=9). 8 at the floor, 9 at floor+5, 10 at floor+10.
 - **5-7 = Medium**, or a High that isn't in the 80% tier (7): a good number that missed a gate (no market price, thin history, sources too far apart, a learned cap). Never above 7, however high the probability.
 - **1-4 = Low**: sources disagree, single source, role unknown (L5/L26), or under 58%. Avoid-list segments are 1.

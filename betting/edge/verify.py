@@ -269,6 +269,35 @@ def check_mlb_game_total(rep: Report):
             f"both teams' {kind} games give {ph:.2f} over {o + u} (logged {logged})")
 
 
+def check_mlb_lineup(rep: Report):
+    """A hitter prop needs him in the posted lineup and a pitcher prop needs him as the listed starter: an 80% call
+    on a player who sits is a void at best. Lineups post ~3 hours before first pitch; until then it's a WARN."""
+    from .grade import _get
+    r = rep.row
+    mk = r.get("market", "")
+    if not (mk.startswith("batter_") or mk.startswith("pitcher_")) or not r.get("player_id"):
+        return
+    try:
+        gm = _get(f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&gamePk={r['event_id']}&hydrate=lineups,probablePitcher")["dates"][0]["games"][0]
+    except Exception:
+        rep.add("WARN", "lineup", "couldn't read the MLB lineup: confirm he plays before publishing")
+        return
+    pid = str(r["player_id"])
+    if mk.startswith("pitcher_"):
+        probs = {str((gm["teams"][s].get("probablePitcher") or {}).get("id")) for s in ("away", "home")}
+        rep.add("PASS" if pid in probs else "FAIL", "starter",
+                "listed as tonight's probable starter" if pid in probs else "not the listed probable starter: withdraw")
+        return
+    lu = gm.get("lineups") or {}
+    names = [str(p.get("id")) for k in ("awayPlayers", "homePlayers") for p in lu.get(k, [])]
+    if not names:
+        rep.add("WARN", "lineup", "lineups not posted yet (about 3 hours before first pitch): confirm he starts")
+    elif pid in names:
+        rep.add("PASS", "lineup", "in the posted lineup")
+    else:
+        rep.add("FAIL", "lineup", "not in the posted lineup: withdraw (a pinch-hit appearance doesn't play the prop)")
+
+
 def check_lineup(rep: Report, s: dict):
     """L29: soccer props are priced for a full start. Nine overs lost on 10/13 to players who got 10-38 minutes."""
     r = rep.row
@@ -377,6 +406,7 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
                 check_cs2(rep, adj)
             elif sport == "mlb":
                 check_mlb_history(rep)
+                check_mlb_lineup(rep)
             elif sport == "soccer":
                 check_soccer(rep)
             else:

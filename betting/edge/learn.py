@@ -299,6 +299,41 @@ def report(rows: list[dict], pms: dict | None = None) -> str:
     return "\n".join(lines)
 
 
+def fit_calibration(rows: list[dict], adj: dict, lam: float = 20.0) -> dict:
+    """Map the blend's probability to how often that number has actually hit, separately for priced and unpriced picks:
+    logistic y ~ a + b*logit(p), pulled toward the identity (a=0, b=1) with strength lam, legs weighted 1/k per game
+    script. p is recomputed from stored components with today's weights and NO calibration, so nothing compounds."""
+    base = {**adj, "calibration": {}}
+    gr = graded(rows)
+    wt = script_weights(gr)
+    out = {}
+    for key, priced in (("market", True), ("no_market", False)):
+        X, y, w = [], [], []
+        for r in gr:
+            pm, pk, ph = _f(r.get("p_model")), _f(r.get("p_market")), _f(r.get("p_hist"))
+            if (pk is not None) != priced or (pm is None and pk is None and ph is None):
+                continue
+            q = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), base).p
+            q = min(0.99, max(0.01, q))
+            X.append([1.0, math.log(q / (1 - q))])
+            y.append(1.0 if r["status"] == "won" else 0.0)
+            w.append(wt[r["id"]])
+        if len(y) < 20:
+            continue
+        X, y, w = np.array(X), np.array(y), np.array(w)
+        th, prior = np.array([0.0, 1.0]), np.array([0.0, 1.0])
+        for _ in range(50):
+            p = 1 / (1 + np.exp(-X @ th))
+            g = X.T @ (w * (p - y)) + lam * (th - prior)
+            H = X.T @ (X * (w * p * (1 - p))[:, None]) + lam * np.eye(2)
+            step = np.linalg.solve(H, g)
+            th -= step
+            if np.abs(step).max() < 1e-9:
+                break
+        out[key] = {"a": round(float(th[0]), 4), "b": round(float(th[1]), 4), "n": int(len(y)), "eff_n": round(float(w.sum()), 1)}
+    return out
+
+
 def tune_rating_floor(rows: list[dict], adj: dict) -> tuple[float, str]:
     """The user's bar: 8-10 picks hit at least 80%. While graded 8+ picks (scored with today's tier rules) fall short
     over 20+, raise the floor 3 points (max 0.92); once they clear 85% over 30+, ease it 2 points (min 0.80)."""
@@ -325,7 +360,8 @@ def update(rows: list[dict] | None = None, adj_path: str = ADJ_PATH, lessons_pat
     fit = fit_blend(rows, {**adj, "blend": adj["blend_prior"]})
     adj["blend"] = {k: fit[k] for k in ("intercept", "w_model", "w_market", "w_hist")}
     adj["blend_fit"] = {k: v for k, v in fit.items() if k in ("n_fit", "note")}
-    adj["outcome_bias_logit"] = learn_segment_bias(rows, adj)
+    adj["outcome_bias_logit"] = learn_segment_bias(rows, {**adj, "calibration": {}})
+    adj["calibration"] = fit_calibration(rows, adj)
     new_avoid = find_avoid_segments(rows)
     adj["avoid_segments"] = sorted(set(old.get("avoid_segments", [])) | set(new_avoid))
     adj["cap_medium_segments"] = find_caps(rows)
@@ -348,6 +384,11 @@ def update(rows: list[dict] | None = None, adj_path: str = ADJ_PATH, lessons_pat
     for seg in old.get("cap_medium_segments", {}):
         if seg not in adj["cap_medium_segments"]:
             notes.append(f"Segment {seg}: Medium cap lifted, results back in line.")
+    for key, c in adj["calibration"].items():
+        oc = old.get("calibration", {}).get(key)
+        if not oc or abs(c["a"] - oc["a"]) > 0.05 or abs(c["b"] - oc["b"]) > 0.05:
+            q = 1 / (1 + math.exp(-(c["a"] + c["b"] * math.log(4))))
+            notes.append(f"Calibration ({key.replace('_', ' ')} picks): an 80% now reads {q:.0%} (a {c['a']:+.2f}, b {c['b']:.2f}, n {c['n']}).")
     if adj["rating_floor"] != old.get("rating_floor", adj["rating_floor"]):
         notes.append(f"8-10 tier: graded 8+ picks hit {tier} -> rating floor {old.get('rating_floor')} -> {adj['rating_floor']}.")
     flagged = set(old.get("rule_flags", []))
