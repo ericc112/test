@@ -787,6 +787,12 @@ def cli(args) -> None:
         tour = args.tour or ("atp" if any(r["w_id"] == a or r["l_id"] == a for r in load_matches()[-6000:] if r["tour"] == "atp") else "wta")
         surf, bo, event = args.surface or "hard", args.bo or 3, args.event
         sets, games, server = (0, 0), (0, 0), None
+        try:   # on today's scoreboard: take its event (for the grader), surface, format and final-set rule
+            st = next((x for x in live_matches(args.player) if {a, b} <= set(x["ids"])), None)
+        except Exception:
+            st = None
+        if st:
+            surf, bo, event = args.surface or st["surface"], args.bo or st["bo"], args.event or st["event"]
     if args.score:
         sets, games = parse_score(args.score)
     server = args.server or server or "A"
