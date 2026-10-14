@@ -128,6 +128,11 @@ class Learning(unittest.TestCase):
         txt = learn.report(_synthetic(80))
         self.assertIn("Calibration", txt)
 
+    def test_report_skips_unpriced_rows(self):
+        rows = _synthetic(80)
+        rows.append({**rows[0], "id": "999", "p_final": "", "status": "won"})   # a user's leg nobody priced
+        self.assertIn("Calibration", learn.report(rows))
+
 
 class HitRateDiscipline(unittest.TestCase):
     def test_no_market_needs_deep_history_for_high(self):

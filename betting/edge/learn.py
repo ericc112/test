@@ -229,6 +229,7 @@ def report(rows: list[dict], pms: dict | None = None) -> str:
     lines = [f"Bets logged: {len(rows)} | graded: {len(g)} | pending: {sum(r.get('status') == 'pending' for r in rows)}"]
     if not g:
         return "\n".join(lines + ["Nothing graded yet: run `python -m edge grade` after games finish."])
+    g = [r for r in g if _f(r.get("p_final")) is not None]   # unpriced rows (e.g. a user's leg nobody priced) have no forecast to score
     ps = [_f(r["p_final"]) for r in g]
     ys = [1.0 if r["status"] == "won" else 0.0 for r in g]
     lines.append(f"Hit rate {np.mean(ys):.1%} vs predicted {np.mean(ps):.1%} | Brier {brier(ps, ys):.3f} | log loss {logloss(ps, ys):.3f}")

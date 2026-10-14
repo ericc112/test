@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-13",
+  "updated": "2026-10-14",
   "blend_prior": {
     "intercept": 0.0,
     "w_model": 0.45,
@@ -8,13 +8,13 @@
     "w_hist": 0.15
   },
   "blend": {
-    "intercept": 0.0252,
-    "w_model": 0.465,
-    "w_market": 0.4276,
-    "w_hist": 0.0852
+    "intercept": 0.0337,
+    "w_model": 0.4427,
+    "w_market": 0.4061,
+    "w_hist": 0.0612
   },
   "blend_fit": {
-    "n_fit": 30
+    "n_fit": 35
   },
   "model_bias_logit": {
     "mlb:batter_hits:over": -0.145,
@@ -27,7 +27,15 @@
     "mlb:batter_hrr:under": -0.31
   },
   "model_bias_source": "2026-10-12 NLCS/ALCS hitter scan: model ran +3.6 pts (hits), +2.0 (singles), -1.2 (walks) vs DraftKings no-vig across all hitters. Re-measure each scan. | 2026-10-12 H+R+RBI 1.5 scan: model ran -7.6 pts vs DK no-vig across 18 hitters (run-environment scaling too strong).",
-  "outcome_bias_logit": {},
+  "outcome_bias_logit": {
+    "cs2:cs_kills_m12:under": -0.061,
+    "cs2:cs_headshots_m12:under": -0.065,
+    "cs2:cs_kills_m12:over": -0.021,
+    "soccer:passes_att:over": -0.251,
+    "soccer:gk_saves:over": 0.184,
+    "soccer:shots:over": -0.346,
+    "soccer:passes_att:under": -0.169
+  },
   "avoid_segments": [],
   "gates": {
     "high": 0.65,

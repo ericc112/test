@@ -55,3 +55,9 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 ### Auto-learned 2026-10-13 (superseded the same day)
 - A first `learn` run set -0.40 (cs2 HS over), -0.34 (lol kills under) and -0.27 (cs2 kills over) from legs that sat on 1-3 series each.
   After L25 (one game script = one piece of evidence) no segment has 5 independent scripts yet, so no outcome bias is active.
+
+### Auto-learned 2026-10-14
+- Segment soccer:passes_att:over: results run below our probabilities; now auto-adjusting -0.25 logit.
+- Segment soccer:gk_saves:over: results run above our probabilities; now auto-adjusting +0.18 logit.
+- Segment soccer:shots:over: results run below our probabilities; now auto-adjusting -0.35 logit.
+- Segment soccer:passes_att:under: results run below our probabilities; now auto-adjusting -0.17 logit.
