@@ -61,6 +61,39 @@ def games(r: dict) -> list[float]:
     return [round(v, 1) for v in vals[:15]]
 
 
+def _avg(xs: list[float]) -> float | None:
+    return round(sum(xs) / len(xs), 2) if xs else None
+
+
+def card_key(lg: str, player: str, stat: str, team: str) -> str:
+    return f"{lg}|{player}|{stat}|{team}"
+
+
+def build_card(lg: str, stat: str, team: str, opp: str, player: str, aid: str | None, position: str = "",
+               home: bool | None = None, date: str = "") -> dict:
+    """The prop card: last games (opponent, home/away, value), averages, head-to-head, venue split, matchup rank."""
+    from . import tier
+    from . import context as CX
+    from . import lowline as LW
+    games = tier.card_games(lg, stat, team, player, aid)
+    vals = [g["v"] for g in games]
+    norm = lambda a: tier.NHL_API.get(tier.espn_team(lg, a or ""), tier.espn_team(lg, a or ""))
+    h2h = [g["v"] for g in games if opp and norm(g["o"]) == norm(opp)]
+    hm, aw = [g["v"] for g in games if g["h"] is True], [g["v"] for g in games if g["h"] is False]
+    pid = aid
+    if lg == "MLB":
+        try:
+            pid = LW.mlb_player(team, player)
+        except Exception:
+            pid = None
+    return {"pl": player, "pos": position, "tm": team, "op": opp, "st": stat,
+            "g": [{"d": g["d"][5:], "o": g["o"], "h": g["h"], "v": g["v"]} for g in games[:15]],
+            "a5": _avg(vals[:5]), "a10": _avg(vals[:10]), "aN": _avg(vals), "n": len(vals),
+            "h2h": {"avg": _avg(h2h), "n": len(h2h)}, "home": {"avg": _avg(hm), "n": len(hm)}, "away": {"avg": _avg(aw), "n": len(aw)},
+            "tonight": "home" if home is True else "away" if home is False else "",
+            "mu": CX.matchup(lg, stat, opp, pid, team, date)}
+
+
 def pick_doc(r: dict, rows: list[dict], verify_it: bool) -> dict:
     notes = r.get("notes", "")
     m = re.search(r"DK (\d+)\+ ([+-]\d+)", notes)
@@ -78,14 +111,20 @@ def pick_doc(r: dict, rows: list[dict], verify_it: bool) -> dict:
         "result": _f(r.get("result_value")), "verdict": "", "warns": [], "lesson": "",
         "context": (re.search(r"context: (.*?)(?:; start |$)", notes).group(1).split(" / ") if "context: " in notes else []),
     }
+    from . import tier
+    stat = next((s for lg_ in (tier.STATS, tier.EXTRA) for s, v in lg_.get(doc["sport"], {}).items()
+                 if (v[1] if isinstance(v, tuple) else v) == r["market"]), None)
     if doc["proj"] is None and doc["status"] == "pending":       # rows logged before projections: price the matchup now
         from . import context as CX
-        from . import tier
-        stat = next((s for lg_ in (tier.STATS, tier.EXTRA) for s, v in lg_.get(doc["sport"], {}).items()
-                     if (v[1] if isinstance(v, tuple) else v) == r["market"]), None)
         cx = CX.price(doc["sport"], stat, doc["opp"], r.get("player_id"), doc["line"], int(r["date"][:4])) if stat else None
         if cx:
             doc["proj"], doc["context"] = round(cx[2], 1), doc["context"] or cx[1]
+    if stat and doc["status"] == "pending":
+        try:
+            doc["card"] = build_card(doc["sport"], stat, doc["team"], doc["opp"], r["player"],
+                                     r.get("player_id") if doc["sport"] in ("NBA", "NFL") else None, date=r["date"])
+        except Exception:
+            pass
     if verify_it and doc["status"] == "pending":
         from .verify import verify
         rep = verify(r, rows)
@@ -127,6 +166,7 @@ def _row(r: dict, source: str) -> dict:
             "ph": None if r.get("p_hist") is None else round(r["p_hist"], 3), "n": r.get("hist_n", 0),
             "r": r["rating"], "t": r.get("start", ""), "cx": r.get("context") or [],
             "pj": r.get("proj"), "pjs": r.get("proj_src", ""), "a10": r.get("avg10"),
+            "ck": card_key(r["league"], r["player"], r["stat"], r.get("team", "")),
             "pmod": None if r.get("p_model") is None else round(r["p_model"], 3)}
 
 
@@ -170,6 +210,8 @@ def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None =
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(regular(pp, now), separators=(",", ":")))
     written.append(("meta", "regular", str(p)))
+    import concurrent.futures as cf
+    cards = {}
     for source, rows in (("pp", pp), ("book", book)):
         for lg in leagues:
             sel = sorted((r for r in rows if r["league"] == lg), key=lambda r: (-r["rating"], -r["p_final"]))[:700]
@@ -177,6 +219,40 @@ def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None =
             p = base / f"{source}-{lg}.json"
             p.write_text(json.dumps(doc, separators=(",", ":")))
             written.append(("boards", f"{source}-{lg}", str(p)))
+            for r in sel:
+                k = card_key(lg, r["player"], r["stat"], r.get("team", ""))
+                if k not in cards:
+                    home = (r.get("home") == r.get("team")) if r.get("home") else None
+                    cards[k] = (lg, r["stat"], r.get("team", ""), r.get("opp", ""), r["player"],
+                                r.get("player_id") if lg in ("NBA", "NFL") else None, r.get("position", ""), home,
+                                (r.get("start") or "")[:10])
+
+    def make(item):
+        k, args = item
+        try:
+            return k, build_card(*args)
+        except Exception:
+            return k, None
+    with cf.ThreadPoolExecutor(6) as ex:
+        built = {k: c for k, c in ex.map(make, cards.items()) if c}
+    # pack the cards into documents under ~180 KB each (the store's limit is 256 KB)
+    cdir = Path(out) / "cards"
+    cdir.mkdir(parents=True, exist_ok=True)
+    for lg in leagues:
+        chunk, size, i = {}, 0, 0
+        items = [(k, c) for k, c in built.items() if k.startswith(lg + "|")]
+        for n, (k, c) in enumerate(items):
+            s = len(json.dumps(c, separators=(",", ":")))
+            if chunk and size + s > 180_000:
+                p = cdir / f"{lg}-{i}.json"
+                p.write_text(json.dumps({"league": lg, "cards": chunk}, separators=(",", ":")))
+                written.append(("cards", f"{lg}-{i}", str(p)))
+                chunk, size, i = {}, 0, i + 1
+            chunk[k], size = c, size + s
+        if chunk:
+            p = cdir / f"{lg}-{i}.json"
+            p.write_text(json.dumps({"league": lg, "cards": chunk}, separators=(",", ":")))
+            written.append(("cards", f"{lg}-{i}", str(p)))
     return written
 
 

@@ -55,8 +55,8 @@ def nhl_teams() -> dict:
     for t, x in cur.items():
         gp, prev = x.get("gamesPlayed") or 0, last.get(t) or x
         out[t] = {k: ((x[f] or 0) * gp + (prev[f] or 0) * PRIOR_GAMES) / (gp + PRIOR_GAMES)
-                  for k, f in (("sa", "shotsAgainstPerGame"), ("sf", "shotsForPerGame"))}
-    lg = {k: sum(v[k] for v in out.values()) / len(out) for k in ("sa", "sf")}
+                  for k, f in (("sa", "shotsAgainstPerGame"), ("sf", "shotsForPerGame"), ("ga", "goalsAgainstPerGame"))}
+    lg = {k: sum(v[k] for v in out.values()) / len(out) for k in ("sa", "sf", "ga")}
     return {"teams": out, "league": lg}
 
 
@@ -176,6 +176,75 @@ def price(league: str, stat: str, opp: str | None, pid: str | None, line: float,
             return nhl_saves(pid, opp, line)
         if league == "MLB" and stat == "Pitcher Strikeouts":
             return mlb_pitcher_k(pid, opp, line, season)
+    except Exception:
+        return None
+    return None
+
+
+# ------------------------------------------------------------------ matchup strength for the prop card
+@functools.lru_cache(maxsize=None)
+def mlb_k_table(hand: str, season: int) -> dict:
+    """{team: strikeout rate vs this throwing hand} for every MLB team."""
+    out, seen = {}, set()
+    for abbr, tid in _mlb_team_ids().items():                      # aliases (AZ/ARI, CWS/CHW...) share an id: count each team once
+        if tid in seen:
+            continue
+        seen.add(tid)
+        r = opp_k_rate(abbr, hand, season)
+        if r:
+            out[abbr] = r[0]
+    return out
+
+
+@functools.lru_cache(maxsize=None)
+def probable_starter(team: str, date: str) -> dict | None:
+    """The starter `team` faces on `date`: name, hand, season ERA and strikeout rate."""
+    tid = _mlb_team_ids().get(team)
+    s = _get(f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date}&hydrate=probablePitcher")
+    for d in s.get("dates", []):
+        for g in d["games"]:
+            sides = g["teams"]
+            for me, them in (("home", "away"), ("away", "home")):
+                if sides[me]["team"]["id"] == tid and sides[them].get("probablePitcher"):
+                    pp = sides[them]["probablePitcher"]
+                    st = _get(f"https://statsapi.mlb.com/api/v1/people/{pp['id']}/stats?stats=season&group=pitching&season={date[:4]}")
+                    x = (st["stats"][0]["splits"] or [{}])[-1].get("stat", {}) if st.get("stats") else {}
+                    bf = x.get("battersFaced") or 0
+                    return {"name": pp["fullName"], "hand": pitch_hand(str(pp["id"])), "era": x.get("era"),
+                            "k": (x.get("strikeOuts") or 0) / bf if bf else None}
+    return None
+
+
+def matchup(league: str, stat: str, opp: str | None, pid: str | None, team: str = "", date: str = "") -> dict | None:
+    """How tonight's opponent stacks up for this stat: label, value, rank (1 = most), out of, and which side it helps."""
+    if not opp:
+        return None
+    try:
+        if league == "NHL":
+            t = nhl_teams()
+            o = _nhl_opp(opp)
+            key, label, helps = {"Goalie Saves": ("sf", "shots taken per game", "over")}.get(
+                stat, ("sa", "shots allowed per game", "over") if stat == "Shots On Goal" else ("ga", "goals allowed per game", "over"))
+            if o not in t["teams"]:
+                return None
+            order = sorted(t["teams"], key=lambda k: -t["teams"][k][key])
+            return {"label": f"{o} {label}", "value": f"{t['teams'][o][key]:.1f} (league {t['league'][key]:.1f})",
+                    "rank": order.index(o) + 1, "of": len(order), "high_helps": helps}
+        if league == "MLB" and stat == "Pitcher Strikeouts" and pid:
+            hand = pitch_hand(pid)
+            tab = mlb_k_table(hand, int(date[:4]) if date else 2026)
+            ids = _mlb_team_ids()
+            me = next((k for k in tab if ids.get(k) == ids.get(opp)), None)
+            if me is None:
+                return None
+            order = sorted(tab, key=lambda k: -tab[k])
+            return {"label": f"{opp} strikeout rate vs {'lefties' if hand == 'L' else 'righties'}", "value": f"{tab[me] * 100:.1f}%",
+                    "rank": order.index(me) + 1, "of": len(order), "high_helps": "over"}
+        if league == "MLB" and team and date:
+            sp = probable_starter(team, date)
+            if sp:
+                bits = [f"{sp['hand']}HP"] + ([f"{sp['era']} ERA"] if sp.get("era") else []) + ([f"{sp['k'] * 100:.0f}% K rate"] if sp.get("k") else [])
+                return {"label": f"Faces {sp['name']}", "value": ", ".join(bits), "rank": None, "of": None, "high_helps": None}
     except Exception:
         return None
     return None

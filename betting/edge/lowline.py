@@ -95,6 +95,14 @@ def mlb_player(team: str, name: str) -> str | None:
     return str(hit[0]["id"]) if hit else None
 
 
+def mlb_abbr(team_id) -> str:
+    """statsapi team id -> abbreviation (game logs name the opponent by id)."""
+    if not _MLB_TEAMS:
+        for t in _get("https://statsapi.mlb.com/api/v1/teams?sportId=1")["teams"]:
+            _MLB_TEAMS[t["abbreviation"]] = t["id"]
+    return next((a for a, i in _MLB_TEAMS.items() if i == team_id), "")
+
+
 def mlb_log(pid: str) -> list[dict]:
     out = []
     year = dt.date.today().year
@@ -105,7 +113,8 @@ def mlb_log(pid: str) -> list[dict]:
             except Exception:
                 continue
             for x in (sp[0]["splits"] if sp else []):
-                out.append({"date": x["date"], "season": str(season), "x": x["stat"], "vol": x["stat"].get("plateAppearances", 0)})
+                out.append({"date": x["date"], "season": str(season), "x": x["stat"], "vol": x["stat"].get("plateAppearances", 0),
+                            "opp": mlb_abbr((x.get("opponent") or {}).get("id")), "home": bool(x.get("isHome"))})
     return sorted(out, key=lambda r: r["date"], reverse=True)
 
 
@@ -146,7 +155,9 @@ def nfl_log(pid: str) -> list[dict]:
         for eid, x in per.items():
             # workload, so a backup who just became the starter is caught (L5): pass attempts for passers, else touches
             vol = _num(x.get(("passing", "ATT"))) or (_num(x.get(("rushing", "CAR"))) + _num(x.get(("receiving", "TGTS"))))
-            out.append({"date": (evs.get(eid) or {}).get("gameDate", "")[:10], "season": str(season), "x": x, "vol": vol})
+            ev = evs.get(eid) or {}
+            out.append({"date": ev.get("gameDate", "")[:10], "season": str(season), "x": x, "vol": vol,
+                        "opp": (ev.get("opponent") or {}).get("abbreviation", ""), "home": ev.get("atVs") == "vs"})
     return sorted(out, key=lambda r: r["date"], reverse=True)
 
 

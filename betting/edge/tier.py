@@ -174,7 +174,8 @@ def mlb_pitch_log(pid: str) -> list[dict]:
             continue
         for x in (sp[0]["splits"] if sp else []):
             if x["stat"].get("gamesStarted"):
-                out.append({"date": x["date"], "season": str(year), "x": x["stat"], "vol": x["stat"].get("battersFaced", 0)})
+                out.append({"date": x["date"], "season": str(year), "x": x["stat"], "vol": x["stat"].get("battersFaced", 0),
+                            "opp": LW.mlb_abbr((x.get("opponent") or {}).get("id")), "home": bool(x.get("isHome"))})
     return sorted(out, key=lambda r: r["date"], reverse=True)
 
 
@@ -201,7 +202,8 @@ def nba_log(aid: str) -> list[dict]:
                     team = m.get("team") or {}
                     if team.get("isAllStar"):
                         continue
-                    out.append({"date": m.get("gameDate", "")[:10], "team": team.get("abbreviation"), "s": dict(zip(g["labels"], ev["stats"]))})
+                    out.append({"date": m.get("gameDate", "")[:10], "team": team.get("abbreviation"), "s": dict(zip(g["labels"], ev["stats"])),
+                                "opp": (m.get("opponent") or {}).get("abbreviation", ""), "home": m.get("atVs") == "vs"})
     return sorted(out, key=lambda r: r["date"], reverse=True)
 
 
@@ -241,6 +243,51 @@ def recount_values(sport: str, market_key: str, team: str, pid: str) -> list[flo
         cur = espn_team("NBA", team)                                # same team only: a new team is a new role (L5)
         return [v for v in (nba_value(g["s"], market_key) for g in nba_log(pid) if g["team"] == cur) if v is not None][:30]
     return None
+
+
+def card_games(sport: str, stat: str, team: str, player: str, aid: str | None = None) -> list[dict]:
+    """His recent games for one stat, newest first (up to 30): {d: date, o: opponent, h: home?, v: value}. The same
+    windows `history` counts (NBA: current team only; MLB batters: 3+ plate appearances; NHL saves: starts only)."""
+    mk, out = market_key(sport, stat), []
+    if sport == "NHL":
+        try:
+            pid = LW.nhl_player(NHL_API.get(team, team), player)
+        except Exception:
+            pid = None
+        key = next((k for k, m in LW.NHL_STATS.values() if m == mk), None)
+        for g in (LW.nhl_log(pid) if pid else []):
+            x = g["x"]
+            if mk == "goalie_saves":
+                if not x.get("gamesStarted"):
+                    continue
+                v = (x.get("shotsAgainst") or 0) - (x.get("goalsAgainst") or 0)
+            elif key:
+                v = x.get(key) or 0
+            else:
+                break
+            out.append({"d": g["date"], "o": x.get("opponentAbbrev", ""), "h": x.get("homeRoadFlag") == "H", "v": float(v)})
+    elif sport == "MLB":
+        pid = LW.mlb_player(team, player)
+        if pid and mk in PITCH_COLS:
+            out = [{"d": g["date"], "o": g.get("opp", ""), "h": g.get("home"), "v": float(g["x"].get(PITCH_COLS[mk]) or 0)}
+                   for g in mlb_pitch_log(pid)]
+        elif pid:
+            for g in LW.mlb_log(pid):
+                v = LW.value("MLB", stat, g) if (g["vol"] or 0) >= 3 else None
+                if v is not None:
+                    out.append({"d": g["date"], "o": g.get("opp", ""), "h": g.get("home"), "v": float(v)})
+    elif sport == "NBA" and aid and mk in NBA_COLS:
+        cur = espn_team("NBA", team)
+        for g in nba_log(aid):
+            v = nba_value(g["s"], mk) if g["team"] == cur else None
+            if v is not None:
+                out.append({"d": g["date"], "o": g.get("opp", ""), "h": g.get("home"), "v": v})
+    elif sport == "NFL" and aid and mk in NFL_COLS:
+        for g in LW.nfl_log(aid):
+            v = [g["x"].get(c) for c in NFL_COLS[mk]]
+            if not all(x is None for x in v):
+                out.append({"d": g["date"], "o": g.get("opp", ""), "h": g.get("home"), "v": sum(LW._num(x) for x in v if x is not None)})
+    return out[:30]
 
 
 def history(sport: str, stat: str, team: str, player: str, line: float, aid: str | None = None) -> tuple[float | None, int, str | None]:
