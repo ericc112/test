@@ -8,13 +8,13 @@
     "w_hist": 0.15
   },
   "blend": {
-    "intercept": 0.0383,
-    "w_model": 0.4546,
-    "w_market": 0.4339,
-    "w_hist": 0.103
+    "intercept": 0.0235,
+    "w_model": 0.4531,
+    "w_market": 0.4341,
+    "w_hist": 0.1124
   },
   "blend_fit": {
-    "n_fit": 44
+    "n_fit": 45
   },
   "model_bias_logit": {
     "mlb:batter_hits:over": -0.145,
@@ -28,19 +28,19 @@
   },
   "model_bias_source": "2026-10-12 NLCS/ALCS hitter scan: model ran +3.6 pts (hits), +2.0 (singles), -1.2 (walks) vs DraftKings no-vig across all hitters. Re-measure each scan. | 2026-10-12 H+R+RBI 1.5 scan: model ran -7.6 pts vs DK no-vig across 18 hitters (run-environment scaling too strong).",
   "outcome_bias_logit": {
-    "nhl:skater_sog:under": -0.078,
-    "cs2:cs_kills_m12:under": -0.252,
-    "cs2:cs_headshots_m12:over": -0.082,
-    "cs2:cs_headshots_m12:under": -0.007,
-    "lol:kills_m123:under": -0.099,
-    "lol:kills_m123:over": -0.103,
-    "cs2:cs_kills_m12:over": 0.045,
-    "soccer:passes_att:over": -0.135,
-    "soccer:gk_saves:over": 0.213,
-    "soccer:shots:over": -0.31,
-    "soccer:sot:over": 0.08,
-    "soccer:passes_att:under": -0.243,
-    "nhl:skater_sog:over": -0.023
+    "nhl:skater_sog:under": -0.075,
+    "cs2:cs_kills_m12:under": -0.247,
+    "cs2:cs_headshots_m12:over": -0.078,
+    "cs2:cs_headshots_m12:under": -0.002,
+    "lol:kills_m123:under": -0.097,
+    "lol:kills_m123:over": -0.101,
+    "cs2:cs_kills_m12:over": 0.048,
+    "soccer:passes_att:over": -0.131,
+    "soccer:gk_saves:over": 0.219,
+    "soccer:shots:over": -0.305,
+    "soccer:sot:over": 0.083,
+    "soccer:passes_att:under": -0.237,
+    "nhl:skater_sog:over": -0.021
   },
   "avoid_segments": [],
   "gates": {
@@ -74,16 +74,16 @@
   "rating_floor": 0.8,
   "calibration": {
     "market": {
-      "a": 0.0009,
+      "a": -0.0044,
       "b": 0.978,
-      "n": 347,
-      "eff_n": 96.9
+      "n": 348,
+      "eff_n": 97.9
     },
     "no_market": {
-      "a": -0.1814,
-      "b": 0.8652,
-      "n": 398,
-      "eff_n": 111.9
+      "a": -0.1748,
+      "b": 0.8852,
+      "n": 403,
+      "eff_n": 116.9
     }
   }
 }
