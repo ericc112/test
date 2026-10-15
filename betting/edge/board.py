@@ -311,8 +311,29 @@ def regular(pp_rows: list[dict], now: str, top: int = 10) -> dict:
 PP_EXTRA = ("CS2", "LOL", "VAL", "SOCCER")
 
 
+STATE_DIR = Path(__file__).resolve().parent.parent / ".cache" / "board_state"
+
+
+def save_state(lg: str, compact: list[dict]) -> None:
+    """Every PrizePicks line priced for a league (the board document keeps only the best ~700), so `edge refresh` can tell
+    a new prop from one that was priced and trimmed. Kept in .cache: a fresh container starts from the board itself."""
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    (STATE_DIR / f"pp-{lg}.json").write_text(json.dumps({"updated": dt.datetime.now(dt.timezone.utc).isoformat(), "rows": compact},
+                                                        separators=(",", ":")))
+
+
+def load_state(lg: str) -> list[dict] | None:
+    p = STATE_DIR / f"pp-{lg}.json"
+    try:
+        return json.loads(p.read_text())["rows"]
+    except (OSError, ValueError, KeyError):
+        return None
+
+
 def _write_board(base: Path, source: str, lg: str, rows: list[dict], now: str) -> tuple[list[dict], tuple[str, str, str]]:
     """One boards/<source>-<LG> document under 256 KB, best-rated rows first. Returns the rows kept."""
+    if source == "pp":
+        save_state(lg, [_row(r, source) for r in rows])
     sel = sorted(rows, key=lambda r: (-r["rating"], -r["p_final"]))[:700]
     doc = {"source": source, "league": lg, "updated": now, "rows": [_row(r, source) for r in sel]}
     while len(json.dumps(doc, separators=(",", ":")).encode()) > 250_000:          # one db document holds 256 KB
@@ -357,6 +378,14 @@ def history_card(r: dict, lg: str) -> dict:
             "away": {"avg": _avg(aw), "n": len(aw)}, "tonight": "", "mu": None, "dvp": None}
 
 
+def extra_row(r: dict, lg: str) -> dict:
+    """An edge pp row (esports, soccer) with what the board needs: league, rating, context, projection source, L10 average."""
+    vals = [g["v"] for g in (r.get("games") or [])[:10]]
+    src = "model median" if lg != "SOCCER" else "DraftKings" if r.get("p_market") is not None else "game log"
+    return {**r, "league": lg, "rating": rating(r["p_final"], r["confidence"], r.get("p_market")),
+            "context": [r["notes"]] if r.get("notes") else [], "proj_src": src, "avg10": _avg(vals)}
+
+
 def export_pp_extra(out: str, leagues=PP_EXTRA, log: bool = True) -> list[tuple[str, str, str]]:
     """boards/pp-<LG> and cards for PrizePicks boards edge pp prices (CS2, LoL, Valorant, soccer): standard and goblin
     lines for games that haven't started, each rated like every other prop and logged to bets.csv (so an 8+ becomes a pick
@@ -375,12 +404,7 @@ def export_pp_extra(out: str, leagues=PP_EXTRA, log: bool = True) -> list[tuple[
         ok = [r for r in PPM.price_board(props) if "error" not in r]
         if log and ok:
             PPM.log_rows(ok)
-        rows = []
-        for r in ok:
-            vals = [g["v"] for g in (r.get("games") or [])[:10]]
-            src = "model median" if lg != "SOCCER" else "DraftKings" if r.get("p_market") is not None else "game log"
-            rows.append({**r, "league": lg, "rating": rating(r["p_final"], r["confidence"], r.get("p_market")),
-                         "context": [r["notes"]] if r.get("notes") else [], "proj_src": src, "avg10": _avg(vals)})
+        rows = [extra_row(r, lg) for r in ok]
         sel, w = _write_board(base, "pp", lg, rows, now)
         written.append(w)
         built = {}
@@ -392,13 +416,16 @@ def export_pp_extra(out: str, leagues=PP_EXTRA, log: bool = True) -> list[tuple[
     return written
 
 
-def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None = None, days: int = 2) -> list[tuple[str, str, str]]:
+def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None = None, days: int = 2,
+                 log: bool = True) -> list[tuple[str, str, str]]:
     """boards/pp-<LG> (every PrizePicks line we could price) and boards/book-<LG> (sportsbook lines), each rated."""
     from . import tier
     written, base = [], Path(out) / "boards"
     base.mkdir(parents=True, exist_ok=True)
     now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     pp = [r for r in tier.scan(leagues, date, days=days) if "error" not in r and r.get("odds_type") != "demon"]
+    if log:
+        tier.log_rows(pp)                                           # every evaluated prop is logged (skips logged ones)
     book = tier.book_scan(leagues, date, days=days)
     p = Path(out) / "meta" / "regular.json"
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -408,14 +435,8 @@ def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None =
     cards = {}
     for source, rows in (("pp", pp), ("book", book)):
         for lg in leagues:
-            sel = sorted((r for r in rows if r["league"] == lg), key=lambda r: (-r["rating"], -r["p_final"]))[:700]
-            doc = {"source": source, "league": lg, "updated": now, "rows": [_row(r, source) for r in sel]}
-            while len(json.dumps(doc, separators=(",", ":")).encode()) > 250_000:      # one db document holds 256 KB
-                doc["rows"] = doc["rows"][:-25]                                      # drop the lowest-rated rows first
-                sel = sel[:len(doc["rows"])]
-            p = base / f"{source}-{lg}.json"
-            p.write_text(json.dumps(doc, separators=(",", ":")))
-            written.append(("boards", f"{source}-{lg}", str(p)))
+            sel, w = _write_board(base, source, lg, [r for r in rows if r["league"] == lg], now)
+            written.append(w)
             for r in sel:
                 k = card_key(lg, r["player"], r["stat"], r.get("team", ""))
                 if k not in cards:

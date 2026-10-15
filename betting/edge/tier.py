@@ -995,6 +995,37 @@ def name_match(given: str, roster: str) -> int:
     return 1 if len(g[0]) == 1 or r[0].startswith(g[0]) or g[0].startswith(r[0]) else 0
 
 
+def log_rows(rows: list[dict], min_rating: int = 1) -> list[str]:
+    """Log scan or price_prop rows to bets.csv (demons and rows under min_rating skipped, logged rows skipped); new ids."""
+    from . import learn as L
+    bets = L.read_bets()
+    seen = {(b["event_id"], b["player"].lower(), b["market"], str(float(b["line"])) if b["line"] else "", b["side"]) for b in bets}
+    nid = max(int(b["id"]) for b in bets if b["id"].isdigit()) + 1
+    new = []
+    for r in rows:
+        if r["odds_type"] == "demon" or r["rating"] < min_rating:
+            continue
+        gid = grade_id(r)                                           # the id stored below (MLB gamePk / NHL gameId), not ESPN's
+        k = (str(gid), r["player"].lower(), r["market_key"], str(float(r["line"])), r["side"])
+        if k in seen:
+            continue
+        seen.add(k)
+        bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": r["league"].lower(),
+                     "event": f"{r['team']} vs {r['opp']}", "event_id": gid,
+                     "player": r["player"], "player_id": r["player_id"] or "", "market": r["market_key"], "line": r["line"],
+                     "side": r["side"], "book": f"PrizePicks {r['odds_type']}", "p_model": "" if r.get("p_model") is None else round(r["p_model"], 4),
+                     "p_market": "" if r["p_market"] is None else round(r["p_market"], 4),
+                     "p_hist": "" if r["p_hist"] is None else round(r["p_hist"], 4), "hist_n": r["hist_n"], "p_final": round(r["p_final"], 4),
+                     "confidence": r["confidence"], "action": "lean" if r["rating"] >= 8 else "pass",
+                     "segment": f"{r['league'].lower()}:{r['market_key']}:{r['side']}", "group": f"{r['league'].lower()}:{r['event_id']}",
+                     "status": "pending", "proj": "" if r.get("proj") is None else r["proj"],
+                     "notes": f"edge tier; {r['notes']}; start {r.get('start')}"})
+        new.append(str(nid))
+        nid += 1
+    L.write_bets(bets)
+    return new
+
+
 def price_prop(league: str, player: str, stat_text: str, line: float, side: str | None, odds_type: str = "standard",
                day: dt.date | None = None) -> dict:
     """Price one prop the way the scan does: DraftKings ladder at the line, game log at the line, the matchup model on

@@ -990,6 +990,24 @@ PLAYERS</div>
         ps.assert_called_once()
 
 
+class Refresh(unittest.TestCase):
+    def test_diff_against_the_live_board(self):
+        from edge.refresh import diff
+        rows = [{"pl": "MarShawn Lloyd", "st": "Rush Yards", "ty": "standard", "ln": 42.5},
+                {"pl": "MarShawn Lloyd", "st": "Rush Yards", "ty": "goblin", "ln": 29.5},
+                {"pl": "Braelon Allen", "st": "Receiving Yards", "ty": "standard", "ln": 16.5},
+                {"pl": "Jalen Brooks", "st": "Longest Reception", "ty": "standard", "ln": 14.5}]
+        props = [{"player": "MarShawn Lloyd", "stat": "Rush Yards", "odds_type": "standard", "line": 42.5},     # same
+                 {"player": "MarShawn Lloyd", "stat": "Rush Yards", "odds_type": "goblin", "line": 22.5},      # new goblin line
+                 {"player": "Braelon Allen", "stat": "Receiving Yards", "odds_type": "standard", "line": 14.5},  # moved 16.5 -> 14.5
+                 {"player": "Jayden Daniels", "stat": "Pass Yards", "odds_type": "standard", "line": 205.5}]    # new prop
+        d = diff(rows, props)
+        self.assertEqual([r["ln"] for r in d["keep"]], [42.5])
+        self.assertEqual([(p["player"], p["line"], p["old_line"]) for p in d["moved"]], [("Braelon Allen", 14.5, 16.5)])
+        self.assertEqual(sorted(p["player"] + str(p["line"]) for p in d["new"]), ["Jayden Daniels205.5", "MarShawn Lloyd22.5"])
+        self.assertEqual(sorted((r["pl"], r["ln"]) for r in d["gone"]), [("Jalen Brooks", 14.5), ("MarShawn Lloyd", 29.5)])
+
+
 class NhlBoxStats(unittest.TestCase):
     def test_hits_come_from_the_box_score(self):
         """10/15: Podkolzin Less 3.5 hits couldn't be graded: the NHL game log has no hits; the box score does."""

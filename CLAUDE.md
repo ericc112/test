@@ -114,6 +114,15 @@ The numbers don't see who sits, who rests, a new or smaller role, a star teammat
 ## Eight-Plus Board page
 The user follows 8+ picks on a live page: https://claude.ai/artifact/AhjWxmRgkijq4UkjhFEhsn (data in its `db`: `picks/<bets.csv id>`, `meta/summary`, `boards/pp-<LG>` / `boards/book-<LG>` for the All props explorer: every PrizePicks or sportsbook line we priced, with its rating and projection, `meta/regular` for regular-line plays, `takes/<id>` for the props the user tapped Take on (see above), and `cards/<LG>-<i>` for the tap-to-open prop cards: last games with opponent and home/away, averages, head-to-head, venue split, matchup rank). After any scan that finds 8+ picks, and after grading, refresh it: `python3 -m edge board --out <fresh dir>` (add `--props` after a morning or pre-slate scan), set `next_scan` in `meta/summary.json`, list `picks` with ArtifactData for versions, then one batch `set` per file (with `if_version` on existing docs). Delete a pick's doc when it is withdrawn.
 
+### Keep the board in step with PrizePicks (user, 10/15)
+PrizePicks moves lines, adds props and pulls them all day. The scheduled task "Refresh board with PrizePicks" fires into this session hourly (7:46 am to 11:46 pm Central) and runs `python3 -m edge refresh LIVE --out OUT`:
+- LIVE is the page's `boards` and `cards` as ArtifactData lists them (out_dir).
+- It compares every league's PrizePicks board with what we priced. A standard line that moved is re-priced at the new number; new props and new goblin lines are priced; pulled props and started games drop off. New and re-priced rows are logged.
+- It diffs against `.cache/board_state/pp-<LG>.json`: every line the last full scan or refresh priced, including the ones the 256 KB board document had to trim. After a container restart that state is gone, so a big board (more than 150 new props) is flagged for a full scan (`edge board --props --league .. --extra ..`), which rebuilds it.
+- It writes the changed `boards/pp-<LG>` and `cards/<LG>-r` (cards for props added since the last full scan) to OUT for one batch upload, and lists new 8+ props. Those need `edge verify` and a picks refresh before they show as picks.
+- The full scan (`edge board --props`) still runs before each slate; it is what rebuilds every card and the regular lines.
+- The refresh messages the user only for a new 8+ pick, a withdrawn pick, or a moved or pulled line on one of their takes.
+
 ### Inbox (Check a slip)
 The page's "Check a slip" section takes screenshots or a screen recording (a slip, a board, someone's pick). The page splits a video into distinct frames on the device. Claude reads the props off the frames (the page's `sample` call), matches them to our boards and cards, and writes a short analysis. Each check is saved as `inbox/<id>` with status "new": `{kind, app, entry, props:[{player, sport, stat, line, side, odds_type, price}], page, analysis, frames:[asset ids], video}`.
 - **When to process:** at every check-in, whenever the user says they checked a slip, and at once when a page comment to Claude reads "Grade inbox <id>".

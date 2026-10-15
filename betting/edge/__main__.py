@@ -122,6 +122,11 @@ def main(argv=None):
     ij = sub.add_parser("inject", help="price, log and back-check the props in an inbox doc from the Eight-Plus Board")
     ij.add_argument("file", help="the inbox document as JSON (ArtifactData read output or its data)")
     ij.add_argument("--out", help="write the results here, for the batch update of the inbox doc")
+    rf = sub.add_parser("refresh", help="bring the board in step with PrizePicks: re-price moved lines, price new props, drop pulled ones")
+    rf.add_argument("live", help="the page's documents as listed (LIVE/boards/pp-<LG>.json, LIVE/cards/*.json)")
+    rf.add_argument("--out", required=True)
+    rf.add_argument("--league", default="", help="default: NHL,MLB,NBA,NFL,CS2,LOL,VAL,SOCCER")
+    rf.add_argument("--no-log", action="store_true")
     tk = sub.add_parser("takes", help="link the user's takes from the Eight-Plus Board to bets.csv and read their status")
     tk.add_argument("folder", help="the takes/*.json documents (ArtifactData list with out_dir)")
     tk.add_argument("--out", help="write the per-take fields for the batch update")
@@ -332,14 +337,25 @@ def main(argv=None):
             print(f"{tid}: #{x.get('bets_id', '-')} {x.get('status')} {x.get('rating') or ''}{'/10' if x.get('rating') else ''} {x.get('why', '')}")
         rec = TK.record()
         print(f"your takes: {rec['hits']} of {rec['n']} hit" + "".join(f" | {k}: {v['hits']}/{v['n']}" for k, v in sorted(rec['bands'].items(), reverse=True)))
+    elif args.cmd == "refresh":
+        from . import refresh as RF
+        lgs = tuple(x.strip().upper() for x in args.league.split(",") if x.strip()) if args.league else RF.TIER + RF.EXTRA
+        sm = RF.run(args.live, args.out, lgs, log=not args.no_log)
+        for lg, c in sm["leagues"].items():
+            print(f"{lg:7s} " + " ".join(f"{k} {v}" for k, v in c.items()))
+        if sm["full_scan"]:
+            print("fresh slate, run the full scan (edge board --props) for: " + ", ".join(sm["full_scan"]))
+        for x in sm["eight_plus"]:
+            print(f"8+ to verify: {x['rating']}/10 {x['lg']} {x['player']} {x['side']} {x['line']} {x['stat']} ({x['odds_type']})")
+        print(f"documents to upload are in {args.out} (summary.json lists the counts)")
     elif args.cmd == "board":
         from . import board as B
         extra = [x.strip().upper() for x in args.extra.split(",") if x.strip()] if args.props else []
         pre = B.export_pp_extra(args.out, tuple(extra)) if extra else []     # logs first, so new 8+ picks make the export
         out = pre + B.export(args.out, args.days, not args.no_verify)
-        if args.props:
-            out += B.export_props(args.out, tuple(x.strip().upper() for x in args.league.split(",")),
-                                  dt.date.fromisoformat(args.date) if args.date else None)
+        lgs = tuple(x.strip().upper() for x in args.league.split(",") if x.strip())
+        if args.props and lgs:
+            out += B.export_props(args.out, lgs, dt.date.fromisoformat(args.date) if args.date else None)
         for coll, doc_id, path in out:
             print(coll, doc_id, path)
     elif args.cmd == "tier":
@@ -355,32 +371,7 @@ def main(argv=None):
                   f"{r['line']:<5} {r['odds_type']:8s} market {'none' if r['p_market'] is None else format(r['p_market'], '.2f')} "
                   f"hist {ph}({r['hist_n']}) {r['notes'][:24]}")
         if args.log:
-            bets = L.read_bets()
-            seen = {(b["event_id"], b["player"].lower(), b["market"], str(float(b["line"])) if b["line"] else "", b["side"]) for b in bets}
-            nid = max(int(b["id"]) for b in bets if b["id"].isdigit()) + 1
-            added = 0
-            for r in ok:
-                if r["odds_type"] == "demon" or r["rating"] < args.log_min_rating:
-                    continue
-                gid = TR.grade_id(r)                                # the id stored below (MLB gamePk / NHL gameId), not ESPN's
-                k = (str(gid), r["player"].lower(), r["market_key"], str(float(r["line"])), r["side"])
-                if k in seen:
-                    continue
-                seen.add(k)
-                bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": r["league"].lower(),
-                             "event": f"{r['team']} vs {r['opp']}", "event_id": gid,
-                             "player": r["player"], "player_id": r["player_id"] or "", "market": r["market_key"], "line": r["line"],
-                             "side": r["side"], "book": f"PrizePicks {r['odds_type']}", "p_model": "" if r.get("p_model") is None else round(r["p_model"], 4),
-                             "p_market": "" if r["p_market"] is None else round(r["p_market"], 4),
-                             "p_hist": "" if r["p_hist"] is None else round(r["p_hist"], 4), "hist_n": r["hist_n"], "p_final": round(r["p_final"], 4),
-                             "confidence": r["confidence"], "action": "lean" if r["rating"] >= 8 else "pass",
-                             "segment": f"{r['league'].lower()}:{r['market_key']}:{r['side']}", "group": f"{r['league'].lower()}:{r['event_id']}",
-                             "status": "pending", "proj": "" if r.get("proj") is None else r["proj"],
-                             "notes": f"edge tier; {r['notes']}; start {r.get('start')}"})
-                nid += 1
-                added += 1
-            L.write_bets(bets)
-            print(f"Logged {added} new prop(s) to bets.csv.")
+            print(f"Logged {len(TR.log_rows(ok, args.log_min_rating))} new prop(s) to bets.csv.")
     elif args.cmd == "lowline":
         from . import lowline as LW
         res = LW.scan(tuple(x.strip().upper() for x in args.league.split(",")), args.max_line)
