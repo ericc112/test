@@ -215,8 +215,8 @@ def summary(rows: list[dict]) -> dict:
 def hold_reason(r: dict) -> str | None:
     """Why a priced prop sits below 8, as a short code the page spells out with the row's own numbers:
     gap, role, out, sit, cap (L5/L31 holds), avoid, split (sources on different sides), one (single source), book (a book
-    under 75%), floor (under the 80% bar), thin (too few games), far (sources too far apart), learned (a learned cap),
-    low (under 58%), mid (a lean)."""
+    under 75%), floor (under the 80% bar), thin (too few games), far (sources too far apart), short (history the blend
+    shrinks toward 50% ends up too far from the model), learned (a learned cap), low (under 58%), mid (a lean)."""
     if (r.get("rating") or 0) >= 8:
         return None
     n = r.get("notes") or ""
@@ -239,9 +239,21 @@ def hold_reason(r: dict) -> str | None:
         return "mid"
     if hn < g["min_hist_n_high"] or (pm is None and hn < g.get("no_market_min_hist_n", 20)):
         return "thin"
-    if spread > (g["max_spread_high"] if pm is not None else g.get("no_market_max_spread", 0.10)):
+    limit = g["max_spread_high"] if pm is not None else g.get("no_market_max_spread", 0.10)
+    if spread > limit:
         return "far"
+    if shrunk_spread(r.get("p_model"), pm, r.get("p_hist"), hn) > limit:
+        return "short"                                              # the blend shrinks short history toward the book (or 50%)
     return "mid"
+
+
+def shrunk_spread(p_model, p_market, p_hist, hist_n: int) -> float:
+    """Spread between the sources as the blend sees them: history regressed toward the book, or 50% with no book."""
+    comps = [v for v in (p_model, p_market) if v is not None]
+    if p_hist is not None:
+        w = hist_n / (hist_n + 10) if hist_n else 0.5
+        comps.append(w * p_hist + (1 - w) * (p_market if p_market is not None else 0.5))
+    return max(comps) - min(comps) if len(comps) > 1 else 0.0
 
 
 HOLD_TEXT = {"gap": "line gap: the standard line is far from his log, so the line likely knows something (role, injury)",
@@ -250,7 +262,8 @@ HOLD_TEXT = {"gap": "line gap: the standard line is far from his log, so the lin
              "cap": "tonight's report (questionable, a blowout spread, weather) caps it", "avoid": "this market is on the avoid list",
              "split": "the sources point to different sides", "one": "only one source: no book price and no usable history",
              "book": "the sportsbook makes it under 75%", "floor": "under the 80% bar for an 8",
-             "thin": "too few games to trust", "far": "the sources are too far apart", "learned": "capped by graded results in this market",
+             "thin": "too few games to trust", "far": "the sources are too far apart",
+             "short": "short history is discounted toward 50% with no book price, which leaves it too far from the model", "learned": "capped by graded results in this market",
              "low": "under 58%: not a play", "mid": "a lean, not an 8"}
 
 

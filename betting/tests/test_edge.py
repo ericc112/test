@@ -957,6 +957,17 @@ class LineGap(unittest.TestCase):
         self.assertEqual(rows[0]["confidence"], "Low")                                           # judgment hold kept
         self.assertEqual(rows[1]["confidence"], "Low")                                           # line gap applied
 
+    def test_hold_reasons_name_the_real_cause(self):
+        """10/15: every Low regular line read 'sources disagree', though model and history agreed."""
+        from edge.board import hold_reason
+        r = {"rating": 4, "p_final": 0.926, "p_market": None, "p_model": 0.979, "p_hist": 1.0, "hist_n": 5, "confidence": "Low",
+             "notes": "edge tier; line gap: PrizePicks set its standard line at 58.5 against his log's 33.8"}
+        self.assertEqual(hold_reason(r), "gap")
+        self.assertEqual(hold_reason({**r, "notes": "components disagree on the side: downgrade or pass"}), "split")
+        fair = {**r, "rating": 7, "confidence": "Medium", "notes": "", "p_final": 0.9153, "p_model": 0.969, "hist_n": 22}
+        self.assertEqual(hold_reason(fair), "short")          # 22 of 22 counts as ~84% with no book: 13 points from the model
+        self.assertEqual(hold_reason({**fair, "rating": 9}), None)
+
     def test_first_names_must_agree(self):
         from edge.tier import name_match
         self.assertEqual(name_match("Jalen Brooks", "Jalen Brooks"), 2)
