@@ -736,5 +736,62 @@ class Tennis(unittest.TestCase):
         self.assertGreater(R.p_elo("1", "2", "hard"), 0.6)                       # after five wins
 
 
+class Inject(unittest.TestCase):
+    def test_stat_names_from_screens(self):
+        from edge.tier import canon_stat
+        self.assertEqual(canon_stat("MLB", "H+R+RBI"), "Hits+Runs+RBIs")
+        self.assertEqual(canon_stat("MLB", "Hits + Runs + RBIs"), "Hits+Runs+RBIs")
+        self.assertEqual(canon_stat("MLB", "Hits Allowed"), "Hits Allowed")                  # not batter Hits
+        self.assertEqual(canon_stat("MLB", "Pitcher Strikeouts"), "Pitcher Strikeouts")
+        self.assertEqual(canon_stat("NHL", "SOG"), "Shots On Goal")
+        self.assertEqual(canon_stat("NBA", "Pts+Rebs+Asts"), "Pts+Rebs+Asts")
+        self.assertEqual(canon_stat("NBA", "3PT Made"), "3-PT Made")
+        self.assertIsNone(canon_stat("NBA", "Fantasy Score"))
+
+    def test_slate_day_reads_utc_in_new_york(self):
+        from edge.tier import slate_day
+        self.assertEqual(slate_day("2026-10-16T00:00Z"), "2026-10-15")                       # 8 PM ET game on the 15th
+        self.assertEqual(slate_day("2026-10-15T20:00:00.000-04:00"), "2026-10-15")
+        self.assertEqual(slate_day("2026-10-15T17:00Z"), "2026-10-15")
+
+    def test_process_logs_dedupes_and_reports(self):
+        from unittest import mock
+        from edge import inject, tier
+        head = {k: "" for k in learn.FIELDS}
+        old = {**head, "id": "7", "event_id": "849810", "player": "Tyler Glasnow", "market": "pitcher_strikeouts", "line": "3.5",
+               "side": "over", "status": "pending", "action": "lean", "entry_id": "", "p_final": "0.8558", "confidence": "High",
+               "p_market": "0.8475"}
+        store = {"rows": [old]}
+        priced = {"Tyler Glasnow": dict(player="Tyler Glasnow", stat="Pitcher Strikeouts", market_key="pitcher_strikeouts",
+                                        side="over", p_market=0.85, p_hist=0.93, hist_n=14, p_model=None, p_final=0.86,
+                                        confidence="High", rating=9, player_id="607192", proj=7.0, notes="DK", event_id="401908033",
+                                        team="LAD", opp="MIL", start="2026-10-16T00:00Z"),
+                  "Shohei Ohtani": dict(player="Shohei Ohtani", stat="Hits+Runs+RBIs", market_key="batter_hrr", side="under",
+                                        p_market=0.69, p_hist=0.8, hist_n=30, p_model=None, p_final=0.71, confidence="Medium",
+                                        rating=7, player_id="660271", proj=1.4, notes="DK", event_id="401908033", team="LAD",
+                                        opp="MIL", start="2026-10-16T00:00Z")}
+        rep = mock.Mock(verdict="VERIFIED", checks=[("WARN", "lineup", "not posted")])
+        doc = {"id": "t1", "kind": "slip", "app": "PrizePicks", "props": [
+            {"player": "Tyler Glasnow", "sport": "MLB", "stat": "Strikeouts", "line": 3.5, "side": "More", "odds_type": "goblin"},
+            {"player": "Shohei Ohtani", "sport": "MLB", "stat": "H+R+RBI", "line": "2.5", "side": "Less"},
+            {"player": "Someone", "sport": "CS2", "stat": "Kills", "line": 30.5, "side": "More"}]}
+        with mock.patch.object(learn, "read_bets", lambda *a: [dict(r) for r in store["rows"]]), \
+                mock.patch.object(learn, "write_bets", lambda rows, *a: store.update(rows=rows)), \
+                mock.patch.object(tier, "price_prop", lambda lg, pl, *a, **k: priced[pl]), \
+                mock.patch.object(tier, "grade_id", lambda r: "849810"), \
+                mock.patch("edge.verify.verify", lambda b, rows: rep):
+            res = inject.process(doc)
+        r0, r1, r2 = res["results"]
+        self.assertEqual((r0["id"], r0["rating"], r0["verdict"]), ("7", 9, "VERIFIED"))         # existing row, not a duplicate
+        self.assertEqual(store["rows"][0]["action"], "user_entry")                               # the user played it
+        self.assertEqual(store["rows"][0]["entry_id"], "inject-t1")
+        self.assertEqual(r1["id"], "8")
+        self.assertEqual(res["new_ids"], ["8"])
+        new = store["rows"][1]
+        self.assertEqual((new["market"], new["side"], new["line"], new["action"]), ("batter_hrr", "under", 2.5, "user_entry"))
+        self.assertEqual(r1["warns"], ["lineup: not posted"])
+        self.assertEqual(r2["status"], "not priced")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -117,6 +117,9 @@ def main(argv=None):
     tn.add_argument("--srv-b", help="B's serve points won/played so far")
     tn.add_argument("--book", default="")
     tn.add_argument("--log", action="store_true")
+    ij = sub.add_parser("inject", help="price, log and back-check the props in an inbox doc from the Eight-Plus Board")
+    ij.add_argument("file", help="the inbox document as JSON (ArtifactData read output or its data)")
+    ij.add_argument("--out", help="write the results here, for the batch update of the inbox doc")
     t = sub.add_parser("tag")
     t.add_argument("id")
     t.add_argument("reason")
@@ -320,6 +323,18 @@ def main(argv=None):
     elif args.cmd == "odds":
         from . import oddsapi as OA
         print(OA.check(args.league.upper()))
+    elif args.cmd == "inject":
+        from . import inject as IJ
+        res = IJ.cli(args.file, args.out)
+        for x in res["results"]:
+            if x["status"] == "logged":
+                print(f"#{x['id']:>5}  {x['player']} {x['side']} {x['line']} {x['stat']}: {x['rating']}/10, "
+                      f"{x['p']:.3f} {x['confidence']}  {x.get('verdict', '')}")
+                for w in x.get("warns", []):
+                    print(f"         {w}")
+            else:
+                print(f"  prop {x['i'] + 1}: not priced ({x['why']})")
+        print(f"{len(res['new_ids'])} new row(s) in bets.csv")
     elif args.cmd == "board":
         from . import board as B
         out = B.export(args.out, args.days, not args.no_verify)

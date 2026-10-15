@@ -587,11 +587,26 @@ def book_scan(leagues=("NHL", "MLB", "NBA"), day: dt.date | None = None, days: i
 _PK: dict = {}
 
 
+def slate_day(start: str | None) -> str:
+    """The US date a game is listed under. ESPN gives UTC ('2026-10-16T00:00Z' is the 8 PM ET game on the 15th), so a
+    zoned start time is read in New York time before the date is taken."""
+    if not start:
+        return dt.date.today().isoformat()
+    try:
+        t = dt.datetime.fromisoformat(start.replace("Z", "+00:00"))
+    except ValueError:
+        return start[:10]
+    if t.tzinfo is None:
+        return t.date().isoformat()
+    from zoneinfo import ZoneInfo
+    return t.astimezone(ZoneInfo("America/New_York")).date().isoformat()
+
+
 def grade_id(r: dict) -> str:
     """The id our graders want: NHL gameId (api-web), MLB gamePk (statsapi); NBA grades on ESPN's own event id."""
     if r["league"] in ("NBA", "NFL"):
         return str(r["event_id"])
-    day = (r.get("start") or dt.date.today().isoformat())[:10]
+    day = slate_day(r.get("start"))
     key = (r["league"], r["team"], day)
     if key not in _PK:
         _PK[key] = ""
@@ -609,3 +624,91 @@ def grade_id(r: dict) -> str:
         except Exception:
             pass
     return _PK[key]
+
+
+# ------------------------------------------------------------------ one prop, priced on request (user asks, injected slips)
+STAT_ALIASES = {
+    "MLB": [("hits+runs+rbis", "Hits+Runs+RBIs"), ("h+r+rbi", "Hits+Runs+RBIs"), ("hrr", "Hits+Runs+RBIs"),
+            ("hits allowed", "Hits Allowed"), ("earned runs", "Earned Runs Allowed"), ("walks allowed", "Walks Allowed"),
+            ("pitching outs", "Pitching Outs"), ("outs", "Pitching Outs"), ("total bases", "Total Bases"), ("tb", "Total Bases"),
+            ("home runs", "Home Runs"), ("homer", "Home Runs"), ("singles", "Singles"), ("doubles", "Doubles"),
+            ("stolen bases", "Stolen Bases"), ("rbi", "RBIs"), ("runs", "Runs"), ("walks", "Walks"),
+            ("hitter strikeouts", "Hitter Strikeouts"), ("batter strikeouts", "Hitter Strikeouts"),
+            ("pitcher strikeouts", "Pitcher Strikeouts"), ("strikeouts thrown", "Pitcher Strikeouts"),
+            ("strikeouts", "Strikeouts"), ("ks", "Strikeouts"), ("hits", "Hits")],
+    "NHL": [("shots on goal", "Shots On Goal"), ("sog", "Shots On Goal"), ("goalie saves", "Goalie Saves"), ("saves", "Goalie Saves"),
+            ("blocked shots", "Blocked Shots"), ("blocks", "Blocked Shots"), ("power play points", "Power Play Points"),
+            ("ppp", "Power Play Points"), ("points", "Points"), ("assists", "Assists"), ("goals", "Goals"), ("shots", "Shots On Goal")],
+    "NBA": [("pts+rebs+asts", "Pts+Rebs+Asts"), ("pra", "Pts+Rebs+Asts"), ("pts+rebs", "Pts+Rebs"), ("pts+asts", "Pts+Asts"),
+            ("rebs+asts", "Rebs+Asts"), ("blks+stls", "Blks+Stls"), ("3-pt made", "3-PT Made"), ("3pt", "3-PT Made"),
+            ("3pm", "3-PT Made"), ("threes", "3-PT Made"), ("three", "3-PT Made"), ("rebounds", "Rebounds"), ("reb", "Rebounds"),
+            ("assists", "Assists"), ("ast", "Assists"), ("steals", "Steals"), ("blocked shots", "Blocked Shots"),
+            ("blocks", "Blocked Shots"), ("turnovers", "Turnovers"), ("points", "Points"), ("pts", "Points")],
+}
+
+
+def canon_stat(league: str, text: str) -> str | None:
+    """A stat as an app or a screenshot writes it ('H+R+RBI', 'SOG', 'Pts+Rebs+Asts') -> our PrizePicks stat name."""
+    t = re.sub(r"\s+", " ", (text or "").lower().replace("hits + runs + rbis", "hits+runs+rbis").replace(" + ", "+")).strip()
+    for alias, stat in STAT_ALIASES.get(league, []):
+        if re.search(r"(?<![a-z])" + re.escape(alias) + r"(?![a-z])", t):
+            return stat
+    return None
+
+
+def find_player(league: str, player: str, day: dt.date | None = None, days: int = 2) -> dict | None:
+    """The player's next game that hasn't started: ESPN event id, his ESPN id, team and opponent."""
+    day = day or dt.date.today()
+    want = LW._fold(player)
+    for d in (day + dt.timedelta(days=i) for i in range(days)):
+        for e in scoreboard(league, d):
+            c = e["competitions"][0]
+            if c["status"]["type"]["state"] != "pre":
+                continue
+            teams = [t["team"]["abbreviation"] for t in c["competitors"]]
+            for ab in teams:
+                try:
+                    names = roster_names(league, ab)
+                except Exception:
+                    continue
+                for nm, aid in names:
+                    f = LW._fold(nm)
+                    if f == want or (want.split()[-1:] == f.split()[-1:] and want[:1] == f[:1]):
+                        return {"event_id": e["id"], "aid": aid, "name": nm, "team": ab,
+                                "opp": next(t for t in teams if t != ab), "start": e.get("date", "")}
+    return None
+
+
+def price_prop(league: str, player: str, stat_text: str, line: float, side: str, odds_type: str = "standard",
+               day: dt.date | None = None) -> dict:
+    """Price one prop the way the scan does: DraftKings ladder at the line, game log at the line, the matchup model on
+    regular lines, blended, calibrated, rated. Returns an error key when it can't be priced."""
+    from . import context as CX
+    _memo()
+    league = league.upper()
+    side = {"more": "over", "less": "under", "over": "over", "under": "under"}.get((side or "").lower())
+    if league not in STATS or side is None or line is None:
+        return {"error": f"can't price {league} {stat_text} {side}: unsupported league or missing line/side"}
+    g = find_player(league, player, day)
+    if not g:
+        return {"error": f"{player}: no upcoming {league} game found"}
+    stat = canon_stat(league, stat_text)
+    if stat == "Strikeouts":                                         # pitcher or hitter: whoever has starts
+        stat = "Pitcher Strikeouts" if (LW.mlb_player(g["team"], g["name"]) and mlb_pitch_log(LW.mlb_player(g["team"], g["name"]))) else "Hitter Strikeouts"
+    mk = market_key(league, stat) if stat else None
+    if not mk:
+        return {"error": f"{stat_text}: stat not priced for {league}", **g}
+    rungs = ladders(league, g["event_id"]).get((STATS[league][stat][0], g["aid"]), {}) if stat in STATS.get(league, {}) else {}
+    mk_over, mnote = market_over(rungs, line) if rungs else (None, "no DraftKings ladder")
+    h_over, n, pid = history(league, stat, g["team"], g["name"], line, g["aid"])
+    cx = CX.price(league, stat, g["opp"], pid, line, (day or dt.date.today()).year)
+    pk = None if mk_over is None else (mk_over if side == "over" else 1 - mk_over)
+    ph = None if h_over is None else (h_over if side == "over" else 1 - h_over)
+    pmod = None if not cx or odds_type != "standard" else (cx[0] if side == "over" else 1 - cx[0])
+    e = final_probability(pmod, pk, ph, f"{league.lower()}:{mk}:{side}", n)
+    avg10 = recent_avg(league, stat, g["team"], g["name"], line)
+    proj, src = projection(cx, rungs, None, avg10)
+    return {**g, "league": league, "player": g["name"], "stat": stat, "market_key": mk, "line": line, "side": side,
+            "odds_type": odds_type, "p_market": pk, "p_hist": ph, "hist_n": n, "p_model": pmod, "p_final": e.p,
+            "confidence": e.confidence, "rating": rating(e.p, e.confidence, pk), "player_id": pid, "proj": proj, "proj_src": src,
+            "notes": "; ".join([mnote] + e.notes + ([f"context: {' / '.join(cx[1])}"] if cx else []))}

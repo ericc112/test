@@ -268,7 +268,7 @@ def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None =
                     home = (r.get("home") == r.get("team")) if r.get("home") else None
                     cards[k] = (lg, r["stat"], r.get("team", ""), r.get("opp", ""), r["player"],
                                 (r.get("player_id") or r.get("aid")) if lg in ("NBA", "NFL") else None,
-                                r.get("position", ""), home, (r.get("start") or "")[:10], r.get("rungs") or {})
+                                r.get("position", ""), home, tier.slate_day(r.get("start")) if r.get("start") else "", r.get("rungs") or {})
 
     def make(item):
         k, args = item
