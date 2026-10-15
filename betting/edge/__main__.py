@@ -362,11 +362,15 @@ def main(argv=None):
             nid = max(int(b["id"]) for b in bets if b["id"].isdigit()) + 1
             added = 0
             for r in ok:
-                k = (str(r["event_id"]), r["player"].lower(), r["market_key"], str(float(r["line"])), r["side"])
-                if r["odds_type"] == "demon" or k in seen or r["rating"] < args.log_min_rating:
+                if r["odds_type"] == "demon" or r["rating"] < args.log_min_rating:
                     continue
+                gid = TR.grade_id(r)                                # the id stored below (MLB gamePk / NHL gameId), not ESPN's
+                k = (str(gid), r["player"].lower(), r["market_key"], str(float(r["line"])), r["side"])
+                if k in seen:
+                    continue
+                seen.add(k)
                 bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": r["league"].lower(),
-                             "event": f"{r['team']} vs {r['opp']}", "event_id": TR.grade_id(r),
+                             "event": f"{r['team']} vs {r['opp']}", "event_id": gid,
                              "player": r["player"], "player_id": r["player_id"] or "", "market": r["market_key"], "line": r["line"],
                              "side": r["side"], "book": f"PrizePicks {r['odds_type']}", "p_model": "" if r.get("p_model") is None else round(r["p_model"], 4),
                              "p_market": "" if r["p_market"] is None else round(r["p_market"], 4),
