@@ -28,6 +28,7 @@ Every pick you name to the user, at any confidence, must pass `python3 -m edge v
   - Soccer passes (L26): it FAILS a goalkeeper priced with the outfield model, and recounts history in tonight's kind of competition (European cup vs domestic). A FAIL there means re-price, not override.
   - Soccer lineups (L29): it FAILS an over on a player who isn't in the starting XI, and WARNS until the XI is out.
   - MLB lineups: it FAILS a batter prop on a player missing from the posted lineup and a pitcher prop on anyone but the listed starter, and WARNS until lineups post (about 3 hours before first pitch). An 8+ isn't published on a WARN here.
+  - Line gap: it FAILS an unpriced PrizePicks standard line read at 70%+ that isn't held at Low, the same hold the scan applies. `--fix` lowers it, and `--refresh` never lifts a role, line-gap or circumstances hold back up.
 - **NOT VERIFIED means not published.** Either fix it with `--fix` (not-started picks only) or withdraw it, and tell the user which.
 - **Started or finished picks are never rewritten.** Their audit result is added as a note.
 - **Show the verdict next to every pick.** Include each WARN, e.g. "Boom line not readable automatically: confirm 8.5 Less on your screen".
@@ -58,7 +59,10 @@ The user marks the props they actually play with the **Take** button on the Eigh
   - It links a take to its bets.csv row (same player, market, line, side and slate day) and marks it the user's entry (`entry_id take-<id>`). A take with no row is priced and logged through `edge inject`.
   - The page shows the status live (Open, tracked / Hit / Miss).
 - A take rated 7 or below is still the user's call: grade it and report it like the rest, without lecturing. If a take is NOT VERIFIED or a circumstance flag lands on it before the game, tell the user right away.
-- A losing take gets the same post-mortem as any loss (step 3 at the start of the session), first in the report.
+- A losing take gets the same post-mortem as any loss (step 3 at the start of the session), first in the report. `edge takes` writes its cause back to the take doc (`tag`, `lesson`, `detail`) and the page shows it under "Why it missed".
+- **The My takes tab** (a tab in the sport bar) is the user's track record: hits and misses, hit rate against what we predicted, last-10 form and streak, by rating band, sport and line type, and every take by day. Keep it current: write every take's status after each grading.
+- **Grade everything, not just takes (user, 10/15).** Every prop we rated is graded, and every loss, taken or not, gets the step-3 post-mortem. Each lesson says what read would have caught it (role, minutes, matchup, line, news) and what changes in the model. Fixable causes feed `edge learn` and LESSONS.md.
+- **Rows without a game id never grade.** `edge grade` now backfills ids for MLB/NHL/NFL/NBA rows from the team, the start time and the ESPN id. If a pending row from a finished slate is still ungraded after `grade`, find out why and fix it; don't leave it.
 
 ## Role and competition check (L26, mandatory)
 Before naming any prop, ask two questions the pricer may not: **is this player's role one the model was built for**, and **does his history come from the same kind of game as tonight?**
@@ -68,6 +72,8 @@ Before naming any prop, ask two questions the pricer may not: **is this player's
 - Any player whose competition level tonight differs from most of his history (European cup vs domestic, playoffs vs regular season, international vs regional esports) is recounted in that competition. If the two disagree by more than 20 points, the same-competition sample wins or the pick is withdrawn.
 - Same idea elsewhere: a CS2 AWPer's headshots, an NHL goalie in a rotation, a backup or rookie on a new role (L5), a returning player on a minutes cap. If the model doesn't know the role, say so and don't publish above Low.
 - When the user questions a number, dig in with the raw match-by-match data before defending it.
+- When the user says a line is wrong, pull the live PrizePicks board (`pp.board(LEAGUE, odds_types=("standard","goblin","demon"))`) and compare every line on the list. A player often has several standard lines on different stats (Lloyd 10/15: Rush Yards 42.5 and Rush+Rec Yds 58.5).
+- Every prop below 8 carries its real reason (`lo` on board rows: line gap, role change, sources split, thin history, book under 75%, ...). The page spells it out with the three sources (model, sportsbook, history) on every card. Never label a hold "sources disagree" unless the sources really point to different sides.
 
 ## Circumstances check (L31, mandatory)
 The numbers don't see who sits, who rests, a new or smaller role, a star teammate out, a blowout, the wind or the probable goalie. `edge/situation.py` reads them for every prop that `edge tier`, `edge inject` and `edge verify` rate:

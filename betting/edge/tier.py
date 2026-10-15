@@ -802,6 +802,9 @@ def book_scan(leagues=("NHL", "MLB", "NBA"), day: dt.date | None = None, days: i
 
 
 _PK: dict = {}
+# ESPN / PrizePicks abbreviations -> the league's own API (NHL api-web, MLB statsapi)
+API_ABBR = {"NHL": {"NJ": "NJD", "SJ": "SJS", "TB": "TBL", "LA": "LAK", "UTAH": "UTA", "MON": "MTL"},
+            "MLB": {"CHW": "CWS", "ARI": "AZ", "OAK": "ATH", "LA": "LAD", "WAS": "WSH"}}
 
 
 def slate_day(start: str | None) -> str:
@@ -827,20 +830,61 @@ def grade_id(r: dict) -> str:
     key = (r["league"], r["team"], day)
     if key not in _PK:
         _PK[key] = ""
+        names = {r["team"], API_ABBR.get(r["league"], {}).get(r["team"], r["team"])}   # ESPN's "NJ" is the NHL's "NJD"
         try:
             if r["league"] == "MLB":
                 for d in _get(f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={day}&hydrate=team")["dates"]:
                     for g in d["games"]:
-                        if r["team"] in (g["teams"]["away"]["team"].get("abbreviation"), g["teams"]["home"]["team"].get("abbreviation")):
+                        if names & {g["teams"]["away"]["team"].get("abbreviation"), g["teams"]["home"]["team"].get("abbreviation")}:
                             _PK[key] = str(g["gamePk"])
             else:
                 for wk in _get(f"https://api-web.nhle.com/v1/schedule/{day}").get("gameWeek", [])[:1]:
                     for g in wk["games"]:
-                        if r["team"] in (g["awayTeam"]["abbrev"], g["homeTeam"]["abbrev"]):
+                        if names & {g["awayTeam"]["abbrev"], g["homeTeam"]["abbrev"]}:
                             _PK[key] = str(g["id"])
         except Exception:
             pass
     return _PK[key]
+
+
+def _espn_event(league: str, team: str, day: str) -> str:
+    """ESPN's event id for a team's game on a slate day (NFL and NBA grade on it)."""
+    team = espn_team(league, team)
+    key = (league, team, day, "espn")
+    if key not in _PK:
+        _PK[key] = ""
+        try:
+            sb = _get(f"https://site.api.espn.com/apis/site/v2/sports/{SPORT[league][0]}/scoreboard?dates={day.replace('-', '')}")
+            for e in sb.get("events") or []:
+                abbrs = {c["team"].get("abbreviation") for c in e["competitions"][0]["competitors"]}
+                if team in abbrs and slate_day(e.get("date")) == day:
+                    _PK[key] = str(e["id"])
+        except Exception:
+            pass
+    return _PK[key]
+
+
+def backfill_ids(rows: list[dict]) -> int:
+    """Give pending rows logged without a game id (edge lowline, a failed schedule lookup) the id their grader wants,
+    from the team in `event` ("DAL vs COL"), the ESPN id in `group` and the start time in the notes. Returns how many."""
+    n = 0
+    for r in rows:
+        lg = (r.get("sport") or "").upper()
+        if r.get("event_id") or r.get("status") != "pending" or lg not in ("MLB", "NHL", "NFL", "NBA"):
+            continue
+        m = re.search(r"start (\S+)", r.get("notes", ""))
+        team = (r.get("event") or "").split(" vs ")[0].split(" @ ")[0].strip().upper()
+        if not m or not team:
+            continue
+        g = (r.get("group") or "").split(":")[-1]
+        if lg in ("NFL", "NBA"):
+            eid = g if g.isdigit() else _espn_event(lg, team, slate_day(m.group(1)))
+        else:
+            eid = grade_id({"league": lg, "team": team, "start": m.group(1)})
+        if eid:
+            r["event_id"] = eid
+            n += 1
+    return n
 
 
 # ------------------------------------------------------------------ one prop, priced on request (user asks, injected slips)
@@ -901,7 +945,7 @@ def name_key(name: str) -> tuple[str, str]:
 def find_player(league: str, player: str, day: dt.date | None = None, days: int = 2) -> dict | None:
     """The player's next game that hasn't started: ESPN event id, his ESPN id, team and opponent."""
     day = day or dt.date.today()
-    want = LW._fold(player)
+    loose = None
     for d in (day + dt.timedelta(days=i) for i in range(days)):
         for e in scoreboard(league, d):
             c = e["competitions"][0]
@@ -914,12 +958,29 @@ def find_player(league: str, player: str, day: dt.date | None = None, days: int 
                 except Exception:
                     continue
                 for nm, aid in names:
-                    f = LW._fold(nm)
-                    if f == want or (name_key(nm) == name_key(player) and name_key(player)[1]):
-                        return {"event_id": e["id"], "aid": aid, "name": nm, "team": ab,
-                                "competition": {1: "preseason", 3: "postseason"}.get((e.get("season") or {}).get("type"), "regular"),
-                                "opp": next(t for t in teams if t != ab), "start": e.get("date", "")}
-    return None
+                    m = name_match(player, nm)
+                    if not m:
+                        continue
+                    hit = {"event_id": e["id"], "aid": aid, "name": nm, "team": ab,
+                           "competition": {1: "preseason", 3: "postseason"}.get((e.get("season") or {}).get("type"), "regular"),
+                           "opp": next(t for t in teams if t != ab), "start": e.get("date", "")}
+                    if m == 2:
+                        return hit
+                    loose = loose or hit
+    return loose
+
+
+def name_match(given: str, roster: str) -> int:
+    """2 = the same full name; 1 = an abbreviated or shortened first name with the same surname ('S. Gilgeous-Alexander',
+    'Ken Walker'); 0 = no match. 'Jalen Brooks' never matches 'Jonathon Brooks': a spelled-out first name must agree."""
+    if LW._fold(given) == LW._fold(roster):
+        return 2
+    a, b = name_key(given), name_key(roster)
+    if not a[1] or a != b:
+        return 0
+    g = re.findall(r"[a-z]+", unicodedata.normalize("NFKD", given).encode("ascii", "ignore").decode().lower())
+    r = re.findall(r"[a-z]+", unicodedata.normalize("NFKD", roster).encode("ascii", "ignore").decode().lower())
+    return 1 if len(g[0]) == 1 or r[0].startswith(g[0]) or g[0].startswith(r[0]) else 0
 
 
 def price_prop(league: str, player: str, stat_text: str, line: float, side: str | None, odds_type: str = "standard",

@@ -57,6 +57,21 @@ class Report:
 
 
 # ------------------------------------------------------------------ individual checks
+ORDER = {"Avoid": 0, "Low": 1, "Medium": 2, "High": 3}
+HOLDS = ("role change:", "line gap:", "circumstances (hold)", "circumstances (cap)", "circumstances (out)")   # judgment holds
+
+
+def line_gap_note(r: dict, p: float) -> str:
+    """tier.line_gate for a logged row: no book price on a PrizePicks standard line read at 70%+ is held at Low (the line
+    knows something his log doesn't: role, injury, L5)."""
+    from .tier import LINE_GAP_P
+    if "prizepicks standard" not in (r.get("book") or "").lower() or _f(r.get("p_market")) is not None or p < LINE_GAP_P:
+        return ""
+    proj = _f(r.get("proj"))
+    return (f"line gap: PrizePicks set its standard line at {_f(r.get('line')):g}" + (f" against his log's {proj:g}" if proj is not None else "")
+            + f"; {p:.0%} on the {r.get('side')} says the line knows something his log doesn't (role, injury, L5): Low")
+
+
 def check_recompute(rep: Report, adj: dict):
     r = rep.row
     pm, pk, ph = _f(r.get("p_model")), _f(r.get("p_market")), _f(r.get("p_hist"))
@@ -68,8 +83,18 @@ def check_recompute(rep: Report, adj: dict):
         adj = preseason_adj()
     e = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), adj)
     logged, conf = _f(r.get("p_final")), r.get("confidence")
-    order = {"Avoid": 0, "Low": 1, "Medium": 2, "High": 3}
-    if any(k in r.get("notes", "") for k in ("role change:", "line gap:", "circumstances (hold)", "circumstances (cap)", "circumstances (out)")) \
+    order = ORDER
+    gap = line_gap_note(r, e.p)
+    if gap and order.get(conf, 0) > order["Low"]:                   # the scan's line-gap hold, enforced at publish time too
+        if getattr(rep, "locked", False):
+            rep.add("WARN", "recompute", f"{gap} (event under way: logged {conf} stands)")
+        else:
+            rep.add("FAIL", "recompute", f"{gap}, not {conf}")
+            rep.fresh = {"p_model": r.get("p_model"), "p_hist": r.get("p_hist"), "hist_n": r.get("hist_n"), "p_final": round(e.p, 4),
+                         "confidence": "Low", "side_note": gap}
+        rep.recomputed = e
+        return
+    if any(k in r.get("notes", "") for k in HOLDS) \
             and order.get(conf, 9) < order.get(e.confidence, 0) and logged is not None \
             and abs(e.p - logged) <= TOL_P:                         # L5 judgment downgrade: a lower label is allowed, never a higher one
         rep.add("PASS", "recompute", f"{e.p:.3f} {e.confidence} from the components, held at {conf} by the role/line check (L5)")
@@ -101,8 +126,8 @@ def check_circumstances(rep: Report):
     espn_id = r.get("player_id") if lg in ("NBA", "NFL") else None          # MLB/NHL rows keep their league's own id
     if espn_id is None:
         try:
-            from .tier import roster_names, espn_team, name_key
-            espn_id = next((a for n, a in roster_names(lg, espn_team(lg, team)) if name_key(n) == name_key(r.get("player", ""))), None)
+            from .tier import roster_names, espn_team, name_match
+            espn_id = next((a for n, a in roster_names(lg, espn_team(lg, team)) if name_match(r.get("player", ""), n)), None)
         except Exception:
             espn_id = None
     try:
@@ -462,11 +487,21 @@ def refresh(rows: list[dict], adj: dict | None = None) -> list[tuple]:
         pm, pk, ph = _f(r.get("p_model")), _f(r.get("p_market")), _f(r.get("p_hist"))
         if pm is None and pk is None and ph is None:
             continue
-        e = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), adj)
-        if _f(r.get("p_final")) is None or abs(e.p - _f(r["p_final"])) > TOL_P or e.confidence != r.get("confidence"):
-            changed.append((r["id"], r["player"], r.get("p_final"), r.get("confidence"), round(e.p, 4), e.confidence))
-            r["notes"] = (r.get("notes", "") + f" | re-scored {dt.date.today()}: {r.get('p_final')} {r.get('confidence')} -> {e.p:.4f} {e.confidence}").strip(" |")
-            r["p_final"], r["confidence"] = round(e.p, 4), e.confidence
+        notes = r.get("notes", "")
+        a = adj
+        if "preseason: history from" in notes:                     # preseason rows blend the book at half weight
+            from .tier import preseason_adj
+            a = preseason_adj()
+        e = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), a)
+        conf = e.confidence
+        if line_gap_note(r, e.p) and ORDER.get(conf, 0) > ORDER["Low"]:
+            conf = "Low"
+        if any(k in notes for k in HOLDS) and ORDER.get(r.get("confidence"), 9) < ORDER.get(conf, 0):
+            conf = r.get("confidence")                              # a judgment hold (L5, L31) is never lifted by new weights
+        if _f(r.get("p_final")) is None or abs(e.p - _f(r["p_final"])) > TOL_P or conf != r.get("confidence"):
+            changed.append((r["id"], r["player"], r.get("p_final"), r.get("confidence"), round(e.p, 4), conf))
+            r["notes"] = (notes + f" | re-scored {dt.date.today()}: {r.get('p_final')} {r.get('confidence')} -> {e.p:.4f} {conf}").strip(" |")
+            r["p_final"], r["confidence"] = round(e.p, 4), conf
     return changed
 
 

@@ -212,6 +212,48 @@ def summary(rows: list[dict]) -> dict:
             "bands": [{"band": k, "hits": h, "n": n, "predicted": round(p / n, 3) if n else None} for k, (h, n, p) in bands.items()]}
 
 
+def hold_reason(r: dict) -> str | None:
+    """Why a priced prop sits below 8, as a short code the page spells out with the row's own numbers:
+    gap, role, out, sit, cap (L5/L31 holds), avoid, split (sources on different sides), one (single source), book (a book
+    under 75%), floor (under the 80% bar), thin (too few games), far (sources too far apart), learned (a learned cap),
+    low (under 58%), mid (a lean)."""
+    if (r.get("rating") or 0) >= 8:
+        return None
+    n = r.get("notes") or ""
+    for key, code in (("circumstances (out)", "out"), ("circumstances (hold)", "sit"), ("line gap:", "gap"),
+                      ("role change:", "role"), ("avoid list", "avoid"), ("circumstances (cap)", "cap"),
+                      ("disagree on the side", "split"), ("single-source", "one"), ("capped at Medium", "learned")):
+        if key in n:
+            return code
+    from .blend import TIER_MARKET_MIN, load_adjustments
+    p, pm, conf = r.get("p_final") or 0, r.get("p_market"), r.get("confidence")
+    hn = int(r.get("hist_n") or 0)
+    comps = [v for v in (r.get("p_model"), pm, r.get("p_hist")) if v is not None]
+    spread = max(comps) - min(comps) if len(comps) > 1 else 0
+    g = load_adjustments()["gates"]
+    if conf == "High":
+        return "book" if pm is not None and pm < TIER_MARKET_MIN else "floor"
+    if p < g["medium"]:
+        return "low"
+    if p < g["high"]:
+        return "mid"
+    if hn < g["min_hist_n_high"] or (pm is None and hn < g.get("no_market_min_hist_n", 20)):
+        return "thin"
+    if spread > (g["max_spread_high"] if pm is not None else g.get("no_market_max_spread", 0.10)):
+        return "far"
+    return "mid"
+
+
+HOLD_TEXT = {"gap": "line gap: the standard line is far from his log, so the line likely knows something (role, injury)",
+             "role": "role change: his workload over the last 5 games is 25%+ off his average (L5)",
+             "out": "listed out tonight", "sit": "tonight's report or news says he may sit or play a smaller role",
+             "cap": "tonight's report (questionable, a blowout spread, weather) caps it", "avoid": "this market is on the avoid list",
+             "split": "the sources point to different sides", "one": "only one source: no book price and no usable history",
+             "book": "the sportsbook makes it under 75%", "floor": "under the 80% bar for an 8",
+             "thin": "too few games to trust", "far": "the sources are too far apart", "learned": "capped by graded results in this market",
+             "low": "under 58%: not a play", "mid": "a lean, not an 8"}
+
+
 def _row(r: dict, source: str) -> dict:
     """One compact row for the page's props explorer."""
     return {"pl": r["player"], "tm": r.get("team", ""), "op": r.get("opp", ""), "st": r["stat"], "ln": r["line"],
@@ -222,7 +264,7 @@ def _row(r: dict, source: str) -> dict:
             "r": r["rating"], "t": r.get("start", ""), "cx": r.get("context") or [],
             "pj": r.get("proj"), "pjs": r.get("proj_src", ""), "a10": r.get("avg10"),
             "ck": card_key(r["league"], r["player"], r["stat"], r.get("team", "")),
-            "pmod": None if r.get("p_model") is None else round(r["p_model"], 3)}
+            "pmod": None if r.get("p_model") is None else round(r["p_model"], 3), "lo": hold_reason(r)}
 
 
 def regular(pp_rows: list[dict], now: str, top: int = 10) -> dict:
@@ -239,7 +281,7 @@ def regular(pp_rows: list[dict], now: str, top: int = 10) -> dict:
         if r["p_final"] < REG_MIN:
             d["why"] = f"under {REG_MIN:.0%}: below the break-even"
         elif r["confidence"] == "Low":
-            d["why"] = "sources disagree"
+            d["why"] = HOLD_TEXT.get(hold_reason(r) or "", "held at Low")
         else:
             b = by_key.get((r["player"].lower(), r["market_key"], str(float(r["line"])), r["side"]))
             if not b:

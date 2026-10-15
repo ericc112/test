@@ -142,7 +142,11 @@ def main(argv=None):
     if args.cmd == "report":
         print(L.report(L.read_bets()))
     elif args.cmd == "grade":
+        from . import tier as TR
         rows = L.read_bets()
+        filled = TR.backfill_ids(rows)                  # rows logged without a game id would never grade
+        if filled:
+            print(f"game ids filled in on {filled} pending row(s)")
         before = {r["id"]: r.get("status") for r in rows}
         print(G.grade_rows(rows))
         L.write_bets(rows)

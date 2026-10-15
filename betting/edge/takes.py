@@ -35,7 +35,7 @@ def _market(lg: str, stat: str) -> str | None:
 
 def match_row(rows: list[dict], t: dict) -> dict | None:
     """The bets.csv row for a take: same sport, player, market, line and side, on the take's slate."""
-    from .tier import name_key, slate_day
+    from .tier import name_match, slate_day
     if t.get("bets_id"):
         return next((r for r in rows if r["id"] == str(t["bets_id"])), None)
     lg = (t.get("lg") or "").upper()
@@ -44,7 +44,7 @@ def match_row(rows: list[dict], t: dict) -> dict | None:
     day = slate_day(t.get("start")) if t.get("start") else (t.get("created") or "")[:10]
     best = None
     for r in rows:
-        if r.get("sport") != lg.lower() or name_key(r.get("player", "")) != name_key(t.get("player", "")):
+        if r.get("sport") != lg.lower() or not name_match(t.get("player", ""), r.get("player", "")):
             continue
         if mk == "ml":
             if not r.get("market", "").startswith("ml"):
@@ -85,6 +85,8 @@ def process(docs: list[dict]) -> dict:
             out[t["id"]] = None
             out.setdefault("_errors", {})[t["id"]] = next((x.get("why") for x in res["results"]), "not priced")
     by = {r["id"]: r for r in L.read_bets()}
+    from . import review as R
+    pms = R.read_pm()
     res = {}
     for tid, bid in out.items():
         if tid == "_errors":
@@ -94,9 +96,13 @@ def process(docs: list[dict]) -> dict:
             res[tid] = {"status": "unlogged", "why": out.get("_errors", {}).get(tid, "not found")}
             continue
         p, pm = _f(b.get("p_final")), _f(b.get("p_market"))
-        res[tid] = {"bets_id": b["id"], "status": b.get("status", "pending"), "result": _f(b.get("result")),
+        res[tid] = {"bets_id": b["id"], "status": b.get("status", "pending"), "result": _f(b.get("result_value")),
                     "rating": rating(p, b.get("confidence"), pm) if p is not None else None, "p": p,
                     "checked": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+        if b.get("status") == "lost":                                # the post-mortem rides along: what happened, why, what changes
+            pmr = pms.get(b["id"], {})
+            res[tid].update({"tag": b.get("miss_reason") or pmr.get("auto_tag") or "", "lesson": pmr.get("lesson", ""),
+                             "detail": (pmr.get("detail") or "")[:400]})
     return res
 
 

@@ -903,6 +903,21 @@ class Takes(unittest.TestCase):
         r = record(rows)
         self.assertEqual((r["hits"], r["n"], r["bands"]["8-10"], r["bands"]["5-7"]), (1, 2, {"hits": 1, "n": 1}, {"hits": 0, "n": 1}))
 
+    def test_missed_take_carries_its_post_mortem(self):
+        from unittest import mock
+        from edge import takes
+        rows = [{"id": "9", "sport": "mlb", "player": "Cooper Pratt", "market": "batter_total_bases", "line": "0.5", "side": "over",
+                 "notes": "start 2026-10-15T20:00:00.000-04:00", "date": "2026-10-15", "status": "lost", "result_value": "0",
+                 "p_final": "0.6754", "confidence": "High", "p_market": "", "action": "pass", "entry_id": "", "miss_reason": "opportunity"}]
+        pm = {"9": {"auto_tag": "variance", "lesson": "pinch-hit for in the 6th", "detail": "inn 2 vs Glasnow: Strikeout"}}
+        t = {"id": "a", "lg": "MLB", "player": "Cooper Pratt", "stat": "Total Bases", "line": 0.5, "side": "More",
+             "start": "2026-10-15T20:00:00.000-04:00"}
+        with mock.patch.object(takes.L, "read_bets", return_value=rows), mock.patch.object(takes.L, "write_bets"), \
+                mock.patch("edge.review.read_pm", return_value=pm):
+            out = takes.process([t])["a"]
+        self.assertEqual((out["status"], out["result"], out["tag"], out["lesson"]), ("lost", 0.0, "opportunity", "pinch-hit for in the 6th"))
+        self.assertEqual(rows[0]["entry_id"], "take-a")                                         # now the user's entry
+
 
 class LineGap(unittest.TestCase):
     def test_standard_line_is_the_median(self):
@@ -912,6 +927,42 @@ class LineGap(unittest.TestCase):
         self.assertIn("line gap", notes[0])
         self.assertEqual(line_gate("High", [], "goblin", 0.88, 0.5, 2.7, "over"), "High")        # goblins sit off the median
         self.assertEqual(line_gate("Medium", [], "standard", 0.66, 47.5, 62.7, "over"), "Medium")  # a normal disagreement
+
+    def _row(self, **kw):
+        r = {"id": "1", "sport": "nfl", "player": "MarShawn Lloyd", "market": "rush_rec_yds", "line": "58.5", "side": "under",
+             "book": "PrizePicks standard", "p_model": "0.9791", "p_market": "", "p_hist": "1.0", "hist_n": "5", "p_final": "0.9551",
+             "confidence": "Medium", "segment": "nfl:rush_rec_yds:under", "status": "pending", "proj": "33.8", "notes": ""}
+        r.update(kw)
+        return r
+
+    def test_back_check_holds_the_gap(self):
+        """10/15: the scan held Lloyd U58.5 at Low, but his logged row passed the back-check at 7/10."""
+        rep = verify.Report(self._row())
+        verify.check_recompute(rep, DEFAULT_ADJ)
+        self.assertEqual(rep.checks[0][0], "FAIL")
+        self.assertIn("line gap", rep.checks[0][2])
+        self.assertEqual(rep.fresh["confidence"], "Low")
+        held = self._row(confidence="Low", notes="corrected by verify: 0.9551 Medium -> 0.9551 Low; line gap: PrizePicks set ...")
+        rep = verify.Report(held)
+        verify.check_recompute(rep, DEFAULT_ADJ)
+        self.assertEqual(rep.checks[0][0], "PASS")
+        self.assertEqual(verify.line_gap_note(self._row(book="PrizePicks goblin"), 0.93), "")      # goblins are off the median
+        self.assertEqual(verify.line_gap_note(self._row(p_market="0.6"), 0.93), "")                # a book prices it
+
+    def test_refresh_never_lifts_a_hold(self):
+        rows = [self._row(confidence="Low", notes="role change: last 5 games' workload is 60% of his average (L5)",
+                          book="PrizePicks goblin", start="2099-01-01T00:00Z"),
+                self._row(id="2")]
+        verify.refresh(rows, DEFAULT_ADJ)
+        self.assertEqual(rows[0]["confidence"], "Low")                                           # judgment hold kept
+        self.assertEqual(rows[1]["confidence"], "Low")                                           # line gap applied
+
+    def test_first_names_must_agree(self):
+        from edge.tier import name_match
+        self.assertEqual(name_match("Jalen Brooks", "Jalen Brooks"), 2)
+        self.assertEqual(name_match("Jalen Brooks", "Jonathon Brooks"), 0)                       # 10/15: priced the wrong Brooks
+        self.assertEqual(name_match("S. Gilgeous-Alexander", "Shai Gilgeous-Alexander"), 1)
+        self.assertEqual(name_match("Ken Walker", "Kenneth Walker III"), 1)
 
 
 class Inject(unittest.TestCase):
