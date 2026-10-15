@@ -66,6 +66,15 @@ Before naming any prop, ask two questions the pricer may not: **is this player's
 ## Eight-Plus Board page
 The user follows 8+ picks on a live page: https://claude.ai/artifact/AhjWxmRgkijq4UkjhFEhsn (data in its `db`: `picks/<bets.csv id>`, `meta/summary`, `boards/pp-<LG>` / `boards/book-<LG>` for the All props explorer: every PrizePicks or sportsbook line we priced, with its rating and projection, `meta/regular` for regular-line plays, and `cards/<LG>-<i>` for the tap-to-open prop cards: last games with opponent and home/away, averages, head-to-head, venue split, matchup rank). After any scan that finds 8+ picks, and after grading, refresh it: `python3 -m edge board --out <fresh dir>` (add `--props` after a morning or pre-slate scan), set `next_scan` in `meta/summary.json`, list `picks` with ArtifactData for versions, then one batch `set` per file (with `if_version` on existing docs). Delete a pick's doc when it is withdrawn.
 
+### Inbox (Check a slip)
+The page's "Check a slip" section takes screenshots or a screen recording (a slip, a board, someone's pick). The page splits a video into distinct frames on the device. Claude reads the props off the frames (the page's `sample` call), matches them to our boards and cards, and writes a short analysis. Each check is saved as `inbox/<id>` with status "new": `{kind, app, entry, props:[{player, sport, stat, line, side, odds_type, price}], page, analysis, frames:[asset ids], video}`.
+- At every check-in, and whenever the user says they checked a slip, list `inbox` and process each "new" doc.
+- **Video only, no props** (the viewer's browser couldn't decode it, e.g. HEVC on desktop Chromium): fetch it with `Artifact read path=<asset id>` and split it with ffmpeg (1 fps, drop near-duplicate frames). Read the frames yourself and write the props into the doc first.
+- **Then:** save the doc to a file and run `python3 -m edge inject FILE --out RES.json`. It prices each MLB/NHL/NBA prop like a scan row, logs it (a slip's legs as `user_entry`; a leg already logged is linked, not duplicated; a tennis leg links to the match priced with `edge tennis pre`), and runs `edge verify` on each.
+- Write back with one ArtifactData `update` (`if_version`): `status: "logged"`, `processed`, `results`, `new_ids`.
+- Tell the user per prop: rating, chance, verdict and WARNs, and whether it's a play. Commit `betting/data/`.
+- The page's own read is a first look from the boards, not the published number: only `edge inject` + `edge verify` numbers are quoted as ratings.
+
 ## Persist the learning
 Cloud containers are temporary. After any `grade`, `review`, `learn`, `add` or `tag`, commit `betting/data/`, `betting/LESSONS.md` and `betting/POSTMORTEMS.md` and push, or the learning is lost.
 
