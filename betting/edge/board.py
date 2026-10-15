@@ -105,7 +105,18 @@ def build_card(lg: str, stat: str, team: str, opp: str, player: str, aid: str | 
             "a5": _avg(vals[:5]), "a10": _avg(vals[:10]), "aN": _avg(vals), "n": len(vals),
             "h2h": {"avg": _avg(h2h), "n": len(h2h)}, "home": {"avg": _avg(hm), "n": len(hm)}, "away": {"avg": _avg(aw), "n": len(aw)},
             "tonight": "home" if home is True else "away" if home is False else "",
-            "mu": CX.matchup(lg, stat, opp, pid, team, date)}
+            "mu": CX.matchup(lg, stat, opp, pid, team, date),
+            "dvp": _dvp(lg, stat, opp, position, aid, pid, team, date)}
+
+
+def _dvp(lg: str, stat: str, opp: str, position: str, aid, pid, team: str, date: str) -> dict | None:
+    """The Defense vs Position card: tonight's opponent against this position for this stat, ranked."""
+    from . import dvp as DV
+    from . import tier
+    try:
+        return DV.card(lg, tier.market_key(lg, stat), stat, opp, position or DV.position_of(lg, team, aid), pid, team, date)
+    except Exception:
+        return None
 
 
 def _ladder_for(r: dict, stat: str) -> dict:

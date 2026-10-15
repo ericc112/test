@@ -856,6 +856,29 @@ class Circumstances(unittest.TestCase):
         self.assertEqual(self.chk(b2b, league="NHL", market="goalie_saves", side="over").apply("High"), "Medium")
 
 
+class DefenseVsPosition(unittest.TestCase):
+    def test_rank_tier_and_side(self):
+        from edge import dvp
+        allowed = {"DEN": 117.8, "SEA": 150.0, "MIA": 190.0, "NYJ": 140.0, "KC": 130.0}
+        c = dvp._card("Defense vs Position", "x", "Def vs WRs", "DEN", allowed, False, "less", "allowed a game")
+        self.assertEqual((c["rank"], c["of"], c["tier"]), (1, 5, "Strong"))           # allows the fewest: strongest
+        w = dvp._card("Defense vs Position", "x", "Def vs WRs", "MIA", allowed, False, "less", "allowed a game")
+        self.assertEqual((w["rank"], w["tier"]), (5, "Weak"))
+        lineup = {"LAD": 0.257, "MIL": 0.221, "NYY": 0.250}                            # a hitting lineup: high = strong
+        self.assertEqual(dvp._card("Lineup vs Pitchers", "x", "g", "LAD", lineup, True, "more", "")["rank"], 1)
+
+    def test_table_from_box_scores(self):
+        from unittest import mock
+        from edge import dvp
+        games = {"1": {"DEN": {"WR": {"rec_yds": 100}}, "SEA": {"WR": {"rec_yds": 200}}},
+                 "2": {"DEN": {"WR": {"rec_yds": 140}}, "SEA": {"WR": {"rec_yds": 180}}}}
+        dvp.table.cache_clear()
+        with mock.patch.object(dvp, "_load", lambda lg: {"games": games}):
+            t = dvp.table("NFL", "WR", ("rec_yds",))
+        dvp.table.cache_clear()
+        self.assertEqual(t, {"DEN": 120.0, "SEA": 190.0})
+
+
 class LineGap(unittest.TestCase):
     def test_standard_line_is_the_median(self):
         from edge.tier import line_gate
