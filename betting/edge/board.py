@@ -17,6 +17,7 @@ from .blend import rating
 from . import learn as L
 
 SIDE = {"over": "More", "under": "Less"}
+REG_MIN = 0.60   # a regular (standard) line is a play at 60%+: above every PrizePicks break-even (2-pick power 57.7%, 3-pick flex 59.8%)
 STAT = {"pitcher_strikeouts": "Strikeouts", "skater_sog": "Shots on goal", "skater_points": "Points", "skater_assists": "Assists",
         "skater_goals": "Goals", "skater_ppp": "Power-play points", "batter_hits": "Hits", "batter_total_bases": "Total bases",
         "batter_hrr": "Hits + runs + RBIs", "batter_strikeouts": "Hitter strikeouts", "batter_walks": "Walks",
@@ -84,7 +85,13 @@ def pick_doc(r: dict, rows: list[dict], verify_it: bool) -> dict:
     return doc
 
 
+def is_regular_play(r: dict) -> bool:
+    p = _f(r.get("p_final"))
+    return "standard" in (r.get("book") or "").lower() and p is not None and p >= REG_MIN and r.get("confidence") in ("Medium", "High")
+
+
 def summary(rows: list[dict]) -> dict:
+    reg = [r for r in rows if r.get("status") in ("won", "lost") and is_regular_play(r)]
     bands = {"8-10": [0, 0, 0.0], "5-7": [0, 0, 0.0], "1-4": [0, 0, 0.0]}
     for r in rows:
         if r.get("status") not in ("won", "lost"):
@@ -97,6 +104,8 @@ def summary(rows: list[dict]) -> dict:
         b[1] += 1
         b[2] += _f(r["p_final"])
     return {"updated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "regular": {"hits": sum(r["status"] == "won" for r in reg), "n": len(reg), "min": REG_MIN,
+                        "predicted": round(sum(_f(r["p_final"]) for r in reg) / len(reg), 3) if reg else None},
             "bands": [{"band": k, "hits": h, "n": n, "predicted": round(p / n, 3) if n else None} for k, (h, n, p) in bands.items()]}
 
 
@@ -110,6 +119,34 @@ def _row(r: dict, source: str) -> dict:
             "r": r["rating"], "t": r.get("start", "")}
 
 
+def regular(pp_rows: list[dict], now: str, top: int = 10) -> dict:
+    """The best regular (standard) PrizePicks lines on the board. A line is a play only at 60%+, not Low, logged and
+    back-checked this run; the rest are shown with the reason they are not."""
+    from .verify import verify
+    bets = L.read_bets()
+    by_key = {(b["player"].lower(), b["market"], str(_f(b["line"])), b["side"]): b for b in bets
+              if b.get("status") == "pending" and "standard" in (b.get("book") or "").lower()}
+    st = sorted((r for r in pp_rows if r.get("odds_type") == "standard"), key=lambda r: -r["p_final"])[:top]
+    rows = []
+    for r in st:
+        d = {**_row(r, "pp"), "lg": r["league"], "play": False, "why": ""}
+        if r["p_final"] < REG_MIN:
+            d["why"] = f"under {REG_MIN:.0%}: below the break-even"
+        elif r["confidence"] == "Low":
+            d["why"] = "sources disagree"
+        else:
+            b = by_key.get((r["player"].lower(), r["market_key"], str(float(r["line"])), r["side"]))
+            if not b:
+                d["why"] = "not logged yet: run edge tier --log"
+            else:
+                rep = verify(b, bets)
+                d["play"] = not rep.verdict.startswith("NOT")
+                d["why"] = "back-check: " + rep.verdict.lower()
+                d["warns"] = [f"{n}: {x}" for s_, n, x in rep.checks if s_ in ("WARN", "FAIL")]
+        rows.append(d)
+    return {"updated": now, "min": REG_MIN, "rows": rows}
+
+
 def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None = None, days: int = 2) -> list[tuple[str, str, str]]:
     """boards/pp-<LG> (every PrizePicks line we could price) and boards/book-<LG> (sportsbook lines), each rated."""
     from . import tier
@@ -118,6 +155,10 @@ def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None =
     now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     pp = [r for r in tier.scan(leagues, date, days=days) if "error" not in r and r.get("odds_type") != "demon"]
     book = tier.book_scan(leagues, date, days=days)
+    p = Path(out) / "meta" / "regular.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(regular(pp, now), separators=(",", ":")))
+    written.append(("meta", "regular", str(p)))
     for source, rows in (("pp", pp), ("book", book)):
         for lg in leagues:
             sel = sorted((r for r in rows if r["league"] == lg), key=lambda r: (-r["rating"], -r["p_final"]))[:700]
