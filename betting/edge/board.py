@@ -149,7 +149,7 @@ def pick_doc(r: dict, rows: list[dict], verify_it: bool) -> dict:
         who = (r.get("event") or "").split(" (")[0]
         a_, _, b_ = who.partition(" vs ")
         doc.update(side="To win", line=None, stat="Match winner", team="", opp=(b_ if a_.strip() == r["player"] else a_).strip(),
-                   hist_hits=None, hist_n=0, odds_type=(r.get("book") or "").replace("PrizePicks ", ""))
+                   hist_hits=None, hist_n=0, odds_type="")
         if verify_it and doc["status"] == "pending":
             from .verify import verify
             rep = verify(r, rows)
