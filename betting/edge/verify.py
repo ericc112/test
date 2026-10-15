@@ -229,6 +229,18 @@ def check_mlb_history(rep: Report):
         rep.add("WARN", "recount", f"no automatic recount for mlb {r['market']}: recount by hand before publishing")
         return
     group, fn = MLB_STATS[r["market"]]
+    if group == "batting":
+        # the pricer's window: last 30 games with 3+ plate appearances, from the hitting log (statsapi has no
+        # 'batting' group; asking for it hands back a two-way player's pitching log, Ohtani's 14 starts)
+        from . import lowline as LW
+        gl = [g for g in LW.mlb_log(r["player_id"]) if (g["vol"] or 0) >= 3][:30]
+        vals = [v for v in (fn(g["x"]) for g in gl) if v is not None]
+        line = float(r["line"])
+        o, u = sum(v > line for v in vals), sum(v < line for v in vals)
+        ph = (o if r["side"] == "over" else u) / max(o + u, 1)
+        logged = _f(r.get("p_hist"))
+        rep.add("FAIL" if abs(ph - logged) > TOL_HIST else "PASS", "recount", f"last 30 games (3+ PA) give {ph:.2f} over {o + u} (logged {logged})")
+        return
     vals = []
     for gt in ("R", "P"):
         try:
