@@ -920,6 +920,20 @@ class Takes(unittest.TestCase):
 
 
 class EsportsSoccer(unittest.TestCase):
+    def test_local_team_names_match_espn(self):
+        ev = {"id": "1", "competitions": [{"competitors": [
+            {"homeAway": "home", "team": {"id": 125, "displayName": "Eintracht Frankfurt", "shortDisplayName": "Frankfurt"}},
+            {"homeAway": "away", "team": {"id": 122, "displayName": "FC Cologne", "shortDisplayName": "Cologne"}}]}]}
+        self.assertEqual(pp._match_event([ev], "Frankfurt", "Köln")["away_id"], "122")
+
+    def test_no_draftkings_props_is_no_ladder(self):
+        import urllib.error
+        from unittest import mock
+        def gone(url):
+            raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+        with mock.patch.object(pp, "_get", gone):
+            self.assertEqual(dict(pp.dk_ladders("ger.1", "401884767")), {})
+
     MATCH = """<div class="moment-tz-convert" data-utc-ts="2026-10-10 19:00:00"></div>
 <a class="match-header-link wf-link-hover mod-1"  href="/team/11058/g2-esports" ><div class="match-header-link-name mod-1"><div class="wf-title-med ">G2 Esports</div></div></a>
 <div class="match-header-vs-note">final</div><div class="match-header-vs-note">Bo3</div>

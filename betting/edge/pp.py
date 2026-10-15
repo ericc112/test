@@ -125,7 +125,11 @@ def board(league: str, odds_types=("standard",)) -> list[dict]:
 def _fold(s: str) -> list[str]:
     """Accent-free name tokens without club filler words: 'Sporting Clube de Portugal' -> ['sporting', 'clube', 'portugal']."""
     s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode().lower()
-    return re.sub(r"\b(fc|cf|cp|sc|ac|afc|club|de|the|sv|fk|bk|ssc|as)\b|[^a-z ]", " ", s).split()
+    return [TEAM_ALIASES.get(t, t) for t in re.sub(r"\b(fc|cf|cp|sc|ac|afc|club|de|the|sv|fk|bk|ssc|as)\b|[^a-z ]", " ", s).split()]
+
+
+# PrizePicks writes the local name, ESPN the English one ("Köln" / "FC Cologne")
+TEAM_ALIASES = {"koln": "cologne", "munchen": "munich", "nurnberg": "nuremberg"}
 
 
 def _close(a: str, b: str) -> float:
@@ -194,7 +198,12 @@ def espn_player(slug: str, team_id: str, name: str) -> tuple[str | None, list[st
 def dk_ladders(slug: str, event_id: str) -> dict:
     items, page = [], 1
     while True:
-        d = _get(f"{CORE}/{slug}/events/{event_id}/competitions/{event_id}/odds/100/propBets?lang=en&region=us&limit=1000&page={page}")
+        try:
+            d = _get(f"{CORE}/{slug}/events/{event_id}/competitions/{event_id}/odds/100/propBets?lang=en&region=us&limit=1000&page={page}")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:                       # DraftKings hasn't posted props for this game: no ladder, game logs price it
+                break
+            raise
         items += d.get("items", [])
         if page >= d.get("pageCount", 1):
             break
