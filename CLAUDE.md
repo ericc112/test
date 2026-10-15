@@ -99,7 +99,12 @@ The numbers don't see who sits, who rests, a new or smaller role, a star teammat
   - `edge tier` prices every PrizePicks prop it can read from game logs, whether or not a book prices it. NFL is included, with an 8-day slate window and readers for TDs, FG made and kicking points.
   - Rows with no book price are marked "no book price" on the board.
   - NBA preseason (L30): `edge tier --league NBA` also reads PrizePicks' NBAP board. Preseason props are priced with the preseason minutes model and preseason history, with the book at half weight. Every prop is matched to the game on its own date.
-- For a PrizePicks board, start with `python3 -m edge pp --league <CS2|UCL|...> [--match TEAM] --log`: it prices every supported prop with the same blend and gates, marks MORE-ONLY lines (no under available) and thin or new-to-team players. Read the flagged legs yourself before recommending anything.
+- **Esports and soccer on the page (user, 10/15):** `edge board --props` also prices, logs and exports PrizePicks' CS2, LoL, Valorant and SOCCER boards (`--extra`, standard and goblin lines for games not yet started), each with a card built from the pricer's series-by-series or match-by-match history.
+  - CS2: maps 1-2 and map 1 kills and headshots (bo3.gg). LoL: maps 1-3 kills (gol.gg + bo3.gg odds).
+  - Valorant (`edge/val.py`): maps 1-2 kills and first bloods. Player maps come from vlr.gg match pages: its robots.txt allows them, requests are spaced 0.6 s apart and finished matches are cached. Series odds come from bo3.gg (discipline 2). Graded from the vlr.gg match page.
+  - Soccer: PrizePicks' main SOCCER board mixes competitions; each game is found on ESPN across the leagues in `pp.SOCCER_SLUGS`. Shots, shots on target and saves use the DraftKings ladder when ESPN has one. Without a ladder, the game-log model is the second source next to history (25 recent matches in any competition).
+  - Their records so far are weak (CS2 kills unders 43% of 81, soccer shots overs 29% of 48). The learned biases correct for it, so 8+ will be rare there. Say so rather than stretch.
+- For a PrizePicks board, start with `python3 -m edge pp --league <CS2|VAL|LOL|SOCCER|...> [--match TEAM] --log`: it prices every supported prop with the same blend and gates, marks MORE-ONLY lines (no under available) and thin or new-to-team players. Read the flagged legs yourself before recommending anything.
 - Final probabilities come from `python3 -m edge prob --model .. --market .. --hist .. --hist-n .. --segment sport:market:side`. Report the confidence it returns; don't override it upward.
 - Log every evaluated prop (bets, leans and passes) with `python3 -m edge add ...` (fields: header of `bets.csv`; market keys: `betting/README.md`). Include `event_id` and `player_id` so it can be auto-graded, and `proj` (projected median) and `opp_proj` (projected BF / PA / TOI / rounds) so a loss can be traced to volume or rate.
 - Before the user submits an entry, run `python3 -m edge card` and remove any leg it flags as unpriced or under break-even (LESSONS L20).
@@ -134,6 +139,7 @@ No-key sources:
 - PrizePicks boards: `https://partner-api.prizepicks.com/projections?league_id=ID&per_page=10000` (league ids from `/leagues`; the main api.prizepicks.com is captcha-blocked). It rate-limits: `edge pp` caches and backs off.
 - Tennis: ESPN `site.api.espn.com/apis/site/v2/sports/tennis/{atp|wta}/scoreboard[?dates=YYYYMMDD]` (results, set scores, live games and server; no point score, no odds). `python3 -m edge tennis refresh` updates `betting/data/tennis/` and refits; for a live match run `edge tennis live NAME --odds A B --points X-Y` (add `--pre-odds` when you have the pre-match price) and rate it like any other pick.
 - MLB: `statsapi.mlb.com`. NHL: `api-web.nhle.com` and `api.nhle.com/stats` (send a User-Agent header). NFL: ESPN `site.api.espn.com`. CS2: `api.bo3.gg` (HLTV blocks scripted access).
+- Valorant: `www.vlr.gg` match, team and match-list pages (`/team/matches/{id}/?group=completed`; robots.txt disallows only `/search/auto` and `/rr/`; keep the 0.6 s spacing). bo3.gg has Valorant schedules and odds but no per-map player stats.
 
 ## Tests
 `cd betting && python3 -m unittest discover -s tests` (numpy is the only dependency).
