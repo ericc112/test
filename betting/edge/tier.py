@@ -268,8 +268,41 @@ def history(sport: str, stat: str, team: str, player: str, line: float, aid: str
         gl = [g for g in LW.mlb_log(pid) if (g["vol"] or 0) >= 3]
         vals = [v for v in (LW.value("MLB", stat, g) for g in gl) if v is not None]
     vals = vals[:30]
+    _LAST_VALS[(sport, stat, team, player, line)] = vals
     n = sum(v != line for v in vals)
     return (sum(v > line for v in vals) / n if n else None), n, pid
+
+
+_LAST_VALS: dict = {}
+
+
+def recent_avg(sport: str, stat: str, team: str, player: str, line: float, k: int = 10) -> float | None:
+    """Average of his last k games from the values `history` just counted for this prop."""
+    v = _LAST_VALS.get((sport, stat, team, player, line)) or []
+    return round(sum(v[:k]) / len(v[:k]), 2) if v else None
+
+
+def ladder_line(rungs: dict) -> float | None:
+    """The market's 50/50 number from a 'k+' ladder: where the de-vigged P(X >= k) crosses one half, on the
+    half-point scale lines use (P(X >= k) = 0.5 is a line of k - 0.5)."""
+    pts = sorted((k, devig_one_way(implied(a))) for k, a in rungs.items())
+    for (k1, q1), (k2, q2) in zip(pts, pts[1:]):
+        if q1 >= 0.5 > q2:
+            return round(k1 - 0.5 + (q1 - 0.5) / (q1 - q2) * (k2 - k1), 1)
+    return None
+
+
+def projection(cx, rungs: dict | None, main_line: float | None, avg: float | None) -> tuple[float | None, str]:
+    """One number to show beside the chance: the matchup model's mean when there is one, else the market's
+    50/50 line (DraftKings ladder or the books' main line), else his recent average."""
+    if cx:
+        return round(cx[2], 1), "matchup model"
+    m = ladder_line(rungs) if rungs else None
+    if m is not None:
+        return m, "DraftKings line"
+    if main_line is not None:
+        return main_line, "books' main line"
+    return (round(avg, 1), "last 10 average") if avg is not None else (None, "")
 
 
 def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: int = 2) -> list[dict]:
@@ -348,10 +381,15 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
                 cons = OA.consensus(OA.book_prices(oa_odds.get((lg, ev["id"]), {}), om, p["player"], p["line"]))
                 if cons:
                     mk_over = cons["p_over"]
+        lad_p = lad.get((lg, eid), {}).get((STATS[lg][p["stat"]][0], aid or "")) if p["stat"] in STATS.get(lg, {}) else None
+        main = None
+        if lg in oa_evs:
+            ev = OA.match_event(oa_evs[lg], p.get("team_name"), p.get("start"))
+            om = OA.MARKETS.get(lg, {}).get(p["stat"])
+            main = OA.main_line(oa_odds.get((lg, ev["id"]), {}), om, p["player"]) if ev and om else None
         if mk_over is None:                                         # fallback: DraftKings ladder through ESPN
             if p["stat"] not in STATS.get(lg, {}):
                 return {**p, "error": "no sportsbook price at this line"}
-            lad_p = lad.get((lg, eid), {}).get((STATS[lg][p["stat"]][0], aid or ""))
             if not lad_p:
                 return {**p, "error": "no DraftKings ladder"}
             mk_over, mnote = market_over(lad_p, p["line"])
@@ -361,6 +399,8 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
         # context (matchup, ice time, strikeout rates) is the model component on regular lines; goblins keep market + history
         cx = CX.price(lg, p["stat"], p.get("opp"), pid, p["line"], day.year)
         use_model = cx is not None and p.get("odds_type") == "standard"
+        avg10 = recent_avg(lg, p["stat"], p["team"], p["player"], p["line"])
+        proj, proj_src = projection(cx, lad_p, main, avg10)
         best = None
         for side in (["over"] if p["over_only"] else ["over", "under"]):
             pk = mk_over if side == "over" else 1 - mk_over
@@ -374,6 +414,7 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
                 rt, note = 7, note + " (held at 7)"
             r = {**p, "side": side, "market_key": mk, "p_market": pk, "p_hist": ph, "hist_n": n, "p_final": e.p, "p_model": pmod,
                  "confidence": e.confidence, "rating": rt, "player_id": pid, "event_id": eid, "context": cx[1] if cx else [],
+                 "proj": proj, "proj_src": proj_src, "avg10": avg10,
                  "notes": f"{note}; " + "; ".join(e.notes) + (f"; context: {' / '.join(cx[1])}" if cx else "")}
             if best is None or r["p_final"] > best["p_final"]:
                 best = r
@@ -393,11 +434,17 @@ LAST_OA: dict = {}          # (league, Odds API event id) -> odds fetched by the
 NHL_API = {"TB": "TBL", "NJ": "NJD", "SJ": "SJS", "LA": "LAK", "UTAH": "UTA"}   # ESPN -> NHL API team codes
 
 
-def _rate(lg: str, stat: str, team: str, player: str, aid: str | None, line: float, side: str, p_market: float) -> dict:
+def _rate(lg: str, stat: str, team: str, player: str, aid: str | None, line: float, side: str, p_market: float,
+          rungs: dict | None = None, main: float | None = None, opp: str = "") -> dict:
+    from . import context as CX
     h_over, n, pid = history(lg, stat, team, player, line, aid)
     ph = None if h_over is None else (h_over if side == "over" else 1 - h_over)
     e = final_probability(None, p_market, ph, f"{lg.lower()}:{market_key(lg, stat)}:{side}", n)
-    return {"p_hist": ph, "hist_n": n, "p_final": e.p, "confidence": e.confidence, "rating": rating(e.p, e.confidence, p_market)}
+    avg10 = recent_avg(lg, stat, team, player, line)
+    cx = CX.price(lg, stat, opp, pid, line, dt.date.today().year)
+    proj, src = projection(cx, rungs, main, avg10)
+    return {"p_hist": ph, "hist_n": n, "p_final": e.p, "confidence": e.confidence, "rating": rating(e.p, e.confidence, p_market),
+            "proj": proj, "proj_src": src, "avg10": avg10, "context": cx[1] if cx else []}
 
 
 def book_scan(leagues=("NHL", "MLB", "NBA"), day: dt.date | None = None, days: int = 1, log=print, max_rows: int = 600) -> list[dict]:
@@ -435,7 +482,7 @@ def book_scan(leagues=("NHL", "MLB", "NBA"), day: dt.date | None = None, days: i
                     if 0.5 <= imp <= 0.985 and k >= 1:
                         cands.append({"league": lg, "player": nm, "team": ab, "opp": opp, "stat": rev[lad_name], "line": k - 0.5,
                                       "side": "over", "price": am, "book": "DraftKings", "p_market": devig_one_way(imp),
-                                      "aid": aid, "start": e.get("date", "")})
+                                      "aid": aid, "start": e.get("date", ""), "rungs": rungs})
             # every book, from odds the PrizePicks scan already paid for
             names = {LW._fold(v): ab for ab, v in teams.items()}
             for (olg, oid), odds in LAST_OA.items():
@@ -467,13 +514,16 @@ def book_scan(leagues=("NHL", "MLB", "NBA"), day: dt.date | None = None, days: i
                         if pm >= 0.5:
                             cands.append({"league": lg, "player": pl, "team": ab, "opp": opp, "stat": stat_of[base], "line": pt,
                                           "side": sd, "price": price, "book": book + (f" (best of {c['n']})" if c["n"] > 1 else ""),
-                                          "p_market": pm, "aid": aid, "start": e.get("date", ""), "disagree": c["disagree"]})
+                                          "p_market": pm, "aid": aid, "start": e.get("date", ""), "disagree": c["disagree"],
+                                          "main": OA.main_line(odds, base, pl)})
         cands.sort(key=lambda r: -r["p_market"])
         cands = cands[:max_rows]
 
         def one(r):
             try:
-                rr = {**r, **_rate(lg, r["stat"], r["team"], r["player"], r["aid"], r["line"], r["side"], r["p_market"])}
+                rr = {**r, **_rate(lg, r["stat"], r["team"], r["player"], r["aid"], r["line"], r["side"], r["p_market"],
+                                   r.get("rungs"), r.get("main"), r.get("opp", ""))}
+                rr.pop("rungs", None)
             except Exception:
                 return None
             if rr.get("disagree") and rr["rating"] >= 8:

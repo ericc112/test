@@ -65,7 +65,7 @@ def _nhl_opp(opp: str) -> str:
     return NHL_API.get(opp, opp)
 
 
-def nhl_sog(pid: str, opp: str, line: float) -> tuple[float, list[str]] | None:
+def nhl_sog(pid: str, opp: str, line: float) -> tuple[float, list[str], float] | None:
     log = LW.nhl_log(pid)[:30]
     if len(log) < 8:
         return None
@@ -90,10 +90,10 @@ def nhl_sog(pid: str, opp: str, line: float) -> tuple[float, list[str]] | None:
         why.append(f"{_nhl_opp(opp)} allows {o['sa']:.1f} shots a game (league {t['league']['sa']:.1f}): {(f - 1) * 100:+.0f}%")
     mean = rate * toi * f
     why.append(f"projects {mean:.2f} shots")
-    return nb_over(mean, line, 0.30), why
+    return nb_over(mean, line, 0.30), why, mean
 
 
-def nhl_saves(pid: str, opp: str, line: float) -> tuple[float, list[str]] | None:
+def nhl_saves(pid: str, opp: str, line: float) -> tuple[float, list[str], float] | None:
     starts = [g for g in LW.nhl_log(pid) if g["x"].get("gamesStarted")][:30]
     if len(starts) < 8:
         return None
@@ -108,7 +108,7 @@ def nhl_saves(pid: str, opp: str, line: float) -> tuple[float, list[str]] | None
     if o:
         why.append(f"{_nhl_opp(opp)} takes {o['sf']:.1f} shots a game (league {t['league']['sf']:.1f})")
     why.append(f"projects {mean:.1f} saves")
-    return nb_over(mean, line, 0.18), why
+    return nb_over(mean, line, 0.18), why, mean
 
 
 # ------------------------------------------------------------------ MLB
@@ -142,7 +142,7 @@ def pitch_hand(pid: str) -> str:
     return _get(f"https://statsapi.mlb.com/api/v1/people/{pid}")["people"][0].get("pitchHand", {}).get("code", "R")
 
 
-def mlb_pitcher_k(pid: str, opp: str, line: float, season: int) -> tuple[float, list[str]] | None:
+def mlb_pitcher_k(pid: str, opp: str, line: float, season: int) -> tuple[float, list[str], float] | None:
     from .tier import mlb_pitch_log
     log = mlb_pitch_log(pid)
     if len(log) < 5:
@@ -162,11 +162,11 @@ def mlb_pitcher_k(pid: str, opp: str, line: float, season: int) -> tuple[float, 
         why.append(f"{opp} strikes out {o[0] * 100:.1f}% vs {'lefties' if hand == 'L' else 'righties'}")
     mean = bf * p
     why.append(f"projects {mean:.1f} strikeouts")
-    return nb_over(mean, line, 0.22), why
+    return nb_over(mean, line, 0.22), why, mean
 
 
-def price(league: str, stat: str, opp: str | None, pid: str | None, line: float, season: int) -> tuple[float, list[str]] | None:
-    """Model P(over) at the line with its reasons, or None when there is no context model for this prop."""
+def price(league: str, stat: str, opp: str | None, pid: str | None, line: float, season: int) -> tuple[float, list[str], float] | None:
+    """(model P(over) at the line, its reasons, projected mean), or None when there is no context model for this prop."""
     if not pid or not opp:
         return None
     try:

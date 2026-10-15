@@ -356,7 +356,8 @@ def main(argv=None):
                              "p_hist": "" if r["p_hist"] is None else round(r["p_hist"], 4), "hist_n": r["hist_n"], "p_final": round(r["p_final"], 4),
                              "confidence": r["confidence"], "action": "lean" if r["rating"] >= 8 else "pass",
                              "segment": f"{r['league'].lower()}:{r['market_key']}:{r['side']}", "group": f"{r['league'].lower()}:{r['event_id']}",
-                             "status": "pending", "notes": f"edge tier; {r['notes']}; start {r.get('start')}"})
+                             "status": "pending", "proj": "" if r.get("proj") is None else r["proj"],
+                             "notes": f"edge tier; {r['notes']}; start {r.get('start')}"})
                 nid += 1
                 added += 1
             L.write_bets(bets)

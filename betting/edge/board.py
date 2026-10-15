@@ -74,10 +74,18 @@ def pick_doc(r: dict, rows: list[dict], verify_it: bool) -> dict:
         "market_p": _f(r.get("p_market")), "market_text": f"DraftKings {m.group(1)}+ at {m.group(2)}" if m else "",
         "hist_hits": round(hist * n) if hist is not None else None, "hist_n": n,
         "games": games(r) if (r.get("status") or "pending") == "pending" else [],      # a graded pick's log now holds its own result
-        "start": st.group(1) if st else "", "status": r.get("status") or "pending",
+        "start": st.group(1) if st else "", "status": r.get("status") or "pending", "proj": _f(r.get("proj")),
         "result": _f(r.get("result_value")), "verdict": "", "warns": [], "lesson": "",
         "context": (re.search(r"context: (.*?)(?:; start |$)", notes).group(1).split(" / ") if "context: " in notes else []),
     }
+    if doc["proj"] is None and doc["status"] == "pending":       # rows logged before projections: price the matchup now
+        from . import context as CX
+        from . import tier
+        stat = next((s for lg_ in (tier.STATS, tier.EXTRA) for s, v in lg_.get(doc["sport"], {}).items()
+                     if (v[1] if isinstance(v, tuple) else v) == r["market"]), None)
+        cx = CX.price(doc["sport"], stat, doc["opp"], r.get("player_id"), doc["line"], int(r["date"][:4])) if stat else None
+        if cx:
+            doc["proj"], doc["context"] = round(cx[2], 1), doc["context"] or cx[1]
     if verify_it and doc["status"] == "pending":
         from .verify import verify
         rep = verify(r, rows)
@@ -118,6 +126,7 @@ def _row(r: dict, source: str) -> dict:
             "p": round(r["p_final"], 4), "pm": round(r["p_market"], 4),
             "ph": None if r.get("p_hist") is None else round(r["p_hist"], 3), "n": r.get("hist_n", 0),
             "r": r["rating"], "t": r.get("start", ""), "cx": r.get("context") or [],
+            "pj": r.get("proj"), "pjs": r.get("proj_src", ""), "a10": r.get("avg10"),
             "pmod": None if r.get("p_model") is None else round(r["p_model"], 3)}
 
 

@@ -546,6 +546,23 @@ class DevigMethods(unittest.TestCase):
         self.assertLessEqual(odds.devig(-500, 350, "worst")[0], min(fav.values()) + 1e-9)
 
 
+class Projection(unittest.TestCase):
+    def test_ladder_line_is_the_market_fifty_fifty_point(self):
+        from edge import tier
+        rungs = {2: -400, 3: -200, 4: 100, 5: 250, 6: 450}       # P(X>=3) ~ .63, P(X>=4) ~ .47
+        m = tier.ladder_line(rungs)
+        self.assertGreater(m, 2.5)
+        self.assertLess(m, 3.5)
+        self.assertIsNone(tier.ladder_line({1: -900, 2: -500}))   # never crosses one half: no market line
+
+    def test_projection_prefers_matchup_then_market_then_average(self):
+        from edge import tier
+        self.assertEqual(tier.projection((0.6, ["x"], 7.04), {2: -400, 3: 100}, 5.5, 6.2), (7.0, "matchup model"))
+        self.assertEqual(tier.projection(None, None, 5.5, 6.2), (5.5, "books' main line"))
+        self.assertEqual(tier.projection(None, None, None, 6.24), (6.2, "last 10 average"))
+        self.assertEqual(tier.projection(None, None, None, None), (None, ""))
+
+
 class ContextModel(unittest.TestCase):
     def test_nb_over_matches_poisson_limit_and_handles_push(self):
         import math

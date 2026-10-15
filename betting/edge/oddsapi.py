@@ -152,6 +152,20 @@ def book_prices(odds: dict, market: str, player: str, line: float) -> dict[str, 
     return out
 
 
+def main_line(odds: dict, market: str, player: str) -> float | None:
+    """The books' main over/under number for this player (median across books): the market's projection."""
+    who, pts = _fold(player), []
+    for bk in odds.get("bookmakers", []):
+        for m in bk.get("markets", []):
+            if m.get("key") == market:
+                pts += [float(o["point"]) for o in m.get("outcomes", []) if o.get("name") == "Over"
+                        and o.get("point") is not None and _fold(o.get("description", "")) == who]
+    if not pts:
+        return None
+    pts.sort()
+    return pts[len(pts) // 2]
+
+
 def consensus(prices: dict[str, float]) -> dict | None:
     if not prices:
         return None
