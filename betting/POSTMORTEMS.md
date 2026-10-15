@@ -11,7 +11,7 @@ Every graded loss is examined here, including passes and Low-confidence legs. `p
 Lessons:
 - #1187: 72% favourite with model = market (-345); straight-sets upset by Chwalinska. Price was right; no rule change.
 
-## 2026-10-14: 151 losses from 22 independent causes
+## 2026-10-14: 170 losses from 26 independent causes
 
 | # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
 |---|---|---|---|---|---|---|---|---|
@@ -96,6 +96,25 @@ Lessons:
 | 746 | Paulo Dybala shots over 3.5 | 1.0 | 0.2755 (Low) | pass | market 32% (against), hist 40% (against) | correlated | correlated | same game script as #742 (variance); own read: variance; we priced this side at 28%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
 | 747 | Paulo Dybala sot over 2.5 | 0.0 | 0.0838 (Low) | pass | market 7% (against), hist 0% (against) | correlated | correlated | same game script as #742 (variance); own read: variance; we priced this side at 8%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
 | 748 | Los Angeles Dodgers moneyline over 0 | 0 | 0.614 (Medium) | user_entry | model 61%, market 61% | correlated | variance | same game script as #918 (opportunity); own read: variance; closest possible loss (missed by the minimum) |
+| 754 | Jamie Benn skater_sog under 1.5 | 2 | 0.6025 (Medium) | lean | model 66%, market 54%, hist 77% | variance | variance | root leg of a 18-leg script loss: #754, #806, #811, #893, #902, #931, #939, #974, #977, #992, #993, #997, #1039, #1046, #1051, #1052, #1075, #1076; closest possible loss (missed by the minimum) |
+| 774 | Alex Ovechkin skater_points under 0.5 | 1 | 0.5022 (Low) | pass | model 55%, hist 53% | variance | variance | root leg of a 23-leg script loss: #774, #796, #808, #818, #848, #859, #879, #889, #914, #924, #935, #946, #966, #1000, #1009, #1010, #1019, #1022, #1032, #1035, #1047, #1068, #1072; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 776 | Mookie Betts batter_singles under 0.5 | 1 | 0.5028 (Low) | pass | model 52%, hist 60% | correlated | variance | same game script as #918 (opportunity); own read: variance; logged as a PASS: no money on it; reviewed for calibration; 5 PA from the 1 slot; opposing starter Robert Gasser went 15 outs / 0 ER; closest possible loss (missed by the minimum) |
+| 780 | Nazem Kadri skater_points under 0.5 | 2 | 0.4926 (Low) | pass | model 53%, hist 57% | variance | variance | we priced this side at 49%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 796 | Lane Hutson skater_sog under 1.5 | 3 | 0.4286 (Low) | pass | model 47% (against), hist 50% (against) | correlated | variance | same game script as #774 (variance); own read: variance; we priced this side at 43%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 806 | Miro Heiskanen skater_points under 0.5 | 1 | 0.4241 (Low) | pass | model 47% (against), hist 37% (against) | correlated | variance | same game script as #754 (variance); own read: variance; we priced this side at 42%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 807 | Joey Ortiz batter_hits under 0.5 | 1 | 0.4117 (Low) | pass | model 44% (against), hist 23% (against) | correlated | variance | same game script as #918 (opportunity); own read: variance; we priced this side at 41%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; 4 PA from the 9 slot; opposing starter Blake Snell went 18 outs / 4 ER; closest possible loss (missed by the minimum) |
+| 808 | Alex Tuch skater_points under 0.5 | 3 | 0.4219 (Low) | pass | model 45% (against), hist 43% (against) | correlated | variance | same game script as #774 (variance); own read: variance; we priced this side at 42%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 811 | Mikko Rantanen skater_assists under 0.5 | 1 | 0.4159 (Low) | pass | model 44% (against), hist 43% (against) | correlated | variance | same game script as #754 (variance); own read: variance; we priced this side at 42%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 813 | Cooper Pratt batter_hits under 0.5 | 3 | 0.4058 (Low) | pass | model 42% (against), hist 27% (against) | correlated | variance | same game script as #918 (opportunity); own read: variance; we priced this side at 41%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; 4 PA from the 7 slot; opposing starter Blake Snell went 18 outs / 4 ER |
+| 816 | Garrett Mitchell batter_hits under 0.5 | 1 | 0.4058 (Low) | pass | model 40% (against), hist 40% (against) | correlated | variance | same game script as #918 (opportunity); own read: variance; we priced this side at 41%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; 4 PA from the 6 slot; opposing starter Blake Snell went 18 outs / 4 ER; closest possible loss (missed by the minimum) |
+| 817 | Jake Bauers batter_hits under 0.5 | 1 | 0.402 (Low) | pass | model 40% (against), hist 37% (against) | correlated | variance | same game script as #918 (opportunity); own read: variance; we priced this side at 40%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; 4 PA from the 5 slot; opposing starter Blake Snell went 18 outs / 4 ER; closest possible loss (missed by the minimum) |
+| 818 | Cole Hutson skater_sog under 1.5 | 3 | 0.3854 (Low) | pass | model 42% (against), hist 45% (against) | correlated | variance | same game script as #774 (variance); own read: variance; we priced this side at 39%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 823 | Will Smith batter_hrr under 1.5 | 3 | 0.373 (Low) | pass | model 45% (against), hist 47% (against) | correlated | variance | same game script as #918 (opportunity); own read: variance; we priced this side at 37%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; 4 PA from the 7 slot; opposing starter Robert Gasser went 15 outs / 0 ER; 0 of 3 H+R+RBI came off the starter, 3 off the bullpen (the bullpen part alone beat the line: not just the starter's fault) |
+| 830 | Cooper Pratt batter_total_bases under 0.5 | 3 | 0.3199 (Low) | pass | model 33% (against), hist 27% (against) | correlated | variance | same game script as #918 (opportunity); own read: variance; we priced this side at 32%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; 4 PA from the 7 slot; opposing starter Blake Snell went 18 outs / 4 ER |
+| 835 | Joey Ortiz batter_total_bases under 0.5 | 1 | 0.3058 (Low) | pass | model 32% (against), hist 23% (against) | correlated | variance | same game script as #918 (opportunity); own read: variance; we priced this side at 31%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; 4 PA from the 9 slot; opposing starter Blake Snell went 18 outs / 4 ER; closest possible loss (missed by the minimum) |
+| 840 | Garrett Mitchell batter_total_bases under 0.5 | 4 | 0.2686 (Low) | pass | model 24% (against), hist 40% (against) | correlated | variance | same game script as #918 (opportunity); own read: variance; we priced this side at 27%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; 4 PA from the 6 slot; opposing starter Blake Snell went 18 outs / 4 ER |
+| 843 | Jackson Chourio batter_hrr under 1.5 | 3 | 0.2557 (Low) | pass | model 29% (against), hist 33% (against) | correlated | variance | same game script as #918 (opportunity); own read: variance; we priced this side at 26%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; 5 PA from the 1 slot; opposing starter Blake Snell went 18 outs / 4 ER; 3 of 3 H+R+RBI came off the starter, 0 off the bullpen |
+| 845 | Jake Bauers batter_total_bases under 0.5 | 4 | 0.2366 (Low) | pass | model 20% (against), hist 37% (against) | correlated | variance | same game script as #918 (opportunity); own read: variance; we priced this side at 24%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; 4 PA from the 5 slot; opposing starter Blake Snell went 18 outs / 4 ER |
 | 848 | Boone Jenner skater_sog over 1.5 | 0 | 0.5169 (Low) | pass | model 60%, hist 57% | variance | variance | root leg of a 20-leg script loss: #848, #859, #879, #889, #914, #924, #935, #946, #966, #1000, #1009, #1010, #1012, #1019, #1022, #1032, #1035, #1047, #1068, #1072; logged as a PASS: no money on it; reviewed for calibration |
 | 852 | Jonathan Stafford Jr. rec_yds over 39.5 | 37.0 | 0.6235 (Medium) | user_entry | model 71%, hist 67% | variance | variance | root leg of a 2-leg script loss: #852, #866 |
 | 853 | Brice Turang batter_hrr under 1.5 | 2 | 0.5498 (Low) | pass | model 58%, market 59%, hist 39% (against) | correlated | correlated | same game script as #918 (opportunity); own read: variance; logged as a PASS: no money on it; reviewed for calibration; 4 PA from the 2 slot; opposing starter Blake Snell went 18 outs / 4 ER; 0 of 2 H+R+RBI came off the starter, 2 off the bullpen (the bullpen part alone beat the line: not just the starter's fault); closest possible loss (missed by the minimum) |
@@ -249,6 +268,25 @@ Lessons:
 - #746: pass (not a pick): auto cause 'correlated' accepted; same script as #742
 - #747: pass (not a pick): auto cause 'correlated' accepted; same script as #742
 - #748: Dodgers moneyline at 61%: Milwaukee won 6-2. Market-priced coin-flip-plus, no model edge; not an 8+ leg.
+- #754: TOI 13.0 matched his role; missed by one shot. Our 60% leaned on history (77%) and the model (67%) over the book (54%): if model-over-market NHL SOG unders keep missing, cap them at Medium without a book above 60%.
+- #774: coin flip (we priced it ~50%); one point in a normal role. Nothing to change.
+- #776: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #780: coin flip (we priced it ~50%); one point in a normal role. Nothing to change.
+- #796: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #806: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #807: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #808: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #811: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #813: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #816: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #817: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #818: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #823: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #830: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #835: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #840: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #843: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
+- #845: the side we priced under 50% (logged pass, the other side was the read); losing confirms the price. Nothing to change.
 - #848: pass (not a pick): auto cause 'variance' accepted
 - #852: 37 yards vs 39.5: 4 catches for 29 at half, 37 final. Missed by 2.5.
 - #853: pass (not a pick): auto cause 'correlated' accepted; same script as #853
@@ -399,6 +437,25 @@ Detail from the feeds:
 - #745 Paulo Dybala: minutes=45.0, passes=28.0, team_passes=546, possession=54, saves=0.0, score=ROMA 3 - RMA 4
 - #746 Paulo Dybala: minutes=45.0, passes=28.0, team_passes=546, possession=54, saves=0.0, score=ROMA 3 - RMA 4
 - #747 Paulo Dybala: minutes=45.0, passes=28.0, team_passes=546, possession=54, saves=0.0, score=ROMA 3 - RMA 4
+- #754 Jamie Benn: toi=13.0, sog=2, shifts=18, pp_goals=0, score=3-2
+- #774 Alex Ovechkin: toi=13.2, sog=0, shifts=15, pp_goals=0, score=4-5
+- #776 Mookie Betts: inn 1 vs Gasser: Flyout; inn 3 vs Gasser: Single; inn 5 vs Gasser: Lineout; inn 7 vs Hall: Groundout; inn 9 vs Megill: Strikeout
+- #780 Nazem Kadri: toi=24.3, sog=2, shifts=24, pp_goals=0, score=3-2
+- #796 Lane Hutson: toi=24.2, sog=3, shifts=26, pp_goals=0, score=4-5
+- #806 Miro Heiskanen: toi=30.1, sog=2, shifts=30, pp_goals=0, score=3-2
+- #807 Joey Ortiz: inn 2 vs Snell: Strikeout; inn 5 vs Snell: Groundout; inn 7 vs Phillips: Double Play; inn 9 vs Wrobleski: Single, 1 RBI
+- #808 Alex Tuch: toi=18.8, sog=3, shifts=21, pp_goals=0, score=4-5
+- #811 Mikko Rantanen: toi=23.1, sog=1, shifts=27, pp_goals=0, score=3-2
+- #813 Cooper Pratt: inn 2 vs Snell: Single; inn 5 vs Snell: Flyout; inn 7 vs Phillips: Single; inn 9 vs Wrobleski: Single; scored inn 9 (bullpen)
+- #816 Garrett Mitchell: inn 2 vs Snell: Walk; inn 4 vs Snell: Strikeout; inn 7 vs Snell: Home Run, 1 RBI; scored inn 7 (starter); inn 9 vs Wrobleski: Strikeout
+- #817 Jake Bauers: inn 2 vs Snell: Flyout; inn 4 vs Snell: Strikeout; inn 7 vs Snell: Home Run, 2 RBI; scored inn 7 (starter); inn 8 vs Wrobleski: Strikeout
+- #818 Cole Hutson: toi=17.1, sog=3, shifts=20, pp_goals=0, score=4-5
+- #823 Will Smith: inn 2 vs Gasser: Flyout; inn 4 vs Gasser: Strikeout; inn 6 vs Uribe: Double, 2 RBI; inn 8 vs Megill: Flyout
+- #830 Cooper Pratt: inn 2 vs Snell: Single; inn 5 vs Snell: Flyout; inn 7 vs Phillips: Single; inn 9 vs Wrobleski: Single; scored inn 9 (bullpen)
+- #835 Joey Ortiz: inn 2 vs Snell: Strikeout; inn 5 vs Snell: Groundout; inn 7 vs Phillips: Double Play; inn 9 vs Wrobleski: Single, 1 RBI
+- #840 Garrett Mitchell: inn 2 vs Snell: Walk; inn 4 vs Snell: Strikeout; inn 7 vs Snell: Home Run, 1 RBI; scored inn 7 (starter); inn 9 vs Wrobleski: Strikeout
+- #843 Jackson Chourio: inn 1 vs Snell: Home Run, 1 RBI; scored inn 1 (starter); inn 3 vs Snell: Pop Out; inn 6 vs Snell: Groundout; inn 8 vs Sasaki: Groundout; inn 9 vs Wrobleski: Groundout
+- #845 Jake Bauers: inn 2 vs Snell: Flyout; inn 4 vs Snell: Strikeout; inn 7 vs Snell: Home Run, 2 RBI; scored inn 7 (starter); inn 8 vs Wrobleski: Strikeout
 - #848 Boone Jenner: toi=15.1, sog=0, shifts=21, pp_goals=0, score=4-5
 - #853 Brice Turang: inn 1 vs Snell: Strikeout; inn 3 vs Snell: Strikeout; inn 6 vs Snell: Groundout; inn 8 vs Sasaki: Single; scored inn 8 (bullpen)
 - #859 Jakob Chychrun: toi=23.1, sog=2, shifts=22, pp_goals=0, score=4-5

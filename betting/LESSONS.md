@@ -85,3 +85,6 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 
 ### Auto-learned 2026-10-15
 - Calibration (no market picks): an 80% now reads 73% (a -0.17, b 0.83, n 425).
+
+### Auto-learned 2026-10-15
+- Segment mlb:batter_hrr:under: Medium cap lifted, results back in line.

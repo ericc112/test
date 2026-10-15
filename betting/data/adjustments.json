@@ -8,13 +8,13 @@
     "w_hist": 0.15
   },
   "blend": {
-    "intercept": 0.0052,
-    "w_model": 0.4543,
-    "w_market": 0.4338,
-    "w_hist": 0.1119
+    "intercept": -0.0088,
+    "w_model": 0.4426,
+    "w_market": 0.4351,
+    "w_hist": 0.0955
   },
   "blend_fit": {
-    "n_fit": 52
+    "n_fit": 53
   },
   "model_bias_logit": {
     "mlb:batter_hits:over": -0.145,
@@ -28,20 +28,20 @@
   },
   "model_bias_source": "2026-10-12 NLCS/ALCS hitter scan: model ran +3.6 pts (hits), +2.0 (singles), -1.2 (walks) vs DraftKings no-vig across all hitters. Re-measure each scan. | 2026-10-12 H+R+RBI 1.5 scan: model ran -7.6 pts vs DK no-vig across 18 hitters (run-environment scaling too strong).",
   "outcome_bias_logit": {
-    "nhl:skater_sog:under": -0.072,
-    "cs2:cs_kills_m12:under": -0.197,
-    "cs2:cs_headshots_m12:over": -0.073,
-    "cs2:cs_headshots_m12:under": 0.025,
-    "lol:kills_m123:under": -0.095,
-    "lol:kills_m123:over": -0.091,
-    "cs2:cs_kills_m12:over": 0.053,
-    "soccer:passes_att:over": -0.127,
-    "soccer:gk_saves:over": 0.225,
-    "soccer:shots:over": -0.299,
+    "nhl:skater_sog:under": -0.069,
+    "cs2:cs_kills_m12:under": -0.19,
+    "cs2:cs_headshots_m12:over": -0.066,
+    "cs2:cs_headshots_m12:under": 0.031,
+    "lol:kills_m123:under": -0.091,
+    "lol:kills_m123:over": -0.088,
+    "cs2:cs_kills_m12:over": 0.058,
+    "soccer:passes_att:over": -0.123,
+    "soccer:gk_saves:over": 0.228,
+    "soccer:shots:over": -0.295,
     "soccer:sot:over": 0.086,
-    "soccer:passes_att:under": -0.232,
-    "nhl:skater_sog:over": -0.016,
-    "tennis:ml_pre:wta": -0.123
+    "soccer:passes_att:under": -0.226,
+    "nhl:skater_sog:over": -0.012,
+    "tennis:ml_pre:wta": -0.115
   },
   "avoid_segments": [],
   "gates": {
@@ -58,7 +58,6 @@
   },
   "hist_weight_scale_note": "Postseason only (LESSONS L17): playoff hooks are quicker than regular-season history implies. Reset to {} on opening day.",
   "cap_medium_segments": {
-    "mlb:batter_hrr:under": "3 losses tagged 'model bias'; hit 47% vs 56% predicted over 17",
     "soccer:passes_att:over": "4 losses tagged 'model bias'; hit 50% vs 52% predicted over 24",
     "soccer:shots:over": "9 losses tagged 'opportunity'; hit 29% vs 49% predicted over 48",
     "soccer:passes_att:under": "11 losses tagged 'model bias'; hit 54% vs 67% predicted over 39"
@@ -75,16 +74,16 @@
   "rating_floor": 0.8,
   "calibration": {
     "market": {
-      "a": -0.0074,
-      "b": 0.9961,
-      "n": 352,
-      "eff_n": 106.9
+      "a": 0.0015,
+      "b": 1.0059,
+      "n": 353,
+      "eff_n": 104.2
     },
     "no_market": {
-      "a": -0.1658,
-      "b": 0.8346,
-      "n": 425,
-      "eff_n": 119.9
+      "a": -0.1408,
+      "b": 0.831,
+      "n": 464,
+      "eff_n": 127.6
     }
   },
   "rating_floor_no_market": 0.8
