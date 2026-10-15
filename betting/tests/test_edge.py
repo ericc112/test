@@ -755,6 +755,10 @@ class NoMarketGrading(unittest.TestCase):
         self.assertEqual(canon_stat("NFL", "Rec Yards"), "Receiving Yards")
         self.assertEqual(canon_stat("NFL", "Recs"), "Receptions")
         self.assertEqual(canon_stat("NFL", "FG Made"), "FG Made")
+        self.assertEqual(canon_stat("NFL", "Receiving"), "Receiving Yards")             # a tout's '70+ Receiving'
+        self.assertEqual(canon_stat("NFL", "Yards Rushing"), "Rush Yards")
+        self.assertEqual(canon_stat("NFL", "Rushing Attempts"), "Rush Attempts")
+        self.assertEqual(canon_stat("NFL", "Passing TDs"), "Pass TDs")
 
     def test_unpriced_floor_learns_apart(self):
         rows = [{"id": str(i), "status": "lost" if i < 8 else "won", "p_final": "0.85", "confidence": "High", "p_market": "",

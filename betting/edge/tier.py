@@ -355,11 +355,13 @@ def role_scale(league: str, market_key_: str, pid: str | None) -> float | None:
 
 
 def role_gate(conf: str, notes: list, scale: float | None) -> str:
-    """No book price + a workload 25%+ off his average: his history is a different role, so Low (L5)."""
-    if scale is not None and abs(scale - 1) > LW.ROLE_SHIFT and conf in ("High", "Medium"):
-        notes.append(f"role change: last 5 games' workload is {scale:.0%} of his average (L5): Low until a book prices the new role")
-        return "Low"
-    return conf
+    """No book price + a workload 25%+ off his average: his history is a different role, so Low (L5). A prop already
+    Low gets the note too: its number comes from the old role, so it is unknown, not a fade."""
+    if scale is None or abs(scale - 1) <= LW.ROLE_SHIFT:
+        return conf
+    notes.append(f"role change: last 5 games' workload is {scale:.0%} of his average (L5): Low until a book prices the new role"
+                 + ("" if conf in ("High", "Medium") else "; the number is from his old role, not a fade"))
+    return "Low" if conf in ("High", "Medium") else conf
 
 
 def recent_avg(sport: str, stat: str, team: str, player: str, line: float, k: int = 10) -> float | None:
@@ -693,9 +695,12 @@ STAT_ALIASES = {
             ("passing touchdowns", "Pass TDs"), ("pass attempts", "Pass Attempts"), ("pass completions", "Pass Completions"),
             ("completions", "Pass Completions"), ("interceptions", "INT"), ("int", "INT"), ("rush yards", "Rush Yards"),
             ("rushing yards", "Rush Yards"), ("rush yds", "Rush Yards"), ("rush attempts", "Rush Attempts"), ("carries", "Rush Attempts"),
-            ("rec yards", "Receiving Yards"), ("receiving yards", "Receiving Yards"), ("rec yds", "Receiving Yards"),
+            ("rec yards", "Receiving Yards"), ("receiving yards", "Receiving Yards"), ("yards receiving", "Receiving Yards"),
+            ("rec yds", "Receiving Yards"), ("yards rushing", "Rush Yards"), ("yards passing", "Pass Yards"),
             ("longest reception", "Longest Reception"), ("receptions", "Receptions"), ("recs", "Receptions"),
-            ("fg made", "FG Made"), ("field goals made", "FG Made"), ("kicking points", "Kicking Points")],
+            ("fg made", "FG Made"), ("field goals made", "FG Made"), ("kicking points", "Kicking Points"),
+            ("rushing attempts", "Rush Attempts"), ("passing attempts", "Pass Attempts"), ("passing completions", "Pass Completions"),
+            ("receiving", "Receiving Yards"), ("rushing", "Rush Yards"), ("passing", "Pass Yards")],     # '70+ Receiving' = yards
 }
 
 
