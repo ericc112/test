@@ -70,6 +70,9 @@ def board_props(lg: str, now: dt.datetime) -> list[dict]:
     from . import tier
     boards = (lg, "NBAP") if lg == "NBA" else (lg,)
     out = []
+    if lg == "SOCCER":                                      # the mixed board and every single-league board (EPL, ...)
+        out = pp.soccer_board()
+        boards = ()
     for b in boards:
         try:
             out += [{**p, "league": lg} for p in pp.board(b, ("standard", "goblin"))]

@@ -34,7 +34,27 @@ PP = "https://partner-api.prizepicks.com"
 SITE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 CORE = "https://sports.core.api.espn.com/v2/sports/soccer/leagues"
 SOCCER = {"UCL": "uefa.champions", "UEL": "uefa.europa", "UECL": "uefa.europa.conf", "EPL": "eng.1", "LALIGA": "esp.1",
-          "SERIEA": "ita.1", "BUNDES": "ger.1", "LIGUE1": "fra.1", "MLS": "usa.1", "UCLW": "uefa.wchampions"}
+          "SERIEA": "ita.1", "BUNDES": "ger.1", "LIGUE1": "fra.1", "MLS": "usa.1", "UCLW": "uefa.wchampions",
+          "LA LIGA": "esp.1", "SERIE A": "ita.1", "BUNDESLIGA": "ger.1", "LIGUE 1": "fra.1", "LIGA MX": "mex.1"}
+# PrizePicks lists soccer on its mixed SOCCER board AND on single-league boards (EPL props are only on "EPL"):
+# the Soccer tab reads them all
+SOCCER_BOARDS = ("SOCCER", "EPL", "UCL", "LA LIGA", "SERIE A", "BUNDESLIGA", "LIGUE 1", "MLS", "LIGA MX")
+
+
+def soccer_board(odds_types=("standard", "goblin")) -> list[dict]:
+    """Every soccer prop PrizePicks lists, from the mixed board and the single-league boards, once each."""
+    out, seen = [], set()
+    for b in SOCCER_BOARDS:
+        try:
+            props = board(b, odds_types)
+        except Exception:
+            continue
+        for p in props:
+            k = (p["player"], p["stat"], p["line"], p["odds_type"], p.get("start"))
+            if k not in seen:
+                seen.add(k)
+                out.append(p)
+    return out
 DK_TYPES = {"Shots": ("Shots Milestones", "shots"), "Shots On Target": ("Shots on Target Milestones", "sot"),
             "Goalie Saves": ("Goalkeeper Saves Milestones", "gk_saves")}
 ROSTER_STAT = {"shots": "totalShots", "sot": "shotsOnTarget", "gk_saves": "saves"}

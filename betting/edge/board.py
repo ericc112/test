@@ -419,7 +419,7 @@ def export_pp_extra(out: str, leagues=PP_EXTRA, log: bool = True) -> list[tuple[
     t_now = dt.datetime.now(dt.timezone.utc)
     for lg in leagues:
         try:
-            props = PPM.board(lg, ("standard", "goblin"))
+            props = PPM.soccer_board() if lg == "SOCCER" else PPM.board(lg, ("standard", "goblin"))
         except Exception:
             continue
         props = [p for p in props if p.get("start") and dt.datetime.fromisoformat(p["start"]) > t_now]

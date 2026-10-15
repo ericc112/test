@@ -983,6 +983,17 @@ PLAYERS</div>
         self.assertEqual(pp._match_event([ev], "Estudiantes", "Flamengo")["id"], "9")
         self.assertIsNone(pp._match_event([ev], "Boca", "Talleres"))
 
+    def test_soccer_tab_reads_every_soccer_board(self):
+        """10/15: Leno's passes were only on PrizePicks' EPL board, which the Soccer tab never read."""
+        from unittest import mock
+        leno = {"player": "Bernd Leno", "stat": "Passes Attempted", "line": 39.5, "odds_type": "standard", "start": "2026-10-17T10:00:00-04:00"}
+        other = {"player": "Muslera", "stat": "Goalie Saves", "line": 1.5, "odds_type": "goblin", "start": "2026-10-15T20:30:00-04:00"}
+        boards = {"SOCCER": [other], "EPL": [leno, other]}
+        with mock.patch.object(pp, "board", side_effect=lambda lg, t=None: boards.get(lg, [])):
+            got = pp.soccer_board()
+        self.assertEqual(sorted(p["player"] for p in got), ["Bernd Leno", "Muslera"])           # once each
+        self.assertEqual(pp.SOCCER["LA LIGA"], "esp.1")
+
     def test_mixed_soccer_board_reaches_the_soccer_pricer(self):
         from unittest import mock
         with mock.patch.object(pp, "price_soccer", return_value=["priced"]) as ps:

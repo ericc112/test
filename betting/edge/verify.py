@@ -215,7 +215,8 @@ def check_offered(rep: Report):
         from . import pp
         lg = {"cs2": "CS2", "lol": "LoL", "val": "VAL", "mlb": "MLB", "nhl": "NHL", "nfl": "NFL", "soccer": "SOCCER"}.get(r.get("sport"))
         try:
-            board = pp.board(lg, ("standard", "goblin", "demon")) if lg else []
+            board = (pp.soccer_board(("standard", "goblin", "demon")) if lg == "SOCCER" else
+                     pp.board(lg, ("standard", "goblin", "demon")) if lg else [])
         except Exception as e:
             rep.add("WARN", "offered", f"couldn't load the PrizePicks board ({type(e).__name__}): confirm the line on screen")
             return
