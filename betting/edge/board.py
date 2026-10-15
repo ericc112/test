@@ -139,7 +139,7 @@ def _ladder_for(r: dict, stat: str) -> dict:
 def pick_doc(r: dict, rows: list[dict], verify_it: bool) -> dict:
     notes = r.get("notes", "")
     m = re.search(r"DK (\d+)\+ ([+-]\d+)", notes)
-    st = re.search(r"start (\d{4}-\d\d-\d\dT[\d:.]+[+-]\d\d:\d\d)", notes)
+    st = re.search(r"start (\d{4}-\d\d-\d\dT[\d:.]+(?:Z|[+-]\d\d:\d\d))", notes)      # PrizePicks "-04:00" or ESPN "Z"
     team, _, opp = (r.get("event") or "").partition(" vs ")
     hist, n = _f(r.get("p_hist")), int(_f(r.get("hist_n")) or 0)
     doc = {
@@ -314,12 +314,12 @@ PP_EXTRA = ("CS2", "LOL", "VAL", "SOCCER")
 STATE_DIR = Path(__file__).resolve().parent.parent / ".cache" / "board_state"
 
 
-def save_state(lg: str, compact: list[dict]) -> None:
+def save_state(lg: str, compact: list[dict], tried: list | None = None) -> None:
     """Every PrizePicks line priced for a league (the board document keeps only the best ~700), so `edge refresh` can tell
     a new prop from one that was priced and trimmed. Kept in .cache: a fresh container starts from the board itself."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    (STATE_DIR / f"pp-{lg}.json").write_text(json.dumps({"updated": dt.datetime.now(dt.timezone.utc).isoformat(), "rows": compact},
-                                                        separators=(",", ":")))
+    (STATE_DIR / f"pp-{lg}.json").write_text(json.dumps({"updated": dt.datetime.now(dt.timezone.utc).isoformat(), "rows": compact,
+                                                         "tried": tried or []}, separators=(",", ":")))
 
 
 def load_state(lg: str) -> list[dict] | None:
@@ -328,6 +328,15 @@ def load_state(lg: str) -> list[dict] | None:
         return json.loads(p.read_text())["rows"]
     except (OSError, ValueError, KeyError):
         return None
+
+
+def load_tried(lg: str) -> set:
+    """Props a refresh already tried and couldn't price (no data, not found): (player, stat, type, line) keys."""
+    p = STATE_DIR / f"pp-{lg}.json"
+    try:
+        return {tuple(k) for k in json.loads(p.read_text()).get("tried", [])}
+    except (OSError, ValueError):
+        return set()
 
 
 def _write_board(base: Path, source: str, lg: str, rows: list[dict], now: str) -> tuple[list[dict], tuple[str, str, str]]:

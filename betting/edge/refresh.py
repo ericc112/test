@@ -60,6 +60,10 @@ def diff(rows: list[dict], props: list[dict]) -> dict:
     return {"keep": keep, "moved": moved, "new": new, "gone": gone}
 
 
+def pkey(p: dict) -> tuple:
+    return (_fold(p["player"]), str(p["stat"]).lower(), _ty(p.get("odds_type")), float(p["line"]))
+
+
 def board_props(lg: str, now: dt.datetime) -> list[dict]:
     """Today's standard and goblin props for a league, games not started; tier leagues only where we have a market."""
     from . import pp
@@ -95,7 +99,7 @@ def price(lg: str, props: list[dict]) -> list[dict]:
         except Exception as e:
             r = {"error": f"{type(e).__name__}"}
         if "error" not in r:
-            rows.append({**r, "stat": p["stat"], "start": r.get("start") or p.get("start"), "team": p.get("team") or r.get("team"),
+            rows.append({**r, "stat": p["stat"], "start": p.get("start") or r.get("start"), "team": p.get("team") or r.get("team"),
                          "opp": p.get("opp") or r.get("opp")})
     return rows
 
@@ -132,17 +136,21 @@ def run(live: str, out: str, leagues=TIER + EXTRA, log: bool = True) -> dict:
         props = board_props(lg, now)
         if not props and not doc.get("rows"):
             continue
+        tried = B.load_tried(lg)
         d = diff(rows, props)
+        d["new"] = [p for p in d["new"] if pkey(p) not in tried]        # couldn't be priced last time: the full scan retries
         if len(d["new"]) > MAX_NEW:
             summary["full_scan"].append(lg)
             summary["leagues"][lg] = {k: len(v) for k, v in d.items()}
             continue
         fresh = price(lg, d["moved"] + d["new"])
+        got = {(_fold(r["player"]), str(r["stat"]).lower(), _ty(r.get("odds_type")), float(r["line"])) for r in fresh}
+        tried |= {pkey(p) for p in d["moved"] + d["new"] if pkey(p) not in got}
         if log and fresh:
             log_rows(lg, fresh)
         compact = [B._row(r, "pp") for r in fresh]
         merged = sorted(d["keep"] + compact, key=lambda r: (-(r.get("r") or 0), -(r.get("p") or 0)))
-        B.save_state(lg, merged)
+        B.save_state(lg, merged, sorted(tried))
         merged = merged[:700]
         changed = bool(fresh or d["gone"] or len(live_rows) != len(doc.get("rows", [])))
         summary["leagues"][lg] = {"kept": len(d["keep"]), "moved": len(d["moved"]), "new": len(d["new"]),
