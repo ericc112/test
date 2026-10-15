@@ -80,3 +80,6 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 ### Auto-learned 2026-10-15
 - Segment cs2:cs_kills_m12:under: results run below our probabilities; now auto-adjusting -0.25 logit.
 - Calibration (no market picks): an 80% now reads 73% (a -0.18, b 0.87, n 398).
+
+### Auto-learned 2026-10-15
+- Calibration (no market picks): an 80% now reads 73% (a -0.17, b 0.83, n 425).

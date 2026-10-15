@@ -2,7 +2,16 @@
 
 Every graded loss is examined here, including passes and Low-confidence legs. `python -m edge review` writes the diagnosis; `python -m edge tag ID "tag" --lesson "..."` confirms the cause. Tags: `variance`, `opportunity`, `correlated`, `role/lineup`, `model bias`, `market info`, `stale line`, `data error`, `format misread`.
 
-## 2026-10-14: 149 losses from 21 independent causes
+## 2026-10-15: 1 losses from 1 independent causes
+
+| # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
+|---|---|---|---|---|---|---|---|---|
+| 1187 | Iva Jovic ml_pre over 0.5 | 0.0 | 0.7212 (High) | lean | model 72%, market 72% | variance | variance | closest possible loss (missed by the minimum) |
+
+Lessons:
+- #1187: 72% favourite with model = market (-345); straight-sets upset by Chwalinska. Price was right; no rule change.
+
+## 2026-10-14: 151 losses from 22 independent causes
 
 | # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
 |---|---|---|---|---|---|---|---|---|
@@ -24,6 +33,8 @@ Every graded loss is examined here, including passes and Low-confidence legs. `p
 | 586 | phzy cs_kills_m12 under 31.5 | 37 | 0.5785 (Low) | pass | model 59%, hist 65% | variance | variance | root leg of a 2-leg script loss: #586, #704; logged as a PASS: no money on it; reviewed for calibration |
 | 590 | m0NESY cs_headshots_m12 under 14.5 | 17 | 0.5753 (Low) | pass | model 60%, hist 56% | correlated | correlated | same game script as #522 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
 | 594 | molodoy cs_kills_m12 under 33.0 | 39 | 0.5732 (Low) | pass | model 59%, hist 63% | correlated | correlated | same game script as #524 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 597 | detr0ittJ cs_headshots_m12 under 11.5 | 12 | 0.5709 (Low) | pass | model 59%, hist 56% | variance | variance | root leg of a 2-leg script loss: #597, #600; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 600 | happ cs_headshots_m12 under 14.5 | 20 | 0.568 (Low) | pass | model 58%, hist 67% | correlated | variance | same game script as #597 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
 | 605 | Roflko cs_headshots_m12 under 15.5 | 21 | 0.5648 (Low) | pass | model 59%, hist 54% | correlated | correlated | same game script as #550 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
 | 606 | fear cs_kills_m12 under 25.0 | 27 | 0.5646 (Low) | pass | model 59%, hist 52% | variance | variance | root leg of a 11-leg script loss: #606, #607, #616, #643, #646, #649, #682, #686, #691, #703, #710; logged as a PASS: no money on it; reviewed for calibration |
 | 607 | dwushka cs_kills_m12 under 29.5 | 40 | 0.5641 (Low) | pass | model 58%, hist 55% | correlated | correlated | same game script as #606 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
@@ -175,6 +186,8 @@ Lessons:
 - #586: pass (not a pick): auto cause 'variance' accepted
 - #590: pass (not a pick): auto cause 'correlated' accepted; same script as #522
 - #594: pass (not a pick): auto cause 'correlated' accepted; same script as #524
+- #597: Low pass, missed by one headshot (12 vs 11.5); no change.
+- #600: Low pass; 16 headshots on one 18-round Inferno map (80% HS rate) is a one-map outlier, not a model miss; no change.
 - #605: pass (not a pick): auto cause 'correlated' accepted; same script as #550
 - #606: pass (not a pick): auto cause 'variance' accepted
 - #607: pass (not a pick): auto cause 'correlated' accepted; same script as #606
@@ -326,6 +339,8 @@ Detail from the feeds:
 - #586 phzy: de_nuke: 29 rds, W, 22 K / 6 HS; de_mirage: 22 rds, W, 15 K / 4 HS
 - #590 m0NESY: de_ancient: 29 rds, W, 26 K / 9 HS; de_dust2: 19 rds, W, 14 K / 8 HS
 - #594 molodoy: de_ancient: 23 rds, W, 18 K / 8 HS; de_mirage: 22 rds, W, 21 K / 9 HS
+- #597 detr0ittJ: de_inferno: 18 rds, L, 12 K / 5 HS; de_ancient: 16 rds, W, 14 K / 7 HS
+- #600 happ: de_inferno: 18 rds, W, 20 K / 16 HS; de_ancient: 16 rds, L, 8 K / 4 HS
 - #605 Roflko: de_mirage: 22 rds, L, 22 K / 12 HS; de_cache: 18 rds, L, 17 K / 9 HS
 - #606 fear: de_ancient: 23 rds, L, 12 K / 6 HS; de_dust2: 23 rds, L, 15 K / 4 HS
 - #607 dwushka: de_ancient: 23 rds, W, 20 K / 17 HS; de_dust2: 23 rds, W, 20 K / 11 HS

@@ -354,6 +354,20 @@ def role_scale(league: str, market_key_: str, pid: str | None) -> float | None:
     return (sum(vols[:5]) / 5) / avg if avg else None
 
 
+LINE_GAP_P = 0.70          # no book price: a PrizePicks standard line is the market's median, so 70%+ against it is news, not edge
+
+
+def line_gate(conf: str, notes: list, odds_type: str | None, p: float, line: float, proj: float | None, side: str) -> str:
+    """No book price on a PrizePicks standard line: the line itself is the market's 50/50 number (books' main lines top
+    out near 57% for us). Reading 70%+ against it means the line knows what his log doesn't (a starter hurt, a new role,
+    L5), so the prop is held at Low. Goblins and demons are set off the median on purpose and are not checked."""
+    if odds_type != "standard" or p < LINE_GAP_P or conf not in ("High", "Medium"):
+        return conf
+    notes.append(f"line gap: PrizePicks set its standard line at {line:g}" + (f" against his log's {proj:g}" if proj is not None else "")
+                 + f"; {p:.0%} on the {side} says the line knows something his log doesn't (role, injury, L5): Low")
+    return "Low"
+
+
 def role_gate(conf: str, notes: list, scale: float | None) -> str:
     """No book price + a workload 25%+ off his average: his history is a different role, so Low (L5). A prop already
     Low gets the note too: its number comes from the old role, so it is unknown, not a fade."""
@@ -500,6 +514,8 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
                 continue
             e = final_probability(pmod, pk, ph, seg, n)
             e.confidence = role_gate(e.confidence, e.notes, shift)
+            if not priced:
+                e.confidence = line_gate(e.confidence, e.notes, p.get("odds_type"), e.p, p["line"], proj, side)
             rt = rating(e.p, e.confidence, pk)
             note = OA.describe(cons, side) if cons else mnote
             if cons and cons["disagree"] and rt >= 8:               # books more than 10 points apart: not an 80% read
@@ -781,12 +797,13 @@ def price_prop(league: str, player: str, stat_text: str, line: float, side: str 
     if pk is None and ph is None and pmod is None:
         return {"error": f"{g['name']}: no {stat} games in his log", **g}
     e = final_probability(pmod, pk, ph, f"{league.lower()}:{mk}:{side}", n)
-    if pk is None:
-        e.confidence = role_gate(e.confidence, e.notes, role_scale(league, mk, pid))
     avg10 = recent_avg(league, stat, g["team"], g["name"], line)
     proj, src = projection(cx, rungs, None, avg10)
     if lm and not cx:
         proj, src = round(lm[2], 1), "game-log model"
+    if pk is None:
+        e.confidence = role_gate(e.confidence, e.notes, role_scale(league, mk, pid))
+        e.confidence = line_gate(e.confidence, e.notes, odds_type, e.p, line, proj, side)
     return {**g, "league": league, "player": g["name"], "stat": stat, "market_key": mk, "line": line, "side": side,
             "odds_type": odds_type, "p_market": pk, "p_hist": ph, "hist_n": n, "p_model": pmod, "p_final": e.p,
             "confidence": e.confidence, "rating": rating(e.p, e.confidence, pk), "player_id": pid, "proj": proj, "proj_src": src,

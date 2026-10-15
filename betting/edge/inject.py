@@ -48,7 +48,9 @@ def process(doc: dict) -> dict:
                    else f"{lg or 'unknown sport'}: no automatic pricer for this sport yet")
             results.append({"i": i, "status": "not priced", "why": why})
             continue
-        r = tier.price_prop(lg, p.get("player", ""), p.get("stat", ""), line, p.get("side"), (p.get("odds_type") or "standard").lower())
+        pp_app = "prizepicks" in (doc.get("app") or "").lower()
+        r = tier.price_prop(lg, p.get("player", ""), p.get("stat", ""), line, p.get("side"),
+                            (p.get("odds_type") or ("standard" if pp_app else "")).lower())
         if "error" in r:
             results.append({"i": i, "status": "not priced", "why": r["error"]})
             continue

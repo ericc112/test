@@ -66,9 +66,9 @@ def check_recompute(rep: Report, adj: dict):
     e = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), adj)
     logged, conf = _f(r.get("p_final")), r.get("confidence")
     order = {"Avoid": 0, "Low": 1, "Medium": 2, "High": 3}
-    if "role change:" in r.get("notes", "") and order.get(conf, 9) < order.get(e.confidence, 0) and logged is not None \
+    if ("role change:" in r.get("notes", "") or "line gap:" in r.get("notes", "")) and order.get(conf, 9) < order.get(e.confidence, 0) and logged is not None \
             and abs(e.p - logged) <= TOL_P:                         # L5 judgment downgrade: a lower label is allowed, never a higher one
-        rep.add("PASS", "recompute", f"{e.p:.3f} {e.confidence} from the components, held at {conf} by the role check (L5)")
+        rep.add("PASS", "recompute", f"{e.p:.3f} {e.confidence} from the components, held at {conf} by the role/line check (L5)")
         rep.recomputed = e
         return
     if (logged is None or abs(e.p - logged) > TOL_P or e.confidence != conf) and getattr(rep, "locked", False):

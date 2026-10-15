@@ -770,6 +770,16 @@ class NoMarketGrading(unittest.TestCase):
         self.assertEqual((priced, unpriced), (0.80, 0.83))                              # only the unpriced floor moves
 
 
+class LineGap(unittest.TestCase):
+    def test_standard_line_is_the_median(self):
+        from edge.tier import line_gate
+        notes = []
+        self.assertEqual(line_gate("Medium", notes, "standard", 0.937, 58.5, 33.8, "under"), "Low")   # Lloyd: the line knows
+        self.assertIn("line gap", notes[0])
+        self.assertEqual(line_gate("High", [], "goblin", 0.88, 0.5, 2.7, "over"), "High")        # goblins sit off the median
+        self.assertEqual(line_gate("Medium", [], "standard", 0.66, 47.5, 62.7, "over"), "Medium")  # a normal disagreement
+
+
 class Inject(unittest.TestCase):
     def test_stat_names_from_screens(self):
         from edge.tier import canon_stat
