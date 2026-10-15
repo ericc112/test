@@ -210,9 +210,99 @@ def probable_starter(team: str, date: str) -> dict | None:
                     st = _get(f"https://statsapi.mlb.com/api/v1/people/{pp['id']}/stats?stats=season&group=pitching&season={date[:4]}")
                     x = (st["stats"][0]["splits"] or [{}])[-1].get("stat", {}) if st.get("stats") else {}
                     bf = x.get("battersFaced") or 0
-                    return {"name": pp["fullName"], "hand": pitch_hand(str(pp["id"])), "era": x.get("era"),
+                    return {"name": pp["fullName"], "id": str(pp["id"]), "hand": pitch_hand(str(pp["id"])), "era": x.get("era"),
                             "k": (x.get("strikeOuts") or 0) / bf if bf else None}
     return None
+
+
+# ------------------------------------------------------------------ MLB matchups: batter vs pitcher, pitcher vs lineup
+def _line(st: dict) -> dict:
+    pa = st.get("plateAppearances") or 0
+    return {"pa": pa, "ab": st.get("atBats") or 0, "h": st.get("hits") or 0, "hr": st.get("homeRuns") or 0,
+            "k": st.get("strikeOuts") or 0, "bb": st.get("baseOnBalls") or 0, "rbi": st.get("rbi") or 0,
+            "avg": st.get("avg") or "", "ops": st.get("ops") or ""}
+
+
+@functools.lru_cache(maxsize=None)
+def bvp(batter_id: str, pitcher_id: str) -> dict | None:
+    """Career regular-season line of a batter against one pitcher (statsapi vsPlayerTotal); None if they never met."""
+    r = _get(f"https://statsapi.mlb.com/api/v1/people/{batter_id}/stats?stats=vsPlayer&opposingPlayerId={pitcher_id}&group=hitting")
+    for st in r.get("stats", []):
+        if st["type"]["displayName"] == "vsPlayerTotal" and st["splits"]:
+            out = _line(st["splits"][0]["stat"])
+            return out if out["pa"] else None
+    return None
+
+
+@functools.lru_cache(maxsize=None)
+def active_roster(team: str) -> tuple:
+    """((name, id, position), ...) on the team's active roster."""
+    tid = _mlb_team_ids().get(team)
+    if not tid:
+        return ()
+    ro = _get(f"https://statsapi.mlb.com/api/v1/teams/{tid}/roster?rosterType=active")
+    return tuple((p["person"]["fullName"], str(p["person"]["id"]), p["position"]["abbreviation"]) for p in ro.get("roster", []))
+
+
+def batter_vs_staff(batter_id: str, opp: str, date: str) -> dict | None:
+    """The hitter's career line against tonight's starter and every arm in the opponent's active bullpen he has faced."""
+    sp = probable_starter_for_opp(opp, date)
+    arms = [(n, i) for n, i, pos in active_roster(opp) if pos in ("P", "TWP")]
+    rows = []
+    for n, i in arms:
+        x = bvp(batter_id, i)
+        if x:
+            rows.append({"name": n, "id": i, "role": "SP" if sp and sp.get("id") == i else "RP", "hand": pitch_hand(i), **x})
+    if sp and not any(r["id"] == sp["id"] for r in rows):
+        x = bvp(batter_id, sp["id"])
+        rows.append({"name": sp["name"], "id": sp["id"], "role": "SP", "hand": sp["hand"], **(x or {"pa": 0})})
+    rows.sort(key=lambda r: (r["role"] != "SP", -r.get("pa", 0)))
+    return {"starter": sp["name"] if sp else None, "rows": rows} if rows else None
+
+
+@functools.lru_cache(maxsize=None)
+def probable_starter_for_opp(opp: str, date: str) -> dict | None:
+    """The starter `opp` sends out on `date` (the pitcher a hitter facing `opp` will see)."""
+    tid = _mlb_team_ids().get(opp)
+    s = _get(f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date}&hydrate=probablePitcher")
+    for d in s.get("dates", []):
+        for g in d["games"]:
+            for side in ("home", "away"):
+                if g["teams"][side]["team"]["id"] == tid and g["teams"][side].get("probablePitcher"):
+                    pp = g["teams"][side]["probablePitcher"]
+                    return {"name": pp["fullName"], "id": str(pp["id"]), "hand": pitch_hand(str(pp["id"]))}
+    return None
+
+
+def pitcher_vs_lineup(pitcher_id: str, opp: str) -> dict | None:
+    """Tonight's opposing hitters (active roster) against this pitcher, career regular season, plus their total."""
+    tid = _mlb_team_ids().get(opp)
+    if not tid:
+        return None
+    r = _get(f"https://statsapi.mlb.com/api/v1/people/{pitcher_id}/stats?stats=vsTeam&opposingTeamId={tid}&group=pitching")
+    hitters = {i: n for n, i, pos in active_roster(opp) if pos != "P"}
+    agg = {}
+    for st in r.get("stats", []):
+        if st["type"]["displayName"] != "vsTeam":
+            continue
+        for s in st["splits"]:
+            b = s.get("batter") or {}
+            bid = str(b.get("id", ""))
+            if bid not in hitters:
+                continue
+            x = _line(s["stat"])
+            a = agg.setdefault(bid, {"name": hitters[bid], "pa": 0, "ab": 0, "h": 0, "hr": 0, "k": 0, "bb": 0, "rbi": 0})
+            for k in ("pa", "ab", "h", "hr", "k", "bb", "rbi"):
+                a[k] += x[k]
+    rows = sorted((a for a in agg.values() if a["pa"]), key=lambda a: -a["pa"])
+    for a in rows:
+        a["avg"] = f"{a['h'] / a['ab']:.3f}".lstrip("0") if a["ab"] else ""
+    if not rows:
+        return None
+    tot = {k: sum(a[k] for a in rows) for k in ("pa", "ab", "h", "hr", "k", "bb", "rbi")}
+    tot["avg"] = f"{tot['h'] / tot['ab']:.3f}".lstrip("0") if tot["ab"] else ""
+    tot["kpct"] = round(tot["k"] / tot["pa"], 3) if tot["pa"] else None
+    return {"rows": rows, "total": tot}
 
 
 def matchup(league: str, stat: str, opp: str | None, pid: str | None, team: str = "", date: str = "") -> dict | None:

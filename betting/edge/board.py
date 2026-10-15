@@ -90,7 +90,16 @@ def build_card(lg: str, stat: str, team: str, opp: str, player: str, aid: str | 
         except Exception:
             pid = None
     slim = lambda g: {"d": g["d"], "o": g["o"], "h": g["h"], "v": g["v"]}
-    return {"pl": player, "pos": position, "tm": team, "op": opp, "st": stat,
+    extra = {}
+    if lg == "MLB" and pid and opp and date:
+        try:
+            if stat in ("Pitcher Strikeouts", "Pitching Outs", "Hits Allowed", "Earned Runs Allowed", "Walks Allowed"):
+                extra["pvl"] = CX.pitcher_vs_lineup(pid, opp)
+            else:
+                extra["bvp"] = CX.batter_vs_staff(pid, opp, date)
+        except Exception:
+            pass
+    return {**extra, "pl": player, "pos": position, "tm": team, "op": opp, "st": stat,
             "g": [slim(g) for g in games], "hh": [slim(g) for g in h2h_g],
             "lad": {str(k): v for k, v in (rungs or {}).items()},
             "a5": _avg(vals[:5]), "a10": _avg(vals[:10]), "aN": _avg(vals), "n": len(vals),
@@ -136,6 +145,17 @@ def pick_doc(r: dict, rows: list[dict], verify_it: bool) -> dict:
     from . import tier
     stat = next((s for lg_ in (tier.STATS, tier.EXTRA) for s, v in lg_.get(doc["sport"], {}).items()
                  if (v[1] if isinstance(v, tuple) else v) == r["market"]), None)
+    if r["sport"] == "tennis":                                  # match winner: "Swiatek to win", no line, no game log
+        who = (r.get("event") or "").split(" (")[0]
+        a_, _, b_ = who.partition(" vs ")
+        doc.update(side="To win", line=None, stat="Match winner", team="", opp=(b_ if a_.strip() == r["player"] else a_).strip(),
+                   hist_hits=None, hist_n=0, odds_type=(r.get("book") or "").replace("PrizePicks ", ""))
+        if verify_it and doc["status"] == "pending":
+            from .verify import verify
+            rep = verify(r, rows)
+            doc["verdict"] = rep.verdict
+            doc["warns"] = [f"{name}: {d}" for s, name, d in rep.checks if s in ("WARN", "FAIL")]
+        return doc
     if doc["proj"] is None and doc["status"] == "pending":       # rows logged before projections: price the matchup now
         from . import context as CX
         cx = CX.price(doc["sport"], stat, doc["opp"], r.get("player_id"), doc["line"], int(r["date"][:4])) if stat else None
