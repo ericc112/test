@@ -328,7 +328,7 @@ def main(argv=None):
         res = IJ.cli(args.file, args.out)
         for x in res["results"]:
             if x["status"] == "logged":
-                print(f"#{x['id']:>5}  {x['player']} {x['side']} {x['line']} {x['stat']}: {x['rating']}/10, "
+                print(f"#{x['id']:>5}  {' '.join(str(v) for v in (x['player'], x['side'], x['line'], x['stat']) if v is not None)}: {x['rating']}/10, "
                       f"{x['p']:.3f} {x['confidence']}  {x.get('verdict', '')}")
                 for w in x.get("warns", []):
                     print(f"         {w}")

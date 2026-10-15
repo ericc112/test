@@ -31,6 +31,18 @@ def process(doc: dict) -> dict:
             line = float(p["line"]) if p.get("line") not in (None, "") else None
         except (TypeError, ValueError):
             line = None
+        if lg in ("TENNIS", "ATP", "WTA"):                        # a match we already priced with `edge tennis pre`
+            from .lowline import _fold
+            old = next((b for b in rows if b.get("sport") == "tennis" and b.get("status") == "pending"
+                        and b.get("market", "").startswith("ml") and _fold(b["player"]) == _fold(p.get("player", ""))), None)
+            if old:
+                if slip and old.get("action") != "user_entry":
+                    old["action"], old["entry_id"] = "user_entry", old.get("entry_id") or f"inject-{doc.get('id', '')}"
+                pm = float(old["p_market"]) if old.get("p_market") else None
+                results.append({"i": i, "status": "logged", "id": old["id"], "player": old["player"], "stat": "Match winner",
+                                "line": None, "side": "To win", "rating": rating(float(old["p_final"]), old["confidence"], pm),
+                                "p": float(old["p_final"]), "confidence": old["confidence"], "p_market": pm, "proj": None})
+                continue
         if lg not in tier.STATS:
             why = ("tennis match winner: priced at check-in with `edge tennis pre` (needs both prices)" if lg in ("TENNIS", "ATP", "WTA")
                    else f"{lg or 'unknown sport'}: no automatic pricer for this sport yet")
