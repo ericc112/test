@@ -783,6 +783,29 @@ class ComboLadder(unittest.TestCase):
         self.assertGreater(combo_over([pts, ast], 20.5), combo_over([pts, ast], 25.5))
 
 
+class Preseason(unittest.TestCase):
+    def test_minutes_model(self):
+        from unittest import mock
+        from edge import tier
+        g = lambda d, mn, pts, reb, ast, team="OKC": {"date": d, "team": team, "s": {"MIN": str(mn), "PTS": str(pts), "REB": str(reb), "AST": str(ast)}}
+        pre = [g("2026-10-14", 23, 15, 0, 6), g("2026-10-08", 18, 17, 3, 5), g("2025-10-18", 18, 12, 4, 5), g("2025-10-15", 19, 23, 2, 6),
+               g("2025-10-10", 20, 16, 1, 5)]
+        reg = [g("2026-04-10", 34, 32, 5, 6)] * 20
+        with mock.patch.object(tier, "nba_log", lambda aid, kind="Regular Season": pre if kind == "Preseason" else reg):
+            fresh = tier.preseason_model("1", "OKC", "pra", 28.5, "2026-10-20")
+            b2b = tier.preseason_model("1", "OKC", "pra", 28.5, "2026-10-15")
+        self.assertLess(fresh[0], 0.30)                                  # ~20 minutes: 28.5 PRA is a long way off
+        self.assertLess(b2b[2], fresh[2])                                # second night of a back-to-back: fewer minutes
+        self.assertIn("back-to-back", b2b[1][0])
+
+    def test_preseason_book_counts_half(self):
+        from edge.tier import preseason_adj
+        from edge.blend import load_adjustments
+        a, b = load_adjustments()["blend"], preseason_adj()["blend"]
+        self.assertAlmostEqual(sum(a[k] for k in ("w_model", "w_market", "w_hist")), sum(b[k] for k in ("w_model", "w_market", "w_hist")), places=6)
+        self.assertLess(b["w_market"] / b["w_model"], a["w_market"] / a["w_model"])
+
+
 class LineGap(unittest.TestCase):
     def test_standard_line_is_the_median(self):
         from edge.tier import line_gate

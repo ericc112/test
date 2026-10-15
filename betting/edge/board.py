@@ -70,13 +70,13 @@ def card_key(lg: str, player: str, stat: str, team: str) -> str:
 
 
 def build_card(lg: str, stat: str, team: str, opp: str, player: str, aid: str | None, position: str = "",
-               home: bool | None = None, date: str = "", rungs: dict | None = None) -> dict:
+               home: bool | None = None, date: str = "", rungs: dict | None = None, competition: str = "regular") -> dict:
     """The prop card: his last 40 games (date, opponent, home/away, value), every game against tonight's opponent the
     logs hold, the DraftKings ladder (to price other lines), averages, venue split and matchup rank."""
     from . import tier
     from . import context as CX
     from . import lowline as LW
-    every = tier.card_games(lg, stat, team, player, aid, limit=None)
+    every = tier.card_games(lg, stat, team, player, aid, limit=None, competition=competition)
     games = every[:40]
     vals = [g["v"] for g in games[:30]]
     norm = lambda a: tier.NHL_API.get(tier.espn_team(lg, a or ""), tier.espn_team(lg, a or ""))
@@ -165,7 +165,8 @@ def pick_doc(r: dict, rows: list[dict], verify_it: bool) -> dict:
         try:
             doc["card"] = build_card(doc["sport"], stat, doc["team"], doc["opp"], r["player"],
                                      r.get("player_id") if doc["sport"] in ("NBA", "NFL") else None, date=r["date"],
-                                     rungs=_ladder_for(r, stat))
+                                     rungs=_ladder_for(r, stat),
+                                     competition="preseason" if "preseason: history from" in r.get("notes", "") else "regular")
         except Exception:
             pass
     if verify_it and doc["status"] == "pending":
@@ -271,7 +272,8 @@ def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None =
                     home = (r.get("home") == r.get("team")) if r.get("home") else None
                     cards[k] = (lg, r["stat"], r.get("team", ""), r.get("opp", ""), r["player"],
                                 (r.get("player_id") or r.get("aid")) if lg in ("NBA", "NFL") else None,
-                                r.get("position", ""), home, tier.slate_day(r.get("start")) if r.get("start") else "", r.get("rungs") or {})
+                                r.get("position", ""), home, tier.slate_day(r.get("start")) if r.get("start") else "", r.get("rungs") or {},
+                                r.get("competition", "regular"))
 
     def make(item):
         k, args = item

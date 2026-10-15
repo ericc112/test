@@ -260,9 +260,72 @@ def nba_log(aid: str, kind: str = "Regular Season") -> list[dict]:
                     team = m.get("team") or {}
                     if team.get("isAllStar"):
                         continue
-                    out.append({"date": m.get("gameDate", "")[:10], "team": team.get("abbreviation"), "s": dict(zip(g["labels"], ev["stats"])),
+                    out.append({"date": m.get("gameDate", "")[:10], "start": m.get("gameDate", ""), "team": team.get("abbreviation"),
+                                "s": dict(zip(g["labels"], ev["stats"])),
                                 "opp": (m.get("opponent") or {}).get("abbreviation", ""), "home": m.get("atVs") == "vs"})
     return sorted(out, key=lambda r: r["date"], reverse=True)
+
+
+PRESEASON_MARKET_WEIGHT = 0.5    # preseason props are set off regular-season rates with low limits: the book counts half
+PRESEASON_B2B = 0.9              # second night of a preseason back-to-back: stars play less (or sit: a void)
+
+
+def _minutes(g: dict) -> float:
+    try:
+        return float(str(g["s"].get("MIN") or 0).split(":")[0])
+    except ValueError:
+        return 0.0
+
+
+def preseason_model(aid: str, team: str, market_key_: str, line: float, game_day: str) -> tuple[float, list[str], float] | None:
+    """An NBA preseason prop is a minutes question. Tonight's minutes: his recent preseason minutes (recency weighted),
+    10% fewer on the second night of a back-to-back. Production per minute: his preseason rate, steadied with his
+    regular-season rate (100 minutes of prior). Spread: gamma-Poisson with the minutes' own uncertainty.
+    Returns (P(over), reasons, projected mean) like the matchup models, or None under 3 preseason games."""
+    from .context import nb_over
+    cur = espn_team("NBA", team)
+    pre = nba_log(aid, "Preseason")
+    same = [g for g in pre if g["team"] == cur]
+    pre = same if len(same) >= 3 else pre
+    games = [g for g in pre if _minutes(g) > 0 and nba_value(g["s"], market_key_) is not None][:10]
+    if len(games) < 3:
+        return None
+    mins = [_minutes(g) for g in games]
+    w = [0.5 ** (i / 3) for i in range(len(mins))]
+    proj_min = sum(a * b for a, b in zip(w, mins)) / sum(w)
+    # ESPN game logs carry the local game date (midnight UTC), not a start time: compare it as written
+    b2b = games[0].get("date") == (dt.date.fromisoformat(game_day) - dt.timedelta(days=1)).isoformat()
+    if b2b:
+        proj_min *= PRESEASON_B2B
+    pre_num, pre_min = sum(nba_value(g["s"], market_key_) for g in games), sum(mins)
+    reg = [g for g in nba_log(aid) if g["team"] == cur and _minutes(g) > 0][:30]
+    reg_vals = [(nba_value(g["s"], market_key_), _minutes(g)) for g in reg]
+    reg_vals = [(v, m) for v, m in reg_vals if v is not None]
+    reg_rate = sum(v for v, _ in reg_vals) / sum(m for _, m in reg_vals) if reg_vals else pre_num / pre_min
+    rate = (pre_num + 100 * reg_rate) / (pre_min + 100)
+    mean = rate * proj_min
+    mean_m = sum(mins) / len(mins)
+    min_sd = max(3.0, math.sqrt(sum((m - mean_m) ** 2 for m in mins) / len(mins)))
+    cv = math.sqrt(0.12 ** 2 + (min_sd / proj_min) ** 2)
+    p = min(0.98, max(0.02, nb_over(mean, line, cv) if mean > 0 else 0.0))
+    why = [f"preseason minutes model: {proj_min:.0f} min tonight (his last {len(mins)} preseason games: {', '.join(f'{m:.0f}' for m in mins[:6])})"
+           + (" x0.9, second night of a back-to-back; if he sits, PrizePicks voids it" if b2b else ""),
+           f"{rate:.2f} per minute (preseason {pre_num / pre_min:.2f}, regular season {reg_rate:.2f}) = {mean:.1f} projected"]
+    return p, why, mean
+
+
+def preseason_adj() -> dict:
+    """Today's blend with the book's weight halved (preseason prices are soft), the total weight kept."""
+    from .blend import load_adjustments
+    import copy
+    adj = copy.deepcopy(load_adjustments())
+    b = adj["blend"]
+    tot = b["w_model"] + b["w_market"] + b["w_hist"]
+    b["w_market"] *= PRESEASON_MARKET_WEIGHT
+    k = tot / (b["w_model"] + b["w_market"] + b["w_hist"])
+    for key in ("w_model", "w_market", "w_hist"):
+        b[key] *= k
+    return adj
 
 
 def nba_value(s: dict, market_key: str) -> float | None:
@@ -310,7 +373,8 @@ def recount_values(sport: str, market_key: str, team: str, pid: str, competition
     return None
 
 
-def card_games(sport: str, stat: str, team: str, player: str, aid: str | None = None, limit: int | None = 30) -> list[dict]:
+def card_games(sport: str, stat: str, team: str, player: str, aid: str | None = None, limit: int | None = 30,
+               competition: str = "regular") -> list[dict]:
     """His games for one stat, newest first: {d: date, o: opponent, h: home?, v: value}. The same windows `history`
     counts (NBA: current team only; MLB batters: 3+ plate appearances; NHL saves: starts only); `limit=None` = every
     game the logs hold (this season and last), for head-to-head."""
@@ -344,8 +408,9 @@ def card_games(sport: str, stat: str, team: str, player: str, aid: str | None = 
                     out.append({"d": g["date"], "o": g.get("opp", ""), "h": g.get("home"), "v": float(v)})
     elif sport == "NBA" and aid and mk in NBA_COLS:
         cur = espn_team("NBA", team)
-        for g in nba_log(aid):
-            v = nba_value(g["s"], mk) if g["team"] == cur else None
+        pre = competition == "preseason"
+        for g in nba_log(aid, "Preseason" if pre else "Regular Season"):
+            v = nba_value(g["s"], mk) if (g["team"] == cur or pre) else None
             if v is not None:
                 out.append({"d": g["date"], "o": g.get("opp", ""), "h": g.get("home"), "v": v})
     elif sport == "NFL" and aid and mk in NFL_COLS:
@@ -471,7 +536,9 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
     props = []
     for lg in leagues:
         try:
-            props += [p for p in pp.board(lg, ("standard", "goblin", "demon")) if market_key(lg, p["stat"])]
+            for board_lg in ((lg, "NBAP") if lg == "NBA" else (lg,)):   # NBAP: PrizePicks' separate NBA preseason board
+                props += [{**p, "league": lg, "pp_league": board_lg} for p in pp.board(board_lg, ("standard", "goblin", "demon"))
+                          if market_key(lg, p["stat"])]
         except Exception as e:
             log(f"{lg}: board unavailable ({type(e).__name__})")
     log(f"{len(props)} PrizePicks props we can read from game logs ..." + ("" if oa_on else " (sportsbook prices: DraftKings via ESPN only; set $ODDS_API_KEY for every book)"))
@@ -500,7 +567,7 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
         log(f"odds API: {len(oa_odds)} games priced across books; requests remaining {OA.quota['remaining']}")
     LAST_OA.clear()
     LAST_OA.update(oa_odds)
-    events, lad, rost = {}, {}, {}
+    events, lad, rost, comps, by_day = {}, {}, {}, {}, {}
     for lg in leagues:
         for d in (day + dt.timedelta(days=i) for i in range(max(days, SLATE_DAYS.get(lg, 0)))):
             for e in scoreboard(lg, d):
@@ -510,6 +577,8 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
                 teams = {t["team"]["abbreviation"]: t["team"] for t in c["competitors"]}
                 for ab in teams:
                     events.setdefault((lg, ab), e["id"])           # tonight's game wins over tomorrow's
+                    by_day[(lg, ab, slate_day(e.get("date")))] = e["id"]
+                    comps[(lg, e["id"])] = {1: "preseason", 3: "postseason"}.get((e.get("season") or {}).get("type"), "regular")
     games = sorted(set((k[0], v) for k, v in events.items()))
     with cf.ThreadPoolExecutor(6) as ex:
         for key, l in zip(games, ex.map(lambda kv: ladders(*kv), games)):
@@ -517,9 +586,12 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
 
     def one(p):
         lg = p["league"]
-        eid = events.get((lg, p["team"])) or events.get((lg, espn_team(lg, p["team"])))
+        # a prop belongs to the game on its own date: PrizePicks lists next week's opener beside tonight's preseason game
+        d = slate_day(p.get("start")) if p.get("start") else None
+        eid = (by_day.get((lg, p["team"], d)) or by_day.get((lg, espn_team(lg, p["team"]), d))) if d else \
+            (events.get((lg, p["team"])) or events.get((lg, espn_team(lg, p["team"]))))
         if not eid:
-            return {**p, "error": "game not found / started"}
+            return {**p, "error": "game not in this scan's window or started"}
         key = (lg, p["team"])
         if key not in rost:
             try:
@@ -544,20 +616,33 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
             main = OA.main_line(oa_odds.get((lg, ev["id"]), {}), om, p["player"]) if ev and om else None
         if mk_over is None and lad_p:                               # fallback: DraftKings ladder through ESPN
             mk_over, mnote = market_over(lad_p, p["line"])
+        parts = [lad.get((lg, eid), {}).get((STATS[lg][x][0], aid or "")) for x in COMBO_PARTS.get(lg, {}).get(mk, ())]
+        if mk_over is None and parts and all(parts):                # no combo ladder: the parts' ladders combined
+            mk_over = combo_over(parts, p["line"])
+            mnote = f"DraftKings {' + '.join(COMBO_PARTS[lg][mk]).lower()} ladders combined: {mk_over:.3f} over"
+        comp = comps.get((lg, eid), "regular") if lg == "NBA" else "regular"
         if mk_over is None:                                         # no book prices it: graded from his games, no market gate
             mnote = f"{mnote or ('no DraftKings ladder' if p['stat'] in STATS.get(lg, {}) else 'no sportsbook line')}: no book price"
-        h_over, n, pid = history(lg, p["stat"], p["team"], p["player"], p["line"], aid)
+        h_over, n, pid = history(lg, p["stat"], p["team"], p["player"], p["line"], aid, comp)
         # context (matchup, ice time, strikeout rates) is the model component on regular lines; goblins keep market + history.
         # With no book price the model is always used, and the game-log model stands in where there is no matchup model.
-        cx = CX.price(lg, p["stat"], p.get("opp"), pid, p["line"], day.year)
+        # An NBA preseason game is a minutes question: the preseason minutes model on every line type, the book at half weight.
+        if comp == "preseason":
+            cx = preseason_model(aid, p["team"], mk, p["line"], slate_day(p.get("start"))) if aid else None
+            mnote += f"; preseason: history from his preseason games only (L26), {n} games"
+        else:
+            cx = CX.price(lg, p["stat"], p.get("opp"), pid, p["line"], day.year)
         priced = mk_over is not None
         lm = None if priced or cx else CX.log_model(_LAST_VALS.get((lg, p["stat"], p["team"], p["player"], p["line"])) or [], p["line"])
-        model = cx if cx and (p.get("odds_type") == "standard" or not priced) else lm
+        model = cx if cx and (p.get("odds_type") == "standard" or not priced or comp == "preseason") else lm
         avg10 = recent_avg(lg, p["stat"], p["team"], p["player"], p["line"])
         proj, proj_src = projection(cx, lad_p, main, avg10)
         if lm and not cx:
             proj, proj_src = round(lm[2], 1), "game-log model"
+        if comp == "preseason" and cx:
+            proj_src = "preseason minutes model"
         shift = None if priced else role_scale(lg, mk, pid)
+        adj_c = preseason_adj() if comp == "preseason" else None
         best = None
         for side in (["over"] if p["over_only"] else ["over", "under"]):
             pk = None if not priced else mk_over if side == "over" else 1 - mk_over
@@ -566,7 +651,9 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
             seg = f"{lg.lower()}:{mk}:{side}"
             if pmod is None and pk is None and ph is None:
                 continue
-            e = final_probability(pmod, pk, ph, seg, n)
+            e = final_probability(pmod, pk, ph, seg, n, adj_c)
+            if adj_c and pk is not None:
+                e.notes.append("preseason book price weighted half: preseason props are set off regular-season rates")
             e.confidence = role_gate(e.confidence, e.notes, shift)
             if not priced:
                 e.confidence = line_gate(e.confidence, e.notes, p.get("odds_type"), e.p, p["line"], proj, side)
@@ -576,6 +663,7 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
                 rt, note = 7, note + " (held at 7)"
             r = {**p, "side": side, "market_key": mk, "p_market": pk, "p_hist": ph, "hist_n": n, "p_final": e.p, "p_model": pmod,
                  "confidence": e.confidence, "rating": rt, "player_id": pid, "event_id": eid, "context": model[1] if model else [],
+                 "competition": comp,
                  "proj": proj, "proj_src": proj_src, "avg10": avg10, "rungs": lad_p or {},
                  "notes": f"{note}; " + "; ".join(e.notes) + (f"; context: {' / '.join(model[1])}" if model else "")}
             if best is None or r["p_final"] > best["p_final"]:
@@ -864,16 +952,22 @@ def price_prop(league: str, player: str, stat_text: str, line: float, side: str 
     if comp != "regular":
         mnote += f"; {comp}: history from his {comp} games only (L26), {n} games"
     cx = CX.price(league, stat, g["opp"], pid, line, (day or dt.date.today()).year) if comp == "regular" else None
+    if comp == "preseason":                                         # a minutes question, on any line type
+        cx = preseason_model(g["aid"], g["team"], mk, line, slate_day(g.get("start")))
     lm = None if mk_over is not None or cx else CX.log_model(_LAST_VALS.get((league, stat, g["team"], g["name"], line)) or [], line)
-    model = cx if cx and (odds_type == "standard" or mk_over is None) else lm
+    model = cx if cx and (odds_type == "standard" or mk_over is None or comp == "preseason") else lm
     pk = None if mk_over is None else (mk_over if side == "over" else 1 - mk_over)
     ph = None if h_over is None else (h_over if side == "over" else 1 - h_over)
     pmod = None if not model else (model[0] if side == "over" else 1 - model[0])
     if pk is None and ph is None and pmod is None:
         return {"error": f"{g['name']}: no {stat} games in his log", **g}
-    e = final_probability(pmod, pk, ph, f"{league.lower()}:{mk}:{side}", n)
+    e = final_probability(pmod, pk, ph, f"{league.lower()}:{mk}:{side}", n, preseason_adj() if comp == "preseason" else None)
+    if comp == "preseason" and pk is not None:
+        e.notes.append("preseason book price weighted half: preseason props are set off regular-season rates")
     avg10 = recent_avg(league, stat, g["team"], g["name"], line)
     proj, src = projection(cx, rungs, None, avg10)
+    if comp == "preseason" and cx:
+        src = "preseason minutes model"
     if lm and not cx:
         proj, src = round(lm[2], 1), "game-log model"
     if pk is None:
@@ -882,5 +976,5 @@ def price_prop(league: str, player: str, stat_text: str, line: float, side: str 
     return {**g, "league": league, "player": g["name"], "stat": stat, "market_key": mk, "line": line, "side": side,
             "odds_type": odds_type, "p_market": pk, "p_hist": ph, "hist_n": n, "p_model": pmod, "p_final": e.p,
             "confidence": e.confidence, "rating": rating(e.p, e.confidence, pk), "player_id": pid, "proj": proj, "proj_src": src,
-            "context": model[1] if model else [],
+            "context": model[1] if model else [], "competition": comp,
             "notes": "; ".join([mnote] + e.notes + ([f"context: {' / '.join(model[1])}"] if model else []))}

@@ -63,6 +63,9 @@ def check_recompute(rep: Report, adj: dict):
     if pm is None and pk is None and ph is None:
         rep.add("FAIL", "recompute", "no model, market or history stored: nothing to check the number against")
         return
+    if "preseason: history from" in r.get("notes", ""):             # preseason rows were blended with the book at half weight
+        from .tier import preseason_adj
+        adj = preseason_adj()
     e = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), adj)
     logged, conf = _f(r.get("p_final")), r.get("confidence")
     order = {"Avoid": 0, "Low": 1, "Medium": 2, "High": 3}
