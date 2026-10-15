@@ -339,10 +339,23 @@ def load_tried(lg: str) -> set:
         return set()
 
 
-def _write_board(base: Path, source: str, lg: str, rows: list[dict], now: str) -> tuple[list[dict], tuple[str, str, str]]:
+def _tried(errors: list[dict]) -> list:
+    """(player, stat, type, line) keys of props a scan couldn't price, so the hourly refresh doesn't retry them."""
+    from .refresh import pkey
+    out = []
+    for p in errors:
+        try:
+            out.append(list(pkey(p)))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
+def _write_board(base: Path, source: str, lg: str, rows: list[dict], now: str,
+                 errors: list[dict] | None = None) -> tuple[list[dict], tuple[str, str, str]]:
     """One boards/<source>-<LG> document under 256 KB, best-rated rows first. Returns the rows kept."""
     if source == "pp":
-        save_state(lg, [_row(r, source) for r in rows])
+        save_state(lg, [_row(r, source) for r in rows], _tried(errors or []))
     sel = sorted(rows, key=lambda r: (-r["rating"], -r["p_final"]))[:700]
     doc = {"source": source, "league": lg, "updated": now, "rows": [_row(r, source) for r in sel]}
     while len(json.dumps(doc, separators=(",", ":")).encode()) > 250_000:          # one db document holds 256 KB
@@ -410,11 +423,12 @@ def export_pp_extra(out: str, leagues=PP_EXTRA, log: bool = True) -> list[tuple[
         except Exception:
             continue
         props = [p for p in props if p.get("start") and dt.datetime.fromisoformat(p["start"]) > t_now]
-        ok = [r for r in PPM.price_board(props) if "error" not in r]
+        priced = PPM.price_board(props)
+        ok = [r for r in priced if "error" not in r]
         if log and ok:
             PPM.log_rows(ok)
         rows = [extra_row(r, lg) for r in ok]
-        sel, w = _write_board(base, "pp", lg, rows, now)
+        sel, w = _write_board(base, "pp", lg, rows, now, [r for r in priced if "error" in r])
         written.append(w)
         built = {}
         for r in sel:
@@ -432,7 +446,9 @@ def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None =
     written, base = [], Path(out) / "boards"
     base.mkdir(parents=True, exist_ok=True)
     now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    pp = [r for r in tier.scan(leagues, date, days=days) if "error" not in r and r.get("odds_type") != "demon"]
+    scanned = tier.scan(leagues, date, days=days)
+    pp = [r for r in scanned if "error" not in r and r.get("odds_type") != "demon"]
+    errs = [r for r in scanned if "error" in r]
     if log:
         tier.log_rows(pp)                                           # every evaluated prop is logged (skips logged ones)
     book = tier.book_scan(leagues, date, days=days)
@@ -444,7 +460,8 @@ def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None =
     cards = {}
     for source, rows in (("pp", pp), ("book", book)):
         for lg in leagues:
-            sel, w = _write_board(base, source, lg, [r for r in rows if r["league"] == lg], now)
+            sel, w = _write_board(base, source, lg, [r for r in rows if r["league"] == lg], now,
+                                  [r for r in errs if r.get("league") == lg] if source == "pp" else None)
             written.append(w)
             for r in sel:
                 k = card_key(lg, r["player"], r["stat"], r.get("team", ""))
