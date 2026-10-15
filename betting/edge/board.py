@@ -259,6 +259,9 @@ def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None =
         for lg in leagues:
             sel = sorted((r for r in rows if r["league"] == lg), key=lambda r: (-r["rating"], -r["p_final"]))[:700]
             doc = {"source": source, "league": lg, "updated": now, "rows": [_row(r, source) for r in sel]}
+            while len(json.dumps(doc, separators=(",", ":")).encode()) > 250_000:      # one db document holds 256 KB
+                doc["rows"] = doc["rows"][:-25]                                      # drop the lowest-rated rows first
+                sel = sel[:len(doc["rows"])]
             p = base / f"{source}-{lg}.json"
             p.write_text(json.dumps(doc, separators=(",", ":")))
             written.append(("boards", f"{source}-{lg}", str(p)))
