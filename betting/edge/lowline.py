@@ -65,6 +65,48 @@ def nhl_player(team: str, name: str) -> str | None:
     return None
 
 
+# NHL stats the game log doesn't carry: read from each game's box score (cached on disk once the game is final)
+NHL_BOX = {"skater_hits": "hits", "skater_blocks": "blockedShots"}
+_BOX_DIR = None
+
+
+def nhl_box(game_id) -> dict:
+    import json, os
+    from .blend import HERE
+    d = os.path.join(HERE, ".cache", "nhl_box")
+    p = os.path.join(d, f"{game_id}.json")
+    if os.path.exists(p):
+        with open(p) as f:
+            return json.load(f)
+    b = _get(f"https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore")
+    if b.get("gameState") in ("OFF", "FINAL"):
+        os.makedirs(d, exist_ok=True)
+        keep = {"gameState": b.get("gameState"), "playerByGameStats": b.get("playerByGameStats")}
+        with open(p, "w") as f:
+            json.dump(keep, f)
+    return b
+
+
+def nhl_box_values(pid: str, market_key: str, games: list[dict]) -> list[float | None]:
+    """His value for a box-score stat (hits, blocked shots) in each of these game-log rows, same order."""
+    key = NHL_BOX[market_key]
+
+    def one(g):
+        try:
+            b = nhl_box(g["x"]["gameId"])
+        except Exception:
+            return None
+        for side in ("homeTeam", "awayTeam"):
+            for grp in ("forwards", "defense"):
+                for p in (b.get("playerByGameStats") or {}).get(side, {}).get(grp, []):
+                    if str(p.get("playerId")) == str(pid):
+                        return float(p.get(key) or 0)
+        return None
+
+    with cf.ThreadPoolExecutor(6) as ex:
+        return list(ex.map(one, games))
+
+
 def nhl_log(pid: str) -> list[dict]:
     out = []
     for season in NHL_SEASONS:

@@ -983,6 +983,27 @@ PLAYERS</div>
         self.assertEqual(pp._match_event([ev], "Estudiantes", "Flamengo")["id"], "9")
         self.assertIsNone(pp._match_event([ev], "Boca", "Talleres"))
 
+    def test_mixed_soccer_board_reaches_the_soccer_pricer(self):
+        from unittest import mock
+        with mock.patch.object(pp, "price_soccer", return_value=["priced"]) as ps:
+            self.assertEqual(pp.price_board([{"league": "SOCCER"}]), ["priced"])
+        ps.assert_called_once()
+
+
+class NhlBoxStats(unittest.TestCase):
+    def test_hits_come_from_the_box_score(self):
+        """10/15: Podkolzin Less 3.5 hits couldn't be graded: the NHL game log has no hits; the box score does."""
+        from unittest import mock
+        from edge import lowline as LW
+        box = {"gameState": "OFF", "playerByGameStats": {"homeTeam": {"forwards": [{"playerId": 8481617, "hits": 6, "blockedShots": 1}]},
+                                                          "awayTeam": {"forwards": [], "defense": []}}}
+        with mock.patch.object(LW, "nhl_box", return_value=box):
+            self.assertEqual(LW.nhl_box_values("8481617", "skater_hits", [{"x": {"gameId": 1}}]), [6.0])
+            self.assertEqual(LW.nhl_box_values("8481617", "skater_blocks", [{"x": {"gameId": 1}}]), [1.0])
+            self.assertEqual(LW.nhl_box_values("999", "skater_hits", [{"x": {"gameId": 1}}]), [None])
+        from edge.tier import canon_stat, market_key
+        self.assertEqual(market_key("NHL", canon_stat("NHL", "Hits")), "skater_hits")
+
 
 class LineGap(unittest.TestCase):
     def test_standard_line_is_the_median(self):

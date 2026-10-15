@@ -484,7 +484,7 @@ def price_board(props: list[dict]) -> list[dict]:
         batch = [p for p in props if p["league"] == lg]
         if lg == "CS2":
             out += price_cs2(batch)
-        elif lg in SOCCER:
+        elif lg in SOCCER or lg == "SOCCER":                    # SOCCER = PrizePicks' mixed board, every competition
             out += price_soccer(batch)
         elif lg == "LOL":
             out += price_lol(batch)

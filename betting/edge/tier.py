@@ -46,7 +46,7 @@ STATS = {
             "Blocked Shots": ("Blocks Milestones", "blocks")},
 }
 # Stats with no ESPN DraftKings ladder, priced only when The Odds API key is set (edge/oddsapi.py): stat -> market key
-EXTRA = {"NHL": {"Blocked Shots": "skater_blocks", "Goalie Saves": "goalie_saves"},
+EXTRA = {"NHL": {"Blocked Shots": "skater_blocks", "Goalie Saves": "goalie_saves", "Hits": "skater_hits"},
          "MLB": {"Pitching Outs": "pitcher_outs", "Hits Allowed": "pitcher_hits_allowed", "Earned Runs Allowed": "pitcher_earned_runs",
                  "Walks Allowed": "pitcher_walks"},
          "NBA": {"Rebs+Asts": "rebs_asts", "Turnovers": "turnovers", "Blks+Stls": "blks_stls"},
@@ -345,6 +345,9 @@ def recount_values(sport: str, market_key: str, team: str, pid: str, competition
         if market_key == "goalie_saves":                            # starts only: saves = shots against - goals against
             return [float((g["x"].get("shotsAgainst") or 0) - (g["x"].get("goalsAgainst") or 0))
                     for g in LW.nhl_log(pid) if g["x"].get("gamesStarted")][:30]
+        if market_key in LW.NHL_BOX:                                # hits, blocked shots: from each game's box score
+            log = LW.nhl_log(pid)[:30]
+            return [v for v in LW.nhl_box_values(pid, market_key, log) if v is not None]
         key = next((k for k, mk in LW.NHL_STATS.values() if mk == market_key), None)
         return None if key is None else [float(g["x"].get(key) or 0) for g in LW.nhl_log(pid)][:30]
     if sport == "MLB" and market_key in PITCH_COLS:
@@ -385,9 +388,17 @@ def card_games(sport: str, stat: str, team: str, player: str, aid: str | None = 
         except Exception:
             pid = None
         key = next((k for k, m in LW.NHL_STATS.values() if m == mk), None)
-        for g in (LW.nhl_log(pid) if pid else []):
+        log = LW.nhl_log(pid) if pid else []
+        box = LW.nhl_box_values(pid, mk, log[:40 if limit is None else limit]) if mk in LW.NHL_BOX and pid else None
+        for i, g in enumerate(log):
             x = g["x"]
-            if mk == "goalie_saves":
+            if box is not None:
+                if i >= len(box):
+                    break
+                if box[i] is None:
+                    continue
+                v = box[i]
+            elif mk == "goalie_saves":
                 if not x.get("gamesStarted"):
                     continue
                 v = (x.get("shotsAgainst") or 0) - (x.get("goalsAgainst") or 0)
@@ -899,7 +910,8 @@ STAT_ALIASES = {
             ("strikeouts", "Strikeouts"), ("ks", "Strikeouts"), ("hits", "Hits")],
     "NHL": [("shots on goal", "Shots On Goal"), ("sog", "Shots On Goal"), ("goalie saves", "Goalie Saves"), ("saves", "Goalie Saves"),
             ("blocked shots", "Blocked Shots"), ("blocks", "Blocked Shots"), ("power play points", "Power Play Points"),
-            ("ppp", "Power Play Points"), ("points", "Points"), ("assists", "Assists"), ("goals", "Goals"), ("shots", "Shots On Goal")],
+            ("ppp", "Power Play Points"), ("points", "Points"), ("assists", "Assists"), ("goals", "Goals"), ("shots", "Shots On Goal"),
+            ("hits", "Hits")],
     "NBA": [("pts+rebs+asts", "Pts+Rebs+Asts"), ("pra", "Pts+Rebs+Asts"), ("pts+rebs", "Pts+Rebs"), ("pts+asts", "Pts+Asts"),
             ("rebs+asts", "Rebs+Asts"), ("blks+stls", "Blks+Stls"), ("3-pt made", "3-PT Made"), ("3pt", "3-PT Made"),
             ("3pm", "3-PT Made"), ("threes", "3-PT Made"), ("three", "3-PT Made"), ("rebounds", "Rebounds"), ("reb", "Rebounds"),
