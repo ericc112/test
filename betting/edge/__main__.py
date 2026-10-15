@@ -95,6 +95,7 @@ def main(argv=None):
     tr.add_argument("--days", type=int, default=2, help="slate days to scan from --date")
     tr.add_argument("--min-rating", type=int, default=8)
     tr.add_argument("--log", action="store_true", help="log every priced non-demon prop")
+    tr.add_argument("--log-min-rating", type=int, default=1, help="with --log: only log props rated this or higher (NFL boards run to thousands)")
     lw = sub.add_parser("lowline", help="standard PrizePicks lines at 0.5-1.5 where Less is offered, unders priced from game logs")
     lw.add_argument("--league", default="NHL,MLB,NFL")
     lw.add_argument("--max-line", type=float, default=1.5)
@@ -362,7 +363,7 @@ def main(argv=None):
             added = 0
             for r in ok:
                 k = (str(r["event_id"]), r["player"].lower(), r["market_key"], str(float(r["line"])), r["side"])
-                if r["odds_type"] == "demon" or k in seen:
+                if r["odds_type"] == "demon" or k in seen or r["rating"] < args.log_min_rating:
                     continue
                 bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": r["league"].lower(),
                              "event": f"{r['team']} vs {r['opp']}", "event_id": TR.grade_id(r),
