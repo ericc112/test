@@ -63,6 +63,9 @@ Before naming any prop, ask two questions the pricer may not: **is this player's
 - Pick'em break-evens: `python3 -m edge breakeven`. Squad Ride: `python3 -m edge squad ...`.
 - Never hand-edit `adjustments.json` to chase a recent result. Only `edge learn` changes it.
 
+## Eight-Plus Board page
+The user follows 8+ picks on a live page: https://claude.ai/artifact/AhjWxmRgkijq4UkjhFEhsn (data in its `db`: `picks/<bets.csv id>`, `meta/summary`). After any scan that finds 8+ picks, and after grading, refresh it: `python3 -m edge board --out <fresh dir>`, set `next_scan` in `meta/summary.json`, list `picks` with ArtifactData for versions, then one batch `set` per file (with `if_version` on existing docs). Delete a pick's doc when it is withdrawn.
+
 ## Persist the learning
 Cloud containers are temporary. After any `grade`, `review`, `learn`, `add` or `tag`, commit `betting/data/`, `betting/LESSONS.md` and `betting/POSTMORTEMS.md` and push, or the learning is lost.
 

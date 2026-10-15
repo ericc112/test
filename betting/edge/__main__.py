@@ -80,6 +80,10 @@ def main(argv=None):
     pb.add_argument("--player")
     pb.add_argument("--types", default="standard", help="odds types to include: standard,goblin,demon")
     pb.add_argument("--log", action="store_true", help="log every priced prop to bets.csv (skips ones already logged)")
+    bd = sub.add_parser("board", help="export 8+ picks and the scorecard as JSON for the Eight-Plus Board page")
+    bd.add_argument("--out", required=True)
+    bd.add_argument("--days", type=int, default=7)
+    bd.add_argument("--no-verify", action="store_true")
     tr = sub.add_parser("tier", help="PrizePicks props with a DraftKings price behind them (NHL, MLB, NBA), rated; 8+ = the 80% tier")
     tr.add_argument("--league", default="NHL,MLB,NBA")
     tr.add_argument("--date", help="first slate date YYYY-MM-DD (default today)")
@@ -308,6 +312,10 @@ def main(argv=None):
                 added += 1
             L.write_bets(bets)
             print(f"Logged {added} new prop(s) to bets.csv.")
+    elif args.cmd == "board":
+        from . import board as B
+        for coll, doc_id, path in B.export(args.out, args.days, not args.no_verify):
+            print(coll, doc_id, path)
     elif args.cmd == "tier":
         from . import tier as TR
         res = TR.scan(tuple(x.strip().upper() for x in args.league.split(",")),
