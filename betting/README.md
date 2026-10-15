@@ -80,6 +80,7 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 ## Market keys the grader understands
 - **mlb** (`event_id` = gamePk, `player_id` = MLBAM id): `pitcher_strikeouts`, `pitcher_outs`, `pitcher_hits_allowed`, `pitcher_earned_runs`, `pitcher_walks`, `pitcher_pitches`, `first_inning_pitches`, `batter_hits`, `batter_walks`, `batter_strikeouts`, `batter_total_bases`, `batter_home_runs`, `batter_singles`, `batter_hrr`
 - **nhl** (`event_id` = NHL gameId, `player_id` = NHL id): `skater_sog`, `skater_points`, `skater_goals`, `goalie_saves`
+- **nba** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `points`, `rebounds`, `assists`, `pra`, `pts_asts`, `pts_rebs`, `rebs_asts`, `threes`, `steals`, `blocks`, `turnovers`. A DNP is voided.
 - **nfl** and **cfb** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `pass_yds`, `pass_att`, `rush_yds`, `rush_att`, `rec_yds`, `receptions`, `anytime_td`
 - **cs2** (`event_id` = bo3.gg match id, `player_id` = nickname): `cs_kills_m12`, `cs_headshots_m12`
 - **lol** (`event_id` = bo3.gg match id, `player_id` = gol.gg player id): `kills_m123` (graded from gol.gg a few hours after the series; void if fewer than 3 games are played)

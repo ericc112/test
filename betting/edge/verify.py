@@ -243,6 +243,26 @@ def check_mlb_history(rep: Report):
     rep.add("FAIL" if abs(ph - logged) > TOL_HIST else "PASS", "recount", f"this season's game log gives {ph:.2f} over {o + u} games (logged {logged})")
 
 
+def check_tier_history(rep: Report):
+    """NHL and NBA rows priced by `edge tier`: recount the same game-log window the scan used (NBA: same team only)."""
+    from . import tier
+    r = rep.row
+    logged = _f(r.get("p_hist"))
+    if logged is None:
+        rep.add("PASS", "recount", "no history component used")
+        return
+    vals = None
+    if "edge tier" in r.get("notes", "") and r.get("player_id"):
+        vals = tier.recount_values(r["sport"].upper(), r["market"], (r.get("event") or "").split(" vs ")[0].strip(), r["player_id"])
+    if vals is None:
+        rep.add("WARN", "recount", f"no automatic recount for {r['sport']} {r['market']} yet: recount history by hand before publishing")
+        return
+    line = float(r["line"])
+    o, u = sum(v > line for v in vals), sum(v < line for v in vals)
+    ph = (o if r["side"] == "over" else u) / max(o + u, 1)
+    rep.add("FAIL" if abs(ph - logged) > TOL_HIST else "PASS", "recount", f"game log gives {ph:.2f} over {o + u} games (logged {logged})")
+
+
 def check_mlb_game_total(rep: Report):
     """Game totals: recount both teams' finished games this season of the same kind as tonight's (L26: a playoff game
     is recounted in playoff games once there are 6+, else in all games)."""
@@ -409,6 +429,8 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
                 check_mlb_lineup(rep)
             elif sport == "soccer":
                 check_soccer(rep)
+            elif sport in ("nhl", "nba"):
+                check_tier_history(rep)
             else:
                 rep.add("WARN", "recount", f"no automatic recount for {sport} yet: recount history by hand before publishing")
         except Exception as e:

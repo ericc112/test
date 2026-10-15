@@ -141,6 +141,32 @@ def nfl_value(event_id: str, player_id: str, market: str, cache: dict, league: s
     return ("final", v) if v is not None else ("void", None)
 
 
+# ------------------------------------------------------------------ NBA (event_id = ESPN event, player_id = ESPN athlete id)
+NBA_STATS = {"points": ("points",), "rebounds": ("rebounds",), "assists": ("assists",), "pra": ("points", "rebounds", "assists"),
+             "pts_asts": ("points", "assists"), "pts_rebs": ("points", "rebounds"), "rebs_asts": ("rebounds", "assists"),
+             "threes": ("threePointFieldGoalsMade-threePointFieldGoalsAttempted",), "steals": ("steals",), "blocks": ("blocks",),
+             "turnovers": ("turnovers",)}
+
+
+def nba_value(event_id: str, player_id: str, market: str, cache: dict):
+    key = ("nba", event_id)
+    if key not in cache:
+        cache[key] = _get(f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={event_id}")
+    s = cache[key]
+    if s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_FINAL":
+        return "pending", None
+    for team in s.get("boxscore", {}).get("players", []):
+        for blk in team["statistics"]:
+            for a in blk["athletes"]:
+                if str(a["athlete"]["id"]) != str(player_id):
+                    continue
+                if a.get("didNotPlay") or not a.get("stats"):
+                    return "void", None                            # DNP: the apps remove the leg
+                st = dict(zip(blk["keys"], a["stats"]))
+                return "final", sum(float(str(st[k]).split("-")[0]) for k in NBA_STATS[market])
+    return "void", None
+
+
 # ------------------------------------------------------------------ CS2 (event_id = bo3.gg match id, player_id = nickname)
 def cs2_value(event_id: str, player_id: str, market: str, cache: dict):
     from . import cs2
@@ -233,7 +259,7 @@ def tennis_value(event_id: str, player_id: str, market: str, cache: dict):
     return tennis.result(event_id, player_id)
 
 
-GRADERS = {"tennis": tennis_value, "mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value, "lol": lol_value}
+GRADERS = {"tennis": tennis_value, "mlb": mlb_value, "nhl": nhl_value, "nba": nba_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value, "lol": lol_value}
 
 
 def settle(value: float, line: float, side: str) -> str:

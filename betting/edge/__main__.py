@@ -80,8 +80,10 @@ def main(argv=None):
     pb.add_argument("--player")
     pb.add_argument("--types", default="standard", help="odds types to include: standard,goblin,demon")
     pb.add_argument("--log", action="store_true", help="log every priced prop to bets.csv (skips ones already logged)")
-    tr = sub.add_parser("tier", help="PrizePicks props with a DraftKings price behind them (NHL, MLB), rated; 8+ = the 80% tier")
-    tr.add_argument("--league", default="NHL,MLB")
+    tr = sub.add_parser("tier", help="PrizePicks props with a DraftKings price behind them (NHL, MLB, NBA), rated; 8+ = the 80% tier")
+    tr.add_argument("--league", default="NHL,MLB,NBA")
+    tr.add_argument("--date", help="first slate date YYYY-MM-DD (default today)")
+    tr.add_argument("--days", type=int, default=2, help="slate days to scan from --date")
     tr.add_argument("--min-rating", type=int, default=8)
     tr.add_argument("--log", action="store_true", help="log every priced non-demon prop")
     lw = sub.add_parser("lowline", help="standard PrizePicks lines at 0.5-1.5 where Less is offered, unders priced from game logs")
@@ -308,7 +310,8 @@ def main(argv=None):
             print(f"Logged {added} new prop(s) to bets.csv.")
     elif args.cmd == "tier":
         from . import tier as TR
-        res = TR.scan(tuple(x.strip().upper() for x in args.league.split(",")))
+        res = TR.scan(tuple(x.strip().upper() for x in args.league.split(",")),
+                      dt.date.fromisoformat(args.date) if args.date else None, days=args.days)
         ok = sorted([r for r in res if "error" not in r], key=lambda r: -r["p_final"])
         shown = [r for r in ok if r["rating"] >= args.min_rating]
         print(f"\n{len(ok)} priced; {len(shown)} rated {args.min_rating}+ (8+ = High, blended 80%+, DraftKings 75%+ on its own)")
