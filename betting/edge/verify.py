@@ -69,7 +69,8 @@ def check_recompute(rep: Report, adj: dict):
     e = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), adj)
     logged, conf = _f(r.get("p_final")), r.get("confidence")
     order = {"Avoid": 0, "Low": 1, "Medium": 2, "High": 3}
-    if ("role change:" in r.get("notes", "") or "line gap:" in r.get("notes", "")) and order.get(conf, 9) < order.get(e.confidence, 0) and logged is not None \
+    if any(k in r.get("notes", "") for k in ("role change:", "line gap:", "circumstances (hold)", "circumstances (cap)", "circumstances (out)")) \
+            and order.get(conf, 9) < order.get(e.confidence, 0) and logged is not None \
             and abs(e.p - logged) <= TOL_P:                         # L5 judgment downgrade: a lower label is allowed, never a higher one
         rep.add("PASS", "recompute", f"{e.p:.3f} {e.confidence} from the components, held at {conf} by the role/line check (L5)")
         rep.recomputed = e
@@ -81,6 +82,45 @@ def check_recompute(rep: Report, adj: dict):
     else:
         rep.add("PASS", "recompute", f"{e.p:.3f} {e.confidence} from model {pm} / market {pk} / hist {ph} (n {r.get('hist_n')})")
     rep.recomputed = e
+
+
+def check_circumstances(rep: Report):
+    """L31: tonight's injury and rest report, a teammate's absence, the spread, weather, goalies, a back-to-back and the
+    player's latest note, read again at publish time. A not-started pick they would lower fails; started picks only
+    get the note."""
+    from . import situation as SI
+    from .tier import slate_day
+    r = rep.row
+    lg = (r.get("sport") or "").upper()
+    if lg not in SI.SPORT:
+        return
+    eid = (r.get("group") or "").split(":")[-1] or r.get("event_id")
+    team = (r.get("event") or "").split(" vs ")[0].strip()
+    m = re.search(r"start (\S+)", r.get("notes", ""))
+    day = slate_day(m.group(1)) if m else None
+    espn_id = r.get("player_id") if lg in ("NBA", "NFL") else None          # MLB/NHL rows keep their league's own id
+    if espn_id is None:
+        try:
+            from .tier import roster_names, espn_team, name_key
+            espn_id = next((a for n, a in roster_names(lg, espn_team(lg, team)) if name_key(n) == name_key(r.get("player", ""))), None)
+        except Exception:
+            espn_id = None
+    try:
+        sit = SI.check(lg, eid, team, r.get("player", ""), espn_id, r.get("market", ""), r.get("side", ""), day)
+    except Exception as e:
+        rep.add("WARN", "circumstances", f"couldn't read tonight's report ({type(e).__name__}): check injuries and news by hand")
+        return
+    serious = [f"{lv}: {t}" for lv, t in sit.flags if lv != "INFO"]
+    info = "; ".join(t for lv, t in sit.flags if lv == "INFO")
+    new = sit.apply(r.get("confidence") or "")
+    if getattr(rep, "locked", False):
+        rep.add("WARN" if serious else "PASS", "circumstances", ("; ".join(serious) + "; " if serious else "") + (info or "nothing flagged"))
+    elif sit.worst == "OUT" or new != r.get("confidence"):
+        rep.add("FAIL", "circumstances", f"{'; '.join(serious)} -> {new if sit.worst != 'OUT' else 'not playable'}, not {r.get('confidence')}")
+    elif serious:
+        rep.add("WARN", "circumstances", "; ".join(serious))
+    else:
+        rep.add("PASS", "circumstances", info or "nothing flagged in tonight's report")
 
 
 def check_rules(rep: Report):
@@ -441,6 +481,7 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
     check_correlation(rep, rows)
     if fetch:
         sport = row.get("sport")
+        check_circumstances(rep)
         try:
             if sport == "lol":
                 check_lol(rep, adj)

@@ -59,6 +59,25 @@ Before naming any prop, ask two questions the pricer may not: **is this player's
 - Same idea elsewhere: a CS2 AWPer's headshots, an NHL goalie in a rotation, a backup or rookie on a new role (L5), a returning player on a minutes cap. If the model doesn't know the role, say so and don't publish above Low.
 - When the user questions a number, dig in with the raw match-by-match data before defending it.
 
+## Circumstances check (L31, mandatory)
+The numbers don't see who sits, who rests, a new or smaller role, a star teammate out, a blowout, the wind or the probable goalie. `edge/situation.py` reads them for every prop that `edge tier`, `edge inject` and `edge verify` rate:
+- **Sources:** tonight's ESPN game report (injury and rest statuses, spread and total, weather, probable goalies, recent games for back-to-backs) and the player's latest Rotowire note.
+- **OUT** (listed out, on IR/IL, not the probable goalie): withdrawn.
+- **HOLD**, to Low:
+  - listed doubtful
+  - resting, or a note saying he sits, rests or plays limited minutes, when the bet is an over
+  - a note giving him a bigger role when the bet is an under, or a smaller role when it's an over (L5)
+- **CAP**, to Medium at most:
+  - listed questionable or a game-time decision
+  - a team leader newly out when the bet is an under
+  - NBA spread of 12+ on overs
+  - NFL gusts of 20+ mph or 70%+ rain on passing and kicking overs
+  - MLB 60%+ rain on pitcher overs
+  - an NHL goalie on the second night of a back-to-back
+- **INFO** (total, opponent's players out, weather, a back-to-back): shown next to the number.
+- `edge verify` re-reads it at publish time and FAILS a not-started pick it would lower; a NOT VERIFIED pick is withdrawn (delete its page doc).
+- Before naming any 8+, read its circumstances line and the player's note yourself, and say what they show. Things the reader can't parse (a coach's quote, a playoff team resting starters, a trade) are still yours to catch.
+
 ## While working
 - For "only 8+" on PrizePicks, run `python3 -m edge tier --log` (NHL, MLB: DraftKings ladder + game log at every line, calibrated, rated). Then `edge verify` every 8+ and drop any NOT VERIFIED.
   - `edge tier` prices every PrizePicks prop it can read from game logs, whether or not a book prices it. NFL is included, with an 8-day slate window and readers for TDs, FG made and kicking points.

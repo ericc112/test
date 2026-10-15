@@ -668,7 +668,22 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
                  "notes": f"{note}; " + "; ".join(e.notes) + (f"; context: {' / '.join(model[1])}" if model else "")}
             if best is None or r["p_final"] > best["p_final"]:
                 best = r
-        return best or {**p, "error": "no games in his log for this stat"}
+        if not best:
+            return {**p, "error": "no games in his log for this stat"}
+        # what the numbers can't see (L31): tonight's report, the spread, weather, goalies, a back-to-back, his latest note
+        from . import situation as SI
+        sit = SI.check(lg, eid, p["team"], p["player"], aid, mk, best["side"], slate_day(p.get("start")),
+                       read_news=best["rating"] >= 6)
+        if sit.worst == "OUT":
+            return {**p, "error": "not playable tonight: " + "; ".join(t for lv, t in sit.flags if lv == "OUT")}
+        conf = sit.apply(best["confidence"])
+        if conf != best["confidence"]:
+            best["confidence"] = conf
+            best["rating"] = min(best["rating"], rating(best["p_final"], conf, best["p_market"]))
+        best["context"] = list(best["context"]) + [t for lv, t in sit.flags if lv != "INFO"][:3]
+        best["circumstances"] = sit.flags
+        best["notes"] += "".join("; " + n for n in sit.notes())
+        return best
 
     def safe(p):
         try:
@@ -973,8 +988,15 @@ def price_prop(league: str, player: str, stat_text: str, line: float, side: str 
     if pk is None:
         e.confidence = role_gate(e.confidence, e.notes, role_scale(league, mk, pid))
         e.confidence = line_gate(e.confidence, e.notes, odds_type, e.p, line, proj, side)
+    from . import situation as SI                                   # what the numbers can't see (L31)
+    sit = SI.check(league, g["event_id"], g["team"], g["name"], g["aid"], mk, side, slate_day(g.get("start")))
+    if sit.worst == "OUT":
+        return {"error": f"{g['name']}: not playable tonight ({'; '.join(t for lv, t in sit.flags if lv == 'OUT')})", **g}
+    e.confidence = sit.apply(e.confidence)
+    e.notes.extend(sit.notes())
     return {**g, "league": league, "player": g["name"], "stat": stat, "market_key": mk, "line": line, "side": side,
             "odds_type": odds_type, "p_market": pk, "p_hist": ph, "hist_n": n, "p_model": pmod, "p_final": e.p,
             "confidence": e.confidence, "rating": rating(e.p, e.confidence, pk), "player_id": pid, "proj": proj, "proj_src": src,
-            "context": model[1] if model else [], "competition": comp,
+            "context": (model[1] if model else []) + [t for lv, t in sit.flags if lv != "INFO"][:3], "competition": comp,
+            "circumstances": sit.flags,
             "notes": "; ".join([mnote] + e.notes + ([f"context: {' / '.join(model[1])}"] if model else []))}

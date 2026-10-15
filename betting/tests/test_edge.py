@@ -806,6 +806,56 @@ class Preseason(unittest.TestCase):
         self.assertLess(b["w_market"] / b["w_model"], a["w_market"] / a["w_model"])
 
 
+class Circumstances(unittest.TestCase):
+    """L31: what a game log can't see, read from tonight's feed and the player's latest note."""
+    def feed(self, injuries=(), spread=None, total=None, weather=None, goalies=None, last=()):
+        return {"injuries": [{"team": {"abbreviation": t}, "injuries": [{"athlete": {"id": i, "displayName": n}, "status": st,
+                                                                            "details": {"type": k}, "date": "2099-01-01T00:00Z"}
+                                                                           for i, n, st, k in v]} for t, v in injuries],
+                "pickcenter": [{"spread": spread, "overUnder": total, "details": f"X {spread}"}] if spread is not None or total else [],
+                "gameInfo": {"weather": weather} if weather else {}, "goalies": goalies or {},
+                "lastFiveGames": [{"team": {"abbreviation": "OKC"}, "events": [{"gameDate": d} for d in last]}],
+                "leaders": [{"team": {"abbreviation": "OKC"}, "leaders": [{"leaders": [{"athlete": {"displayName": "Shai Gilgeous-Alexander"}}]}]}]}
+
+    def chk(self, feed, note="", **kw):
+        from unittest import mock
+        from edge import situation as SI
+        args = dict(league="NBA", event_id="1", team="OKC", player="Jalen Williams", espn_id="9", market="pra", side="under",
+                    game_day="2026-10-15")
+        args.update(kw)
+        with mock.patch.object(SI, "summary", lambda lg, ev: feed), mock.patch.object(SI, "rotowire", lambda lg, i: note):
+            return SI.check(**args)
+
+    def test_out_and_doubtful(self):
+        f = self.feed(injuries=[("OKC", [("9", "Jalen Williams", "Out", "Wrist")])])
+        self.assertEqual(self.chk(f).worst, "OUT")
+        f = self.feed(injuries=[("OKC", [("9", "Jalen Williams", "Doubtful", "Wrist")])])
+        self.assertEqual(self.chk(f).apply("High"), "Low")
+
+    def test_rest_and_notes_by_side(self):
+        f = self.feed(injuries=[("OKC", [("9", "Jalen Williams", "Day-To-Day", "Rest")])])
+        self.assertEqual(self.chk(f, side="over").worst, "HOLD")             # resting: an over is a bet on minutes he may not get
+        self.assertEqual(self.chk(f, side="under").worst, "INFO")            # sitting voids, limited minutes help
+        note = "It remains to be seen if he'll get one final tune-up Thursday in Houston."
+        self.assertEqual(self.chk(self.feed(), note, side="over").worst, "HOLD")
+        self.assertEqual(self.chk(self.feed(), "He is expected to start Thursday with Holmgren out.", side="under").worst, "HOLD")
+        self.assertEqual(self.chk(self.feed(), "Glasnow will start Game 4.", market="pitcher_strikeouts", side="under",
+                                  league="MLB").worst, "INFO")             # a starter who will start isn't news
+
+    def test_star_teammate_out_caps_unders(self):
+        f = self.feed(injuries=[("OKC", [("1", "Shai Gilgeous-Alexander", "Out", "Rest")])])
+        self.assertEqual(self.chk(f).apply("High"), "Medium")
+
+    def test_blowout_weather_goalie_b2b(self):
+        self.assertEqual(self.chk(self.feed(spread=14.5), side="over").apply("High"), "Medium")
+        wind = self.feed(weather={"gust": 25, "precipitation": 10, "temperature": 40})
+        self.assertEqual(self.chk(wind, league="NFL", market="pass_yds", side="over").apply("High"), "Medium")
+        g = {"home": {"athletes": [{"displayName": "Sergei Bobrovsky"}]}}
+        self.assertEqual(self.chk(self.feed(goalies=g), league="NHL", market="goalie_saves", player="Spencer Knight", side="over").worst, "OUT")
+        b2b = self.feed(goalies={"home": {"athletes": [{"displayName": "Jalen Williams"}]}}, last=["2026-10-14T23:30Z"])
+        self.assertEqual(self.chk(b2b, league="NHL", market="goalie_saves", side="over").apply("High"), "Medium")
+
+
 class LineGap(unittest.TestCase):
     def test_standard_line_is_the_median(self):
         from edge.tier import line_gate
