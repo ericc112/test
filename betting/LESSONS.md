@@ -76,3 +76,7 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 ### Auto-learned 2026-10-14
 - Calibration (market picks): an 80% now reads 81% (a +0.03, b 1.01, n 167).
 - Calibration (no market picks): an 80% now reads 73% (a -0.27, b 0.91, n 206).
+
+### Auto-learned 2026-10-15
+- Segment cs2:cs_kills_m12:under: results run below our probabilities; now auto-adjusting -0.25 logit.
+- Calibration (no market picks): an 80% now reads 73% (a -0.18, b 0.87, n 398).
