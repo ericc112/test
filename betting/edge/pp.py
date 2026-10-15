@@ -15,6 +15,7 @@ import collections
 import concurrent.futures as cf
 import datetime as dt
 import difflib
+import functools
 import json
 import math
 import os
@@ -25,7 +26,7 @@ import urllib.error
 
 import numpy as np
 
-from . import cs2, lol, soccer
+from . import cs2, lol, soccer, val
 from .blend import HERE, final_probability
 from .grade import _get
 
@@ -107,16 +108,52 @@ def _close(a: str, b: str) -> float:
     return 1.0 if ta & tb else difflib.SequenceMatcher(None, " ".join(sorted(ta)), " ".join(sorted(tb))).ratio()
 
 
+# PrizePicks' main SOCCER board mixes every competition: each game is found on ESPN by its teams and date
+SOCCER_SLUGS = ("eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "usa.1", "mex.1", "arg.1", "bra.1", "usa.nwsl", "aus.1", "ned.1",
+                "por.1", "sco.1", "bel.1", "tur.1", "eng.2", "ger.2", "esp.2", "ita.2", "fra.2", "jpn.1", "ksa.1", "col.1", "chi.1",
+                "uefa.champions", "uefa.europa", "uefa.europa.conf", "conmebol.libertadores", "conmebol.sudamericana",
+                "concacaf.champions", "uefa.wchampions", "eng.w.1")
+
+
+@functools.lru_cache(maxsize=None)
+def _scoreboard(slug: str, day: str) -> tuple:
+    try:
+        return tuple(_get(f"{SITE}/{slug}/scoreboard?dates={day}").get("events", []))
+    except Exception:
+        return ()
+
+
+def _match_event(events, home: str, away: str) -> dict | None:
+    for e in events:
+        cs = {c["homeAway"]: c["team"] for c in e["competitions"][0]["competitors"]}
+        score = min(max(_close(home, cs["home"].get(k, "")) for k in ("displayName", "shortDisplayName", "abbreviation")),
+                    max(_close(away, cs["away"].get(k, "")) for k in ("displayName", "shortDisplayName", "abbreviation")))
+        if score >= 0.7:
+            return {"id": e["id"], "home_id": str(cs["home"]["id"]), "away_id": str(cs["away"]["id"]),
+                    "home_name": cs["home"]["displayName"], "away_name": cs["away"]["displayName"]}
+    return None
+
+
+def espn_event_any(start: str, home: str, away: str) -> tuple[str, dict] | tuple[None, None]:
+    """(ESPN league slug, event) for a game on PrizePicks' mixed SOCCER board."""
+    day = dt.datetime.fromisoformat(start).date()
+    for d in (day, day - dt.timedelta(days=1), day + dt.timedelta(days=1)):
+        ds = f"{d:%Y%m%d}"
+        with cf.ThreadPoolExecutor(8) as ex:
+            boards = dict(zip(SOCCER_SLUGS, ex.map(lambda sl: _scoreboard(sl, ds), SOCCER_SLUGS)))
+        for slug in SOCCER_SLUGS:
+            ev = _match_event(boards[slug], home, away)
+            if ev:
+                return slug, ev
+    return None, None
+
+
 def espn_event(slug: str, start: str, home: str, away: str) -> dict | None:
     day = dt.datetime.fromisoformat(start).date()
     for d in (day, day - dt.timedelta(days=1), day + dt.timedelta(days=1)):
-        for e in _get(f"{SITE}/{slug}/scoreboard?dates={d:%Y%m%d}").get("events", []):
-            cs = {c["homeAway"]: c["team"] for c in e["competitions"][0]["competitors"]}
-            score = min(max(_close(home, cs["home"].get(k, "")) for k in ("displayName", "shortDisplayName", "abbreviation")),
-                        max(_close(away, cs["away"].get(k, "")) for k in ("displayName", "shortDisplayName", "abbreviation")))
-            if score >= 0.7:
-                return {"id": e["id"], "home_id": str(cs["home"]["id"]), "away_id": str(cs["away"]["id"]),
-                        "home_name": cs["home"]["displayName"], "away_name": cs["away"]["displayName"]}
+        ev = _match_event(_scoreboard(slug, f"{d:%Y%m%d}"), home, away)
+        if ev:
+            return ev
     return None
 
 
@@ -186,22 +223,28 @@ def _finish(p: dict, market_key: str, sport: str, p_over, p_under, p_push, hist_
     return {**p, **best, "market_key": market_key, "sport": sport, "push": p_push or 0.0, "notes": notes}
 
 
+CS2_STATS = {"MAPS 1-2 Kills": ("kills", 2), "MAPS 1-2 Headshots": ("hs", 2), "MAP 1 Kills": ("kills", 1), "MAP 1 Headshots": ("hs", 1)}
+VAL_STATS = {"MAPS 1-2 Kills": ("kills", 2), "MAPS 1-2 First Bloods": ("fb", 2), "MAP 1 Kills": ("kills", 1)}
+
+
 def price_cs2(props: list[dict]) -> list[dict]:
     by_match = collections.defaultdict(list)
     for p in props:
-        if p["stat"] in ("MAPS 1-2 Kills", "MAPS 1-2 Headshots"):
-            by_match[tuple(sorted((p["team"], p["opp"])))].append({**p, "stat_key": "kills" if "Kills" in p["stat"] else "hs"})
+        if p["stat"] in CS2_STATS and "+" not in str(p["player"]):
+            k, n = CS2_STATS[p["stat"]]
+            by_match[tuple(sorted((p["team"], p["opp"])))].append({**p, "stat_key": k, "maps": n})
     out = []
 
     def run(key):
         legs = by_match[key]
-        res = cs2.price_match(key[0], key[1], [{"player": l["player"], "team": l["team"], "stat": l["stat_key"], "line": l["line"]} for l in legs])
+        res = cs2.price_match(key[0], key[1], [{"player": l["player"], "team": l["team"], "stat": l["stat_key"], "line": l["line"],
+                                                "maps": l["maps"]} for l in legs])
         rows = []
         for l, r in zip(legs, res):
             if "error" in r:
                 rows.append({**l, "error": r["error"]})
                 continue
-            mk = "cs_kills_m12" if l["stat_key"] == "kills" else "cs_headshots_m12"
+            mk = ("cs_kills_m" if l["stat_key"] == "kills" else "cs_headshots_m") + ("12" if l["maps"] == 2 else "1")
             flag = ("NEW TO TEAM: priced from previous team" if r["newcomer"] else
                     f"THIN SAMPLE: {r['maps']} maps with this roster" if r["thin"] else "")
             note = (flag + ", role unconfirmed (L5); " if flag else "") + f"median {r['median']:.0f}, per-map win {r['p_map']:.0%}"
@@ -209,13 +252,45 @@ def price_cs2(props: list[dict]) -> list[dict]:
             if flag and "confidence" in row:
                 row["confidence"] = "Low"  # unproven role: never an entry leg until the lineup and role are confirmed
             rows.append({**row, "event_id": r["event_id"], "player_id": l["player"], "proj": r["median"], "script": f"cs2:{r['event_id']}",
-                         "newcomer": r["newcomer"] or r["thin"]})
+                         "newcomer": r["newcomer"] or r["thin"], "games": r.get("games", [])})
         return rows
 
     with cf.ThreadPoolExecutor(3) as ex:
         for rows in ex.map(run, list(by_match)):
             out += rows
-    out += [{**p, "error": "stat not priced yet"} for p in props if p["stat"] not in ("MAPS 1-2 Kills", "MAPS 1-2 Headshots")]
+    out += [{**p, "error": "stat not priced yet"} for p in props if p["stat"] not in CS2_STATS or "+" in str(p["player"])]
+    return out
+
+
+def price_val(props: list[dict]) -> list[dict]:
+    """Valorant: val.py model (vlr.gg maps, bo3.gg series odds) + series-level history."""
+    by_match = collections.defaultdict(list)
+    for p in props:
+        if p["stat"] in VAL_STATS and "+" not in str(p["player"]):
+            k, n = VAL_STATS[p["stat"]]
+            by_match[tuple(sorted((p["team"], p["opp"])))].append({**p, "stat_key": k, "maps": n})
+    out = []
+    for key, legs in by_match.items():
+        try:
+            res = val.price_match(key[0], key[1], [{"player": l["player"], "team": l["team"], "stat": l["stat_key"], "line": l["line"],
+                                                    "maps": l["maps"]} for l in legs])
+        except Exception as e:
+            out += [{**l, "error": f"{type(e).__name__}: {str(e)[:60]}"} for l in legs]
+            continue
+        for l, r in zip(legs, res):
+            if "error" in r:
+                out.append({**l, "error": r["error"]})
+                continue
+            mk = f"val_{l['stat_key']}_m" + ("12" if l["maps"] == 2 else "1")
+            flag = f"THIN SAMPLE: {r['maps']} maps with this roster" if r["thin"] else ""
+            note = (flag + ", role unconfirmed (L5); " if flag else "") + \
+                f"median {r['median']:.0f}, per-map win {r['p_map']:.0%}" + ("" if r["p_series"] is not None else " (no series odds: 50%)")
+            row = _finish(l, mk, "val", r["p_over"], r["p_under"], r["p_push"], r["hist_over"], r["hist_under"], notes=note)
+            if flag and "confidence" in row:
+                row["confidence"] = "Low"
+            out.append({**row, "event_id": r["event_id"], "player_id": l["player"], "proj": r["median"], "script": f"val:{r['event_id']}",
+                        "newcomer": r["thin"], "games": r.get("games", [])})
+    out += [{**p, "error": "stat not priced yet"} for p in props if p["stat"] not in VAL_STATS or "+" in str(p["player"])]
     return out
 
 
@@ -223,14 +298,14 @@ def price_soccer(props: list[dict]) -> list[dict]:
     out, cache = [], {}
     for p in props:
         slug = SOCCER.get(p["league"])
-        if p["stat"] not in ("Passes Attempted", *DK_TYPES) or not slug:
+        if p["stat"] not in ("Passes Attempted", *DK_TYPES) or "+" in str(p["player"]) or not (slug or p["league"] == "SOCCER"):
             out.append({**p, "error": "stat not priced yet"})
             continue
         try:
             ek = ("ev", p["start"], p["home"], p["away"])
             if ek not in cache:
-                cache[ek] = espn_event(slug, p["start"], p["home"], p["away"])
-            ev = cache[ek]
+                cache[ek] = espn_event_any(p["start"], p["home"], p["away"]) if not slug else (slug, espn_event(slug, p["start"], p["home"], p["away"]))
+            slug, ev = cache[ek]
             if not ev:
                 out.append({**p, "error": "ESPN event not found"})
                 continue
@@ -264,24 +339,34 @@ def price_soccer(props: list[dict]) -> list[dict]:
             mk_over = poisson_sides(lam, p["line"]) if lam else None
             hk = ("hist", tid)
             if hk not in cache:
-                cache[hk] = soccer.team_matches(str(tid), 10)
-            vals = []
+                cache[hk] = soccer.team_history(str(tid), comps=(slug,), n=25)
+            games = []
             for mt in cache[hk]:
-                for r in mt["summary"].get("rosters", []):
+                for r in mt["summary"].get("rosters") or []:
                     if str(r["team"]["id"]) == str(tid):
                         for a in r.get("roster", []):
                             if str(a["athlete"]["id"]) == pid and (a.get("starter") or a.get("subbedIn")):
                                 v = {x["name"]: x.get("value") for x in a.get("stats", [])}.get(ROSTER_STAT[key])
                                 if v is not None:
-                                    vals.append(v)
+                                    games.append({"d": mt["date"], "o": mt["opp"], "h": mt["home"], "v": v})
+            vals = [g["v"] for g in games]
             ho, hu = sum(v > p["line"] for v in vals), sum(v < p["line"] for v in vals)
+            pm_over = proj = None
             if mk_over:
                 note += f"DraftKings implies {lam:.1f}" + (f", push {mk_over[2]:.0%}" if mk_over[2] else "")
-            else:
-                note += "no DraftKings ladder for this player (often means not expected to start)"
+                proj = lam
+            else:                                   # no book price: his own games carry the model (10/15: not a gate)
+                from .context import log_model
+                lm = log_model(vals, p["line"])
+                if lm:
+                    pm_over, why, proj = lm
+                    note += "no DraftKings ladder; " + why[0]
+                else:
+                    note += "no DraftKings ladder and under 5 games: history only"
             o, u, pu = mk_over if mk_over else (None, None, 0.0)
-            row = _finish(p, key, "soccer", None, None, pu, ho, hu, mk_over=None if not mk_over else o / max(o + u, 1e-9), notes=note)
-            out.append({**row, **base, "proj": lam})
+            row = _finish(p, key, "soccer", pm_over, None if pm_over is None else 1 - pm_over, pu, ho, hu,
+                          mk_over=None if not mk_over else o / max(o + u, 1e-9), notes=note)
+            out.append({**row, **base, "proj": proj, "games": games, "slug": slug})
         except Exception as e:  # one bad lookup shouldn't sink the board
             out.append({**p, "error": f"{type(e).__name__}: {e}"[:80]})
     return out
@@ -348,10 +433,48 @@ def price_lol(props: list[dict]) -> list[dict]:
             o, u, n = lol.history(games, p["line"])
             note = f"median {r['median']:.0f}, {team} series {ps:.0%} (per game {pg:.0%}), Bo{bo}; {n} series of history"
             row = _finish(p, "kills_m123", "lol", r["p_over"], r["p_under"], r["p_push"], o, u, notes=note)
-            out.append({**row, "event_id": str(m["id"]), "player_id": pid, "proj": r["median"], "script": f"lol:{m['id']}"})
+            out.append({**row, "event_id": str(m["id"]), "player_id": pid, "proj": r["median"], "script": f"lol:{m['id']}",
+                        "games": lol_series(games)})
         except Exception as e:
             out.append({**p, "error": f"{type(e).__name__}: {str(e)[:60]}"})
     return out
+
+
+def lol_series(games: list[dict], n_games: int = 3) -> list[dict]:
+    """His maps 1-3 kill totals, newest first, for the prop card (the series title stands in for the opponent)."""
+    by = collections.defaultdict(list)
+    for g in games:
+        by[(g["date"], g["title"])].append(g)
+    out = [{"d": d[:10], "o": t, "h": None, "v": sum(x["k"] for x in sorted(v, key=lambda g: g["game"])[:n_games])}
+           for (d, t), v in by.items() if len(v) >= n_games]
+    return sorted(out, key=lambda g: g["d"], reverse=True)
+
+
+def log_rows(ok: list[dict]) -> list[str]:
+    """Log priced board rows to bets.csv (skips ones already logged); returns the new ids."""
+    from . import learn as L
+    bets = L.read_bets()
+    seen = {(b["event_id"], str(b["player"]).lower(), b["market"], str(float(b["line"])) if b["line"] else "", b["side"]) for b in bets}
+    nid = max(int(b["id"]) for b in bets if b["id"].isdigit()) + 1
+    new = []
+    for r in ok:
+        k = (str(r["event_id"]), str(r["player"]).lower(), r["market_key"], str(float(r["line"])), r["side"])
+        if k in seen:
+            continue
+        seen.add(k)
+        bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": r["sport"], "event": f"{r['team']} vs {r['opp']}",
+                     "event_id": r["event_id"], "player": r["player"], "player_id": r["player_id"], "market": r["market_key"],
+                     "line": r["line"], "side": r["side"], "book": f"PrizePicks {r['odds_type']}", "p_model": "" if r["p_model"] is None else round(r["p_model"], 3),
+                     "p_market": "" if r["p_market"] is None else round(r["p_market"], 3), "p_hist": "" if r["p_hist"] is None else round(r["p_hist"], 3),
+                     "hist_n": r["hist_n"], "p_final": r["p_final"], "confidence": r["confidence"],
+                     "action": "lean" if r["confidence"] in ("High", "Medium") and not r.get("newcomer") else "pass",
+                     "segment": f"{r['sport']}:{r['market_key']}:{r['side']}", "group": r["script"], "status": "pending",
+                     "proj": "" if r.get("proj") is None else round(r["proj"], 1),
+                     "notes": f"edge pp; {r['notes']}" + (f"; start {r['start']}" if r.get("start") else "")})
+        new.append(str(nid))
+        nid += 1
+    L.write_bets(bets)
+    return new
 
 
 def price_board(props: list[dict]) -> list[dict]:
@@ -365,6 +488,8 @@ def price_board(props: list[dict]) -> list[dict]:
             out += price_soccer(batch)
         elif lg == "LOL":
             out += price_lol(batch)
+        elif lg == "VAL":
+            out += price_val(batch)
         else:
             out += [{**p, "error": "league not priced yet"} for p in batch]
     return out

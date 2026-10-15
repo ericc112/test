@@ -88,6 +88,7 @@ def main(argv=None):
     bd.add_argument("--no-verify", action="store_true")
     bd.add_argument("--props", action="store_true", help="also export every rated PrizePicks and sportsbook prop (runs the scans)")
     bd.add_argument("--league", default="NHL,MLB,NBA")
+    bd.add_argument("--extra", default="CS2,LOL,VAL,SOCCER", help="with --props: PrizePicks boards priced by edge pp (esports, soccer); '' to skip")
     bd.add_argument("--date", help="first slate date for --props (default today)")
     tr = sub.add_parser("tier", help="PrizePicks props with a DraftKings price behind them (NHL, MLB, NBA), rated; 8+ = the 80% tier")
     tr.add_argument("--league", default="NHL,MLB,NBA")
@@ -308,26 +309,7 @@ def main(argv=None):
         if any(r["over_only"] for r in ok):
             print("MORE-ONLY lines can't be played under on PrizePicks; goblins/demons also pay differently, so check the payout.")
         if args.log:
-            bets = L.read_bets()
-            seen = {(b["event_id"], str(b["player"]).lower(), b["market"], str(float(b["line"])) if b["line"] else "", b["side"]) for b in bets}
-            nid = max(int(b["id"]) for b in bets if b["id"].isdigit()) + 1
-            added = 0
-            for r in ok:
-                k = (str(r["event_id"]), str(r["player"]).lower(), r["market_key"], str(float(r["line"])), r["side"])
-                if k in seen:
-                    continue
-                bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": r["sport"], "event": f"{r['team']} vs {r['opp']}",
-                             "event_id": r["event_id"], "player": r["player"], "player_id": r["player_id"], "market": r["market_key"],
-                             "line": r["line"], "side": r["side"], "book": f"PrizePicks {r['odds_type']}", "p_model": "" if r["p_model"] is None else round(r["p_model"], 3),
-                             "p_market": "" if r["p_market"] is None else round(r["p_market"], 3), "p_hist": "" if r["p_hist"] is None else round(r["p_hist"], 3),
-                             "hist_n": r["hist_n"], "p_final": r["p_final"], "confidence": r["confidence"],
-                             "action": "lean" if r["confidence"] in ("High", "Medium") and not r.get("newcomer") else "pass",
-                             "segment": f"{r['sport']}:{r['market_key']}:{r['side']}", "group": r["script"], "status": "pending",
-                             "proj": "" if r.get("proj") is None else round(r["proj"], 1), "notes": f"edge pp; {r['notes']}"})
-                nid += 1
-                added += 1
-            L.write_bets(bets)
-            print(f"Logged {added} new prop(s) to bets.csv.")
+            print(f"Logged {len(P.log_rows(ok))} new prop(s) to bets.csv.")
     elif args.cmd == "odds":
         from . import oddsapi as OA
         print(OA.check(args.league.upper()))
@@ -352,7 +334,9 @@ def main(argv=None):
         print(f"your takes: {rec['hits']} of {rec['n']} hit" + "".join(f" | {k}: {v['hits']}/{v['n']}" for k, v in sorted(rec['bands'].items(), reverse=True)))
     elif args.cmd == "board":
         from . import board as B
-        out = B.export(args.out, args.days, not args.no_verify)
+        extra = [x.strip().upper() for x in args.extra.split(",") if x.strip()] if args.props else []
+        pre = B.export_pp_extra(args.out, tuple(extra)) if extra else []     # logs first, so new 8+ picks make the export
+        out = pre + B.export(args.out, args.days, not args.no_verify)
         if args.props:
             out += B.export_props(args.out, tuple(x.strip().upper() for x in args.league.split(",")),
                                   dt.date.fromisoformat(args.date) if args.date else None)

@@ -28,8 +28,19 @@ def _f(v):
 
 def _market(lg: str, stat: str) -> str | None:
     from .tier import canon_stat, market_key
+    from . import pp
     if re.search(r"match ?winner|^ml", stat or "", re.I):
         return "ml"
+    if lg == "CS2" and stat in pp.CS2_STATS:
+        k, n = pp.CS2_STATS[stat]
+        return ("cs_kills_m" if k == "kills" else "cs_headshots_m") + ("12" if n == 2 else "1")
+    if lg == "VAL" and stat in pp.VAL_STATS:
+        k, n = pp.VAL_STATS[stat]
+        return f"val_{k}_m" + ("12" if n == 2 else "1")
+    if lg == "LOL" and stat == "MAPS 1-3 Kills":
+        return "kills_m123"
+    if lg == "SOCCER":
+        return {"Passes Attempted": "passes_att", **{s: k for s, (_, k) in pp.DK_TYPES.items()}}.get(stat)
     return market_key(lg, stat) or market_key(lg, canon_stat(lg, stat) or "")
 
 

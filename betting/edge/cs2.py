@@ -71,10 +71,11 @@ def map_p_from_series(p_series: float) -> float:
 
 
 # ------------------------------------------------------------------ bo3.gg data
-def find_match(team_a: str, team_b: str | None = None) -> dict | None:
+def find_match(team_a: str, team_b: str | None = None, disc: int = 1) -> dict | None:
+    """The upcoming or live bo3.gg match between two teams (discipline 1 = CS2, 2 = Valorant)."""
     for st in ("upcoming", "current"):
         d = get(f"{B}/matches?page%5Blimit%5D=100&sort=start_date&filter%5Bmatches.status%5D%5Bin%5D={st}"
-                f"&filter%5Bmatches.discipline_id%5D%5Beq%5D=1&with=teams,tournament")
+                f"&filter%5Bmatches.discipline_id%5D%5Beq%5D={disc}&with=teams,tournament")
         for m in d["results"]:
             names = [(m.get("team1") or {}).get("name") or "", (m.get("team2") or {}).get("name") or ""]
             if any(same_name(team_a, n) for n in names) and (not team_b or any(same_name(team_b, n) for n in names)):
@@ -97,11 +98,12 @@ def team_maps(team_id: int, n: int = 30) -> list[dict]:
     ms = []
     for side in ("team1_id", "team2_id"):
         ms += get(f"{B}/matches?page%5Blimit%5D={n}&sort=-start_date&filter%5Bmatches.status%5D%5Bin%5D=finished"
-                  f"&filter%5Bmatches.{side}%5D%5Beq%5D={team_id}")["results"]
+                  f"&filter%5Bmatches.{side}%5D%5Beq%5D={team_id}&with=teams")["results"]
     ms = sorted(ms, key=lambda m: m["start_date"], reverse=True)[:n]
 
     def one(m):
         rows = []
+        names = {m.get("team1_id"): (m.get("team1") or {}).get("name") or "", m.get("team2_id"): (m.get("team2") or {}).get("name") or ""}
         for g in get(f"{B}/games?filter%5Bgames.match_id%5D%5Beq%5D={m['id']}", cache=True)["results"]:
             if g.get("status") != "finished" or not g.get("rounds_count"):
                 continue
@@ -113,8 +115,10 @@ def team_maps(team_id: int, n: int = 30) -> list[dict]:
                 pl = ((p.get("steam_profile") or {}).get("player") or {})
                 if p.get("kills") is None or p.get("headshots") is None or g["rounds_count"] < 13:
                     continue
+                tid = (p.get("team_clan") or {}).get("team_id")
                 rows.append({"date": m["start_date"][:10], "match": m["id"], "bo": m.get("bo_type"), "game": g["id"],
-                             "num": g.get("number"), "rounds": g["rounds_count"], "team_id": (p.get("team_clan") or {}).get("team_id"),
+                             "num": g.get("number"), "rounds": g["rounds_count"], "team_id": tid,
+                             "opp": next((nm for i, nm in names.items() if i != tid), ""),
                              "nick": pl.get("nickname") or (p.get("steam_profile") or {}).get("nickname"),
                              "kills": p["kills"], "hs": p["headshots"], "win": bool(p.get("win"))})
         return rows
@@ -150,7 +154,8 @@ def newcomer_maps(nick: str, n: int = 30) -> list[dict]:
 
 # ------------------------------------------------------------------ pricing
 def price(player_rows: list[dict], all_rows: list[dict], p_map: float, rounds_w, rounds_l, stat: str, line: float,
-          n: int = 200_000, seed: int = 17) -> dict:
+          n: int = 200_000, seed: int = 17, maps: int = 2) -> dict:
+    """stat 'kills' or 'hs' over the series' first `maps` maps (2 = PrizePicks' MAPS 1-2, 1 = MAP 1)."""
     rng = np.random.default_rng(seed)
     K = lambda x: sum(r["kills"] for r in x)
     H = lambda x: sum(r["hs"] for r in x)
@@ -163,17 +168,20 @@ def price(player_rows: list[dict], all_rows: list[dict], p_map: float, rounds_w,
     kw = (K(w) + kall * 1.11 * 300) / (R(w) + 300)
     kl = (K(lo) + kall * 0.86 * 300) / (R(lo) + 300)
     hs = (H(player_rows) + hall * 150) / (K(player_rows) + 150)
-    win = rng.random((n, 2)) < p_map
-    rounds = np.where(win, rng.choice(rounds_w, (n, 2)), rng.choice(rounds_l, (n, 2)))
-    kills = rng.poisson(np.where(win, kw, kl) * rounds * rng.gamma(1 / FORM_CV ** 2, FORM_CV ** 2, (n, 2)))
-    x = kills.sum(1) if stat == "kills" else rng.binomial(kills, rng.beta(hs * HS_CONC, (1 - hs) * HS_CONC, (n, 2))).sum(1)
-    by = collections.defaultdict(list)
+    win = rng.random((n, maps)) < p_map
+    rounds = np.where(win, rng.choice(rounds_w, (n, maps)), rng.choice(rounds_l, (n, maps)))
+    kills = rng.poisson(np.where(win, kw, kl) * rounds * rng.gamma(1 / FORM_CV ** 2, FORM_CV ** 2, (n, maps)))
+    x = kills.sum(1) if stat == "kills" else rng.binomial(kills, rng.beta(hs * HS_CONC, (1 - hs) * HS_CONC, (n, maps))).sum(1)
+    by, meta = collections.defaultdict(dict), {}
     for r in player_rows:
-        if r["num"] in (1, 2) and (r.get("bo") or 3) >= 3:
-            by[r["match"]].append(r["kills"] if stat == "kills" else r["hs"])
-    series = [sum(v) for v in by.values() if len(v) == 2]
+        if 1 <= (r["num"] or 0) <= maps and (r.get("bo") or 3) >= (3 if maps > 1 else 1):
+            by[r["match"]][r["num"]] = r["kills"] if stat == "kills" else r["hs"]
+            meta[r["match"]] = (r["date"], r.get("opp", ""))
+    done = {m: sum(v.values()) for m, v in by.items() if len(v) == maps}
+    series = list(done.values())
+    games = sorted(({"d": meta[m][0], "o": meta[m][1], "h": None, "v": v} for m, v in done.items()), key=lambda g: g["d"], reverse=True)
     return {"p_over": float((x > line).mean()), "p_under": float((x < line).mean()), "p_push": float((x == line).mean()),
-            "mean": float(x.mean()), "median": float(np.median(x)), "series": series,
+            "mean": float(x.mean()), "median": float(np.median(x)), "series": series, "games": games,
             "hist_over": sum(s > line for s in series), "hist_under": sum(s < line for s in series),
             "kpr_w": kw, "kpr_l": kl, "hs_pct": hs, "maps": len(player_rows)}
 
@@ -218,7 +226,7 @@ def price_match(team: str, opp: str, props: list[dict]) -> list[dict]:
         if len(prow) < THIN_MAPS and not newcomer:  # e.g. one match since joining: add his previous team's maps to the prior
             prev = newcomer_maps(p["player"])
             allr = (allr or []) + [r for r in prev if r["game"] not in {x["game"] for x in allr or []}]
-        r = price(prow, allr or prow, p_map, rw, rl, p["stat"], p["line"])
+        r = price(prow, allr or prow, p_map, rw, rl, p["stat"], p["line"], maps=p.get("maps", 2))
         out.append({**p, **r, "event_id": str(m["id"]), "match": m.get("slug"), "p_series": ps, "p_map": p_map,
                     "newcomer": newcomer, "thin": not newcomer and len(prow) < THIN_MAPS})
     return out

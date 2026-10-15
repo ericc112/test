@@ -4,17 +4,28 @@ from __future__ import annotations
 import json
 import os
 import ssl
+import time
 import unicodedata
+import urllib.error
 import urllib.request
 
 _CA = "/root/.ccr/ca-bundle.crt"
 _CTX = ssl.create_default_context(cafile=_CA) if os.path.exists(_CA) else ssl.create_default_context()
 
 
-def _get(url: str):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, context=_CTX, timeout=30) as r:
-        return json.load(r)
+def _get(url: str, tries: int = 3):
+    """JSON from a feed. A dropped connection (SSL EOF, reset, timeout) is retried; an HTTP error is not."""
+    for i in range(tries):
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        try:
+            with urllib.request.urlopen(req, context=_CTX, timeout=30) as r:
+                return json.load(r)
+        except urllib.error.HTTPError:
+            raise
+        except (urllib.error.URLError, ConnectionError, TimeoutError, ssl.SSLError):
+            if i == tries - 1:
+                raise
+            time.sleep(1.5 * (i + 1))
 
 
 def _norm(s) -> str:
@@ -187,10 +198,11 @@ def cs2_value(event_id: str, player_id: str, market: str, cache: dict):
         games = _get(f"https://api.bo3.gg/api/v1/games?filter%5Bgames.match_id%5D%5Beq%5D={event_id}")["results"]
         cache[key] = sorted(games, key=lambda g: g.get("number") or 0)
     games = cache[key]
-    m12 = [g for g in games if g.get("number") in (1, 2)]
-    if len(m12) < 2 or any(g.get("status") != "finished" for g in m12):
+    need = 1 if market.endswith("_m1") else 2                     # cs_kills_m12 = maps 1-2, cs_kills_m1 = map 1
+    m12 = [g for g in games if g.get("number") in range(1, need + 1)]
+    if len(m12) < need or any(g.get("status") != "finished" for g in m12):
         return "pending", None
-    field = {"cs_kills_m12": "kills", "cs_headshots_m12": "headshots"}[market]
+    field = "kills" if market.startswith("cs_kills") else "headshots"
     total, seen = 0, 0
     for g in m12:
         stats = _get(f"https://api.bo3.gg/api/v1/games/{g['id']}/players_stats")
@@ -201,7 +213,15 @@ def cs2_value(event_id: str, player_id: str, market: str, cache: dict):
             if cs2.norm(nick) == cs2.norm(player_id):   # 'dev1ce' on the server is 'device' on the board
                 total += p[field]
                 seen += 1
-    return ("final", total) if seen == 2 else ("void", None)
+    return ("final", total) if seen == need else ("void", None)
+
+
+# ------------------------------------------------------------------ Valorant (event_id = vlr.gg match id, player_id = nick)
+def val_value(event_id: str, player_id: str, market: str, cache: dict):
+    """val_kills_m12 / val_fb_m12 / val_kills_m1 from the vlr.gg match page once the series is final."""
+    from . import val
+    stat = "fb" if "_fb_" in market else "kills"
+    return val.result(event_id, player_id, stat, 1 if market.endswith("_m1") else 2)
 
 
 # ------------------------------------------------------------------ Soccer (event_id = ESPN event, player_id = ESPN athlete id)
@@ -271,7 +291,8 @@ def tennis_value(event_id: str, player_id: str, market: str, cache: dict):
     return tennis.result(event_id, player_id)
 
 
-GRADERS = {"tennis": tennis_value, "mlb": mlb_value, "nhl": nhl_value, "nba": nba_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value, "lol": lol_value}
+GRADERS = {"tennis": tennis_value, "mlb": mlb_value, "nhl": nhl_value, "nba": nba_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value, "lol": lol_value,
+           "val": val_value}
 
 
 def settle(value: float, line: float, side: str) -> str:

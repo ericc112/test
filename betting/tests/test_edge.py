@@ -919,6 +919,71 @@ class Takes(unittest.TestCase):
         self.assertEqual(rows[0]["entry_id"], "take-a")                                         # now the user's entry
 
 
+class EsportsSoccer(unittest.TestCase):
+    MATCH = """<div class="moment-tz-convert" data-utc-ts="2026-10-10 19:00:00"></div>
+<a class="match-header-link wf-link-hover mod-1"  href="/team/11058/g2-esports" ><div class="match-header-link-name mod-1"><div class="wf-title-med ">G2 Esports</div></div></a>
+<div class="match-header-vs-note">final</div><div class="match-header-vs-note">Bo3</div>
+<a class="match-header-link wf-link-hover mod-2"  href="/team/2059/team-vitality" ><div class="match-header-link-name mod-2"><div class="wf-title-med ">Team Vitality</div></div></a>
+<a class="vm-stats-gamesnav-item js-map-switch" data-game-id="all" data-disabled="0"></a>
+<a class="vm-stats-gamesnav-item js-map-switch" data-game-id="11" data-disabled="0"></a>
+<a class="vm-stats-gamesnav-item js-map-switch  mod-disabled" data-game-id="12" data-disabled="1"></a>
+<div class="vm-stats-game " data-game-id="11"><div class="team"><div class="score " style="x">9 </div><div class="team-name">G2 Esports</div></div>
+<div class="map"><div class="map-name"><span style="x">Abyss<span class="picked">PICK</span></span></div></div>
+<div class="team mod-right"><div class="team-name">Team Vitality</div><div class="score mod-win" style="x">13</div></div>
+PLAYERS</div>
+<div class="vm-stats-game mod-active" data-game-id="all"></div>"""
+
+    def _players(self):
+        cell = lambda n, k, fb: (f'<div class="ovw-player-name text-of">{n}</div><span class="ovw-kda-stat" data-col="kills"><span class="side mod-both">{k}</span>'
+                                 f'</span><div class="ovw-cell" data-col="fb"><span class="stats-sq"><span class="side mod-both">{fb}</span></span></div>')
+        return "".join(cell(f"p{i}", 10 + i, i % 3) for i in range(10))
+
+    def test_vlr_match_page(self):
+        from edge import val
+        m = val.parse_match(self.MATCH.replace("PLAYERS", self._players()))
+        self.assertEqual((m["date"], m["bo"], m["final"], [t["id"] for t in m["teams"]]), ("2026-10-10", 3, True, ["11058", "2059"]))
+        mp = m["maps"][0]
+        self.assertEqual((mp["num"], mp["map"], mp["rounds"]), (1, "Abyss", 22))
+        self.assertEqual((mp["players"][0]["team"], mp["players"][0]["win"], mp["players"][0]["kills"]), ("G2 Esports", False, 10))
+        self.assertEqual((mp["players"][7]["team"], mp["players"][7]["win"], mp["players"][7]["fb"]), ("Team Vitality", True, 1))
+
+    def test_val_history_is_maps_one_and_two(self):
+        from edge import val
+        rows = [{"match": m, "num": n, "bo": 3, "rounds": 22, "kills": k, "fb": 2, "win": n == 1, "date": f"2026-10-0{m}", "opp": "LOUD"}
+                for m, n, k in ((1, 1, 18), (1, 2, 15), (1, 3, 30), (2, 1, 12), (2, 2, 14), (3, 1, 20))]   # match 3 has no map 2
+        r = val.price(rows, rows, 0.5, np.array([22]), np.array([22]), "kills", 30.5, maps=2, n=5000)
+        self.assertEqual(sorted(r["series"]), [26, 33])
+        self.assertEqual((r["hist_over"], r["hist_under"]), (1, 1))
+        self.assertEqual([g["v"] for g in r["games"]], [26, 33])            # newest first, for the prop card
+
+    def test_takes_find_esports_and_soccer_markets(self):
+        from edge.takes import _market
+        self.assertEqual(_market("VAL", "MAPS 1-2 First Bloods"), "val_fb_m12")
+        self.assertEqual(_market("CS2", "MAP 1 Headshots"), "cs_headshots_m1")
+        self.assertEqual(_market("LOL", "MAPS 1-3 Kills"), "kills_m123")
+        self.assertEqual(_market("SOCCER", "Goalie Saves"), "gk_saves")
+
+    def test_history_card(self):
+        from edge.board import history_card
+        r = {"player": "Derke", "team": "Team Vitality", "opp": "LOUD", "stat": "MAPS 1-2 Kills",
+             "games": [{"d": "2026-10-10", "o": "G2 Esports", "h": None, "v": 35}, {"d": "2026-09-30", "o": "LOUD", "h": None, "v": 42}]}
+        c = history_card(r, "VAL")
+        self.assertEqual((c["n"], c["a5"], c["h2h"]["n"], c["h2h"]["avg"]), (2, 38.5, 1, 42.0))
+
+    def test_started_falls_back_to_the_logged_start(self):
+        past = {"sport": "val", "notes": "edge pp; start 2026-01-01T00:00:00.000-04:00"}
+        future = {"sport": "val", "notes": "edge pp; start 2099-01-01T00:00:00.000-04:00"}
+        self.assertTrue(verify.started(past))
+        self.assertFalse(verify.started(future))
+
+    def test_soccer_game_on_the_mixed_board(self):
+        ev = {"id": "9", "competitions": [{"competitors": [
+            {"homeAway": "home", "team": {"id": "1", "displayName": "Estudiantes de La Plata", "shortDisplayName": "Estudiantes", "abbreviation": "EST"}},
+            {"homeAway": "away", "team": {"id": "2", "displayName": "Flamengo", "shortDisplayName": "Flamengo", "abbreviation": "FLA"}}]}]}
+        self.assertEqual(pp._match_event([ev], "Estudiantes", "Flamengo")["id"], "9")
+        self.assertIsNone(pp._match_event([ev], "Boca", "Talleres"))
+
+
 class LineGap(unittest.TestCase):
     def test_standard_line_is_the_median(self):
         from edge.tier import line_gate

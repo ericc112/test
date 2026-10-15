@@ -195,6 +195,13 @@ def started(row: dict) -> bool | None:
             return g["status"]["abstractGameState"] != "Preview"
     except Exception:
         return None
+    m = re.search(r"start (\S+)", row.get("notes", ""))             # every other sport: the logged start time
+    if m:
+        try:
+            st = dt.datetime.fromisoformat(m.group(1).replace("Z", "+00:00"))
+            return dt.datetime.now(dt.timezone.utc) >= st
+        except ValueError:
+            return None
     return None
 
 
@@ -206,7 +213,7 @@ def check_offered(rep: Report):
     book = (r.get("book") or "").lower()
     if "prizepicks" in book:
         from . import pp
-        lg = {"cs2": "CS2", "lol": "LoL", "mlb": "MLB", "nhl": "NHL", "nfl": "NFL", "soccer": "UCL"}.get(r.get("sport"))
+        lg = {"cs2": "CS2", "lol": "LoL", "val": "VAL", "mlb": "MLB", "nhl": "NHL", "nfl": "NFL", "soccer": "SOCCER"}.get(r.get("sport"))
         try:
             board = pp.board(lg, ("standard", "goblin", "demon")) if lg else []
         except Exception as e:

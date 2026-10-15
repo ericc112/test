@@ -148,6 +148,54 @@ def team_matches(team_id: str, n: int = 10, seasons=("2026", "2025")) -> list[di
         return [m for m in ex.map(one, sorted(evs, reverse=True)[:n]) if m]
 
 
+SUMMARY_CACHE = os.path.join(HERE, ".cache", "espn_soccer")
+
+
+def summary_cached(event_id: str) -> dict:
+    """ESPN's match summary; finished matches are kept on disk (they never change)."""
+    p = os.path.join(SUMMARY_CACHE, f"{event_id}.json")
+    if os.path.exists(p):
+        with open(p) as f:
+            return json.load(f)
+    s = summary(event_id)
+    if ((s.get("header") or {}).get("competitions") or [{}])[0].get("status", {}).get("type", {}).get("completed"):
+        os.makedirs(SUMMARY_CACHE, exist_ok=True)
+        with open(p, "w") as f:
+            json.dump({k: s.get(k) for k in ("header", "rosters", "boxscore")}, f)
+    return s
+
+
+def team_history(team_id: str, comps=(), n: int = 25, seasons=("2026", "2025")) -> list[dict]:
+    """His team's last n finished matches in any competition we can see (domestic league, the cups, and tonight's
+    competition), newest first: {date, event_id, opp, home, summary}. Unlike team_matches it keeps matches whose feed has
+    no passing numbers, so shots, saves and fouls can be counted in every league ESPN covers."""
+    dom = (_get(f"{SITE}/all/teams/{team_id}").get("team") or {}).get("defaultLeague", {}).get("slug")
+    evs = {}
+    for lg in dict.fromkeys(x for x in (dom, *comps, *CUPS) if x):
+        for se in seasons:
+            try:
+                for e in _get(f"{SITE}/{lg}/teams/{team_id}/schedule?season={se}").get("events", []):
+                    if e["competitions"][0]["status"]["type"].get("completed"):
+                        evs[e["id"]] = e["date"]
+            except Exception:
+                continue
+
+    def one(item):
+        eid, date = item
+        try:
+            s = summary_cached(eid)
+        except Exception:
+            return None
+        cs = ((s.get("header") or {}).get("competitions") or [{}])[0].get("competitors") or []
+        me = next((c for c in cs if str(c.get("id") or (c.get("team") or {}).get("id")) == str(team_id)), None)
+        op = next((c for c in cs if c is not me), None)
+        return {"date": date[:10], "event_id": eid, "summary": s, "home": (me or {}).get("homeAway") == "home",
+                "opp": ((op or {}).get("team") or {}).get("abbreviation") or ((op or {}).get("team") or {}).get("displayName") or ""}
+
+    with cf.ThreadPoolExecutor(8) as ex:
+        return [m for m in ex.map(one, sorted(evs.items(), key=lambda kv: kv[1], reverse=True)[:n]) if m]
+
+
 def league_ppp(league: str) -> float:
     """League-average passes per possession point (cached; computed from up to 60 recent league matches)."""
     if league in LEAGUE_PPP:
