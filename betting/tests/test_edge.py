@@ -532,6 +532,20 @@ class MlbLineupCheck(unittest.TestCase):
         self.assertEqual(self._run({"awayPlayers": [{"id": 8}], "homePlayers": []}), "FAIL")
 
 
+class DevigMethods(unittest.TestCase):
+    def test_methods_agree_on_even_lines_and_order_on_favourites(self):
+        from edge import odds
+        for m in odds.DEVIG_METHODS + ("worst",):
+            a, b = odds.devig(-110, -110, m)
+            self.assertAlmostEqual(a, 0.5, places=4)
+            self.assertAlmostEqual(a + b, 1.0, places=4) if m != "worst" else None
+        fav = {m: odds.devig(-500, 350, m)[0] for m in odds.DEVIG_METHODS}
+        # multiplicative leaves the most margin on the favourite; power and Shin move it to the longshot
+        self.assertLess(fav["multiplicative"], fav["power"])
+        self.assertLess(fav["multiplicative"], fav["shin"])
+        self.assertLessEqual(odds.devig(-500, 350, "worst")[0], min(fav.values()) + 1e-9)
+
+
 class TierScan(unittest.TestCase):
     def test_devig_and_rungs(self):
         from edge import tier

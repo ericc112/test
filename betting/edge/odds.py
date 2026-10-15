@@ -15,9 +15,35 @@ def implied(american: float) -> float:
     return 100 / (a + 100) if a > 0 else -a / (-a + 100)
 
 
+DEVIG_METHODS = ("multiplicative", "additive", "power", "shin")
+
+
 def devig(over: float, under: float, method: str = "multiplicative") -> tuple[float, float]:
-    """No-vig probabilities for a two-way market priced in American odds."""
+    """No-vig probabilities for a two-way market priced in American odds.
+
+    multiplicative: scale both sides by the overround. additive: take half the overround off each side.
+    power: po**k + pu**k = 1 (shades longshots more). shin: Shin's insider-trading model, which also loads the margin
+    on the longshot. worst: the lowest fair probability any method gives each side (the conservative read).
+    """
     po, pu = implied(over), implied(under)
+    if method == "worst":
+        fair = [devig(over, under, m) for m in DEVIG_METHODS]
+        return min(f[0] for f in fair), min(f[1] for f in fair)
+    if method == "additive":
+        cut = (po + pu - 1) / 2
+        a, b = min(max(po - cut, 1e-6), 1 - 1e-6), min(max(pu - cut, 1e-6), 1 - 1e-6)
+        return a / (a + b), b / (a + b)
+    if method == "shin":
+        s = po + pu
+
+        def fair(z):
+            return [(math.sqrt(z * z + 4 * (1 - z) * q * q / s) - z) / (2 * (1 - z)) for q in (po, pu)]
+        lo, hi = 0.0, 0.5
+        for _ in range(60):
+            z = (lo + hi) / 2
+            lo, hi = (z, hi) if sum(fair(z)) > 1 else (lo, z)
+        a, b = fair((lo + hi) / 2)
+        return a / (a + b), b / (a + b)
     if method == "multiplicative":
         s = po + pu
         return po / s, pu / s
