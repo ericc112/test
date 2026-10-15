@@ -1018,6 +1018,27 @@ class Refresh(unittest.TestCase):
         self.assertEqual(sorted(p["player"] + str(p["line"]) for p in d["new"]), ["Jayden Daniels205.5", "MarShawn Lloyd22.5"])
         self.assertEqual(sorted((r["pl"], r["ln"]) for r in d["gone"]), [("Jalen Brooks", 14.5), ("MarShawn Lloyd", 29.5)])
 
+    def test_big_board_splits_into_parts(self):
+        import json
+        from pathlib import Path
+        from edge import board as B
+        rows = [{"pl": f"Player {i}", "st": "Shots", "ln": 1.5, "r": 9 - i // 300, "cx": ["x" * 300]} for i in range(2000)]
+        docs = B.board_docs("pp", "SOCCER", rows, "2026-10-15T23:00:00Z")
+        self.assertEqual(docs[0][0], "pp-SOCCER")
+        self.assertEqual(docs[0][1]["parts"], len(docs))
+        self.assertEqual([k for k, _ in docs[1:]], [f"pp-SOCCER~{i}" for i in range(2, len(docs) + 1)])
+        self.assertEqual(sum(len(d["rows"]) for _, d in docs), 2000)                   # nothing trimmed
+        self.assertEqual([r["pl"] for _, d in docs for r in d["rows"]], [r["pl"] for r in rows])  # best rows stay first
+        for _, d in docs:
+            self.assertLess(len(json.dumps(d, separators=(",", ":")).encode()), 250_000)
+        with tempfile.TemporaryDirectory() as tmp:
+            B.write_board_docs(Path(tmp, "boards"), docs)
+            self.assertEqual(len(B.read_board(tmp, "pp", "SOCCER")["rows"]), 2000)
+            stale = {**docs[1][1], "updated": "2026-10-14T23:00:00Z"}                     # a part left from an older scan
+            Path(tmp, "boards", "pp-SOCCER~2.json").write_text(json.dumps({"data": stale}))
+            self.assertEqual(len(B.read_board(tmp, "pp", "SOCCER")["rows"]), 2000 - len(docs[1][1]["rows"]))
+            self.assertEqual(B.read_board(tmp, "pp", "NFL"), {"rows": []})
+
 
 class NhlBoxStats(unittest.TestCase):
     def test_hits_come_from_the_box_score(self):

@@ -315,7 +315,7 @@ STATE_DIR = Path(__file__).resolve().parent.parent / ".cache" / "board_state"
 
 
 def save_state(lg: str, compact: list[dict], tried: list | None = None) -> None:
-    """Every PrizePicks line priced for a league (the board document keeps only the best ~700), so `edge refresh` can tell
+    """Every PrizePicks line priced for a league (the board documents keep the best ~2,500), so `edge refresh` can tell
     a new prop from one that was priced and trimmed. Kept in .cache: a fresh container starts from the board itself."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     (STATE_DIR / f"pp-{lg}.json").write_text(json.dumps({"updated": dt.datetime.now(dt.timezone.utc).isoformat(), "rows": compact,
@@ -351,19 +351,73 @@ def _tried(errors: list[dict]) -> list:
     return out
 
 
+PART_BYTES = 245_000      # one db document holds 256 KB
+MAX_PARTS = 6
+CARD_ROWS = 700           # tier leagues build cards over the network: the best-rated rows get them
+
+
+def board_docs(source: str, lg: str, compact: list[dict], now: str) -> list[tuple[str, dict]]:
+    """A league's board as one or more documents, best-rated rows first: <source>-<LG> holds the top rows and the part
+    count, the rest go to <source>-<LG>~2, ~3, ... The page reads a part only when its `updated` matches the main
+    document's, so a part left over from a bigger board is ignored."""
+    head = {"source": source, "league": lg, "updated": now}
+    parts, cur, size = [], [], 200
+    for r in compact:
+        s = len(json.dumps(r, separators=(",", ":"))) + 1
+        if cur and size + s > PART_BYTES:
+            parts.append(cur)
+            cur, size = [], 200
+            if len(parts) == MAX_PARTS:
+                break
+        cur.append(r)
+        size += s
+    if cur and len(parts) < MAX_PARTS:
+        parts.append(cur)
+    parts = parts or [[]]
+    docs = [(f"{source}-{lg}", {**head, "parts": len(parts), "rows": parts[0]})]
+    docs += [(f"{source}-{lg}~{i}", {**head, "part": i, "rows": rows}) for i, rows in enumerate(parts[1:], start=2)]
+    return docs
+
+
+def read_board(live: str, source: str, lg: str) -> dict:
+    """A league's board as ArtifactData listed it (LIVE/boards/<id>.json), parts merged; {"rows": []} when there is none."""
+    def load(doc_id):
+        f = Path(live, "boards", f"{doc_id}.json")
+        if not f.exists():
+            return None
+        d = json.loads(f.read_text())
+        return d.get("data", d)
+    main = load(f"{source}-{lg}")
+    if not main:
+        return {"rows": []}
+    rows = list(main.get("rows", []))
+    for i in range(2, (main.get("parts") or 1) + 1):
+        part = load(f"{source}-{lg}~{i}")
+        if part and part.get("updated") == main.get("updated"):
+            rows += part.get("rows", [])
+    return {**main, "rows": rows}
+
+
+def write_board_docs(base: Path, docs: list[tuple[str, dict]]) -> list[tuple[str, str, str]]:
+    base.mkdir(parents=True, exist_ok=True)
+    out = []
+    for doc_id, d in docs:
+        p = base / f"{doc_id}.json"
+        p.write_text(json.dumps(d, separators=(",", ":")))
+        out.append(("boards", doc_id, str(p)))
+    return out
+
+
 def _write_board(base: Path, source: str, lg: str, rows: list[dict], now: str,
-                 errors: list[dict] | None = None) -> tuple[list[dict], tuple[str, str, str]]:
-    """One boards/<source>-<LG> document under 256 KB, best-rated rows first. Returns the rows kept."""
+                 errors: list[dict] | None = None) -> tuple[list[dict], list[tuple[str, str, str]]]:
+    """The league's board documents (board_docs), best-rated rows first. Returns the rows kept and the writes."""
+    sel = sorted(rows, key=lambda r: (-r["rating"], -r["p_final"]))
+    compact = [_row(r, source) for r in sel]
     if source == "pp":
-        save_state(lg, [_row(r, source) for r in rows], _tried(errors or []))
-    sel = sorted(rows, key=lambda r: (-r["rating"], -r["p_final"]))[:700]
-    doc = {"source": source, "league": lg, "updated": now, "rows": [_row(r, source) for r in sel]}
-    while len(json.dumps(doc, separators=(",", ":")).encode()) > 250_000:          # one db document holds 256 KB
-        doc["rows"] = doc["rows"][:-25]                                          # drop the lowest-rated rows first
-    sel = sel[:len(doc["rows"])]
-    p = base / f"{source}-{lg}.json"
-    p.write_text(json.dumps(doc, separators=(",", ":")))
-    return sel, ("boards", f"{source}-{lg}", str(p))
+        save_state(lg, compact, _tried(errors or []))
+    docs = board_docs(source, lg, compact, now)
+    sel = sel[:sum(len(d["rows"]) for _, d in docs)]
+    return sel, write_board_docs(base, docs)
 
 
 def _write_cards(out: str, lg: str, built: dict) -> list[tuple[str, str, str]]:
@@ -429,7 +483,7 @@ def export_pp_extra(out: str, leagues=PP_EXTRA, log: bool = True) -> list[tuple[
             PPM.log_rows(ok)
         rows = [extra_row(r, lg) for r in ok]
         sel, w = _write_board(base, "pp", lg, rows, now, [r for r in priced if "error" in r])
-        written.append(w)
+        written += w
         built = {}
         for r in sel:
             k = card_key(lg, r["player"], r["stat"], r.get("team", ""))
@@ -462,8 +516,8 @@ def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None =
         for lg in leagues:
             sel, w = _write_board(base, source, lg, [r for r in rows if r["league"] == lg], now,
                                   [r for r in errs if r.get("league") == lg] if source == "pp" else None)
-            written.append(w)
-            for r in sel:
+            written += w
+            for r in sel[:CARD_ROWS]:
                 k = card_key(lg, r["player"], r["stat"], r.get("team", ""))
                 if k not in cards:
                     home = (r.get("home") == r.get("team")) if r.get("home") else None

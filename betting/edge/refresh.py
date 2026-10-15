@@ -1,13 +1,13 @@
 """Keep the Eight-Plus Board in step with PrizePicks between full scans: python -m edge refresh LIVE --out OUT
 
-LIVE holds the page's documents as ArtifactData listed them (LIVE/boards/pp-<LG>.json, and LIVE/cards/*.json for the
-cards already built). For each league the current PrizePicks board is read and compared prop by prop:
+LIVE holds the page's documents as ArtifactData listed them (LIVE/boards/pp-<LG>.json and its parts pp-<LG>~2.json, ...,
+and LIVE/cards/*.json for the cards already built). For each league the current PrizePicks board is read and compared prop by prop:
   same line                         kept as priced
   standard line moved               re-priced at the new line
   new prop (or a new goblin line)   priced
   pulled, or the game has started   dropped
 Re-priced and new props are logged like scan rows (every evaluated prop is logged). The documents that changed are written
-to OUT (boards/pp-<LG>.json, cards/<LG>-r.json for the new props' cards) with OUT/summary.json: counts per league and the
+to OUT (boards/pp-<LG>.json and its parts, cards/<LG>-r.json for the new props' cards) with OUT/summary.json: counts per league and the
 new or moved 8+ props, which need `edge verify` and a picks refresh before they show as picks. A fresh slate (more than
 MAX_NEW new props in a league) is left to the full scan (`edge board --props`), which also rebuilds cards and regular lines.
 """
@@ -129,9 +129,7 @@ def run(live: str, out: str, leagues=TIER + EXTRA, log: bool = True) -> dict:
     summary = {"updated": stamp, "leagues": {}, "eight_plus": [], "full_scan": []}
     Path(out, "boards").mkdir(parents=True, exist_ok=True)
     for lg in leagues:
-        f = os.path.join(live, "boards", f"pp-{lg}.json")
-        doc = json.load(open(f)) if os.path.exists(f) else {"rows": []}
-        doc = doc.get("data", doc)
+        doc = B.read_board(live, "pp", lg)                          # the main document and its parts (pp-<LG>~2, ...)
         known = B.load_state(lg)                                     # every line the last scan priced, trimmed ones too
         live_rows = [r for r in doc.get("rows", []) if not r.get("t") or dt.datetime.fromisoformat(r["t"]) > now]
         rows = [r for r in (known if known is not None else doc.get("rows", []))
@@ -154,8 +152,7 @@ def run(live: str, out: str, leagues=TIER + EXTRA, log: bool = True) -> dict:
         compact = [B._row(r, "pp") for r in fresh]
         merged = sorted(d["keep"] + compact, key=lambda r: (-(r.get("r") or 0), -(r.get("p") or 0)))
         B.save_state(lg, merged, sorted(tried))
-        merged = merged[:700]
-        changed = bool(fresh or d["gone"] or len(live_rows) != len(doc.get("rows", [])))
+        changed = bool(fresh or d["gone"] or len(live_rows) != len(doc.get("rows", [])) or len(merged) != len(live_rows))
         summary["leagues"][lg] = {"kept": len(d["keep"]), "moved": len(d["moved"]), "new": len(d["new"]),
                                   "priced": len(fresh), "dropped": len(d["gone"]), "state": known is not None}
         summary["eight_plus"] += [{"lg": lg, "player": r["player"], "stat": r["stat"], "line": r["line"], "side": r["side"],
@@ -163,15 +160,14 @@ def run(live: str, out: str, leagues=TIER + EXTRA, log: bool = True) -> dict:
                                   for r in fresh if r.get("rating", 0) >= 8]
         if not changed:
             continue
-        new_doc = {"source": "pp", "league": lg, "updated": stamp, "rows": merged}
-        while len(json.dumps(new_doc, separators=(",", ":")).encode()) > 250_000:
-            new_doc["rows"] = new_doc["rows"][:-25]
-        Path(out, "boards", f"pp-{lg}.json").write_text(json.dumps(new_doc, separators=(",", ":")))
+        docs = B.board_docs("pp", lg, merged, stamp)                # every part is rewritten: they share the main's stamp
+        B.write_board_docs(Path(out, "boards"), docs)
+        summary["leagues"][lg]["docs"] = [k for k, _ in docs]
         # cards for new props that have none yet, merged with the refresh cards already on the page
         rf = os.path.join(live, "cards", f"{lg}-r.json")
         old = json.load(open(rf)) if os.path.exists(rf) else {}
         cards = dict((old.get("data", old).get("cards") or {}))
-        on_board = {r.get("ck") for r in new_doc["rows"]}
+        on_board = {r.get("ck") for _, dd in docs for r in dd["rows"]}
         cards = {k: v for k, v in cards.items() if k in on_board}
         for r in fresh:
             k = B.card_key(lg, r["player"], r["stat"], r.get("team", ""))
