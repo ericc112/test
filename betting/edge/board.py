@@ -70,28 +70,50 @@ def card_key(lg: str, player: str, stat: str, team: str) -> str:
 
 
 def build_card(lg: str, stat: str, team: str, opp: str, player: str, aid: str | None, position: str = "",
-               home: bool | None = None, date: str = "") -> dict:
-    """The prop card: last games (opponent, home/away, value), averages, head-to-head, venue split, matchup rank."""
+               home: bool | None = None, date: str = "", rungs: dict | None = None) -> dict:
+    """The prop card: his last 40 games (date, opponent, home/away, value), every game against tonight's opponent the
+    logs hold, the DraftKings ladder (to price other lines), averages, venue split and matchup rank."""
     from . import tier
     from . import context as CX
     from . import lowline as LW
-    games = tier.card_games(lg, stat, team, player, aid)
-    vals = [g["v"] for g in games]
+    every = tier.card_games(lg, stat, team, player, aid, limit=None)
+    games = every[:40]
+    vals = [g["v"] for g in games[:30]]
     norm = lambda a: tier.NHL_API.get(tier.espn_team(lg, a or ""), tier.espn_team(lg, a or ""))
-    h2h = [g["v"] for g in games if opp and norm(g["o"]) == norm(opp)]
-    hm, aw = [g["v"] for g in games if g["h"] is True], [g["v"] for g in games if g["h"] is False]
+    h2h_g = [g for g in every if opp and norm(g["o"]) == norm(opp)]
+    h2h = [g["v"] for g in h2h_g]
+    hm, aw = [g["v"] for g in games[:30] if g["h"] is True], [g["v"] for g in games[:30] if g["h"] is False]
     pid = aid
     if lg == "MLB":
         try:
             pid = LW.mlb_player(team, player)
         except Exception:
             pid = None
+    slim = lambda g: {"d": g["d"], "o": g["o"], "h": g["h"], "v": g["v"]}
     return {"pl": player, "pos": position, "tm": team, "op": opp, "st": stat,
-            "g": [{"d": g["d"][5:], "o": g["o"], "h": g["h"], "v": g["v"]} for g in games[:15]],
+            "g": [slim(g) for g in games], "hh": [slim(g) for g in h2h_g],
+            "lad": {str(k): v for k, v in (rungs or {}).items()},
             "a5": _avg(vals[:5]), "a10": _avg(vals[:10]), "aN": _avg(vals), "n": len(vals),
             "h2h": {"avg": _avg(h2h), "n": len(h2h)}, "home": {"avg": _avg(hm), "n": len(hm)}, "away": {"avg": _avg(aw), "n": len(aw)},
             "tonight": "home" if home is True else "away" if home is False else "",
             "mu": CX.matchup(lg, stat, opp, pid, team, date)}
+
+
+def _ladder_for(r: dict, stat: str) -> dict:
+    """DraftKings 'k+' rungs for a logged pick, so its card can price other lines (empty when ESPN has none)."""
+    from . import tier
+    try:
+        lg = r["sport"].upper()
+        eid = (r.get("group") or "").split(":")[-1]
+        team, _, opp = (r.get("event") or "").partition(" vs ")
+        names = {}
+        for ab in (tier.espn_team(lg, team.strip()), tier.espn_team(lg, opp.strip())):
+            names.update(tier.roster(lg, ab))
+        from . import lowline as LW
+        aid = names.get(LW._fold(r["player"]))
+        return tier.ladders(lg, eid).get((tier.STATS[lg][stat][0], aid or ""), {}) if aid and stat in tier.STATS.get(lg, {}) else {}
+    except Exception:
+        return {}
 
 
 def pick_doc(r: dict, rows: list[dict], verify_it: bool) -> dict:
@@ -122,7 +144,8 @@ def pick_doc(r: dict, rows: list[dict], verify_it: bool) -> dict:
     if stat and doc["status"] == "pending":
         try:
             doc["card"] = build_card(doc["sport"], stat, doc["team"], doc["opp"], r["player"],
-                                     r.get("player_id") if doc["sport"] in ("NBA", "NFL") else None, date=r["date"])
+                                     r.get("player_id") if doc["sport"] in ("NBA", "NFL") else None, date=r["date"],
+                                     rungs=_ladder_for(r, stat))
         except Exception:
             pass
     if verify_it and doc["status"] == "pending":
@@ -224,8 +247,8 @@ def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None =
                 if k not in cards:
                     home = (r.get("home") == r.get("team")) if r.get("home") else None
                     cards[k] = (lg, r["stat"], r.get("team", ""), r.get("opp", ""), r["player"],
-                                r.get("player_id") if lg in ("NBA", "NFL") else None, r.get("position", ""), home,
-                                (r.get("start") or "")[:10])
+                                (r.get("player_id") or r.get("aid")) if lg in ("NBA", "NFL") else None,
+                                r.get("position", ""), home, (r.get("start") or "")[:10], r.get("rungs") or {})
 
     def make(item):
         k, args = item

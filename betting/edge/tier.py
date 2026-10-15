@@ -245,9 +245,10 @@ def recount_values(sport: str, market_key: str, team: str, pid: str) -> list[flo
     return None
 
 
-def card_games(sport: str, stat: str, team: str, player: str, aid: str | None = None) -> list[dict]:
-    """His recent games for one stat, newest first (up to 30): {d: date, o: opponent, h: home?, v: value}. The same
-    windows `history` counts (NBA: current team only; MLB batters: 3+ plate appearances; NHL saves: starts only)."""
+def card_games(sport: str, stat: str, team: str, player: str, aid: str | None = None, limit: int | None = 30) -> list[dict]:
+    """His games for one stat, newest first: {d: date, o: opponent, h: home?, v: value}. The same windows `history`
+    counts (NBA: current team only; MLB batters: 3+ plate appearances; NHL saves: starts only); `limit=None` = every
+    game the logs hold (this season and last), for head-to-head."""
     mk, out = market_key(sport, stat), []
     if sport == "NHL":
         try:
@@ -287,7 +288,7 @@ def card_games(sport: str, stat: str, team: str, player: str, aid: str | None = 
             v = [g["x"].get(c) for c in NFL_COLS[mk]]
             if not all(x is None for x in v):
                 out.append({"d": g["date"], "o": g.get("opp", ""), "h": g.get("home"), "v": sum(LW._num(x) for x in v if x is not None)})
-    return out[:30]
+    return out if limit is None else out[:limit]
 
 
 def history(sport: str, stat: str, team: str, player: str, line: float, aid: str | None = None) -> tuple[float | None, int, str | None]:
@@ -461,7 +462,7 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
                 rt, note = 7, note + " (held at 7)"
             r = {**p, "side": side, "market_key": mk, "p_market": pk, "p_hist": ph, "hist_n": n, "p_final": e.p, "p_model": pmod,
                  "confidence": e.confidence, "rating": rt, "player_id": pid, "event_id": eid, "context": cx[1] if cx else [],
-                 "proj": proj, "proj_src": proj_src, "avg10": avg10,
+                 "proj": proj, "proj_src": proj_src, "avg10": avg10, "rungs": lad_p or {},
                  "notes": f"{note}; " + "; ".join(e.notes) + (f"; context: {' / '.join(cx[1])}" if cx else "")}
             if best is None or r["p_final"] > best["p_final"]:
                 best = r
@@ -570,7 +571,7 @@ def book_scan(leagues=("NHL", "MLB", "NBA"), day: dt.date | None = None, days: i
             try:
                 rr = {**r, **_rate(lg, r["stat"], r["team"], r["player"], r["aid"], r["line"], r["side"], r["p_market"],
                                    r.get("rungs"), r.get("main"), r.get("opp", ""))}
-                rr.pop("rungs", None)
+                rr["rungs"] = rr.get("rungs") or {}
             except Exception:
                 return None
             if rr.get("disagree") and rr["rating"] >= 8:
