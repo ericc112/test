@@ -121,6 +121,9 @@ def main(argv=None):
     ij = sub.add_parser("inject", help="price, log and back-check the props in an inbox doc from the Eight-Plus Board")
     ij.add_argument("file", help="the inbox document as JSON (ArtifactData read output or its data)")
     ij.add_argument("--out", help="write the results here, for the batch update of the inbox doc")
+    tk = sub.add_parser("takes", help="link the user's takes from the Eight-Plus Board to bets.csv and read their status")
+    tk.add_argument("folder", help="the takes/*.json documents (ArtifactData list with out_dir)")
+    tk.add_argument("--out", help="write the per-take fields for the batch update")
     t = sub.add_parser("tag")
     t.add_argument("id")
     t.add_argument("reason")
@@ -336,6 +339,13 @@ def main(argv=None):
             else:
                 print(f"  prop {x['i'] + 1}: not priced ({x['why']})")
         print(f"{len(res['new_ids'])} new row(s) in bets.csv")
+    elif args.cmd == "takes":
+        from . import takes as TK
+        res = TK.cli(args.folder, args.out)
+        for tid, x in res.items():
+            print(f"{tid}: #{x.get('bets_id', '-')} {x.get('status')} {x.get('rating') or ''}{'/10' if x.get('rating') else ''} {x.get('why', '')}")
+        rec = TK.record()
+        print(f"your takes: {rec['hits']} of {rec['n']} hit" + "".join(f" | {k}: {v['hits']}/{v['n']}" for k, v in sorted(rec['bands'].items(), reverse=True)))
     elif args.cmd == "board":
         from . import board as B
         out = B.export(args.out, args.days, not args.no_verify)

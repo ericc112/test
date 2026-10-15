@@ -879,6 +879,31 @@ class DefenseVsPosition(unittest.TestCase):
         self.assertEqual(t, {"DEN": 120.0, "SEA": 190.0})
 
 
+class Takes(unittest.TestCase):
+    def test_take_links_to_its_row(self):
+        from edge.takes import match_row
+        rows = [{"id": "10", "sport": "nhl", "player": "Kiefer Sherwood", "market": "skater_sog", "line": "0.5", "side": "over",
+                 "notes": "edge tier; start 2026-10-15T20:00:00.000-04:00", "date": "2026-10-15"},
+                {"id": "11", "sport": "nhl", "player": "Kiefer Sherwood", "market": "skater_sog", "line": "0.5", "side": "over",
+                 "notes": "edge tier; start 2026-10-17T19:00:00.000-04:00", "date": "2026-10-16"},
+                {"id": "12", "sport": "tennis", "player": "Iga Swiatek", "market": "ml_pre", "line": "0.5", "side": "over", "notes": "", "date": "2026-10-15"}]
+        t = {"id": "a", "lg": "NHL", "player": "Kiefer Sherwood", "stat": "Shots On Goal", "line": 0.5, "side": "More",
+             "start": "2026-10-15T20:00:00.000-04:00"}
+        self.assertEqual(match_row(rows, t)["id"], "10")                 # tonight's game, not Saturday's
+        self.assertEqual(match_row(rows, {**t, "side": "Less"}), None)
+        self.assertEqual(match_row(rows, {"lg": "TENNIS", "player": "Iga Swiatek", "stat": "Match winner", "side": "To win",
+                                          "created": "2026-10-15T09:00Z"})["id"], "12")
+        self.assertEqual(match_row(rows, {**t, "bets_id": "11"})["id"], "11")
+
+    def test_record_by_band(self):
+        from edge.takes import record
+        rows = [{"entry_id": "take-a", "status": "won", "p_final": "0.85", "confidence": "High", "p_market": "0.86"},
+                {"entry_id": "take-b", "status": "lost", "p_final": "0.66", "confidence": "Medium", "p_market": ""},
+                {"entry_id": "", "status": "won", "p_final": "0.9", "confidence": "High", "p_market": "0.9"}]
+        r = record(rows)
+        self.assertEqual((r["hits"], r["n"], r["bands"]["8-10"], r["bands"]["5-7"]), (1, 2, {"hits": 1, "n": 1}, {"hits": 0, "n": 1}))
+
+
 class LineGap(unittest.TestCase):
     def test_standard_line_is_the_median(self):
         from edge.tier import line_gate

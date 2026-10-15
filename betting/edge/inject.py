@@ -18,7 +18,7 @@ from . import tier
 from .blend import rating
 
 
-def process(doc: dict) -> dict:
+def process(doc: dict, entry_prefix: str = "inject") -> dict:
     rows = L.read_bets()
     seen = {(b["event_id"], b["player"].lower(), b["market"], str(float(b["line"])) if b.get("line") else "", b["side"]): b["id"]
             for b in rows}
@@ -37,7 +37,7 @@ def process(doc: dict) -> dict:
                         and b.get("market", "").startswith("ml") and _fold(b["player"]) == _fold(p.get("player", ""))), None)
             if old:
                 if slip and old.get("action") != "user_entry":
-                    old["action"], old["entry_id"] = "user_entry", old.get("entry_id") or f"inject-{doc.get('id', '')}"
+                    old["action"], old["entry_id"] = "user_entry", old.get("entry_id") or f"{entry_prefix}-{doc.get('id', '')}"
                 pm = float(old["p_market"]) if old.get("p_market") else None
                 results.append({"i": i, "status": "logged", "id": old["id"], "player": old["player"], "stat": "Match winner",
                                 "line": None, "side": "To win", "rating": rating(float(old["p_final"]), old["confidence"], pm),
@@ -61,14 +61,14 @@ def process(doc: dict) -> dict:
             old = next(b for b in rows if b["id"] == bid)
             if slip and old.get("status") == "pending" and old.get("action") != "user_entry":
                 old["action"] = "user_entry"                        # the user played it: grade it as their entry
-                old["entry_id"] = old.get("entry_id") or f"inject-{doc.get('id', '')}"
+                old["entry_id"] = old.get("entry_id") or f"{entry_prefix}-{doc.get('id', '')}"
         else:
             bid = str(nid)
             nid += 1
             rows.append({"id": bid, "date": dt.date.today().isoformat(), "sport": lg.lower(), "event": f"{r['team']} vs {r['opp']}",
                          "event_id": gid, "player": r["player"], "player_id": r.get("player_id") or "", "market": r["market_key"],
                          "line": line, "side": r["side"], "book": f"{doc.get('app') or 'app'} {p.get('odds_type') or ''}".strip(),
-                         "price": "", "entry_id": f"inject-{doc.get('id', '')}" if slip else "",
+                         "price": "", "entry_id": f"{entry_prefix}-{doc.get('id', '')}" if slip else "",
                          "p_model": "" if r["p_model"] is None else round(r["p_model"], 4),
                          "p_market": "" if r["p_market"] is None else round(r["p_market"], 4),
                          "p_hist": "" if r["p_hist"] is None else round(r["p_hist"], 4), "hist_n": r["hist_n"],
