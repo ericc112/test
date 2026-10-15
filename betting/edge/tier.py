@@ -15,6 +15,7 @@ import datetime as dt
 import functools
 import math
 import re
+import unicodedata
 
 from .blend import final_probability, rating
 from .grade import _get
@@ -76,6 +77,50 @@ def nfl_num(v) -> float:
     t = str(v).replace(",", "").strip()
     m = re.match(r"^(\d+)-(\d+)$", t)
     return float(m.group(1)) if m else LW._num(t)
+
+
+# combo props DraftKings may not ladder: built from the parts' ladders (market key -> PrizePicks stats of the parts)
+COMBO_PARTS = {"NBA": {"pra": ("Points", "Rebounds", "Assists"), "pts_asts": ("Points", "Assists"),
+                       "pts_rebs": ("Points", "Rebounds"), "rebs_asts": ("Rebounds", "Assists")}}
+
+
+def ladder_pmf(rungs: dict, top: int = 80) -> list[float]:
+    """A 'k+' ladder as a distribution: de-vigged P(X >= k) at each rung, logit-interpolated between rungs, a geometric
+    tail past the last one."""
+    ks = sorted(int(k) for k in rungs)
+    surv = {k: devig_one_way(implied(float(rungs[k] if k in rungs else rungs[str(k)]))) for k in ks}
+    lk, lp = [0] + ks, [0.999] + [surv[k] for k in ks]
+    lg = lambda q: math.log(q / (1 - q))
+    s = [1.0]
+    for x in range(1, top + 1):
+        if x >= ks[-1]:
+            v = surv[ks[-1]] * 0.75 ** (x - ks[-1])
+        else:
+            i = max(j for j in range(len(lk)) if lk[j] <= x)
+            t = (x - lk[i]) / (lk[i + 1] - lk[i])
+            v = 1 / (1 + math.exp(-((1 - t) * lg(lp[i]) + t * lg(lp[i + 1]))))
+        s.append(min(s[-1], v))
+    pm = [s[x] - (s[x + 1] if x < top else 0.0) for x in range(top + 1)]
+    tot = sum(pm)
+    return [q / tot for q in pm]
+
+
+def combo_over(parts: list[dict], line: float) -> float:
+    """P(sum > line) from the parts' ladders, convolved as independent; whole lines remove the push."""
+    dist = [1.0]
+    for rungs in parts:
+        q = ladder_pmf(rungs)
+        out = [0.0] * (len(dist) + len(q) - 1)
+        for i, a in enumerate(dist):
+            if a:
+                for j, b in enumerate(q):
+                    out[i + j] += a * b
+        dist = out
+    over = sum(dist[int(math.floor(line)) + 1:])
+    if line == int(line):
+        at = dist[int(line)] if int(line) < len(dist) else 0.0
+        return over / max(1e-9, 1 - at)
+    return over
 
 
 def market_key(league: str, stat: str) -> str | None:
@@ -192,19 +237,20 @@ def mlb_pitch_log(pid: str) -> list[dict]:
 
 
 @functools.lru_cache(maxsize=None)
-def nba_log(aid: str) -> list[dict]:
-    """Regular-season games, newest first, this season then last. All-Star games and total rows are skipped; playoffs
-    and preseason are a different kind of game (L26) and stay out."""
+def nba_log(aid: str, kind: str = "Regular Season") -> list[dict]:
+    """One competition's games, newest first: regular season (this season then last) or, for a preseason game,
+    preseason games from the last four preseasons (L26: a preseason star plays capped minutes, so his regular-season
+    log is a different kind of game). All-Star games and total rows are skipped."""
     today = dt.date.today()
     yr = today.year + (1 if today.month >= 8 else 0)              # ESPN names the season by the year it ends
     out = []
-    for season in (yr, yr - 1):
+    for season in ((yr, yr - 1) if kind == "Regular Season" else (yr, yr - 1, yr - 2, yr - 3)):
         try:
             g = _get(f"https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/{aid}/gamelog?season={season}")
         except Exception:
             continue
         for st in g.get("seasonTypes", []):
-            if "Regular Season" not in st.get("displayName", ""):
+            if kind not in st.get("displayName", ""):
                 continue
             for cat in st.get("categories", []):
                 if cat.get("type") != "event":
@@ -229,8 +275,9 @@ def nba_value(s: dict, market_key: str) -> float | None:
     return tot
 
 
-def recount_values(sport: str, market_key: str, team: str, pid: str) -> list[float] | None:
-    """Per-game values the scan's history used, newest first (up to 30); None when the market has no reader here."""
+def recount_values(sport: str, market_key: str, team: str, pid: str, competition: str = "regular") -> list[float] | None:
+    """Per-game values the scan's history used, newest first (up to 30); None when the market has no reader here.
+    competition='preseason' (NBA) recounts his preseason games only."""
     if sport == "NHL":
         if market_key == "goalie_saves":                            # starts only: saves = shots against - goals against
             return [float((g["x"].get("shotsAgainst") or 0) - (g["x"].get("goalsAgainst") or 0))
@@ -253,7 +300,13 @@ def recount_values(sport: str, market_key: str, team: str, pid: str) -> list[flo
         if market_key not in NBA_COLS:
             return None
         cur = espn_team("NBA", team)                                # same team only: a new team is a new role (L5)
-        return [v for v in (nba_value(g["s"], market_key) for g in nba_log(pid) if g["team"] == cur) if v is not None][:30]
+        if competition == "preseason":
+            games = nba_log(pid, "Preseason")
+            same = [g for g in games if g["team"] == cur]
+            games = same if len(same) >= 5 else games              # few preseason games: every team's count
+        else:
+            games = [g for g in nba_log(pid) if g["team"] == cur]
+        return [v for v in (nba_value(g["s"], market_key) for g in games) if v is not None][:30]
     return None
 
 
@@ -303,13 +356,14 @@ def card_games(sport: str, stat: str, team: str, player: str, aid: str | None = 
     return out if limit is None else out[:limit]
 
 
-def history(sport: str, stat: str, team: str, player: str, line: float, aid: str | None = None) -> tuple[float | None, int, str | None]:
+def history(sport: str, stat: str, team: str, player: str, line: float, aid: str | None = None,
+            competition: str = "regular") -> tuple[float | None, int, str | None]:
     """Share of his recent games on each side of the line (this season first, up to 30 games), and his league id."""
     mk = market_key(sport, stat)
     if sport in ("NBA", "NFL"):                                     # ESPN athlete id, from the ESPN roster
         if not aid:
             return None, 0, None
-        vals, pid = recount_values(sport, mk, team, aid) or [], aid
+        vals, pid = recount_values(sport, mk, team, aid, competition) or [], aid
     elif sport == "NHL":
         try:
             pid = LW.nhl_player(NHL_API.get(team, team), player)
@@ -729,6 +783,18 @@ def canon_stat(league: str, text: str) -> str | None:
     return None
 
 
+_SUFFIX = {"jr", "sr", "ii", "iii", "iv", "v"}
+
+
+def name_key(name: str) -> tuple[str, str]:
+    """(first initial, surname) so 'S. Gilgeous-Alexander' finds 'Shai Gilgeous-Alexander' and 'K. Walker' finds
+    'Kenneth Walker III'."""
+    t = [w for w in re.findall(r"[a-z]+", unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode().lower())]
+    while len(t) > 1 and t[-1] in _SUFFIX:
+        t.pop()
+    return (t[0][:1], "".join(t[1:])) if len(t) > 1 else ("", "".join(t))
+
+
 def find_player(league: str, player: str, day: dt.date | None = None, days: int = 2) -> dict | None:
     """The player's next game that hasn't started: ESPN event id, his ESPN id, team and opponent."""
     day = day or dt.date.today()
@@ -746,8 +812,9 @@ def find_player(league: str, player: str, day: dt.date | None = None, days: int 
                     continue
                 for nm, aid in names:
                     f = LW._fold(nm)
-                    if f == want or (want.split()[-1:] == f.split()[-1:] and want[:1] == f[:1]):
+                    if f == want or (name_key(nm) == name_key(player) and name_key(player)[1]):
                         return {"event_id": e["id"], "aid": aid, "name": nm, "team": ab,
+                                "competition": {1: "preseason", 3: "postseason"}.get((e.get("season") or {}).get("type"), "regular"),
                                 "opp": next(t for t in teams if t != ab), "start": e.get("date", "")}
     return None
 
@@ -783,12 +850,20 @@ def price_prop(league: str, player: str, stat_text: str, line: float, side: str 
     mk = market_key(league, stat) if stat else None
     if not mk:
         return {"error": f"{stat_text}: stat not priced for {league}", **g}
-    rungs = ladders(league, g["event_id"]).get((STATS[league][stat][0], g["aid"]), {}) if stat in STATS.get(league, {}) else {}
+    lad_all = ladders(league, g["event_id"])
+    rungs = lad_all.get((STATS[league][stat][0], g["aid"]), {}) if stat in STATS.get(league, {}) else {}
     mk_over, mnote = market_over(rungs, line) if rungs else (None, "no DraftKings ladder")
+    parts = [lad_all.get((STATS[league][x][0], g["aid"])) for x in COMBO_PARTS.get(league, {}).get(mk, ())]
+    if mk_over is None and parts and all(parts):                   # no combo ladder: build it from the parts'
+        mk_over = combo_over(parts, line)
+        mnote = f"DraftKings {' + '.join(COMBO_PARTS[league][mk]).lower()} ladders combined: {mk_over:.3f} over"
+    comp = g.get("competition", "regular") if league == "NBA" else "regular"     # NBA logs split by competition
     if mk_over is None:
         mnote = f"{mnote}: no book price"
-    h_over, n, pid = history(league, stat, g["team"], g["name"], line, g["aid"])
-    cx = CX.price(league, stat, g["opp"], pid, line, (day or dt.date.today()).year)
+    h_over, n, pid = history(league, stat, g["team"], g["name"], line, g["aid"], comp)
+    if comp != "regular":
+        mnote += f"; {comp}: history from his {comp} games only (L26), {n} games"
+    cx = CX.price(league, stat, g["opp"], pid, line, (day or dt.date.today()).year) if comp == "regular" else None
     lm = None if mk_over is not None or cx else CX.log_model(_LAST_VALS.get((league, stat, g["team"], g["name"], line)) or [], line)
     model = cx if cx and (odds_type == "standard" or mk_over is None) else lm
     pk = None if mk_over is None else (mk_over if side == "over" else 1 - mk_over)

@@ -271,7 +271,8 @@ def check_tier_history(rep: Report):
         return
     vals = None
     if ("edge tier" in r.get("notes", "") or r.get("notes", "").startswith("inject ")) and r.get("player_id"):
-        vals = tier.recount_values(r["sport"].upper(), r["market"], (r.get("event") or "").split(" vs ")[0].strip(), r["player_id"])
+        comp = "preseason" if "preseason: history from" in r.get("notes", "") else "regular"
+        vals = tier.recount_values(r["sport"].upper(), r["market"], (r.get("event") or "").split(" vs ")[0].strip(), r["player_id"], comp)
     if vals is None:
         rep.add("WARN", "recount", f"no automatic recount for {r['sport']} {r['market']} yet: recount history by hand before publishing")
         return

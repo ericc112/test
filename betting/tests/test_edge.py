@@ -770,6 +770,19 @@ class NoMarketGrading(unittest.TestCase):
         self.assertEqual((priced, unpriced), (0.80, 0.83))                              # only the unpriced floor moves
 
 
+class ComboLadder(unittest.TestCase):
+    def test_parts_combine(self):
+        from edge.tier import combo_over, ladder_pmf
+        pts = {8: -4400, 10: -1580, 12: -730, 15: -288, 18: -134, 20: 119, 25: 354, 30: 1100, 35: 2900}
+        ast = {3: -2400, 4: -750, 5: -315, 6: -153, 7: 121, 8: 220, 9: 402, 10: 730, 11: 1220, 12: 2600}
+        reb = {3: -111, 4: 223, 5: 518, 6: 1060}
+        self.assertAlmostEqual(sum(ladder_pmf(pts)), 1.0, places=6)
+        over = combo_over([pts, reb, ast], 28.5)                      # Shai, preseason 10/15: the book's ~28 PRA
+        self.assertTrue(0.40 < over < 0.52)
+        self.assertGreater(combo_over([pts, reb, ast], 20.5), over)
+        self.assertGreater(combo_over([pts, ast], 20.5), combo_over([pts, ast], 25.5))
+
+
 class LineGap(unittest.TestCase):
     def test_standard_line_is_the_median(self):
         from edge.tier import line_gate
@@ -791,6 +804,12 @@ class Inject(unittest.TestCase):
         self.assertEqual(canon_stat("NBA", "Pts+Rebs+Asts"), "Pts+Rebs+Asts")
         self.assertEqual(canon_stat("NBA", "3PT Made"), "3-PT Made")
         self.assertIsNone(canon_stat("NBA", "Fantasy Score"))
+
+    def test_abbreviated_names(self):
+        from edge.tier import name_key
+        self.assertEqual(name_key("S. Gilgeous-Alexander"), name_key("Shai Gilgeous-Alexander"))
+        self.assertEqual(name_key("K. Walker"), name_key("Kenneth Walker III"))
+        self.assertNotEqual(name_key("J. Williams"), name_key("Jalen Brooks"))
 
     def test_slate_day_reads_utc_in_new_york(self):
         from edge.tier import slate_day
