@@ -244,7 +244,7 @@ def check_mlb_history(rep: Report):
 
 
 def check_tier_history(rep: Report):
-    """NHL and NBA rows priced by `edge tier`: recount the same game-log window the scan used (NBA: same team only)."""
+    """NHL, NBA and NFL rows priced by `edge tier`: recount the same game-log window the scan used (NBA: same team only)."""
     from . import tier
     r = rep.row
     logged = _f(r.get("p_hist"))
@@ -429,7 +429,7 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
                 check_mlb_lineup(rep)
             elif sport == "soccer":
                 check_soccer(rep)
-            elif sport in ("nhl", "nba"):
+            elif sport in ("nhl", "nba", "nfl"):
                 check_tier_history(rep)
             else:
                 rep.add("WARN", "recount", f"no automatic recount for {sport} yet: recount history by hand before publishing")

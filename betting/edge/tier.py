@@ -1,7 +1,9 @@
 """80% tier scanner: PrizePicks props with a DraftKings price behind them, priced and rated by the same blend and gates.
 
-8-10 needs a sportsbook price (model-only 80%s hit 56%), so this scans the leagues where ESPN carries DraftKings
-player ladders (NHL, MLB, NBA): for each PrizePicks line, market = the DraftKings "k+" milestone at that line (de-vigged),
+8-10 needs a sportsbook price (model-only 80%s hit 56%). With $ODDS_API_KEY set, market = the consensus of every book's
+fair price at the PrizePicks line (edge/oddsapi.py, sharp books weighted up; books more than 10 points apart cap the
+rating at 7). Without it, or when no book prices the line, market = the DraftKings "k+" milestone that ESPN carries
+(NHL, MLB, NBA), de-vigged;
 history = the player's game log at that line (this season first, up to 30 games), blended with `final_probability`,
 calibrated, rated. Only 8+ is printed by default; everything priced can be logged.
 """
@@ -20,9 +22,9 @@ from . import lowline as LW
 SITE = "https://site.api.espn.com/apis/site/v2/sports"
 CORE = "https://sports.core.api.espn.com/v2/sports"
 SPORT = {"NHL": ("hockey/nhl", "hockey/leagues/nhl"), "MLB": ("baseball/mlb", "baseball/leagues/mlb"),
-         "NBA": ("basketball/nba", "basketball/leagues/nba")}
+         "NBA": ("basketball/nba", "basketball/leagues/nba"), "NFL": ("football/nfl", "football/leagues/nfl")}
 # PrizePicks team abbreviation -> ESPN's (scoreboard, roster, game logs)
-ALIAS = {"MLB": {"LA": "LAD"}, "NBA": {"NYK": "NY", "SAS": "SA", "GSW": "GS", "NOP": "NO", "UTA": "UTAH", "WAS": "WSH"}}
+ALIAS = {"MLB": {"LA": "LAD"}, "NFL": {"WAS": "WSH"}, "NBA": {"NYK": "NY", "SAS": "SA", "GSW": "GS", "NOP": "NO", "UTA": "UTAH", "WAS": "WSH"}}
 # PrizePicks stat -> (DraftKings ladder, our market key, game-log reader)
 STATS = {
     "NHL": {"Shots On Goal": ("Shots on Goal Milestones", "skater_sog"), "Points": ("Points Milestones", "skater_points"),
@@ -41,9 +43,30 @@ STATS = {
             "3-PT Made": ("3-Point Field Goals Milestones", "threes"), "Steals": ("Steals Milestones", "steals"),
             "Blocked Shots": ("Blocks Milestones", "blocks")},
 }
+# Stats with no ESPN DraftKings ladder, priced only when The Odds API key is set (edge/oddsapi.py): stat -> market key
+EXTRA = {"NHL": {"Blocked Shots": "skater_blocks", "Goalie Saves": "goalie_saves"},
+         "MLB": {"Pitching Outs": "pitcher_outs", "Hits Allowed": "pitcher_hits_allowed", "Earned Runs Allowed": "pitcher_earned_runs",
+                 "Walks Allowed": "pitcher_walks"},
+         "NBA": {"Rebs+Asts": "rebs_asts", "Turnovers": "turnovers", "Blks+Stls": "blks_stls"},
+         "NFL": {"Pass Yards": "pass_yds", "Rush Yards": "rush_yds", "Receiving Yards": "rec_yds", "Receptions": "receptions",
+                 "Pass TDs": "pass_tds", "Rush+Rec Yds": "rush_rec_yds", "Pass Attempts": "pass_att", "Pass Completions": "pass_cmp",
+                 "Rush Attempts": "rush_att", "INT": "pass_int", "Longest Reception": "longest_rec"}}
 # market key -> ESPN game-log columns summed (3PT is 'made-attempted')
 NBA_COLS = {"points": ("PTS",), "rebounds": ("REB",), "assists": ("AST",), "pra": ("PTS", "REB", "AST"), "pts_asts": ("PTS", "AST"),
-            "pts_rebs": ("PTS", "REB"), "threes": ("3PT",), "steals": ("STL",), "blocks": ("BLK",)}
+            "pts_rebs": ("PTS", "REB"), "threes": ("3PT",), "steals": ("STL",), "blocks": ("BLK",), "rebs_asts": ("REB", "AST"),
+            "turnovers": ("TO",), "blks_stls": ("BLK", "STL")}
+# starting pitchers: market key -> statsapi pitching field
+PITCH_COLS = {"pitcher_strikeouts": "strikeOuts", "pitcher_outs": "outs", "pitcher_hits_allowed": "hits",
+              "pitcher_earned_runs": "earnedRuns", "pitcher_walks": "baseOnBalls"}
+# NFL: market key -> ESPN game-log (category, label) columns summed
+NFL_COLS = {"pass_yds": [("passing", "YDS")], "rush_yds": [("rushing", "YDS")], "rec_yds": [("receiving", "YDS")],
+            "receptions": [("receiving", "REC")], "pass_tds": [("passing", "TD")], "pass_att": [("passing", "ATT")],
+            "pass_cmp": [("passing", "CMP")], "rush_att": [("rushing", "CAR")], "pass_int": [("passing", "INT")],
+            "longest_rec": [("receiving", "LNG")], "rush_rec_yds": [("rushing", "YDS"), ("receiving", "YDS")]}
+
+
+def market_key(league: str, stat: str) -> str | None:
+    return (STATS.get(league, {}).get(stat) or (None, None))[1] or EXTRA.get(league, {}).get(stat)
 
 
 def espn_team(league: str, team: str) -> str:
@@ -172,8 +195,23 @@ def nba_value(s: dict, market_key: str) -> float | None:
 def recount_values(sport: str, market_key: str, team: str, pid: str) -> list[float] | None:
     """Per-game values the scan's history used, newest first (up to 30); None when the market has no reader here."""
     if sport == "NHL":
+        if market_key == "goalie_saves":                            # starts only: saves = shots against - goals against
+            return [float((g["x"].get("shotsAgainst") or 0) - (g["x"].get("goalsAgainst") or 0))
+                    for g in LW.nhl_log(pid) if g["x"].get("gamesStarted")][:30]
         key = next((k for k, mk in LW.NHL_STATS.values() if mk == market_key), None)
         return None if key is None else [float(g["x"].get(key) or 0) for g in LW.nhl_log(pid)][:30]
+    if sport == "MLB" and market_key in PITCH_COLS:
+        return [float(g["x"].get(PITCH_COLS[market_key]) or 0) for g in mlb_pitch_log(pid)][:30]
+    if sport == "NFL":
+        cols = NFL_COLS.get(market_key)
+        if not cols:
+            return None
+        out = []
+        for g in LW.nfl_log(pid):
+            v = [g["x"].get(c) for c in cols]
+            if not all(x is None for x in v):
+                out.append(sum(LW._num(x) for x in v if x is not None))
+        return out[:30]
     if sport == "NBA":
         if market_key not in NBA_COLS:
             return None
@@ -184,19 +222,19 @@ def recount_values(sport: str, market_key: str, team: str, pid: str) -> list[flo
 
 def history(sport: str, stat: str, team: str, player: str, line: float, aid: str | None = None) -> tuple[float | None, int, str | None]:
     """Share of his recent games on each side of the line (this season first, up to 30 games), and his league id."""
-    if sport == "NBA":
+    mk = market_key(sport, stat)
+    if sport in ("NBA", "NFL"):                                     # ESPN athlete id, from the ESPN roster
         if not aid:
             return None, 0, None
-        vals, pid = recount_values("NBA", STATS["NBA"][stat][1], team, aid), aid
+        vals, pid = recount_values(sport, mk, team, aid) or [], aid
     elif sport == "NHL":
         pid = LW.nhl_player(team, player)
         if not pid:
             return None, 0, None
-        key = LW.NHL_STATS[stat][0]
-        vals = [float(g["x"].get(key) or 0) for g in LW.nhl_log(pid)]
-    elif stat == "Pitcher Strikeouts":
+        vals = recount_values("NHL", mk, team, pid) or []
+    elif mk in PITCH_COLS:
         pid = LW.mlb_player(team, player)
-        vals = [float(g["x"].get("strikeOuts") or 0) for g in mlb_pitch_log(pid)] if pid else []
+        vals = (recount_values("MLB", mk, team, pid) or []) if pid else []
     else:
         pid = LW.mlb_player(team, player)
         if not pid:
@@ -210,14 +248,40 @@ def history(sport: str, stat: str, team: str, player: str, line: float, aid: str
 
 def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: int = 2) -> list[dict]:
     from . import pp
+    from . import oddsapi as OA
     day = day or dt.date.today()
+    oa_on = OA.enabled()
     props = []
     for lg in leagues:
         try:
-            props += [p for p in pp.board(lg, ("standard", "goblin", "demon")) if p["stat"] in STATS[lg]]
+            props += [p for p in pp.board(lg, ("standard", "goblin", "demon"))
+                      if p["stat"] in STATS.get(lg, {}) or (oa_on and p["stat"] in OA.MARKETS.get(lg, {}) and market_key(lg, p["stat"]))]
         except Exception as e:
             log(f"{lg}: board unavailable ({type(e).__name__})")
-    log(f"{len(props)} PrizePicks props with a DraftKings ladder type ...")
+    log(f"{len(props)} PrizePicks props with a sportsbook market type ..." + ("" if oa_on else " (DraftKings via ESPN only: set $ODDS_API_KEY for every book)"))
+    # The Odds API: one call per game, only the markets on this board (quota = markets x book groups)
+    oa_evs, oa_odds = {}, {}
+    if oa_on:
+        for lg in leagues:
+            if lg not in OA.SPORT_KEYS:
+                continue
+            try:
+                oa_evs[lg] = OA.events(lg)
+            except Exception as e:
+                log(f"{lg}: odds API unavailable ({type(e).__name__}: {e})")
+                continue
+            need = collections.defaultdict(set)
+            for p in props:
+                if p["league"] == lg:
+                    ev = OA.match_event(oa_evs[lg], p.get("team_name"), p.get("start"))
+                    if ev and OA.MARKETS.get(lg, {}).get(p["stat"]):
+                        need[ev["id"]].add(OA.MARKETS[lg][p["stat"]])
+            for oid, mks in need.items():
+                try:
+                    oa_odds[(lg, oid)] = OA.event_odds(lg, oid, mks)
+                except Exception as e:
+                    log(f"{lg} {oid}: odds API error ({type(e).__name__}: {e})")
+        log(f"odds API: {len(oa_odds)} games priced across books; requests remaining {OA.quota['remaining']}")
     events, lad, rost = {}, {}, {}
     for lg in leagues:
         for d in (day + dt.timedelta(days=i) for i in range(days)):
@@ -245,13 +309,24 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
             except Exception:
                 rost[key] = {}
         aid = rost[key].get(LW._fold(p["player"]))
-        ladder_name, mk = STATS[lg][p["stat"]]
-        lad_p = lad.get((lg, eid), {}).get((ladder_name, aid or ""))
-        if not lad_p:
-            return {**p, "error": "no DraftKings ladder"}
-        mk_over, mnote = market_over(lad_p, p["line"])
-        if mk_over is None:
-            return {**p, "error": mnote}
+        mk = market_key(lg, p["stat"])
+        mk_over, mnote, cons = None, "", None
+        if lg in oa_evs:                                            # every book first, sharp books weighted up
+            ev = OA.match_event(oa_evs[lg], p.get("team_name"), p.get("start"))
+            om = OA.MARKETS.get(lg, {}).get(p["stat"])
+            if ev and om:
+                cons = OA.consensus(OA.book_prices(oa_odds.get((lg, ev["id"]), {}), om, p["player"], p["line"]))
+                if cons:
+                    mk_over = cons["p_over"]
+        if mk_over is None:                                         # fallback: DraftKings ladder through ESPN
+            if p["stat"] not in STATS.get(lg, {}):
+                return {**p, "error": "no sportsbook price at this line"}
+            lad_p = lad.get((lg, eid), {}).get((STATS[lg][p["stat"]][0], aid or ""))
+            if not lad_p:
+                return {**p, "error": "no DraftKings ladder"}
+            mk_over, mnote = market_over(lad_p, p["line"])
+            if mk_over is None:
+                return {**p, "error": mnote}
         h_over, n, pid = history(lg, p["stat"], p["team"], p["player"], p["line"], aid)
         best = None
         for side in (["over"] if p["over_only"] else ["over", "under"]):
@@ -259,9 +334,13 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
             ph = None if h_over is None else (h_over if side == "over" else 1 - h_over)
             seg = f"{lg.lower()}:{mk}:{side}"
             e = final_probability(None, pk, ph, seg, n)
+            rt = rating(e.p, e.confidence, pk)
+            note = OA.describe(cons, side) if cons else mnote
+            if cons and cons["disagree"] and rt >= 8:               # books more than 10 points apart: not an 80% read
+                rt, note = 7, note + " (held at 7)"
             r = {**p, "side": side, "market_key": mk, "p_market": pk, "p_hist": ph, "hist_n": n, "p_final": e.p,
-                 "confidence": e.confidence, "rating": rating(e.p, e.confidence, pk), "player_id": pid, "event_id": eid,
-                 "notes": f"{mnote}; " + "; ".join(e.notes)}
+                 "confidence": e.confidence, "rating": rt, "player_id": pid, "event_id": eid,
+                 "notes": f"{note}; " + "; ".join(e.notes)}
             if best is None or r["p_final"] > best["p_final"]:
                 best = r
         return best
@@ -275,7 +354,7 @@ _PK: dict = {}
 
 def grade_id(r: dict) -> str:
     """The id our graders want: NHL gameId (api-web), MLB gamePk (statsapi); NBA grades on ESPN's own event id."""
-    if r["league"] == "NBA":
+    if r["league"] in ("NBA", "NFL"):
         return str(r["event_id"])
     day = (r.get("start") or dt.date.today().isoformat())[:10]
     key = (r["league"], r["team"], day)

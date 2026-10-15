@@ -546,6 +546,53 @@ class DevigMethods(unittest.TestCase):
         self.assertLessEqual(odds.devig(-500, 350, "worst")[0], min(fav.values()) + 1e-9)
 
 
+class OddsApi(unittest.TestCase):
+    ODDS = {"id": "e1", "home_team": "Boston Celtics", "away_team": "Detroit Pistons", "commence_time": "2026-10-20T23:00:00Z",
+            "bookmakers": [
+                {"key": "pinnacle", "markets": [{"key": "player_points", "outcomes": [
+                    {"name": "Over", "description": "Jayson Tatum", "price": -400, "point": 19.5},
+                    {"name": "Under", "description": "Jayson Tatum", "price": 300, "point": 19.5}]}]},
+                {"key": "draftkings", "markets": [{"key": "player_points_alternate", "outcomes": [
+                    {"name": "Over", "description": "Jayson Tatum", "price": -500, "point": 19.5},
+                    {"name": "Over", "description": "Jayson Tatum", "price": -200, "point": 24.5}]}]},
+                {"key": "fanduel", "markets": [{"key": "player_points", "outcomes": [
+                    {"name": "Over", "description": "Jaylen Brown", "price": -110, "point": 22.5},
+                    {"name": "Under", "description": "Jaylen Brown", "price": -110, "point": 22.5}]}]}]}
+
+    def test_book_prices_two_way_and_ladder(self):
+        from edge import oddsapi as OA, tier
+        p = OA.book_prices(self.ODDS, "player_points", "Jayson Tatum", 19.5)
+        self.assertEqual(set(p), {"pinnacle", "draftkings"})
+        self.assertAlmostEqual(p["pinnacle"], 0.8 / (0.8 + 0.25), places=4)              # two-way, multiplicative
+        self.assertAlmostEqual(p["draftkings"], tier.devig_one_way(500 / 600), places=4)  # one-way rung
+        self.assertEqual(OA.book_prices(self.ODDS, "player_points", "Jayson Tatum", 20.5), {})
+        self.assertEqual(OA.book_prices(self.ODDS, "player_points", "Jayson Tatum", 20.0), {})  # whole line, no push price
+
+    def test_consensus_weights_sharp_and_flags_disagreement(self):
+        from edge import oddsapi as OA
+        c = OA.consensus({"pinnacle": 0.76, "draftkings": 0.82})
+        self.assertLess(c["p_over"], 0.79)                         # Pinnacle 3x pulls toward .76
+        self.assertEqual(c["sharp"], ["pinnacle"])
+        self.assertFalse(c["disagree"])
+        self.assertTrue(OA.consensus({"pinnacle": 0.70, "fanduel": 0.85})["disagree"])
+        self.assertIsNone(OA.consensus({}))
+        self.assertIn("2 books incl. pinnacle", OA.describe(c))
+
+    def test_match_event_by_team_and_time(self):
+        from edge import oddsapi as OA
+        evs = [self.ODDS, {**self.ODDS, "id": "e2", "commence_time": "2026-10-22T23:00:00Z"}]
+        self.assertEqual(OA.match_event(evs, "Celtics", "2026-10-20T19:10:00.000-04:00")["id"], "e1")
+        self.assertEqual(OA.match_event(evs, "Celtics", "2026-10-22T19:00:00.000-04:00")["id"], "e2")
+        self.assertIsNone(OA.match_event(evs, "Knicks", "2026-10-20T19:00:00.000-04:00"))
+
+    def test_market_keys_cover_extra_stats(self):
+        from edge import tier
+        self.assertEqual(tier.market_key("MLB", "Pitching Outs"), "pitcher_outs")
+        self.assertEqual(tier.market_key("NHL", "Shots On Goal"), "skater_sog")
+        self.assertEqual(tier.market_key("NFL", "Receiving Yards"), "rec_yds")
+        self.assertIsNone(tier.market_key("NFL", "Fantasy Score"))
+
+
 class TierScan(unittest.TestCase):
     def test_devig_and_rungs(self):
         from edge import tier

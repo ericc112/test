@@ -80,6 +80,8 @@ def main(argv=None):
     pb.add_argument("--player")
     pb.add_argument("--types", default="standard", help="odds types to include: standard,goblin,demon")
     pb.add_argument("--log", action="store_true", help="log every priced prop to bets.csv (skips ones already logged)")
+    oa = sub.add_parser("odds", help="The Odds API ($ODDS_API_KEY): check the key and quota")
+    oa.add_argument("--league", default="NBA")
     bd = sub.add_parser("board", help="export 8+ picks and the scorecard as JSON for the Eight-Plus Board page")
     bd.add_argument("--out", required=True)
     bd.add_argument("--days", type=int, default=7)
@@ -312,6 +314,9 @@ def main(argv=None):
                 added += 1
             L.write_bets(bets)
             print(f"Logged {added} new prop(s) to bets.csv.")
+    elif args.cmd == "odds":
+        from . import oddsapi as OA
+        print(OA.check(args.league.upper()))
     elif args.cmd == "board":
         from . import board as B
         for coll, doc_id, path in B.export(args.out, args.days, not args.no_verify):

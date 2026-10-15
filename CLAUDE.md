@@ -69,7 +69,10 @@ The user follows 8+ picks on a live page: https://claude.ai/artifact/AhjWxmRgkij
 ## Persist the learning
 Cloud containers are temporary. After any `grade`, `review`, `learn`, `add` or `tag`, commit `betting/data/`, `betting/LESSONS.md` and `betting/POSTMORTEMS.md` and push, or the learning is lost.
 
-## Data sources that work (no API keys)
+## Data sources that work
+- Every book's player-prop prices: The Odds API with `$ODDS_API_KEY` from the environment (`edge/oddsapi.py`; `python3 -m edge odds` checks it). `edge tier` uses it first and falls back to ESPN's DraftKings ladders. Never print, log or commit the key.
+
+No-key sources:
 - Odds and DraftKings props: `https://sports.core.api.espn.com/v2/sports/{sport}/leagues/{league}/events/{id}/competitions/{id}/odds/100/propBets`. Over/under order is not labelled: verify sides against the "N+" milestone price (LESSONS L2).
 - Soccer: ESPN `site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event=ID` (any league), plus per-player match stats (passes, saves, minutes) from `sports.core.api.espn.com/v2/sports/soccer/leagues/{league}/events/{id}/competitions/{id}/competitors/{team}/roster/{player}/statistics/0`. DraftKings soccer props are on the same propBets endpoint (league `uefa.champions`, `eng.1`, ...).
 - PrizePicks boards: `https://partner-api.prizepicks.com/projections?league_id=ID&per_page=10000` (league ids from `/leagues`; the main api.prizepicks.com is captcha-blocked). It rate-limits: `edge pp` caches and backs off.

@@ -77,11 +77,18 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 | `POSTMORTEMS.md` | Readable post-mortem log, grouped by date and independent cause |
 | `tests/test_edge.py` | `python -m unittest discover -s tests` |
 
+## Every book's price (The Odds API, `edge/oddsapi.py`)
+Set `ODDS_API_KEY` in the environment (never in the repo). `python -m edge odds` checks the key and quota.
+- `edge tier` then prices each PrizePicks line from every book's fair price at that exact line: two-way over/under de-vigged multiplicatively (the method that never overstates a favourite), one-way alternate rungs with the milestone hold. Sharp books count more (Pinnacle 3x, Circa 2x, BetOnline 1.5x); books more than 10 points apart hold the rating at 7.
+- New stats with a book price: NHL goalie saves and blocked shots, MLB pitcher outs / hits / earned runs / walks, NBA rebs+asts / turnovers / blks+stls, NFL yards, receptions, attempts, TDs, interceptions, longest reception.
+- Without a key, or when no book prices the line, the scan falls back to the DraftKings ladder ESPN carries.
+- Quota: one call per game with only the markets on that night's board (markets x bookmaker groups of 10). Responses are cached in `.cache/oddsapi` (odds 10 min, events 1 h). `ODDS_API_BOOKS` overrides the book list.
+
 ## Market keys the grader understands
 - **mlb** (`event_id` = gamePk, `player_id` = MLBAM id): `pitcher_strikeouts`, `pitcher_outs`, `pitcher_hits_allowed`, `pitcher_earned_runs`, `pitcher_walks`, `pitcher_pitches`, `first_inning_pitches`, `batter_hits`, `batter_walks`, `batter_strikeouts`, `batter_total_bases`, `batter_home_runs`, `batter_singles`, `batter_hrr`
-- **nhl** (`event_id` = NHL gameId, `player_id` = NHL id): `skater_sog`, `skater_points`, `skater_goals`, `goalie_saves`
-- **nba** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `points`, `rebounds`, `assists`, `pra`, `pts_asts`, `pts_rebs`, `rebs_asts`, `threes`, `steals`, `blocks`, `turnovers`. A DNP is voided.
-- **nfl** and **cfb** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `pass_yds`, `pass_att`, `rush_yds`, `rush_att`, `rec_yds`, `receptions`, `anytime_td`
+- **nhl** (`event_id` = NHL gameId, `player_id` = NHL id): `skater_sog`, `skater_points`, `skater_goals`, `skater_blocks`, `goalie_saves`
+- **nba** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `points`, `rebounds`, `assists`, `pra`, `pts_asts`, `pts_rebs`, `rebs_asts`, `threes`, `steals`, `blocks`, `blks_stls`, `turnovers`. A DNP is voided.
+- **nfl** and **cfb** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `pass_yds`, `pass_att`, `pass_cmp`, `pass_tds`, `pass_int`, `rush_yds`, `rush_att`, `rec_yds`, `receptions`, `rush_rec_yds`, `longest_rec`, `anytime_td`
 - **cs2** (`event_id` = bo3.gg match id, `player_id` = nickname): `cs_kills_m12`, `cs_headshots_m12`
 - **lol** (`event_id` = bo3.gg match id, `player_id` = gol.gg player id): `kills_m123` (graded from gol.gg a few hours after the series; void if fewer than 3 games are played)
 - **soccer** (`event_id` = ESPN event, `player_id` = ESPN athlete id; any league): `passes_att`, `gk_saves`, `shots`, `sot`, `tackles`, `fouls`. A player who doesn't play is voided, as the apps do.

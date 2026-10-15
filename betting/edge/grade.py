@@ -72,7 +72,7 @@ def mlb_value(event_id: str, player_id: str, market: str, cache: dict):
 
 # ------------------------------------------------------------------ NHL (event_id = gameId, player_id = NHL id)
 NHL_STATS = {"skater_sog": "sog", "skater_points": "points", "skater_goals": "goals", "skater_assists": "assists", "goalie_saves": "saves",
-             "skater_hits": "hits", "skater_toi": "toi"}
+             "skater_hits": "hits", "skater_toi": "toi", "skater_blocks": "blockedShots"}
 
 
 def _nhl_num(v):
@@ -101,7 +101,8 @@ def nhl_value(event_id: str, player_id: str, market: str, cache: dict):
 # ------------------------------------------------------------------ NFL (event_id = ESPN event, player_id = ESPN athlete id)
 NFL_STATS = {
     "pass_yds": ("passing", "YDS"), "rush_yds": ("rushing", "YDS"), "rush_att": ("rushing", "CAR"),
-    "rec_yds": ("receiving", "YDS"), "receptions": ("receiving", "REC"),
+    "rec_yds": ("receiving", "YDS"), "receptions": ("receiving", "REC"), "pass_tds": ("passing", "TD"),
+    "pass_int": ("passing", "INT"), "longest_rec": ("receiving", "LONG"), "pass_cmp": ("passing", "C/ATT"),
 }
 
 
@@ -129,6 +130,11 @@ def nfl_value(event_id: str, player_id: str, market: str, cache: dict, league: s
         if all(t is None for t in tds):
             return "void", None
         return "final", sum(t or 0 for t in tds)
+    if market == "rush_rec_yds":
+        yds = [stat("rushing", "YDS"), stat("receiving", "YDS")]
+        if all(y is None for y in yds):
+            return "void", None
+        return "final", sum(y or 0 for y in yds)
     if market == "pass_att":
         for team in s["boxscore"].get("players", []):
             for cat in team["statistics"]:
@@ -145,7 +151,7 @@ def nfl_value(event_id: str, player_id: str, market: str, cache: dict, league: s
 NBA_STATS = {"points": ("points",), "rebounds": ("rebounds",), "assists": ("assists",), "pra": ("points", "rebounds", "assists"),
              "pts_asts": ("points", "assists"), "pts_rebs": ("points", "rebounds"), "rebs_asts": ("rebounds", "assists"),
              "threes": ("threePointFieldGoalsMade-threePointFieldGoalsAttempted",), "steals": ("steals",), "blocks": ("blocks",),
-             "turnovers": ("turnovers",)}
+             "turnovers": ("turnovers",), "blks_stls": ("blocks", "steals")}
 
 
 def nba_value(event_id: str, player_id: str, market: str, cache: dict):
