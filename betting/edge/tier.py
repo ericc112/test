@@ -12,6 +12,7 @@ from __future__ import annotations
 import collections
 import concurrent.futures as cf
 import datetime as dt
+import functools
 import math
 import re
 
@@ -103,7 +104,13 @@ def market_over(lad: dict, line: float) -> tuple[float | None, str]:
 
 
 def scoreboard(sport: str, day: dt.date) -> list[dict]:
-    return _get(f"{SITE}/{SPORT[sport][0]}/scoreboard?dates={day:%Y%m%d}").get("events", [])
+    for attempt in range(3):                                       # ESPN times out now and then; a missing day is []
+        try:
+            return _get(f"{SITE}/{SPORT[sport][0]}/scoreboard?dates={day:%Y%m%d}").get("events", [])
+        except Exception:
+            if attempt == 2:
+                return []
+    return []
 
 
 def ladders(sport: str, event_id: str) -> dict:
@@ -132,16 +139,31 @@ def ladders(sport: str, event_id: str) -> dict:
     return lad
 
 
-def roster(sport: str, team_abbr: str) -> dict:
+@functools.lru_cache(maxsize=None)
+def roster_names(sport: str, team_abbr: str) -> tuple:
+    """((display name, ESPN athlete id), ...) for an ESPN team abbreviation."""
     d = _get(f"{SITE}/{SPORT[sport][0]}/teams/{team_abbr.lower()}/roster")
-    out = {}
+    out = []
     for grp in d.get("athletes", []):
         for a in (grp.get("items") if isinstance(grp, dict) and "items" in grp else [grp]):
             if isinstance(a, dict) and a.get("displayName"):
-                out[LW._fold(a["displayName"])] = str(a["id"])
-    return out
+                out.append((a["displayName"], str(a["id"])))
+    return tuple(out)
 
 
+def roster(sport: str, team_abbr: str) -> dict:
+    return {LW._fold(n): i for n, i in roster_names(sport, team_abbr)}
+
+
+def _memo():
+    """Game logs and player lookups are fetched once per run: one player can have a dozen priced lines."""
+    for name in ("nhl_log", "mlb_log", "nfl_log", "nhl_player", "mlb_player"):
+        f = getattr(LW, name)
+        if not hasattr(f, "cache_info"):
+            setattr(LW, name, functools.lru_cache(maxsize=None)(f))
+
+
+@functools.lru_cache(maxsize=None)
 def mlb_pitch_log(pid: str) -> list[dict]:
     out = []
     year = dt.date.today().year
@@ -156,6 +178,7 @@ def mlb_pitch_log(pid: str) -> list[dict]:
     return sorted(out, key=lambda r: r["date"], reverse=True)
 
 
+@functools.lru_cache(maxsize=None)
 def nba_log(aid: str) -> list[dict]:
     """Regular-season games, newest first, this season then last. All-Star games and total rows are skipped; playoffs
     and preseason are a different kind of game (L26) and stay out."""
@@ -228,7 +251,10 @@ def history(sport: str, stat: str, team: str, player: str, line: float, aid: str
             return None, 0, None
         vals, pid = recount_values(sport, mk, team, aid) or [], aid
     elif sport == "NHL":
-        pid = LW.nhl_player(team, player)
+        try:
+            pid = LW.nhl_player(NHL_API.get(team, team), player)
+        except Exception:                                           # unknown team code at the NHL API: no history
+            pid = None
         if not pid:
             return None, 0, None
         vals = recount_values("NHL", mk, team, pid) or []
@@ -249,6 +275,7 @@ def history(sport: str, stat: str, team: str, player: str, line: float, aid: str
 def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: int = 2) -> list[dict]:
     from . import pp
     from . import oddsapi as OA
+    _memo()
     day = day or dt.date.today()
     oa_on = OA.enabled()
     props = []
@@ -282,6 +309,8 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
                 except Exception as e:
                     log(f"{lg} {oid}: odds API error ({type(e).__name__}: {e})")
         log(f"odds API: {len(oa_odds)} games priced across books; requests remaining {OA.quota['remaining']}")
+    LAST_OA.clear()
+    LAST_OA.update(oa_odds)
     events, lad, rost = {}, {}, {}
     for lg in leagues:
         for d in (day + dt.timedelta(days=i) for i in range(days)):
@@ -345,8 +374,111 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
                 best = r
         return best
 
+    def safe(p):
+        try:
+            return one(p)
+        except Exception as e:                                      # one bad lookup never sinks the whole board
+            return {**p, "error": f"{type(e).__name__}: {str(e)[:60]}"}
+
     with cf.ThreadPoolExecutor(6) as ex:
-        return list(ex.map(one, props))
+        return list(ex.map(safe, props))
+
+
+LAST_OA: dict = {}          # (league, Odds API event id) -> odds fetched by the last scan, reused by book_scan at no quota cost
+NHL_API = {"TB": "TBL", "NJ": "NJD", "SJ": "SJS", "LA": "LAK", "UTAH": "UTA"}   # ESPN -> NHL API team codes
+
+
+def _rate(lg: str, stat: str, team: str, player: str, aid: str | None, line: float, side: str, p_market: float) -> dict:
+    h_over, n, pid = history(lg, stat, team, player, line, aid)
+    ph = None if h_over is None else (h_over if side == "over" else 1 - h_over)
+    e = final_probability(None, p_market, ph, f"{lg.lower()}:{market_key(lg, stat)}:{side}", n)
+    return {"p_hist": ph, "hist_n": n, "p_final": e.p, "confidence": e.confidence, "rating": rating(e.p, e.confidence, p_market)}
+
+
+def book_scan(leagues=("NHL", "MLB", "NBA"), day: dt.date | None = None, days: int = 1, log=print, max_rows: int = 600) -> list[dict]:
+    """Sportsbook props with our rating: every DraftKings 'k+' rung ESPN carries (one-way, de-vigged), plus every
+    book's over/under lines the last `scan` pulled from The Odds API. Same blend, gates and rating as the PrizePicks scan."""
+    from . import oddsapi as OA
+    _memo()
+    day = day or dt.date.today()
+    out = []
+    for lg in leagues:
+        if lg not in SPORT:
+            continue
+        evs = []
+        for d in (day + dt.timedelta(days=i) for i in range(days)):
+            for e in scoreboard(lg, d):
+                c = e["competitions"][0]
+                if c["status"]["type"]["state"] == "pre":
+                    evs.append((e, {t["team"]["abbreviation"]: t["team"].get("displayName", "") for t in c["competitors"]}))
+        cands = []
+        rev = {lad: stat for stat, (lad, _) in STATS.get(lg, {}).items()}
+        for e, teams in evs:
+            who = {}
+            for ab in teams:
+                try:
+                    for nm, aid in roster_names(lg, ab):
+                        who[aid] = (nm, ab, next((o for o in teams if o != ab), ""))
+                except Exception:
+                    continue
+            for (lad_name, aid), rungs in ladders(lg, e["id"]).items():
+                if lad_name not in rev or aid not in who:
+                    continue
+                nm, ab, opp = who[aid]
+                for k, am in rungs.items():
+                    imp = implied(am)
+                    if 0.5 <= imp <= 0.985 and k >= 1:
+                        cands.append({"league": lg, "player": nm, "team": ab, "opp": opp, "stat": rev[lad_name], "line": k - 0.5,
+                                      "side": "over", "price": am, "book": "DraftKings", "p_market": devig_one_way(imp),
+                                      "aid": aid, "start": e.get("date", "")})
+            # every book, from odds the PrizePicks scan already paid for
+            names = {LW._fold(v): ab for ab, v in teams.items()}
+            for (olg, oid), odds in LAST_OA.items():
+                if olg != lg or not odds or {LW._fold(odds.get("home_team", "")), LW._fold(odds.get("away_team", ""))} != set(names):
+                    continue
+                stat_of = {m: st for st, m in OA.MARKETS.get(lg, {}).items()}
+                lines = collections.defaultdict(dict)                # (player, market, point) -> {side: (price, book)}
+                for bk in odds.get("bookmakers", []):
+                    for m in bk.get("markets", []):
+                        base = m["key"].replace("_alternate", "")
+                        if base not in stat_of or not market_key(lg, stat_of[base]):
+                            continue
+                        for o in m.get("outcomes", []):
+                            if o.get("point") is None or o.get("name") not in ("Over", "Under"):
+                                continue
+                            key, sd = (o.get("description", ""), base, float(o["point"])), o["name"].lower()
+                            if sd not in lines[key] or o["price"] > lines[key][sd][0]:
+                                lines[key][sd] = (o["price"], bk.get("title") or bk["key"])
+                for (pl, base, pt), best in lines.items():
+                    c = OA.consensus(OA.book_prices(odds, base, pl, pt))
+                    if not c:
+                        continue
+                    aid, ab, opp = None, "", ""
+                    for a, (nm, t, o) in who.items():
+                        if LW._fold(nm) == LW._fold(pl):
+                            aid, ab, opp = a, t, o
+                    for sd, (price, book) in best.items():
+                        pm = c["p_over"] if sd == "over" else 1 - c["p_over"]
+                        if pm >= 0.5:
+                            cands.append({"league": lg, "player": pl, "team": ab, "opp": opp, "stat": stat_of[base], "line": pt,
+                                          "side": sd, "price": price, "book": book + (f" (best of {c['n']})" if c["n"] > 1 else ""),
+                                          "p_market": pm, "aid": aid, "start": e.get("date", ""), "disagree": c["disagree"]})
+        cands.sort(key=lambda r: -r["p_market"])
+        cands = cands[:max_rows]
+
+        def one(r):
+            try:
+                rr = {**r, **_rate(lg, r["stat"], r["team"], r["player"], r["aid"], r["line"], r["side"], r["p_market"])}
+            except Exception:
+                return None
+            if rr.get("disagree") and rr["rating"] >= 8:
+                rr["rating"] = 7
+            return rr
+        with cf.ThreadPoolExecutor(6) as ex:
+            rows = [r for r in ex.map(one, cands) if r]
+        log(f"{lg}: {len(rows)} sportsbook props rated")
+        out += rows
+    return out
 
 
 _PK: dict = {}

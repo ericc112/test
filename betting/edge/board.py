@@ -100,6 +100,34 @@ def summary(rows: list[dict]) -> dict:
             "bands": [{"band": k, "hits": h, "n": n, "predicted": round(p / n, 3) if n else None} for k, (h, n, p) in bands.items()]}
 
 
+def _row(r: dict, source: str) -> dict:
+    """One compact row for the page's props explorer."""
+    return {"pl": r["player"], "tm": r.get("team", ""), "op": r.get("opp", ""), "st": r["stat"], "ln": r["line"],
+            "sd": ("More" if r["side"] == "over" else "Less") if source == "pp" else ("Over" if r["side"] == "over" else "Under"),
+            "ty": r.get("odds_type", "") if source == "pp" else r.get("book", ""), "pr": r.get("price"),
+            "p": round(r["p_final"], 4), "pm": round(r["p_market"], 4),
+            "ph": None if r.get("p_hist") is None else round(r["p_hist"], 3), "n": r.get("hist_n", 0),
+            "r": r["rating"], "t": r.get("start", "")}
+
+
+def export_props(out: str, leagues=("NHL", "MLB", "NBA"), date: dt.date | None = None, days: int = 2) -> list[tuple[str, str, str]]:
+    """boards/pp-<LG> (every PrizePicks line we could price) and boards/book-<LG> (sportsbook lines), each rated."""
+    from . import tier
+    written, base = [], Path(out) / "boards"
+    base.mkdir(parents=True, exist_ok=True)
+    now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    pp = [r for r in tier.scan(leagues, date, days=days) if "error" not in r and r.get("odds_type") != "demon"]
+    book = tier.book_scan(leagues, date, days=days)
+    for source, rows in (("pp", pp), ("book", book)):
+        for lg in leagues:
+            sel = sorted((r for r in rows if r["league"] == lg), key=lambda r: (-r["rating"], -r["p_final"]))[:700]
+            doc = {"source": source, "league": lg, "updated": now, "rows": [_row(r, source) for r in sel]}
+            p = base / f"{source}-{lg}.json"
+            p.write_text(json.dumps(doc, separators=(",", ":")))
+            written.append(("boards", f"{source}-{lg}", str(p)))
+    return written
+
+
 def export(out: str, days: int = 7, verify_it: bool = True) -> list[tuple[str, str, str]]:
     rows = L.read_bets()
     since = (dt.date.today() - dt.timedelta(days=days)).isoformat()

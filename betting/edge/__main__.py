@@ -86,6 +86,9 @@ def main(argv=None):
     bd.add_argument("--out", required=True)
     bd.add_argument("--days", type=int, default=7)
     bd.add_argument("--no-verify", action="store_true")
+    bd.add_argument("--props", action="store_true", help="also export every rated PrizePicks and sportsbook prop (runs the scans)")
+    bd.add_argument("--league", default="NHL,MLB,NBA")
+    bd.add_argument("--date", help="first slate date for --props (default today)")
     tr = sub.add_parser("tier", help="PrizePicks props with a DraftKings price behind them (NHL, MLB, NBA), rated; 8+ = the 80% tier")
     tr.add_argument("--league", default="NHL,MLB,NBA")
     tr.add_argument("--date", help="first slate date YYYY-MM-DD (default today)")
@@ -319,7 +322,11 @@ def main(argv=None):
         print(OA.check(args.league.upper()))
     elif args.cmd == "board":
         from . import board as B
-        for coll, doc_id, path in B.export(args.out, args.days, not args.no_verify):
+        out = B.export(args.out, args.days, not args.no_verify)
+        if args.props:
+            out += B.export_props(args.out, tuple(x.strip().upper() for x in args.league.split(",")),
+                                  dt.date.fromisoformat(args.date) if args.date else None)
+        for coll, doc_id, path in out:
             print(coll, doc_id, path)
     elif args.cmd == "tier":
         from . import tier as TR
