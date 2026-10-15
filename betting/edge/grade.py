@@ -103,6 +103,7 @@ NFL_STATS = {
     "pass_yds": ("passing", "YDS"), "rush_yds": ("rushing", "YDS"), "rush_att": ("rushing", "CAR"),
     "rec_yds": ("receiving", "YDS"), "receptions": ("receiving", "REC"), "pass_tds": ("passing", "TD"),
     "pass_int": ("passing", "INT"), "longest_rec": ("receiving", "LONG"), "pass_cmp": ("passing", "C/ATT"),
+    "fg_made": ("kicking", "FG"), "kicking_pts": ("kicking", "PTS"),
 }
 
 
@@ -132,6 +133,11 @@ def nfl_value(event_id: str, player_id: str, market: str, cache: dict, league: s
         return "final", sum(t or 0 for t in tds)
     if market == "rush_rec_yds":
         yds = [stat("rushing", "YDS"), stat("receiving", "YDS")]
+        if all(y is None for y in yds):
+            return "void", None
+        return "final", sum(y or 0 for y in yds)
+    if market == "pass_rush_yds":
+        yds = [stat("passing", "YDS"), stat("rushing", "YDS")]
         if all(y is None for y in yds):
             return "void", None
         return "final", sum(y or 0 for y in yds)

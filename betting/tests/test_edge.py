@@ -59,7 +59,8 @@ class Blend(unittest.TestCase):
         from edge.blend import rating
         self.assertEqual([rating(p, "High", 0.85, floor=0.80) for p in (0.80, 0.85, 0.90)], [8, 9, 10])
         self.assertEqual(rating(0.79, "High", 0.85, floor=0.80), 7)     # under the 80% floor
-        self.assertEqual(rating(0.88, "High", None, floor=0.80), 7)     # no sportsbook price: model-only 80%s hit 56%
+        self.assertEqual(rating(0.88, "High", None, floor_no_market=0.80), 9)   # no book price: held to its own floor, not capped
+        self.assertEqual(rating(0.88, "High", None, floor_no_market=0.89), 7)   # ... which learn raises on unpriced results
         self.assertEqual(rating(0.86, "High", 0.70, floor=0.80), 7)     # the market itself under 75%
         self.assertEqual([rating(p, "Medium") for p in (0.58, 0.63, 0.90)], [5, 6, 7])     # 90% that failed a gate is a 7 at most
         self.assertEqual([rating(p, "Low") for p in (0.45, 0.52, 0.56, 0.95)], [1, 2, 3, 4])
@@ -734,6 +735,35 @@ class Tennis(unittest.TestCase):
         R, out = T.walk(rows)
         self.assertAlmostEqual(out[0][3]["p_elo"], 0.5)                          # first meeting: no information yet
         self.assertGreater(R.p_elo("1", "2", "hard"), 0.6)                       # after five wins
+
+
+class NoMarketGrading(unittest.TestCase):
+    def test_log_model(self):
+        from edge.context import log_model
+        p, why, m = log_model([102, 45, 88, 130, 61, 95, 77, 110, 40, 99, 120, 85], 91.5)
+        self.assertTrue(0.3 < p < 0.5 and 80 < m < 95)
+        self.assertIsNone(log_model([1, 2, 3], 1.5))                                   # under 5 games: no model
+        self.assertEqual(log_model([0, 0, 0, 0, 0, 0], 0.5)[0], 0.02)                  # never 0 or 1
+        hi, lo = log_model([2, 1, 3, 2, 1, 2, 0, 1], 0.5)[0], log_model([2, 1, 3, 2, 1, 2, 0, 1], 2.5)[0]
+        self.assertGreater(hi, lo)
+
+    def test_nfl_cells(self):
+        from edge.tier import nfl_num, canon_stat
+        self.assertEqual([nfl_num(v) for v in ("3-4", "1,204", "-3", "0/0", "--")], [3, 1204, -3, 0, 0])
+        self.assertEqual(canon_stat("NFL", "Anytime TDs"), "Rush+Rec TDs")
+        self.assertEqual(canon_stat("NFL", "Rush+Rec Yds"), "Rush+Rec Yds")
+        self.assertEqual(canon_stat("NFL", "Rec Yards"), "Receiving Yards")
+        self.assertEqual(canon_stat("NFL", "Recs"), "Receptions")
+        self.assertEqual(canon_stat("NFL", "FG Made"), "FG Made")
+
+    def test_unpriced_floor_learns_apart(self):
+        rows = [{"id": str(i), "status": "lost" if i < 8 else "won", "p_final": "0.85", "confidence": "High", "p_market": "",
+                 "sport": "nfl", "market": "rec_yds", "side": "over", "action": "lean"} for i in range(20)]
+        rows += [{"id": f"m{i}", "status": "won", "p_final": "0.85", "confidence": "High", "p_market": "0.86", "sport": "mlb",
+                  "market": "pitcher_strikeouts", "side": "over", "action": "lean"} for i in range(20)]
+        priced, _ = learn.tune_rating_floor(rows, {"rating_floor": 0.80})
+        unpriced, _ = learn.tune_rating_floor(rows, {"rating_floor_no_market": 0.80}, priced=False)
+        self.assertEqual((priced, unpriced), (0.80, 0.83))                              # only the unpriced floor moves
 
 
 class Inject(unittest.TestCase):

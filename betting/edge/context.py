@@ -181,6 +181,30 @@ def price(league: str, stat: str, opp: str | None, pid: str | None, line: float,
     return None
 
 
+# ------------------------------------------------------------------ game-log model: the second source when no book prices a prop
+LOG_HALF_LIFE = 8           # games: last week's game counts twice as much as the one eight games back
+
+
+def log_model(vals: list[float], line: float) -> tuple[float, list[str], float] | None:
+    """(P(over), reasons, projected mean) from his own games alone, newest first: a recency-weighted mean and spread
+    fitted as a gamma-Poisson count, so a line that sits between his outcomes gets a smooth chance rather than a raw
+    tally. Used only when no sportsbook prices the prop; None under 5 games."""
+    v = [max(0.0, float(x)) for x in vals[:30]]
+    if len(v) < 5:
+        return None
+    w = [0.5 ** (i / LOG_HALF_LIFE) for i in range(len(v))]
+    sw = sum(w)
+    m = sum(a * b for a, b in zip(w, v)) / sw
+    sd = math.sqrt(sum(a * (b - m) ** 2 for a, b in zip(w, v)) / sw)
+    if m <= 0:
+        p = 0.0
+    else:
+        cv = math.sqrt(max(sd * sd - m, 0.0025 * m * m)) / m        # at least Poisson spread, never tighter than CV 0.05
+        p = nb_over(m, line, cv)
+    p = min(0.98, max(0.02, p))
+    return p, [f"game-log model: recency-weighted average {m:.1f} over his last {len(v)} games (spread {sd:.1f})"], m
+
+
 # ------------------------------------------------------------------ matchup strength for the prop card
 @functools.lru_cache(maxsize=None)
 def mlb_k_table(hand: str, season: int) -> dict:

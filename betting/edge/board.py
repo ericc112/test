@@ -183,14 +183,14 @@ def is_regular_play(r: dict) -> bool:
 
 def summary(rows: list[dict]) -> dict:
     reg = [r for r in rows if r.get("status") in ("won", "lost") and is_regular_play(r)]
-    bands = {"8-10": [0, 0, 0.0], "5-7": [0, 0, 0.0], "1-4": [0, 0, 0.0]}
+    bands = {"8-10": [0, 0, 0.0], "8-10 no book": [0, 0, 0.0], "5-7": [0, 0, 0.0], "1-4": [0, 0, 0.0]}
     for r in rows:
         if r.get("status") not in ("won", "lost"):
             continue
         rt = _rating(r)
         if rt is None:
             continue
-        b = bands["8-10" if rt >= 8 else "5-7" if rt >= 5 else "1-4"]
+        b = bands[("8-10" if _f(r.get("p_market")) is not None else "8-10 no book") if rt >= 8 else "5-7" if rt >= 5 else "1-4"]
         b[0] += r["status"] == "won"
         b[1] += 1
         b[2] += _f(r["p_final"])
@@ -205,7 +205,7 @@ def _row(r: dict, source: str) -> dict:
     return {"pl": r["player"], "tm": r.get("team", ""), "op": r.get("opp", ""), "st": r["stat"], "ln": r["line"],
             "sd": ("More" if r["side"] == "over" else "Less") if source == "pp" else ("Over" if r["side"] == "over" else "Under"),
             "ty": r.get("odds_type", "") if source == "pp" else r.get("book", ""), "pr": r.get("price"),
-            "p": round(r["p_final"], 4), "pm": round(r["p_market"], 4),
+            "p": round(r["p_final"], 4), "pm": None if r.get("p_market") is None else round(r["p_market"], 4),
             "ph": None if r.get("p_hist") is None else round(r["p_hist"], 3), "n": r.get("hist_n", 0),
             "r": r["rating"], "t": r.get("start", ""), "cx": r.get("context") or [],
             "pj": r.get("proj"), "pjs": r.get("proj_src", ""), "a10": r.get("avg10"),

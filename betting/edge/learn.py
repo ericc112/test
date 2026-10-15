@@ -334,20 +334,22 @@ def fit_calibration(rows: list[dict], adj: dict, lam: float = 20.0) -> dict:
     return out
 
 
-def tune_rating_floor(rows: list[dict], adj: dict) -> tuple[float, str]:
+def tune_rating_floor(rows: list[dict], adj: dict, priced: bool = True) -> tuple[float, str]:
     """The user's bar: 8-10 picks hit at least 80%. While graded 8+ picks (scored with today's tier rules) fall short
-    over 20+, raise the floor 3 points (max 0.92); once they clear 85% over 30+, ease it 2 points (min 0.80)."""
-    from .blend import RATING_FLOOR, rating
-    fl = float(adj.get("rating_floor", RATING_FLOOR))
-    tier = [r for r in graded(rows) if _f(r.get("p_final")) is not None
-            and rating(_f(r["p_final"]), r.get("confidence"), _f(r.get("p_market")), floor=fl) >= 8]
+    over 20+, raise the floor 3 points (max 0.92); once they clear 85% over 30+, ease it 2 points (min 0.80).
+    Priced and unpriced picks keep separate floors, each tuned only on its own results."""
+    from .blend import RATING_FLOOR, RATING_FLOOR_NO_MARKET, rating
+    key, base = ("rating_floor", RATING_FLOOR) if priced else ("rating_floor_no_market", RATING_FLOOR_NO_MARKET)
+    fl = float(adj.get(key, base))
+    tier = [r for r in graded(rows) if _f(r.get("p_final")) is not None and (_f(r.get("p_market")) is not None) == priced
+            and rating(_f(r["p_final"]), r.get("confidence"), _f(r.get("p_market")), floor=fl, floor_no_market=fl) >= 8]
     if not tier:
         return fl, "none graded yet"
     hit = float(np.mean([r["status"] == "won" for r in tier]))
     if len(tier) >= 20 and hit < 0.80:
         fl = min(0.92, round(fl + 0.03, 2))
     elif len(tier) >= 30 and hit >= 0.85:
-        fl = max(RATING_FLOOR, round(fl - 0.02, 2))
+        fl = max(base, round(fl - 0.02, 2))
     return fl, f"{hit:.0%} of {len(tier)}"
 
 
@@ -366,6 +368,7 @@ def update(rows: list[dict] | None = None, adj_path: str = ADJ_PATH, lessons_pat
     adj["avoid_segments"] = sorted(set(old.get("avoid_segments", [])) | set(new_avoid))
     adj["cap_medium_segments"] = find_caps(rows)
     adj["rating_floor"], tier = tune_rating_floor(rows, old)
+    adj["rating_floor_no_market"], tier_nm = tune_rating_floor(rows, old, priced=False)
     adj["updated"] = today or dt.date.today().isoformat()
 
     notes = []
@@ -391,6 +394,9 @@ def update(rows: list[dict] | None = None, adj_path: str = ADJ_PATH, lessons_pat
             notes.append(f"Calibration ({key.replace('_', ' ')} picks): an 80% now reads {q:.0%} (a {c['a']:+.2f}, b {c['b']:.2f}, n {c['n']}).")
     if adj["rating_floor"] != old.get("rating_floor", adj["rating_floor"]):
         notes.append(f"8-10 tier: graded 8+ picks hit {tier} -> rating floor {old.get('rating_floor')} -> {adj['rating_floor']}.")
+    if adj["rating_floor_no_market"] != old.get("rating_floor_no_market", adj["rating_floor_no_market"]):
+        notes.append(f"8-10 tier, no book price: graded unpriced 8+ picks hit {tier_nm} -> floor "
+                     f"{old.get('rating_floor_no_market')} -> {adj['rating_floor_no_market']}.")
     flagged = set(old.get("rule_flags", []))
     for seg, c in cause_counts(rows).items():
         for tag, n in c.items():

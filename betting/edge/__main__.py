@@ -349,11 +349,12 @@ def main(argv=None):
                       dt.date.fromisoformat(args.date) if args.date else None, days=args.days)
         ok = sorted([r for r in res if "error" not in r], key=lambda r: -r["p_final"])
         shown = [r for r in ok if r["rating"] >= args.min_rating]
-        print(f"\n{len(ok)} priced; {len(shown)} rated {args.min_rating}+ (8+ = High, blended 80%+, DraftKings 75%+ on its own)")
+        print(f"\n{len(ok)} priced; {len(shown)} rated {args.min_rating}+ (8+ = High, blended 80%+, and 75%+ at the book when a book prices it)")
         for r in shown:
             ph = "-" if r["p_hist"] is None else f"{r['p_hist']:.2f}"
             print(f"{r['rating']:>2}/10 {r['p_final']:.3f} {r['league']} {r['player'][:22]:22s} {r['team']:4s} {r['stat'][:18]:18s} {'More' if r['side'] == 'over' else 'Less'} "
-                  f"{r['line']:<5} {r['odds_type']:8s} market {r['p_market']:.2f} hist {ph}({r['hist_n']}) {r['notes'][:24]}")
+                  f"{r['line']:<5} {r['odds_type']:8s} market {'none' if r['p_market'] is None else format(r['p_market'], '.2f')} "
+                  f"hist {ph}({r['hist_n']}) {r['notes'][:24]}")
         if args.log:
             bets = L.read_bets()
             seen = {(b["event_id"], b["player"].lower(), b["market"], str(float(b["line"])) if b["line"] else "", b["side"]) for b in bets}
@@ -367,7 +368,7 @@ def main(argv=None):
                              "event": f"{r['team']} vs {r['opp']}", "event_id": TR.grade_id(r),
                              "player": r["player"], "player_id": r["player_id"] or "", "market": r["market_key"], "line": r["line"],
                              "side": r["side"], "book": f"PrizePicks {r['odds_type']}", "p_model": "" if r.get("p_model") is None else round(r["p_model"], 4),
-                             "p_market": round(r["p_market"], 4),
+                             "p_market": "" if r["p_market"] is None else round(r["p_market"], 4),
                              "p_hist": "" if r["p_hist"] is None else round(r["p_hist"], 4), "hist_n": r["hist_n"], "p_final": round(r["p_final"], 4),
                              "confidence": r["confidence"], "action": "lean" if r["rating"] >= 8 else "pass",
                              "segment": f"{r['league'].lower()}:{r['market_key']}:{r['side']}", "group": f"{r['league'].lower()}:{r['event_id']}",

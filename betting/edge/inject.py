@@ -43,7 +43,7 @@ def process(doc: dict) -> dict:
                                 "line": None, "side": "To win", "rating": rating(float(old["p_final"]), old["confidence"], pm),
                                 "p": float(old["p_final"]), "confidence": old["confidence"], "p_market": pm, "proj": None})
                 continue
-        if lg not in tier.STATS:
+        if lg not in tier.SPORT:
             why = ("tennis match winner: priced at check-in with `edge tennis pre` (needs both prices)" if lg in ("TENNIS", "ATP", "WTA")
                    else f"{lg or 'unknown sport'}: no automatic pricer for this sport yet")
             results.append({"i": i, "status": "not priced", "why": why})

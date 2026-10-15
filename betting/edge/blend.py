@@ -62,26 +62,38 @@ class Estimate:
 
 
 RATING_FLOOR = 0.80      # the 8-10 tier must hit 80%: learn raises this while graded 8+ picks fall short
-TIER_MARKET_MIN = 0.75   # ... and the sportsbook itself must make it a 75%+ shot (model-only 80%+ picks hit 56%, n=9)
+TIER_MARKET_MIN = 0.75   # ... and a sportsbook that prices it must make it a 75%+ shot on its own
+# No book price is not a bar to 8 (the user's call, 10/15): those picks need every High gate (20+ games, sources within
+# 10 points) and their own floor, which `edge learn` raises from unpriced 8+ results alone. Their record before
+# calibration was weak (unpriced Highs at 65-80% hit 6 of 11), which is why calibration shrinks them first.
+RATING_FLOOR_NO_MARKET = 0.80
 
 
-def rating_floor(adj: dict | None = None) -> float:
+def rating_floor(adj: dict | None = None, priced: bool = True) -> float:
+    key, default = ("rating_floor", RATING_FLOOR) if priced else ("rating_floor_no_market", RATING_FLOOR_NO_MARKET)
     try:
-        return float((adj or load_adjustments()).get("rating_floor", RATING_FLOOR))
+        return float((adj or load_adjustments()).get(key, default))
     except Exception:
-        return RATING_FLOOR
+        return default
 
 
-def rating(p: float | None, confidence: str | None, p_market: float | None = None, floor: float | None = None) -> int:
+def rating(p: float | None, confidence: str | None, p_market: float | None = None, floor: float | None = None,
+           floor_no_market: float | None = None) -> int:
     """1-10 confidence score. The label decides the band and the probability places it inside the band, so no number
     can buy its way past a gate. 8-10 is the 80% tier: High (every gate passed) AND blended chance >= the floor (0.80,
-    raised by `edge learn` if graded 8+ picks hit less) AND a sportsbook price that makes it a 75%+ shot on its own.
-    A High without all three is a 7. 5-7 Medium, 1-4 Low, 1 for Avoid."""
+    raised by `edge learn` if graded 8+ picks hit less) AND, when a sportsbook prices it, the book making it a 75%+ shot
+    on its own. A prop no book prices is held to its own floor instead (`rating_floor_no_market`).
+    A High that misses is a 7. 5-7 Medium, 1-4 Low, 1 for Avoid."""
     if p is None or not confidence or confidence == "Avoid":
         return 1
     if confidence == "High":
-        fl = rating_floor() if floor is None else floor
-        if p_market is not None and p_market >= TIER_MARKET_MIN and p >= fl:
+        if p_market is None:
+            fl = rating_floor(priced=False) if floor_no_market is None else floor_no_market
+        else:
+            fl = rating_floor() if floor is None else floor
+            if p_market < TIER_MARKET_MIN:                          # the book disagrees: that's a real signal, not a missing one
+                return 7
+        if p >= fl:
             return 10 if p >= round(fl + 0.10, 4) else 9 if p >= round(fl + 0.05, 4) else 8
         return 7
     if confidence == "Medium":

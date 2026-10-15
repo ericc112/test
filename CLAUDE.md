@@ -37,8 +37,13 @@ Every pick you name to the user, at any confidence, must pass `python3 -m edge v
 ## User preference: 1-10 rating on every prop
 The user wants **every prop rated 1-10** (`blend.rating`, shown by `edge pp`, `edge prob` and `edge verify`). The gates don't change; the label sets the band and the probability places it inside:
 - Every probability passes through a calibration map that `edge learn` fits from graded results, separately for priced and unpriced picks (`adjustments.json` "calibration"). A model-only 80% currently reads 73%.
-- **8-10 = the 80% tier.** The user's bar: these must hit at least 80%. Requires every High gate, a blended chance at or above the rating floor (0.80; `edge learn` raises it while graded 8+ picks hit under 80% over 20+), AND a sportsbook price that makes it a 75%+ shot on its own. Model-only picks (no market: CS2, CFB, game-log scans) can't reach 8: at 80%+ they hit 56% (n=9). 8 at the floor, 9 at floor+5, 10 at floor+10.
-- **5-7 = Medium**, or a High that isn't in the 80% tier (7): a good number that missed a gate (no market price, thin history, sources too far apart, a learned cap). Never above 7, however high the probability.
+- **8-10 = the 80% tier.** The user's bar: these must hit at least 80%. Requires every High gate and a blended chance at or above the rating floor (0.80; `edge learn` raises it while graded 8+ picks hit under 80% over 20+). When a sportsbook prices the prop, the book must also make it a 75%+ shot on its own (a book under 75% caps it at 7).
+  - **No book price is not a gate (user's call, 10/15):** a prop no book prices is graded from its game logs: history plus the matchup model, or the game-log model (recency-weighted mean, gamma-Poisson) where there is no matchup model. The no-market calibration applies.
+  - It can reach 8 when it clears the no-market High gates (20+ games, sources within 10 points) and its own floor, `rating_floor_no_market` (0.80). `edge learn` tunes that floor on unpriced 8+ results only, never mixed with priced ones. The scorecard shows them as their own row ("8-10, no book price").
+  - Their record before this was weak (unpriced Highs at 65-80% hit 6 of 11), so watch that row and say so when it runs under 80%.
+  - Bands: 8 at the floor, 9 at floor+5, 10 at floor+10.
+  - **Role check, no book price (L5):** a workload 25%+ off his average over the last 5 games (touches/attempts, ice time, plate appearances) holds the prop at Low. The back-check accepts that downgrade.
+- **5-7 = Medium**, or a High that isn't in the 80% tier (7): a good number that missed a gate (a book under 75%, thin history, sources too far apart, a learned cap). Never above 7, however high the probability.
 - **1-4 = Low**: sources disagree, single source, role unknown (L5/L26), or under 58%. Avoid-list segments are 1.
 Show the rating next to every prop. A prop rated 8+ must pass `edge verify` this session, with its verdict and WARNs shown; a NOT VERIFIED or judgment-downgraded prop (role check) drops to its new label's band. Ratings of 7 or below come straight from the pricer: mark them as ratings, not picks. Recommend only 8+.
 
@@ -55,7 +60,9 @@ Before naming any prop, ask two questions the pricer may not: **is this player's
 - When the user questions a number, dig in with the raw match-by-match data before defending it.
 
 ## While working
-- For "only 8+" on PrizePicks, run `python3 -m edge tier --log` (NHL, MLB: DraftKings ladder + game log at every line, calibrated, rated). Then `edge verify` every 8+ and drop any NOT VERIFIED. Model-only boards (CS2, LoL, game-log scans) can't produce an 8.
+- For "only 8+" on PrizePicks, run `python3 -m edge tier --log` (NHL, MLB: DraftKings ladder + game log at every line, calibrated, rated). Then `edge verify` every 8+ and drop any NOT VERIFIED.
+  - `edge tier` prices every PrizePicks prop it can read from game logs, whether or not a book prices it. NFL is included, with an 8-day slate window and readers for TDs, FG made and kicking points.
+  - Rows with no book price are marked "no book price" on the board.
 - For a PrizePicks board, start with `python3 -m edge pp --league <CS2|UCL|...> [--match TEAM] --log`: it prices every supported prop with the same blend and gates, marks MORE-ONLY lines (no under available) and thin or new-to-team players. Read the flagged legs yourself before recommending anything.
 - Final probabilities come from `python3 -m edge prob --model .. --market .. --hist .. --hist-n .. --segment sport:market:side`. Report the confidence it returns; don't override it upward.
 - Log every evaluated prop (bets, leans and passes) with `python3 -m edge add ...` (fields: header of `bets.csv`; market keys: `betting/README.md`). Include `event_id` and `player_id` so it can be auto-graded, and `proj` (projected median) and `opp_proj` (projected BF / PA / TOI / rounds) so a loss can be traced to volume or rate.
@@ -68,7 +75,8 @@ The user follows 8+ picks on a live page: https://claude.ai/artifact/AhjWxmRgkij
 
 ### Inbox (Check a slip)
 The page's "Check a slip" section takes screenshots or a screen recording (a slip, a board, someone's pick). The page splits a video into distinct frames on the device. Claude reads the props off the frames (the page's `sample` call), matches them to our boards and cards, and writes a short analysis. Each check is saved as `inbox/<id>` with status "new": `{kind, app, entry, props:[{player, sport, stat, line, side, odds_type, price}], page, analysis, frames:[asset ids], video}`.
-- At every check-in, and whenever the user says they checked a slip, list `inbox` and process each "new" doc.
+- **When to process:** at every check-in, whenever the user says they checked a slip, and at once when a page comment to Claude reads "Grade inbox <id>". That comment is the page's "Get full grades now" button. Process that doc right away, write the results and a short analysis back to it (the page fills them in live), and answer the comment in one line.
+- `edge inject` grades MLB, NHL, NBA and NFL props with or without a book price. With no side picked (a board, a post), it grades both sides and keeps the better one. NHL faceoffs and other stats outside the game logs are reported as not gradable.
 - **Video only, no props** (the viewer's browser couldn't decode it, e.g. HEVC on desktop Chromium): fetch it with `Artifact read path=<asset id>` and split it with ffmpeg (1 fps, drop near-duplicate frames). Read the frames yourself and write the props into the doc first.
 - **Then:** save the doc to a file and run `python3 -m edge inject FILE --out RES.json`. It prices each MLB/NHL/NBA prop like a scan row, logs it (a slip's legs as `user_entry`; a leg already logged is linked, not duplicated; a tennis leg links to the match priced with `edge tennis pre`), and runs `edge verify` on each.
 - Write back with one ArtifactData `update` (`if_version`): `status: "logged"`, `processed`, `results`, `new_ids`.

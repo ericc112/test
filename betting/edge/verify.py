@@ -65,6 +65,12 @@ def check_recompute(rep: Report, adj: dict):
         return
     e = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), adj)
     logged, conf = _f(r.get("p_final")), r.get("confidence")
+    order = {"Avoid": 0, "Low": 1, "Medium": 2, "High": 3}
+    if "role change:" in r.get("notes", "") and order.get(conf, 9) < order.get(e.confidence, 0) and logged is not None \
+            and abs(e.p - logged) <= TOL_P:                         # L5 judgment downgrade: a lower label is allowed, never a higher one
+        rep.add("PASS", "recompute", f"{e.p:.3f} {e.confidence} from the components, held at {conf} by the role check (L5)")
+        rep.recomputed = e
+        return
     if (logged is None or abs(e.p - logged) > TOL_P or e.confidence != conf) and getattr(rep, "locked", False):
         rep.add("WARN", "recompute", f"today's weights give {e.p:.3f} {e.confidence}; logged {logged} {conf} (event under way: logged number stands)")
     elif logged is None or abs(e.p - logged) > TOL_P or e.confidence != conf:
@@ -256,7 +262,7 @@ def check_mlb_history(rep: Report):
 
 
 def check_tier_history(rep: Report):
-    """NHL, NBA and NFL rows priced by `edge tier`: recount the same game-log window the scan used (NBA: same team only)."""
+    """NHL, NBA and NFL rows priced by `edge tier` or `edge inject`: recount the same game-log window the scan used (NBA: same team only)."""
     from . import tier
     r = rep.row
     logged = _f(r.get("p_hist"))
@@ -264,7 +270,7 @@ def check_tier_history(rep: Report):
         rep.add("PASS", "recount", "no history component used")
         return
     vals = None
-    if "edge tier" in r.get("notes", "") and r.get("player_id"):
+    if ("edge tier" in r.get("notes", "") or r.get("notes", "").startswith("inject ")) and r.get("player_id"):
         vals = tier.recount_values(r["sport"].upper(), r["market"], (r.get("event") or "").split(" vs ")[0].strip(), r["player_id"])
     if vals is None:
         rep.add("WARN", "recount", f"no automatic recount for {r['sport']} {r['market']} yet: recount history by hand before publishing")

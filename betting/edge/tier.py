@@ -51,7 +51,8 @@ EXTRA = {"NHL": {"Blocked Shots": "skater_blocks", "Goalie Saves": "goalie_saves
          "NBA": {"Rebs+Asts": "rebs_asts", "Turnovers": "turnovers", "Blks+Stls": "blks_stls"},
          "NFL": {"Pass Yards": "pass_yds", "Rush Yards": "rush_yds", "Receiving Yards": "rec_yds", "Receptions": "receptions",
                  "Pass TDs": "pass_tds", "Rush+Rec Yds": "rush_rec_yds", "Pass Attempts": "pass_att", "Pass Completions": "pass_cmp",
-                 "Rush Attempts": "rush_att", "INT": "pass_int", "Longest Reception": "longest_rec"}}
+                 "Rush Attempts": "rush_att", "INT": "pass_int", "Longest Reception": "longest_rec", "Rush+Rec TDs": "anytime_td",
+                 "FG Made": "fg_made", "Kicking Points": "kicking_pts", "Pass+Rush Yds": "pass_rush_yds"}}
 # market key -> ESPN game-log columns summed (3PT is 'made-attempted')
 NBA_COLS = {"points": ("PTS",), "rebounds": ("REB",), "assists": ("AST",), "pra": ("PTS", "REB", "AST"), "pts_asts": ("PTS", "AST"),
             "pts_rebs": ("PTS", "REB"), "threes": ("3PT",), "steals": ("STL",), "blocks": ("BLK",), "rebs_asts": ("REB", "AST"),
@@ -63,7 +64,18 @@ PITCH_COLS = {"pitcher_strikeouts": "strikeOuts", "pitcher_outs": "outs", "pitch
 NFL_COLS = {"pass_yds": [("passing", "YDS")], "rush_yds": [("rushing", "YDS")], "rec_yds": [("receiving", "YDS")],
             "receptions": [("receiving", "REC")], "pass_tds": [("passing", "TD")], "pass_att": [("passing", "ATT")],
             "pass_cmp": [("passing", "CMP")], "rush_att": [("rushing", "CAR")], "pass_int": [("passing", "INT")],
-            "longest_rec": [("receiving", "LNG")], "rush_rec_yds": [("rushing", "YDS"), ("receiving", "YDS")]}
+            "longest_rec": [("receiving", "LNG")], "rush_rec_yds": [("rushing", "YDS"), ("receiving", "YDS")],
+            "anytime_td": [("rushing", "TD"), ("receiving", "TD")], "fg_made": [("fieldgoals", "FG")], "kicking_pts": [("pats", "PTS")],
+            "pass_rush_yds": [("passing", "YDS"), ("rushing", "YDS")]}
+# slates: how many days ahead a league's next game can be (NFL plays weekly)
+SLATE_DAYS = {"NFL": 8}
+
+
+def nfl_num(v) -> float:
+    """An ESPN NFL game-log cell: '1,204' -> 1204, '3-4' (made-attempted) -> 3, '-3' -> -3."""
+    t = str(v).replace(",", "").strip()
+    m = re.match(r"^(\d+)-(\d+)$", t)
+    return float(m.group(1)) if m else LW._num(t)
 
 
 def market_key(league: str, stat: str) -> str | None:
@@ -235,7 +247,7 @@ def recount_values(sport: str, market_key: str, team: str, pid: str) -> list[flo
         for g in LW.nfl_log(pid):
             v = [g["x"].get(c) for c in cols]
             if not all(x is None for x in v):
-                out.append(sum(LW._num(x) for x in v if x is not None))
+                out.append(sum(nfl_num(x) for x in v if x is not None))
         return out[:30]
     if sport == "NBA":
         if market_key not in NBA_COLS:
@@ -287,7 +299,7 @@ def card_games(sport: str, stat: str, team: str, player: str, aid: str | None = 
         for g in LW.nfl_log(aid):
             v = [g["x"].get(c) for c in NFL_COLS[mk]]
             if not all(x is None for x in v):
-                out.append({"d": g["date"], "o": g.get("opp", ""), "h": g.get("home"), "v": sum(LW._num(x) for x in v if x is not None)})
+                out.append({"d": g["date"], "o": g.get("opp", ""), "h": g.get("home"), "v": sum(nfl_num(x) for x in v if x is not None)})
     return out if limit is None else out[:limit]
 
 
@@ -322,6 +334,32 @@ def history(sport: str, stat: str, team: str, player: str, line: float, aid: str
 
 
 _LAST_VALS: dict = {}
+
+
+def role_scale(league: str, market_key_: str, pid: str | None) -> float | None:
+    """His last 5 games' workload over his 30-game average (current season counted double), as `lowline` measures it
+    (L5): pass attempts or touches (NFL), ice time (NHL skaters), plate appearances (MLB batters). None where the
+    workload isn't read (NBA keeps same-team games only; goalies and pitchers have their own windows)."""
+    if not pid or market_key_ in ("goalie_saves",) or market_key_ in PITCH_COLS:
+        return None
+    try:
+        log = {"NFL": LW.nfl_log, "NHL": LW.nhl_log, "MLB": LW.mlb_log}.get(league, lambda _: [])(pid)[:30]
+    except Exception:
+        return None
+    vols = [float(g.get("vol") or 0) for g in log]
+    if len(vols) < 8 or not sum(vols):
+        return None
+    w = [2.0 if g.get("season") == log[0].get("season") else 1.0 for g in log]
+    avg = sum(a * b for a, b in zip(w, vols)) / sum(w)
+    return (sum(vols[:5]) / 5) / avg if avg else None
+
+
+def role_gate(conf: str, notes: list, scale: float | None) -> str:
+    """No book price + a workload 25%+ off his average: his history is a different role, so Low (L5)."""
+    if scale is not None and abs(scale - 1) > LW.ROLE_SHIFT and conf in ("High", "Medium"):
+        notes.append(f"role change: last 5 games' workload is {scale:.0%} of his average (L5): Low until a book prices the new role")
+        return "Low"
+    return conf
 
 
 def recent_avg(sport: str, stat: str, team: str, player: str, line: float, k: int = 10) -> float | None:
@@ -363,11 +401,10 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
     props = []
     for lg in leagues:
         try:
-            props += [p for p in pp.board(lg, ("standard", "goblin", "demon"))
-                      if p["stat"] in STATS.get(lg, {}) or (oa_on and p["stat"] in OA.MARKETS.get(lg, {}) and market_key(lg, p["stat"]))]
+            props += [p for p in pp.board(lg, ("standard", "goblin", "demon")) if market_key(lg, p["stat"])]
         except Exception as e:
             log(f"{lg}: board unavailable ({type(e).__name__})")
-    log(f"{len(props)} PrizePicks props with a sportsbook market type ..." + ("" if oa_on else " (DraftKings via ESPN only: set $ODDS_API_KEY for every book)"))
+    log(f"{len(props)} PrizePicks props we can read from game logs ..." + ("" if oa_on else " (sportsbook prices: DraftKings via ESPN only; set $ODDS_API_KEY for every book)"))
     # The Odds API: one call per game, only the markets on this board (quota = markets x book groups)
     oa_evs, oa_odds = {}, {}
     if oa_on:
@@ -395,7 +432,7 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
     LAST_OA.update(oa_odds)
     events, lad, rost = {}, {}, {}
     for lg in leagues:
-        for d in (day + dt.timedelta(days=i) for i in range(days)):
+        for d in (day + dt.timedelta(days=i) for i in range(max(days, SLATE_DAYS.get(lg, 0)))):
             for e in scoreboard(lg, d):
                 c = e["competitions"][0]
                 if c["status"]["type"]["state"] != "pre":
@@ -435,38 +472,43 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
             ev = OA.match_event(oa_evs[lg], p.get("team_name"), p.get("start"))
             om = OA.MARKETS.get(lg, {}).get(p["stat"])
             main = OA.main_line(oa_odds.get((lg, ev["id"]), {}), om, p["player"]) if ev and om else None
-        if mk_over is None:                                         # fallback: DraftKings ladder through ESPN
-            if p["stat"] not in STATS.get(lg, {}):
-                return {**p, "error": "no sportsbook price at this line"}
-            if not lad_p:
-                return {**p, "error": "no DraftKings ladder"}
+        if mk_over is None and lad_p:                               # fallback: DraftKings ladder through ESPN
             mk_over, mnote = market_over(lad_p, p["line"])
-            if mk_over is None:
-                return {**p, "error": mnote}
+        if mk_over is None:                                         # no book prices it: graded from his games, no market gate
+            mnote = f"{mnote or ('no DraftKings ladder' if p['stat'] in STATS.get(lg, {}) else 'no sportsbook line')}: no book price"
         h_over, n, pid = history(lg, p["stat"], p["team"], p["player"], p["line"], aid)
-        # context (matchup, ice time, strikeout rates) is the model component on regular lines; goblins keep market + history
+        # context (matchup, ice time, strikeout rates) is the model component on regular lines; goblins keep market + history.
+        # With no book price the model is always used, and the game-log model stands in where there is no matchup model.
         cx = CX.price(lg, p["stat"], p.get("opp"), pid, p["line"], day.year)
-        use_model = cx is not None and p.get("odds_type") == "standard"
+        priced = mk_over is not None
+        lm = None if priced or cx else CX.log_model(_LAST_VALS.get((lg, p["stat"], p["team"], p["player"], p["line"])) or [], p["line"])
+        model = cx if cx and (p.get("odds_type") == "standard" or not priced) else lm
         avg10 = recent_avg(lg, p["stat"], p["team"], p["player"], p["line"])
         proj, proj_src = projection(cx, lad_p, main, avg10)
+        if lm and not cx:
+            proj, proj_src = round(lm[2], 1), "game-log model"
+        shift = None if priced else role_scale(lg, mk, pid)
         best = None
         for side in (["over"] if p["over_only"] else ["over", "under"]):
-            pk = mk_over if side == "over" else 1 - mk_over
+            pk = None if not priced else mk_over if side == "over" else 1 - mk_over
             ph = None if h_over is None else (h_over if side == "over" else 1 - h_over)
-            pmod = (cx[0] if side == "over" else 1 - cx[0]) if use_model else None
+            pmod = (model[0] if side == "over" else 1 - model[0]) if model else None
             seg = f"{lg.lower()}:{mk}:{side}"
+            if pmod is None and pk is None and ph is None:
+                continue
             e = final_probability(pmod, pk, ph, seg, n)
+            e.confidence = role_gate(e.confidence, e.notes, shift)
             rt = rating(e.p, e.confidence, pk)
             note = OA.describe(cons, side) if cons else mnote
             if cons and cons["disagree"] and rt >= 8:               # books more than 10 points apart: not an 80% read
                 rt, note = 7, note + " (held at 7)"
             r = {**p, "side": side, "market_key": mk, "p_market": pk, "p_hist": ph, "hist_n": n, "p_final": e.p, "p_model": pmod,
-                 "confidence": e.confidence, "rating": rt, "player_id": pid, "event_id": eid, "context": cx[1] if cx else [],
+                 "confidence": e.confidence, "rating": rt, "player_id": pid, "event_id": eid, "context": model[1] if model else [],
                  "proj": proj, "proj_src": proj_src, "avg10": avg10, "rungs": lad_p or {},
-                 "notes": f"{note}; " + "; ".join(e.notes) + (f"; context: {' / '.join(cx[1])}" if cx else "")}
+                 "notes": f"{note}; " + "; ".join(e.notes) + (f"; context: {' / '.join(model[1])}" if model else "")}
             if best is None or r["p_final"] > best["p_final"]:
                 best = r
-        return best
+        return best or {**p, "error": "no games in his log for this stat"}
 
     def safe(p):
         try:
@@ -644,6 +686,16 @@ STAT_ALIASES = {
             ("3pm", "3-PT Made"), ("threes", "3-PT Made"), ("three", "3-PT Made"), ("rebounds", "Rebounds"), ("reb", "Rebounds"),
             ("assists", "Assists"), ("ast", "Assists"), ("steals", "Steals"), ("blocked shots", "Blocked Shots"),
             ("blocks", "Blocked Shots"), ("turnovers", "Turnovers"), ("points", "Points"), ("pts", "Points")],
+    "NFL": [("pass+rush yds", "Pass+Rush Yds"), ("pass+rush yards", "Pass+Rush Yds"), ("rush+rec yds", "Rush+Rec Yds"),
+            ("rush+rec yards", "Rush+Rec Yds"), ("rush+rec tds", "Rush+Rec TDs"), ("anytime tds", "Rush+Rec TDs"),
+            ("anytime td", "Rush+Rec TDs"), ("anytime touchdown", "Rush+Rec TDs"), ("pass yards", "Pass Yards"),
+            ("passing yards", "Pass Yards"), ("pass yds", "Pass Yards"), ("pass tds", "Pass TDs"), ("passing tds", "Pass TDs"),
+            ("passing touchdowns", "Pass TDs"), ("pass attempts", "Pass Attempts"), ("pass completions", "Pass Completions"),
+            ("completions", "Pass Completions"), ("interceptions", "INT"), ("int", "INT"), ("rush yards", "Rush Yards"),
+            ("rushing yards", "Rush Yards"), ("rush yds", "Rush Yards"), ("rush attempts", "Rush Attempts"), ("carries", "Rush Attempts"),
+            ("rec yards", "Receiving Yards"), ("receiving yards", "Receiving Yards"), ("rec yds", "Receiving Yards"),
+            ("longest reception", "Longest Reception"), ("receptions", "Receptions"), ("recs", "Receptions"),
+            ("fg made", "FG Made"), ("field goals made", "FG Made"), ("kicking points", "Kicking Points")],
 }
 
 
@@ -679,17 +731,29 @@ def find_player(league: str, player: str, day: dt.date | None = None, days: int 
     return None
 
 
-def price_prop(league: str, player: str, stat_text: str, line: float, side: str, odds_type: str = "standard",
+def price_prop(league: str, player: str, stat_text: str, line: float, side: str | None, odds_type: str = "standard",
                day: dt.date | None = None) -> dict:
     """Price one prop the way the scan does: DraftKings ladder at the line, game log at the line, the matchup model on
-    regular lines, blended, calibrated, rated. Returns an error key when it can't be priced."""
+    regular lines, blended, calibrated, rated. No book price is not a stop: the game-log model and his history grade it.
+    No side (a board or a post where nothing is picked): both sides are graded and the better one returned.
+    Returns an error key when it can't be priced."""
     from . import context as CX
     _memo()
     league = league.upper()
-    side = {"more": "over", "less": "under", "over": "over", "under": "under"}.get((side or "").lower())
-    if league not in STATS or side is None or line is None:
-        return {"error": f"can't price {league} {stat_text} {side}: unsupported league or missing line/side"}
-    g = find_player(league, player, day)
+    sd = {"more": "over", "less": "under", "over": "over", "under": "under", "higher": "over", "lower": "under"}.get((side or "").lower())
+    if league not in SPORT or line is None:
+        return {"error": f"can't price {league} {stat_text}: no pricer for this league or no line"}
+    if sd is None:
+        both = [price_prop(league, player, stat_text, line, x, odds_type, day) for x in ("over", "under")]
+        ok = [b for b in both if "error" not in b]
+        if not ok:
+            return both[0]
+        best = max(ok, key=lambda b: (b["rating"], b["p_final"]))
+        other = next((b for b in ok if b is not best), None)
+        return {**best, "notes": f"no side picked: graded both, {best['side']} is the better side"
+                + (f" (the {other['side']} is {other['rating']}/10, {other['p_final']:.3f})" if other else "") + "; " + best["notes"]}
+    side = sd
+    g = find_player(league, player, day, days=max(2, SLATE_DAYS.get(league, 0)))
     if not g:
         return {"error": f"{player}: no upcoming {league} game found"}
     stat = canon_stat(league, stat_text)
@@ -700,15 +764,26 @@ def price_prop(league: str, player: str, stat_text: str, line: float, side: str,
         return {"error": f"{stat_text}: stat not priced for {league}", **g}
     rungs = ladders(league, g["event_id"]).get((STATS[league][stat][0], g["aid"]), {}) if stat in STATS.get(league, {}) else {}
     mk_over, mnote = market_over(rungs, line) if rungs else (None, "no DraftKings ladder")
+    if mk_over is None:
+        mnote = f"{mnote}: no book price"
     h_over, n, pid = history(league, stat, g["team"], g["name"], line, g["aid"])
     cx = CX.price(league, stat, g["opp"], pid, line, (day or dt.date.today()).year)
+    lm = None if mk_over is not None or cx else CX.log_model(_LAST_VALS.get((league, stat, g["team"], g["name"], line)) or [], line)
+    model = cx if cx and (odds_type == "standard" or mk_over is None) else lm
     pk = None if mk_over is None else (mk_over if side == "over" else 1 - mk_over)
     ph = None if h_over is None else (h_over if side == "over" else 1 - h_over)
-    pmod = None if not cx or odds_type != "standard" else (cx[0] if side == "over" else 1 - cx[0])
+    pmod = None if not model else (model[0] if side == "over" else 1 - model[0])
+    if pk is None and ph is None and pmod is None:
+        return {"error": f"{g['name']}: no {stat} games in his log", **g}
     e = final_probability(pmod, pk, ph, f"{league.lower()}:{mk}:{side}", n)
+    if pk is None:
+        e.confidence = role_gate(e.confidence, e.notes, role_scale(league, mk, pid))
     avg10 = recent_avg(league, stat, g["team"], g["name"], line)
     proj, src = projection(cx, rungs, None, avg10)
+    if lm and not cx:
+        proj, src = round(lm[2], 1), "game-log model"
     return {**g, "league": league, "player": g["name"], "stat": stat, "market_key": mk, "line": line, "side": side,
             "odds_type": odds_type, "p_market": pk, "p_hist": ph, "hist_n": n, "p_model": pmod, "p_final": e.p,
             "confidence": e.confidence, "rating": rating(e.p, e.confidence, pk), "player_id": pid, "proj": proj, "proj_src": src,
-            "notes": "; ".join([mnote] + e.notes + ([f"context: {' / '.join(cx[1])}"] if cx else []))}
+            "context": model[1] if model else [],
+            "notes": "; ".join([mnote] + e.notes + ([f"context: {' / '.join(model[1])}"] if model else []))}
