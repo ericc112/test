@@ -232,6 +232,9 @@ SOCCER_STATS = {
     "sot": lambda s: s.get("shotsOnTarget"),
     "tackles": lambda s: s.get("totalTackles"),
     "fouls": lambda s: s.get("foulsCommitted"),
+    "goals": lambda s: s.get("totalGoals"),
+    "assists": lambda s: s.get("goalAssists"),
+    "g_a": lambda s: None if s.get("totalGoals") is None else (s.get("totalGoals") or 0) + (s.get("goalAssists") or 0),
 }
 
 

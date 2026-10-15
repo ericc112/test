@@ -58,6 +58,11 @@ def soccer_board(odds_types=("standard", "goblin")) -> list[dict]:
 DK_TYPES = {"Shots": ("Shots Milestones", "shots"), "Shots On Target": ("Shots on Target Milestones", "sot"),
             "Goalie Saves": ("Goalkeeper Saves Milestones", "gk_saves")}
 ROSTER_STAT = {"shots": "totalShots", "sot": "shotsOnTarget", "gk_saves": "saves"}
+# stats ESPN's match report carries but DraftKings doesn't ladder: priced from his matches (game-log model + history)
+HIST_ONLY = {"Goals": "goals", "Assists": "assists", "Goal + Assist": "g_a", "Fouls": "fouls"}
+ROSTER_FN = {"shots": lambda s: s.get("totalShots"), "sot": lambda s: s.get("shotsOnTarget"), "gk_saves": lambda s: s.get("saves"),
+             "goals": lambda s: s.get("totalGoals"), "assists": lambda s: s.get("goalAssists"), "fouls": lambda s: s.get("foulsCommitted"),
+             "g_a": lambda s: None if s.get("totalGoals") is None else (s.get("totalGoals") or 0) + (s.get("goalAssists") or 0)}
 MILESTONE_HOLD = 0.93   # one-sided DraftKings milestone prices carry roughly 7% hold
 
 
@@ -318,7 +323,8 @@ def price_soccer(props: list[dict]) -> list[dict]:
     out, cache = [], {}
     for p in props:
         slug = SOCCER.get(p["league"])
-        if p["stat"] not in ("Passes Attempted", *DK_TYPES) or "+" in str(p["player"]) or not (slug or p["league"] == "SOCCER"):
+        if p["stat"] not in ("Passes Attempted", *DK_TYPES, *HIST_ONLY) or " + " in str(p["player"]) \
+                or not (slug or p["league"] == "SOCCER"):
             out.append({**p, "error": "stat not priced yet"})
             continue
         try:
@@ -346,11 +352,11 @@ def price_soccer(props: list[dict]) -> list[dict]:
                     f"median {m['median']:.0f}, possession {m['possession']:.0%}, press factor {m['press_factor']:.2f}; share and history from {m.get('basis')}; confirm lineup"
                 out.append({**_finish(p, "passes_att", "soccer", m["p_over"], m["p_under"], m["p_push"], ho, hu, notes=note), **base, "proj": m["median"]})
                 continue
-            dk_type, key = DK_TYPES[p["stat"]]
+            dk_type, key = DK_TYPES[p["stat"]] if p["stat"] in DK_TYPES else (None, HIST_ONLY[p["stat"]])
             lk = ("dk", ev["id"])
-            if lk not in cache:
+            if dk_type and lk not in cache:
                 cache[lk] = dk_ladders(slug, ev["id"])
-            lad = cache[lk].get((dk_type, pid))
+            lad = cache[lk].get((dk_type, pid)) if dk_type else None
             note = ""
             if not lad and key == "gk_saves":  # DraftKings sometimes lists the team's keeper under another name
                 lad = next((cache[lk][(dk_type, g)] for g in gks if (dk_type, g) in cache[lk]), None)
@@ -366,7 +372,7 @@ def price_soccer(props: list[dict]) -> list[dict]:
                     if str(r["team"]["id"]) == str(tid):
                         for a in r.get("roster", []):
                             if str(a["athlete"]["id"]) == pid and (a.get("starter") or a.get("subbedIn")):
-                                v = {x["name"]: x.get("value") for x in a.get("stats", [])}.get(ROSTER_STAT[key])
+                                v = ROSTER_FN[key]({x["name"]: x.get("value") for x in a.get("stats", [])})
                                 if v is not None:
                                     games.append({"d": mt["date"], "o": mt["opp"], "h": mt["home"], "v": v})
             vals = [g["v"] for g in games]
@@ -380,7 +386,7 @@ def price_soccer(props: list[dict]) -> list[dict]:
                 lm = log_model(vals, p["line"])
                 if lm:
                     pm_over, why, proj = lm
-                    note += "no DraftKings ladder; " + why[0]
+                    note += ("no DraftKings ladder; " if dk_type else "no book line for this stat; ") + why[0]
                 else:
                     note += "no DraftKings ladder and under 5 games: history only"
             o, u, pu = mk_over if mk_over else (None, None, 0.0)

@@ -40,7 +40,7 @@ def _market(lg: str, stat: str) -> str | None:
     if lg == "LOL" and stat == "MAPS 1-3 Kills":
         return "kills_m123"
     if lg == "SOCCER":
-        return {"Passes Attempted": "passes_att", **{s: k for s, (_, k) in pp.DK_TYPES.items()}}.get(stat)
+        return {"Passes Attempted": "passes_att", **{s: k for s, (_, k) in pp.DK_TYPES.items()}, **pp.HIST_ONLY}.get(stat)
     return market_key(lg, stat) or market_key(lg, canon_stat(lg, stat) or "")
 
 
