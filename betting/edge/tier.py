@@ -275,6 +275,7 @@ def history(sport: str, stat: str, team: str, player: str, line: float, aid: str
 def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: int = 2) -> list[dict]:
     from . import pp
     from . import oddsapi as OA
+    from . import context as CX
     _memo()
     day = day or dt.date.today()
     oa_on = OA.enabled()
@@ -357,19 +358,23 @@ def scan(leagues=("NHL", "MLB"), day: dt.date | None = None, log=print, days: in
             if mk_over is None:
                 return {**p, "error": mnote}
         h_over, n, pid = history(lg, p["stat"], p["team"], p["player"], p["line"], aid)
+        # context (matchup, ice time, strikeout rates) is the model component on regular lines; goblins keep market + history
+        cx = CX.price(lg, p["stat"], p.get("opp"), pid, p["line"], day.year)
+        use_model = cx is not None and p.get("odds_type") == "standard"
         best = None
         for side in (["over"] if p["over_only"] else ["over", "under"]):
             pk = mk_over if side == "over" else 1 - mk_over
             ph = None if h_over is None else (h_over if side == "over" else 1 - h_over)
+            pmod = (cx[0] if side == "over" else 1 - cx[0]) if use_model else None
             seg = f"{lg.lower()}:{mk}:{side}"
-            e = final_probability(None, pk, ph, seg, n)
+            e = final_probability(pmod, pk, ph, seg, n)
             rt = rating(e.p, e.confidence, pk)
             note = OA.describe(cons, side) if cons else mnote
             if cons and cons["disagree"] and rt >= 8:               # books more than 10 points apart: not an 80% read
                 rt, note = 7, note + " (held at 7)"
-            r = {**p, "side": side, "market_key": mk, "p_market": pk, "p_hist": ph, "hist_n": n, "p_final": e.p,
-                 "confidence": e.confidence, "rating": rt, "player_id": pid, "event_id": eid,
-                 "notes": f"{note}; " + "; ".join(e.notes)}
+            r = {**p, "side": side, "market_key": mk, "p_market": pk, "p_hist": ph, "hist_n": n, "p_final": e.p, "p_model": pmod,
+                 "confidence": e.confidence, "rating": rt, "player_id": pid, "event_id": eid, "context": cx[1] if cx else [],
+                 "notes": f"{note}; " + "; ".join(e.notes) + (f"; context: {' / '.join(cx[1])}" if cx else "")}
             if best is None or r["p_final"] > best["p_final"]:
                 best = r
         return best

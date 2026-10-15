@@ -76,6 +76,7 @@ def pick_doc(r: dict, rows: list[dict], verify_it: bool) -> dict:
         "games": games(r) if (r.get("status") or "pending") == "pending" else [],      # a graded pick's log now holds its own result
         "start": st.group(1) if st else "", "status": r.get("status") or "pending",
         "result": _f(r.get("result_value")), "verdict": "", "warns": [], "lesson": "",
+        "context": (re.search(r"context: (.*?)(?:; start |$)", notes).group(1).split(" / ") if "context: " in notes else []),
     }
     if verify_it and doc["status"] == "pending":
         from .verify import verify
@@ -116,7 +117,8 @@ def _row(r: dict, source: str) -> dict:
             "ty": r.get("odds_type", "") if source == "pp" else r.get("book", ""), "pr": r.get("price"),
             "p": round(r["p_final"], 4), "pm": round(r["p_market"], 4),
             "ph": None if r.get("p_hist") is None else round(r["p_hist"], 3), "n": r.get("hist_n", 0),
-            "r": r["rating"], "t": r.get("start", "")}
+            "r": r["rating"], "t": r.get("start", ""), "cx": r.get("context") or [],
+            "pmod": None if r.get("p_model") is None else round(r["p_model"], 3)}
 
 
 def regular(pp_rows: list[dict], now: str, top: int = 10) -> dict:

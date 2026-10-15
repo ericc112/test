@@ -546,6 +546,23 @@ class DevigMethods(unittest.TestCase):
         self.assertLessEqual(odds.devig(-500, 350, "worst")[0], min(fav.values()) + 1e-9)
 
 
+class ContextModel(unittest.TestCase):
+    def test_nb_over_matches_poisson_limit_and_handles_push(self):
+        import math
+        from edge import context as CX
+        lam = 2.0
+        pois_over_1_5 = 1 - math.exp(-lam) * (1 + lam)
+        self.assertAlmostEqual(CX.nb_over(lam, 1.5, 0.01), pois_over_1_5, places=3)   # tiny CV -> Poisson
+        self.assertLess(CX.nb_over(lam, 1.5, 0.5), pois_over_1_5)                     # overdispersion fattens the 0-1 side
+        p0, p1 = math.exp(-lam), math.exp(-lam) * lam
+        self.assertAlmostEqual(CX.nb_over(lam, 1.0, 0.01), (1 - p0 - p1) / (1 - p1), places=3)  # whole line: push removed
+
+    def test_no_context_for_unsupported_props(self):
+        from edge import context as CX
+        self.assertIsNone(CX.price("NBA", "Points", "BOS", "1", 20.5, 2026))
+        self.assertIsNone(CX.price("NHL", "Shots On Goal", None, "1", 2.5, 2026))
+
+
 class OddsApi(unittest.TestCase):
     ODDS = {"id": "e1", "home_team": "Boston Celtics", "away_team": "Detroit Pistons", "commence_time": "2026-10-20T23:00:00Z",
             "bookmakers": [
