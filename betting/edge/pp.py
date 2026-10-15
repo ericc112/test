@@ -319,7 +319,18 @@ def price_val(props: list[dict]) -> list[dict]:
     return out
 
 
-def price_soccer(props: list[dict]) -> list[dict]:
+def price_soccer(props: list[dict], workers: int = 6) -> list[dict]:
+    """Soccer props, one game per worker: each game's lookups (ESPN event, rosters, ladders, team histories) are its own."""
+    games = collections.defaultdict(list)
+    for p in props:
+        games[(p.get("start"), p.get("home"), p.get("away"))].append(p)
+    if len(games) <= 1 or workers <= 1:
+        return _price_soccer_game(props)
+    with cf.ThreadPoolExecutor(min(workers, len(games))) as ex:
+        return [r for rows in ex.map(_price_soccer_game, games.values()) for r in rows]
+
+
+def _price_soccer_game(props: list[dict]) -> list[dict]:
     out, cache = [], {}
     for p in props:
         slug = SOCCER.get(p["league"])
