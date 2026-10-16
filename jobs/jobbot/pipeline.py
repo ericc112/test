@@ -1,4 +1,5 @@
 """Search all enabled sources, score what comes back, and decide what to apply to."""
+import math
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -275,13 +276,14 @@ class Watcher(threading.Thread):
     """Checks employer job boards every few minutes and acts on new postings right away.
 
     Aggregators (Indeed, LinkedIn and the boards above) re-list jobs hours or days after
-    the employer publishes them. Greenhouse, Lever, Ashby and Workday *are* the employers'
+    the employer publishes them. Greenhouse, Lever, Ashby, Workday and Oracle *are* the employers'
     own job systems, so a posting is visible there the moment a recruiter publishes it.
     Unchanged boards answer with an empty 304, so frequent checks stay cheap.
     """
 
     TICK = 20  # seconds between looking for due boards
-    PER_TICK = 8  # boards polled per tick, so checks are spread out
+    PER_TICK = 8  # boards polled per tick, so checks are spread out...
+    MAX_PER_TICK = 30  # ...growing with the watch list (500 employers: about every 6 minutes)
 
     def __init__(self, enqueue):
         super().__init__(daemon=True, name="jobbot-watcher")
@@ -314,14 +316,16 @@ class Watcher(threading.Thread):
         search, profile = db.get_setting("search"), db.get_setting("profile")
         interval = max(1.0, float(auto.get("watch_minutes") or 5)) * 60
         feeds = self.feeds(search)
-        self.status.update(feeds=len(feeds), interval_min=interval / 60)
+        per_tick = max(self.PER_TICK, min(self.MAX_PER_TICK, math.ceil(len(feeds) * self.TICK / interval)))
+        cycle = max(interval, math.ceil(len(feeds) / per_tick) * self.TICK)  # what the list really allows
+        self.status.update(feeds=len(feeds), interval_min=round(cycle / 60, 1))
         now = time.time()
         due = sorted((f for f in feeds if now - self.last_poll.get(f, 0) >= interval),
-                     key=lambda f: self.last_poll.get(f, 0))[: self.PER_TICK]
+                     key=lambda f: self.last_poll.get(f, 0))[:per_tick]
         if not due:
             return []
         fresh = []
-        with ThreadPoolExecutor(max_workers=4) as pool:
+        with ThreadPoolExecutor(max_workers=6) as pool:
             futures = {pool.submit(poll_feed, n, k, search, profile): (n, k) for n, k in due}
             for fut in as_completed(futures):
                 feed = futures[fut]

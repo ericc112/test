@@ -136,3 +136,24 @@ class PipelineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WatchListUpgradeTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = TempData()
+
+    def tearDown(self):
+        self.tmp.close()
+
+    def test_saved_searches_pick_up_new_default_employers_once(self):
+        from jobbot import config
+        with mock.patch.dict(config.DEFAULT_SEARCH["companies"], {"oracle": ["jpmc.fa.oraclecloud.com|CX_1001"],
+                                                                 "workday": ["acme|wd5|Careers", "new|wd1|Jobs"]}), \
+             mock.patch.object(config, "WATCHLIST_VERSION", 2):
+            db.set_setting("search", {"companies": {"workday": ["acme|wd5|Careers", "mine|wd3|X"]}})  # saved before the upgrade
+            s = db.get_setting("search")
+            self.assertEqual(s["companies"]["workday"], ["acme|wd5|Careers", "mine|wd3|X", "new|wd1|Jobs"])
+            self.assertEqual(s["companies"]["oracle"], ["jpmc.fa.oraclecloud.com|CX_1001"])
+            s["companies"]["workday"].remove("new|wd1|Jobs")  # you remove one afterwards: it stays removed
+            db.set_setting("search", s)
+            self.assertNotIn("new|wd1|Jobs", db.get_setting("search")["companies"]["workday"])

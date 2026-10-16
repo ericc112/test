@@ -57,7 +57,7 @@ def display_name(slug):
 
 
 from . import (  # noqa: E402  (modules register themselves)
-    arbeitnow, ashby, greenhouse, himalayas, jobicy, lever, remoteok, remotive, themuse, workday,
+    arbeitnow, ashby, greenhouse, himalayas, jobicy, lever, oracle, remoteok, remotive, themuse, workday,
 )
 
 # Employer-run job systems (not aggregators): watched every few minutes for new postings.

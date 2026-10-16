@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from unittest import mock
 
 from jobbot import db, pipeline, sources
-from jobbot.sources import http, make_job, workday
+from jobbot.sources import http, make_job, oracle, workday
 
 from .helpers import PROFILE, TempData
 
@@ -111,6 +111,20 @@ class WorkdayTests(unittest.TestCase):
         self.assertEqual([j["title"] for j in jobs], ["Corporate Banking Summer Program"])
         self.assertIn("Internship", jobs[0]["tags"])
 
+    def test_intern_feed_without_an_intern_filter_searches_for_interns(self):
+        workday._intern_facets.clear()
+        bodies = []
+
+        def post(url, body, **kw):
+            bodies.append(body)
+            return {"facets": [], "jobPostings": []} if body["limit"] == 1 else wd_page([("R9", "Finance Intern")])
+
+        with mock.patch.object(http, "post_json", side_effect=post), \
+             mock.patch.object(http, "get_json", return_value={"jobPostingInfo": {}}):
+            jobs = workday.fetch("acme|wd5|Careers#intern", {"field": "business", "job_types": ["internship"]})
+        self.assertEqual(bodies[1]["searchText"], "intern")
+        self.assertEqual([j["title"] for j in jobs], ["Finance Intern"])
+
     def test_paging_stops_once_caught_up(self):
         full = wd_page([(f"R{i}", "Financial Analyst") for i in range(20)])
         known = {f"workday:acme:R{i}" for i in range(20)}
@@ -118,6 +132,46 @@ class WorkdayTests(unittest.TestCase):
              mock.patch.object(http, "get_json", return_value={"jobPostingInfo": {}}):
             self.assertEqual(workday.fetch(self.KEY, self.SEARCH, known=known), [])
         self.assertEqual(post.call_count, 1)
+
+
+def orc_page(rows, total=3674):
+    return {"items": [{"TotalJobsCount": total, "requisitionList": [
+        {"Id": i, "Title": t, "PostedDate": "2026-10-01", "PrimaryLocation": loc, "WorkplaceType": "",
+         "ShortDescriptionStr": "Short", "secondaryLocations": []} for i, t, loc in rows]}]}
+
+
+class OracleTests(unittest.TestCase):
+    KEY = "jpmc.fa.oraclecloud.com|CX_1001"
+
+    def setUp(self):
+        oracle._looked_at.clear()
+
+    def test_keys_and_urls(self):
+        s = {"companies": {"oracle": [self.KEY]}}
+        self.assertEqual(oracle.keys(dict(s, job_types=["internship"])), [self.KEY + "#intern"])
+        self.assertEqual(oracle.id_prefix(self.KEY + "#intern"), "oracle:jpmc:")
+        self.assertEqual(oracle.key_from_url("https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs"), self.KEY)
+
+    def test_intern_feed_searches_by_relevance_and_keeps_business_internships(self):
+        page = orc_page([("1", "2027 Global Finance & Business Management - Summer Analyst", "New York, NY, United States"),
+                         ("2", "Software Engineer Intern", "Plano, TX, United States"),
+                         ("3", "Credit Trading - Analyst", "New York, NY, United States")])
+        detail = {"items": [{"ExternalDescriptionStr": "<p>Pay: $50 per hour</p>"}]}
+        calls = []
+
+        def get_json(url, params=None, **kw):
+            calls.append((url, params))
+            return detail if "Details" in url else page
+
+        with mock.patch.object(http, "get_json", side_effect=get_json):
+            jobs = oracle.fetch(self.KEY + "#intern", {"field": "business", "job_types": ["internship"]})
+        self.assertEqual([j["title"] for j in jobs], ["2027 Global Finance & Business Management - Summer Analyst"])
+        j = jobs[0]
+        self.assertEqual(j["id"], "oracle:jpmc:1")
+        self.assertEqual(j["url"], "https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/job/1")
+        self.assertIn("Pay: $50 per hour", j["description"])
+        self.assertIn('keyword="intern"', calls[0][1]["finder"])
+        self.assertIn("sortBy=RELEVANCY", calls[0][1]["finder"])
 
 
 class WatcherTests(unittest.TestCase):
@@ -189,6 +243,16 @@ class WatcherTests(unittest.TestCase):
         pipeline.search_changed()
         self.assertNotIn("greenhouse:acme:2", pipeline._filtered_out)
         self.assertEqual(db.last_source_run("greenhouse", "acme")["count"], 1)  # board total, not just new ones
+
+    def test_big_watch_lists_are_spread_over_the_interval(self):
+        s = db.get_setting("search")
+        s["companies"]["greenhouse"] = [f"co{i}" for i in range(450)]
+        db.set_setting("search", s)
+        polled = []
+        with mock.patch.object(pipeline, "poll_feed", side_effect=lambda n, k, *a: polled.append(k) or {"jobs": [], "fresh": []}):
+            self.watcher.tick()
+        self.assertEqual(len(polled), 30)  # 450 boards every 5 min: 30 per 20 s tick
+        self.assertEqual(self.watcher.status["interval_min"], 5.0)
 
     def test_watch_can_be_turned_off(self):
         db.set_setting("automation", dict(db.get_setting("automation"), watch_enabled=False))

@@ -3,6 +3,7 @@
 Everything personal (profile, resume, database, screenshots) lives under DATA_DIR,
 which is git-ignored. Override it with the JOBBOT_DATA environment variable.
 """
+import json
 import os
 from pathlib import Path
 
@@ -123,6 +124,7 @@ DEFAULT_SEARCH = {
         "arbeitnow": False,
         "themuse": True,
         "workday": True,
+        "oracle": True,
     },
     # Employer job boards to watch; filled from SUGGESTED_COMPANIES below.
     "companies": {},
@@ -158,17 +160,36 @@ SUGGESTED_COMPANIES = [
 ]
 
 
+def _fortune500():
+    """The 2026 Fortune 500 with each company's careers site and the feeds JobBot reads (fortune500.json)."""
+    try:
+        return json.loads(Path(__file__).with_name("fortune500.json").read_text())
+    except (OSError, ValueError):
+        return []
+
+
+FORTUNE500 = _fortune500()
+_known = {(kind, slug) for _, kind, slug in SUGGESTED_COMPANIES}
+for _co in FORTUNE500:
+    for _kind, _slug in _co.get("feeds", []):
+        if (_kind, _slug) not in _known:
+            SUGGESTED_COMPANIES.append((_co["name"], _kind, _slug))
+            _known.add((_kind, _slug))
+WATCHLIST_VERSION = 2  # raise when the default watch list grows, so saved searches pick up the new employers
+
+
 def _default_companies():
-    out = {"greenhouse": [], "lever": [], "ashby": [], "workday": []}
+    out = {"greenhouse": [], "lever": [], "ashby": [], "workday": [], "oracle": []}
     for _, kind, slug in SUGGESTED_COMPANIES:
-        out[kind].append(slug)
+        out.setdefault(kind, []).append(slug)
     return out
 
 
 DEFAULT_SEARCH["companies"] = _default_companies()
+DEFAULT_SEARCH["watchlist_version"] = WATCHLIST_VERSION
 
 DEFAULT_AUTOMATION = {
-    # Check employer job boards (Greenhouse, Lever, Ashby, Workday) every few minutes
+    # Check employer job boards (Greenhouse, Lever, Ashby, Workday, Oracle) every few minutes
     # while JobBot runs, so new postings are caught as soon as they're published.
     "watch_enabled": True,
     "watch_minutes": 5,

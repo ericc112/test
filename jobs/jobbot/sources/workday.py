@@ -138,13 +138,16 @@ def fetch(key, search, known=None):
     tenant, _, site = parse_key(key)
     base, api = _api(key)
     name = company_name(key)
-    facets, label = {}, []
+    facets, label, text = {}, [], ""
     if key.endswith("#intern"):
         facets = intern_facets(key) or {}
-        label = ["Internship"] if facets else []  # no intern filter on this site: titles decide
+        label = ["Internship"] if facets else []
+        # No intern filter on this site: search for "intern" and let the titles decide
+        # (the newest 100 postings of a big employer may hold no internships at all).
+        text = "" if facets else "intern"
     out, details_left = [], DETAIL_LIMIT
     for page in range(MAX_PAGES):
-        data = http.post_json(f"{api}/jobs", {"appliedFacets": facets, "limit": PAGE, "offset": page * PAGE, "searchText": ""})
+        data = http.post_json(f"{api}/jobs", {"appliedFacets": facets, "limit": PAGE, "offset": page * PAGE, "searchText": text})
         posts = data.get("jobPostings") or []
         unseen = 0
         for p in posts:

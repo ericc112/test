@@ -128,7 +128,15 @@ def get_setting(key):
     with connect() as c:
         row = c.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
     stored = json.loads(row["value"]) if row else None
-    return _merge(config.DEFAULTS.get(key), stored)
+    merged = _merge(config.DEFAULTS.get(key), stored)
+    if key == "search" and stored is not None and (stored.get("watchlist_version") or 1) < config.WATCHLIST_VERSION:
+        # JobBot now watches more employers by default (e.g. the Fortune 500): add the new ones once.
+        for kind, slugs in config.DEFAULT_SEARCH["companies"].items():
+            have = merged["companies"].setdefault(kind, [])
+            have.extend(s for s in slugs if s not in have)
+        merged["watchlist_version"] = config.WATCHLIST_VERSION
+        set_setting("search", merged)
+    return merged
 
 
 def set_setting(key, value):

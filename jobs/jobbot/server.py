@@ -290,14 +290,15 @@ def create_app(start_background=True, extra_hosts=(), phone_access=False):
         if not raw:
             raise HTTPException(400, "Enter a company name or job board URL")
         hit = ats.detect(raw)
-        workday_key = sources.REGISTRY["workday"].key_from_url(raw)
+        site = next(((n, sources.REGISTRY[n].key_from_url(raw)) for n in ("workday", "oracle")
+                     if sources.REGISTRY[n].key_from_url(raw)), None)  # a careers-site link
         found = []
         if hit[0]:
             found.append({"ats": hit[0], "slug": hit[1]})
-        elif workday_key:
-            if not sources.REGISTRY["workday"].probe(workday_key):
-                raise HTTPException(400, "That Workday careers site didn't answer. Copy the link from the company's job search page.")
-            found.append({"ats": "workday", "slug": workday_key})
+        elif site:
+            if not sources.REGISTRY[site[0]].probe(site[1]):
+                raise HTTPException(400, "That careers site didn't answer. Copy the link from the company's job search page.")
+            found.append({"ats": site[0], "slug": site[1]})
         else:
             base = re.sub(r"https?://|www\.|\.(com|io|ai|co|org|net)\b.*$", "", raw.lower()).strip("/ ")
             words_ = re.findall(r"[a-z0-9]+", base)
