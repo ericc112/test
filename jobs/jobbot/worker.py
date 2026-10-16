@@ -5,6 +5,7 @@ import threading
 from . import ats, config, db, pipeline
 from .answers import Context
 from .apply.engine import Engine
+from .apply.workday import WorkdayEngine, is_workday, password
 from .llm import Claude
 from .textutil import norm
 
@@ -114,21 +115,24 @@ class Worker(threading.Thread):
             return
         automation = db.get_setting("automation")
         label = f"{job['title']} at {job['company']}"
+        workday = is_workday(job) and bool(password(db.get_setting("profile")))  # sign in and apply there
 
-        if not job.get("ats"):
+        if not workday and not job.get("ats"):
             db.log(f"Finding the application form for {label}", job_id=job_id)
             found = ats.resolve(job)
             db.update_job(job_id, **found)
             job.update(found)
-        if job.get("ats") == "manual":
-            note = ("The employer's careers site asks you to create an account with them, so apply there."
-                    if job.get("source") in ("workday", "oracle", "amazon") else "Needs an account on another site, so apply there directly.")
+        if not workday and job.get("ats") == "manual":
+            note = ("Workday asks for an account with each employer: add a Workday password in Profile and JobBot "
+                    "will create it and apply." if is_workday(job) else
+                    "The employer's careers site asks you to create an account with them, so apply there."
+                    if job.get("source") in ("oracle", "amazon") else "Needs an account on another site, so apply there directly.")
             db.update_job(job_id, status="manual", status_note=note)
             db.log(f"{label}: apply manually", job_id=job_id)
             return
 
         db.update_job(job_id, status="preparing" if action == "prepare" else "submitting")
-        engine = Engine(
+        engine = (WorkdayEngine if workday else Engine)(
             headless=automation.get("headless", True),
             assist_timeout_min=automation.get("assist_timeout_min", 10),
             log=lambda m: db.log(m, job_id=job_id),

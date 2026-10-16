@@ -89,3 +89,50 @@ class EngineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(HAS_BROWSER, "Chromium for Playwright isn't installed (python -m playwright install chromium)")
+class WorkdayFlowTests(unittest.TestCase):
+    """The Workday flow against a local stand-in for a Workday careers site."""
+
+    def setUp(self):
+        self.tmp = TempData()
+
+    def tearDown(self):
+        self.tmp.close()
+
+    def run_wd(self, mode="prepare", query="", overrides=None, password="Str0ng!Pass"):
+        from jobbot.apply.workday import WorkdayEngine
+        job = {"id": "test:wd", "title": "Finance Intern", "company": "Acme", "source": "workday",
+               "url": (FIXTURES / "workday_like.html").as_uri() + query}
+        ctx = Context(profile=dict(PROFILE, workday_password=password, state="New York"), bank=DEFAULT_ANSWERS, job=job,
+                      overrides={norm(k): v for k, v in (overrides or {}).items()}, files={"resume": str(FIXTURES / "resume.txt")})
+        return WorkdayEngine(headless=True).run(job, ctx, mode)
+
+    def answer(self, res, label_part):
+        return next(f["answer"] for f in res.fields if label_part.lower() in f["label"].lower())
+
+    def test_creates_the_account_fills_every_step_and_stops_at_review(self):
+        res = self.run_wd(overrides={"Which Acme office would you prefer?": "New York"})
+        self.assertEqual(res.result, "ready", res.message)
+        self.assertIn("nothing has been sent", res.message)
+        self.assertEqual(self.answer(res, "hear about"), "Company Website")  # found on the employer's own site
+        self.assertEqual(self.answer(res, "state"), "New York")
+        self.assertEqual(self.answer(res, "sponsorship"), "No")
+        self.assertEqual(self.answer(res, "gender"), "I do not wish to answer")
+        # The stand-in rejects sign-ups whose hidden "beecatcher" bot trap was filled, so getting here proves it wasn't.
+
+    def test_a_question_only_you_can_answer_comes_back_with_its_options(self):
+        res = self.run_wd()
+        self.assertEqual(res.result, "needs_input")
+        self.assertEqual(res.missing[0]["label"], "Which Acme office would you prefer?")
+        self.assertEqual(res.missing[0]["options"], ["Minneapolis", "New York"])
+        self.assertIn("saved in your draft", res.message)
+
+    def test_submit_signs_in_and_is_confirmed(self):
+        res = self.run_wd("submit", "?account=1", overrides={"Which Acme office would you prefer?": "New York"})
+        self.assertEqual(res.result, "applied", res.message)
+
+    def test_needs_a_strong_password(self):
+        self.assertIn("password", self.run_wd(password="").message.lower())
+        self.assertIn("8+ characters", self.run_wd(password="short").message)

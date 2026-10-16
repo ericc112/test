@@ -76,6 +76,60 @@ def cmd_submit(args):
     _run_one(args.job_id, "submit")
 
 
+SOURCE_NAMES = {"the muse": "themuse", "remote ok": "remoteok"}
+
+
+def cmd_apply_batch(args):
+    """Fill (or submit) a list of applications and write the results as JSON.
+
+    Used by the cloud runner behind the JobBot page: requests come from the page's
+    "Apply for me" and "Submit" buttons, and the results go back to it. Each request:
+    {"k", "mode": "prepare"|"submit", "title", "company", "url", "source", "answers": {question: answer}}.
+    """
+    import shutil
+    from pathlib import Path
+
+    from .server import extract_text
+    from .worker import Worker
+
+    requests = json.load(open(args.requests))
+    profile = db.get_setting("profile")
+    if args.profile:
+        mine = json.load(open(args.profile))
+        profile.update({k: v for k, v in mine.items() if k in config.DEFAULT_PROFILE and v not in (None, "")})
+    if args.resume:
+        src = Path(args.resume)
+        config.ensure_dirs()
+        shutil.copy(src, config.FILES_DIR / src.name)
+        profile["resume_file"], profile["resume_text"] = src.name, extract_text(config.FILES_DIR / src.name)
+    db.set_setting("profile", profile)
+    worker, results = Worker(), []
+    for r in requests:
+        mode = "submit" if r.get("mode") == "submit" else "prepare"
+        src = (r.get("source") or "page").strip().lower()
+        job = {"id": r["k"], "source": SOURCE_NAMES.get(src, src.replace(" ", "")), "title": r.get("title") or "",
+               "company": r.get("company") or "", "url": r.get("url"), "apply_url": r.get("url"),
+               "dedupe_key": r["k"], "posted_at": None}
+        db.upsert_job(job)
+        db.update_job(r["k"], answers=r.get("answers") or {}, status="new")
+        print(f"{mode}: {job['title']} at {job['company']}", flush=True)
+        try:
+            worker.process(r["k"], mode)
+        except Exception as e:  # one failure shouldn't stop the batch
+            db.update_job(r["k"], status="error", status_note=str(e)[:300])
+        done, att = db.get_job(r["k"]), db.latest_attempt(r["k"], mode)
+        shot = att and att.get("screenshot")
+        results.append({
+            "k": r["k"], "mode": mode, "status": done["status"], "note": done.get("status_note") or "",
+            "fields": [{k: f.get(k) for k in ("label", "answer", "source", "note", "required")} for f in (att or {}).get("fields", [])],
+            "missing": [{k: m.get(k) for k in ("label", "kind", "options", "note")} for m in (att or {}).get("missing", [])],
+            "screenshot": str(config.SHOTS_DIR / shot) if shot else None,
+        })
+        print(f"  -> {done['status']}: {done.get('status_note') or ''}", flush=True)
+    json.dump(results, open(args.out, "w"), indent=1)
+    print(f"wrote {len(results)} result(s) to {args.out}")
+
+
 def cmd_settings(args):
     if args.value is None:
         print(json.dumps(db.get_setting(args.key), indent=2))
@@ -108,6 +162,12 @@ def main(argv=None):
     s = sub.add_parser("submit", help="fill and submit a job's application")
     s.add_argument("job_id")
     s.set_defaults(fn=cmd_submit)
+    s = sub.add_parser("apply-batch", help="fill or submit a list of applications (JSON in, JSON out)")
+    s.add_argument("requests")
+    s.add_argument("--profile", help="your profile as JSON (JobBot profile fields)")
+    s.add_argument("--resume", help="your resume file")
+    s.add_argument("--out", default="results.json")
+    s.set_defaults(fn=cmd_apply_batch)
     s = sub.add_parser("settings", help="show or set a settings block as JSON")
     s.add_argument("key", choices=["profile", "answers", "search", "automation", "llm"])
     s.add_argument("value", nargs="?")
