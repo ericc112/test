@@ -1,0 +1,52 @@
+import unittest
+from datetime import datetime, timedelta, timezone
+
+from jobbot import scoring
+
+SEARCH = {"keywords": ["software engineer", "backend engineer"], "exclude": ["intern", "manager"],
+          "locations": ["Remote", "United States"], "remote": "any", "min_salary": 120000, "max_age_days": 30}
+PROFILE = {"skills": "python, go, aws, kubernetes"}
+
+
+def job(**kw):
+    base = {"title": "Senior Software Engineer", "description": "We use Python and AWS.", "location": "Remote",
+            "remote": True, "posted_at": datetime.now(timezone.utc).isoformat()}
+    base.update(kw)
+    return base
+
+
+class ScoringTests(unittest.TestCase):
+    def test_title_match(self):
+        self.assertEqual(scoring.title_match("Senior Software Engineer", ["software engineer"])[0], 40)
+        self.assertEqual(scoring.title_match("Software Engineering Lead", ["software engineer"])[0], 32)
+        self.assertLess(scoring.title_match("Data Analyst", ["software engineer"])[0], 32)
+
+    def test_relevant(self):
+        self.assertTrue(scoring.relevant(job(), SEARCH))
+        self.assertFalse(scoring.relevant(job(title="Account Executive"), SEARCH))
+
+    def test_exclusions(self):
+        self.assertIn("intern", scoring.exclusion(job(title="Software Engineer Intern"), SEARCH))
+        old = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+        self.assertIn("days ago", scoring.exclusion(job(posted_at=old), SEARCH))
+        self.assertIn("below", scoring.exclusion(job(salary_max=90000), SEARCH))
+        self.assertIsNone(scoring.exclusion(job(salary_max=150000), SEARCH))
+        self.assertEqual(scoring.exclusion(job(remote=False, location="NYC"), dict(SEARCH, remote="remote_only")), "Not remote")
+
+    def test_good_remote_match_scores_high(self):
+        s, reasons, excluded = scoring.score(job(), SEARCH, PROFILE)
+        self.assertIsNone(excluded)
+        self.assertGreaterEqual(s, 75)
+        self.assertTrue(any("skills" in r for r in reasons))
+
+    def test_location_mismatch_is_penalised(self):
+        here, _, _ = scoring.score(job(remote=False, location="Austin, TX, USA"), SEARCH, PROFILE)
+        abroad, _, _ = scoring.score(job(remote=False, location="Amsterdam"), SEARCH, PROFILE)
+        locked, reasons, _ = scoring.score(job(location="Poland, Portugal, UK"), SEARCH, PROFILE)
+        self.assertGreater(here, abroad + 30)
+        self.assertGreater(here, locked + 30)
+        self.assertTrue(any("only for" in r for r in reasons))
+
+
+if __name__ == "__main__":
+    unittest.main()

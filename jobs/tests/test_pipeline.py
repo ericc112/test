@@ -1,0 +1,101 @@
+import unittest
+from unittest import mock
+
+from jobbot import db, pipeline, sources
+from jobbot.sources import make_job
+
+from .helpers import PROFILE, TempData
+
+
+class PipelineTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = TempData()
+        db.set_setting("profile", PROFILE)
+        search = db.get_setting("search")
+        search.update(keywords=["backend engineer"], locations=["Remote"], sources={n: False for n in sources.REGISTRY})
+        search["sources"]["greenhouse"] = search["sources"]["remotive"] = True
+        search["companies"]["greenhouse"] = ["acme"]
+        db.set_setting("search", search)
+
+    def tearDown(self):
+        self.tmp.close()
+
+    def fake_fetch(self, source):
+        def fetch(key, search):
+            if source == "greenhouse":
+                return [make_job("greenhouse", "acme:1", "Backend Engineer", "Acme", "https://acme.com/1",
+                                 ats="greenhouse", ats_board="acme", ats_job_id="1", remote=True, location="Remote",
+                                 description="python aws"),
+                        make_job("greenhouse", "acme:2", "Sales Director", "Acme", "https://acme.com/2")]
+            return [make_job("remotive", "77", "Backend Engineer", "Acme Inc", "https://remotive.com/77", remote=True,
+                             location="Remote", description="python")]
+        return fetch
+
+    def run_search(self):
+        with mock.patch.object(sources.REGISTRY["greenhouse"], "fetch", self.fake_fetch("greenhouse")), \
+             mock.patch.object(sources.REGISTRY["remotive"], "fetch", self.fake_fetch("remotive")):
+            return pipeline.run_search()
+
+    def test_search_filters_scores_and_dedupes(self):
+        summary = self.run_search()
+        self.assertEqual(summary["new"], 2)
+        gh = db.get_job("greenhouse:acme:1")
+        rm = db.get_job("remotive:77")
+        self.assertIsNone(db.get_job("greenhouse:acme:2"))  # irrelevant title isn't stored
+        self.assertGreater(gh["score"], 50)
+        # Same job on two boards: keep the one we can apply to directly.
+        self.assertEqual({gh["status"], rm["status"]}, {"new", "duplicate"})
+        self.assertEqual(gh["status"], "new")
+
+    def test_rate_limit_skips_recent_feeds(self):
+        self.run_search()
+        summary = self.run_search()
+        self.assertEqual(summary["fetched"], [])
+        self.assertEqual({s["source"] for s in summary["skipped"]}, {"greenhouse", "remotive"})
+
+    def test_upsert_keeps_user_fields(self):
+        self.run_search()
+        db.update_job("greenhouse:acme:1", status="skipped", answers={"Why us?": "Because"})
+        db.upsert_job(make_job("greenhouse", "acme:1", "Backend Engineer II", "Acme", "u"))
+        j = db.get_job("greenhouse:acme:1")
+        self.assertEqual((j["title"], j["status"], j["answers"]), ("Backend Engineer II", "skipped", {"Why us?": "Because"}))
+
+    def test_rescore_hides_newly_excluded_and_restores(self):
+        self.run_search()
+        s = db.get_setting("search")
+        s["exclude"] = ["backend"]
+        db.set_setting("search", s)
+        pipeline.rescore()
+        self.assertEqual(db.get_job("greenhouse:acme:1")["status"], "skipped")
+        s["exclude"] = []
+        db.set_setting("search", s)
+        pipeline.rescore()
+        self.assertEqual(db.get_job("greenhouse:acme:1")["status"], "new")
+
+    def test_auto_submit_policy(self):
+        self.run_search()
+        job = db.get_job("greenhouse:acme:1")
+        job["score"] = 90
+        auto = dict(db.get_setting("automation"), auto_submit=True, submit_min_score=75, daily_limit=1, company_limit_30d=5)
+        ok, _ = pipeline.can_auto_submit(job, {"fields": [{"source": "profile"}]}, auto)
+        self.assertTrue(ok)
+        ok, why = pipeline.can_auto_submit(job, {"fields": [{"source": "ai"}]}, auto)
+        self.assertFalse(ok)
+        self.assertIn("AI", why)
+        ok, why = pipeline.can_auto_submit(dict(job, ats="generic"), {"fields": []}, auto)
+        self.assertFalse(ok)
+        db.update_job("remotive:77", status="applied", applied_at=db.now())
+        ok, why = pipeline.can_auto_submit(job, {"fields": []}, auto)
+        self.assertEqual((ok, why), (False, "daily limit reached"))
+        ok, why = pipeline.can_auto_submit(job, {"fields": []}, dict(auto, auto_submit=False))
+        self.assertFalse(ok)
+
+    def test_settings_merge_new_defaults(self):
+        db.set_setting("automation", {"enabled": True})
+        a = db.get_setting("automation")
+        self.assertTrue(a["enabled"])
+        self.assertEqual(a["daily_limit"], 15)
+
+
+if __name__ == "__main__":
+    unittest.main()

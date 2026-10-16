@@ -1,0 +1,94 @@
+import unittest
+from unittest import mock
+
+from fastapi.testclient import TestClient
+
+from jobbot import db, sources
+from jobbot.server import create_app
+from jobbot.sources import make_job
+
+from .helpers import FIXTURES, TempData
+
+
+class ServerTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = TempData()
+        self.client = TestClient(create_app(start_background=False), headers={"X-JobBot": "1"})
+        db.upsert_job(make_job("greenhouse", "acme:1", "Backend Engineer", "Acme", "https://acme.com/1", ats="greenhouse"))
+        self.jid = "greenhouse%3Aacme%3A1"
+
+    def tearDown(self):
+        self.tmp.close()
+
+    def test_index_and_state(self):
+        self.assertEqual(self.client.get("/").status_code, 200)
+        st = self.client.get("/api/state").json()
+        self.assertEqual(st["counts"], {"new": 1})
+        self.assertFalse(st["setup"]["resume"])
+
+    def test_profile_round_trip_keeps_resume(self):
+        r = self.client.post("/api/upload/resume", files={"file": ("my resume.txt", (FIXTURES / "resume.txt").read_bytes(), "text/plain")})
+        self.assertEqual(r.status_code, 200)
+        self.assertGreater(r.json()["text_chars"], 20)
+        p = self.client.get("/api/settings/profile").json()
+        p["first_name"] = "Ada"
+        p.pop("resume_file")
+        self.assertEqual(self.client.put("/api/settings/profile", json=p).status_code, 200)
+        p = self.client.get("/api/settings/profile").json()
+        self.assertEqual((p["first_name"], p["resume_file"]), ("Ada", "my resume.txt"))
+
+    def test_upload_rejects_other_types(self):
+        r = self.client.post("/api/upload/resume", files={"file": ("x.exe", b"MZ", "application/octet-stream")})
+        self.assertEqual(r.status_code, 400)
+
+    def test_api_key_is_never_returned(self):
+        self.client.put("/api/settings/llm", json={"enabled": True, "api_key": "sk-ant-secret", "model": "claude-opus-5-5"})
+        got = self.client.get("/api/settings/llm").json()
+        self.assertEqual((got["api_key"], got["has_key"]), ("", True))
+        # Saving again without a key keeps the stored one.
+        self.client.put("/api/settings/llm", json={"enabled": True, "api_key": ""})
+        self.assertEqual(db.get_setting("llm")["api_key"], "sk-ant-secret")
+        self.client.put("/api/settings/llm", json={"enabled": False, "api_key": "", "clear_key": True})
+        self.assertEqual(db.get_setting("llm")["api_key"], "")
+
+    def test_job_actions(self):
+        for action, status in (("skip", "skipped"), ("restore", "new"), ("mark_applied", "applied")):
+            r = self.client.post(f"/api/jobs/{self.jid}/action", json={"action": action})
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(self.client.get(f"/api/jobs/{self.jid}/detail").json()["status"], status)
+        self.assertEqual(self.client.post(f"/api/jobs/{self.jid}/action", json={"action": "submit"}).status_code, 409)
+
+    def test_answers_saved_and_remembered(self):
+        r = self.client.post(f"/api/jobs/{self.jid}/answers",
+                             json={"answers": {"Why Acme?": "Great team"}, "remember": True, "refill": False})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(db.get_job("greenhouse:acme:1")["answers"], {"Why Acme?": "Great team"})
+        self.assertIn({"q": "Why Acme?", "a": "Great team"}, db.get_setting("answers"))
+
+    def test_cross_site_writes_and_foreign_hosts_are_refused(self):
+        bare = TestClient(create_app(start_background=False))
+        r = bare.post("/api/upload/resume", files={"file": ("evil.txt", b"x", "text/plain")})
+        self.assertEqual(r.status_code, 403)
+        r = self.client.get("/api/state", headers={"Host": "attacker.example"})
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(bare.get("/api/state").status_code, 200)
+
+    def test_screenshot_path_is_contained(self):
+        self.assertEqual(self.client.get("/shots/..%2F..%2Fetc%2Fpasswd").status_code, 404)
+        (self.tmp.dir / "screenshots" / "a.png").write_bytes(b"\x89PNG")
+        self.assertEqual(self.client.get("/shots/a.png").status_code, 200)
+
+    def test_company_detection_adds_boards(self):
+        with mock.patch.object(sources.REGISTRY["greenhouse"], "probe", side_effect=lambda s: s == "acmecorp"), \
+             mock.patch.object(sources.REGISTRY["lever"], "probe", return_value=False), \
+             mock.patch.object(sources.REGISTRY["ashby"], "probe", side_effect=lambda s: s == "acme-corp"):
+            r = self.client.post("/api/companies/detect", json={"name": "Acme Corp", "add": True}).json()
+        self.assertEqual(sorted((f["ats"], f["slug"]) for f in r["found"]), [("ashby", "acme-corp"), ("greenhouse", "acmecorp")])
+        companies = db.get_setting("search")["companies"]
+        self.assertEqual((companies["greenhouse"], companies["ashby"]), (["acmecorp"], ["acme-corp"]))
+        r = self.client.post("/api/companies/detect", json={"name": "https://jobs.lever.co/zeta/6ed76ce8-4156-4b60-b120-403538bd66cd"}).json()
+        self.assertEqual(r["found"], [{"ats": "lever", "slug": "zeta"}])
+
+
+if __name__ == "__main__":
+    unittest.main()

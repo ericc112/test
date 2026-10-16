@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JobBot</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232f6fed'/%3E%3Cpath d='M10 12h12v11a1 1 0 0 1-1 1H11a1 1 0 0 1-1-1z' fill='white'/%3E%3Cpath d='M13 12V9.5A1.5 1.5 0 0 1 14.5 8h3A1.5 1.5 0 0 1 19 9.5V12' stroke='white' stroke-width='2' fill='none'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="logo" aria-hidden="true"></span>
+        <span>JobBot</span>
+      </div>
+      <nav id="nav">
+        <a href="#/dashboard" data-view="dashboard">Dashboard</a>
+        <a href="#/jobs" data-view="jobs">Jobs <span class="count" id="nav-new"></span></a>
+        <a href="#/review" data-view="review">Review <span class="count attention" id="nav-review"></span></a>
+        <a href="#/applied" data-view="applied">Applied <span class="count" id="nav-applied"></span></a>
+        <a href="#/profile" data-view="profile">Profile</a>
+        <a href="#/answers" data-view="answers">Answer bank</a>
+        <a href="#/search" data-view="search">Search setup</a>
+        <a href="#/settings" data-view="settings">Automation &amp; AI</a>
+        <a href="#/activity" data-view="activity">Activity</a>
+      </nav>
+      <div class="sidebar-foot" id="worker-status"></div>
+    </aside>
+    <main>
+      <header class="topbar">
+        <h1 id="view-title">Dashboard</h1>
+        <div class="topbar-actions">
+          <span class="pill" id="auto-pill"></span>
+          <button class="btn" id="btn-search">Search now</button>
+        </div>
+      </header>
+      <section id="view" class="view" aria-live="polite"></section>
+    </main>
+  </div>
+  <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+  <aside class="drawer" id="drawer" hidden aria-label="Job details"></aside>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

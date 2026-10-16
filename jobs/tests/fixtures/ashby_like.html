@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Engineer @ Acme</title></head>
+<body>
+<!-- Mimics Ashby: field entries, Yes/No button groups, and an anti-bot question. -->
+<div class="ashby-application-form-container">
+  <div class="ashby-application-form-field-entry"><label for="_systemfield_name">Legal Name</label><input id="_systemfield_name" type="text" required></div>
+  <div class="ashby-application-form-field-entry"><label for="_systemfield_email">Email</label><input id="_systemfield_email" type="email" required></div>
+  <div class="ashby-application-form-field-entry"><label class="_required_x" for="yrs">Do you have a minimum of 5 years of experience building software?</label>
+    <div><button type="button" aria-pressed="false" data-option="yes">Yes</button><button type="button" aria-pressed="false" data-option="no">No</button>
+      <input type="checkbox" name="yrs" tabindex="-1" style="display:none"></div></div>
+  <div class="ashby-application-form-field-entry"><label for="bot">To show you're not a bot auto-applying, what is three plus four?</label>
+    <textarea id="bot" required></textarea></div>
+  <button type="submit" id="go">Submit Application</button>
+</div>
+<script>
+  document.querySelectorAll("button[aria-pressed]").forEach((b) => b.addEventListener("click", () => {
+    b.parentElement.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", "false"));
+    b.setAttribute("aria-pressed", "true");
+  }));
+  document.getElementById("go").addEventListener("click", () => {
+    if (document.getElementById("bot").value.trim() === "7") document.body.innerHTML = "<h2>Thank you for applying!</h2>";
+  });
+</script>
+</body></html>

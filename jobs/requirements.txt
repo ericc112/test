@@ -1,0 +1,7 @@
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
+playwright>=1.45
+pypdf>=4.0
+# Optional: AI answers for open-ended questions and cover letters
+anthropic>=1.0
