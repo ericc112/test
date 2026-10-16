@@ -7,6 +7,7 @@ from . import display_name, http, iso, make_job, register
 
 NAME = "ashby"
 LABEL = "Ashby boards"
+EMPLOYER = True  # the employer's own applicant-tracking system: listings appear here first
 MIN_INTERVAL = 30 * 60
 FORCE_MIN_INTERVAL = 2 * 60
 
@@ -33,7 +34,7 @@ def _money(s):
 
 def fetch(org, search):
     data = http.get_json(
-        f"https://api.ashbyhq.com/posting-api/job-board/{org}", {"includeCompensation": "true"}
+        f"https://api.ashbyhq.com/posting-api/job-board/{org}", {"includeCompensation": "true"}, conditional=True
     )
     out = []
     for j in data.get("jobs", []):

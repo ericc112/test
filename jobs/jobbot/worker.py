@@ -121,8 +121,9 @@ class Worker(threading.Thread):
             db.update_job(job_id, **found)
             job.update(found)
         if job.get("ats") == "manual":
-            db.update_job(job_id, status="manual",
-                          status_note="Needs an account on another site, so apply there directly.")
+            note = ("Workday asks you to create an account with each employer, so apply on their careers site."
+                    if job.get("source") == "workday" else "Needs an account on another site, so apply there directly.")
+            db.update_job(job_id, status="manual", status_note=note)
             db.log(f"{label}: apply manually", job_id=job_id)
             return
 

@@ -4,11 +4,16 @@ from unittest import mock
 from jobbot import ats, sources
 from jobbot.sources import http
 
-SAMPLES = {
-    "boards-api.greenhouse.io": {"jobs": [{
-        "id": 101, "title": "Backend Engineer", "company_name": "Acme", "absolute_url": "https://acme.com/jobs?gh_jid=101",
+GH_JOB = {
+        "id": 101, "title": "Financial Analyst", "company_name": "Acme", "absolute_url": "https://acme.com/jobs?gh_jid=101",
         "location": {"name": "Remote - US"}, "content": "&lt;p&gt;Python &amp;amp; Go&lt;/p&gt;",
-        "first_published": "2026-10-10T10:00:00-04:00", "departments": [{"name": "Eng"}]}]},
+        "first_published": "2026-10-10T10:00:00-04:00", "departments": [{"name": "Finance"}]}
+GH_LIST = {"jobs": [{k: v for k, v in GH_JOB.items() if k not in ("content", "departments")},
+                    {"id": 102, "title": "Senior Software Engineer", "company_name": "Acme", "absolute_url": "u",
+                     "location": {"name": "Remote"}, "first_published": "2026-10-10T10:00:00-04:00"}]}
+SAMPLES = {
+    "boards-api.greenhouse.io/v1/boards/acme/jobs/101": GH_JOB,
+    "boards-api.greenhouse.io": GH_LIST,
     "api.lever.co": [{
         "id": "6ed76ce8-4156-4b60-b120-403538bd66cd", "text": "Software Engineer", "categories": {"location": "New York, NY", "team": "Eng"},
         "workplaceType": "hybrid", "hostedUrl": "https://jobs.lever.co/acme/6ed76ce8-4156-4b60-b120-403538bd66cd",
@@ -46,13 +51,26 @@ class SourceParserTests(unittest.TestCase):
         self.patch.stop()
 
     def test_greenhouse(self):
-        [j] = sources.REGISTRY["greenhouse"].fetch("acme", {})
+        [j] = sources.REGISTRY["greenhouse"].fetch("acme", {"field": "business"})
         self.assertEqual(j["id"], "greenhouse:acme:101")
         self.assertEqual(j["ats"], "greenhouse")
         self.assertEqual(j["apply_url"], "https://job-boards.greenhouse.io/embed/job_app?for=acme&token=101")
         self.assertEqual(j["description"], "Python & Go")
+        self.assertEqual(j["categories"], ["Finance"])
         self.assertTrue(j["remote"])
         self.assertTrue(j["posted_at"].startswith("2026-10-10T14:00"))
+
+    def test_greenhouse_vague_location_uses_offices(self):
+        from jobbot.sources import greenhouse
+        j = greenhouse._job("acme", {"id": 1, "title": "BDR", "location": {"name": "Hybrid"}, "content": "",
+                                     "offices": [{"name": "Dubai, United Arab Emirates"}]})
+        self.assertEqual(j["location"], "Hybrid · Dubai, United Arab Emirates")
+
+    def test_greenhouse_only_fetches_details_for_new_matching_jobs(self):
+        gh = sources.REGISTRY["greenhouse"]
+        self.assertEqual(gh.fetch("acme", {"field": "business"}, known={"greenhouse:acme:101"}), [])
+        urls = [c.args[0] for c in http.get_json.call_args_list]
+        self.assertNotIn("https://boards-api.greenhouse.io/v1/boards/acme/jobs/102", urls)  # engineer: never detailed
 
     def test_lever(self):
         [j] = sources.REGISTRY["lever"].fetch("acme", {})

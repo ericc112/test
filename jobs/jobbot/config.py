@@ -95,7 +95,7 @@ DEFAULT_SEARCH = {
     "families": ["finance", "consulting", "operations", "marketing", "sales", "hr", "management", "analytics"],
     # Optional: only titles containing every word of one of these lines.
     "keywords": [],
-    "exclude": ["director", "vice president", "vp", "head of"],
+    "exclude": ["director", "vice president", "vp", "head of", "part time", "part-time", "seasonal", "temporary"],
     "locations": ["Remote", "United States"],
     # any | remote_only | onsite_only
     "remote": "any",
@@ -111,13 +111,16 @@ DEFAULT_SEARCH = {
         "himalayas": True,
         "arbeitnow": False,
         "themuse": True,
+        "workday": True,
     },
-    # Company job boards to watch. These are the ones JobBot can apply to directly.
-    "companies": {"greenhouse": [], "lever": [], "ashby": []},
+    # Employer job boards to watch; filled from SUGGESTED_COMPANIES below.
+    "companies": {},
 }
 
-# Companies whose Greenhouse/Lever/Ashby boards list many business roles
-# (checked October 2026). Offered as one-click additions in Search setup.
+# Employers with many business roles whose own job systems JobBot can read
+# (checked October 2026). Watched by default; remove any in Search setup.
+# Greenhouse/Lever/Ashby jobs can be applied to directly. Workday needs an account
+# with each employer, so those are alerts with a link.
 SUGGESTED_COMPANIES = [
     ("Stripe", "greenhouse", "stripe"), ("Toast", "greenhouse", "toast"), ("Datadog", "greenhouse", "datadog"),
     ("Databricks", "greenhouse", "databricks"), ("MongoDB", "greenhouse", "mongodb"), ("Cloudflare", "greenhouse", "cloudflare"),
@@ -127,10 +130,40 @@ SUGGESTED_COMPANIES = [
     ("Plaid", "ashby", "plaid"), ("Palantir", "lever", "palantir"), ("Instacart", "greenhouse", "instacart"),
     ("Affirm", "greenhouse", "affirm"), ("Gusto", "greenhouse", "gusto"), ("Pinterest", "greenhouse", "pinterest"),
     ("Robinhood", "greenhouse", "robinhood"), ("Spotify", "lever", "spotify"), ("SoFi", "greenhouse", "sofi"),
+    ("Capital One", "workday", "capitalone|wd12|Capital_One"), ("Citi", "workday", "citi|wd5|2"),
+    ("Wells Fargo", "workday", "wf|wd1|WellsFargoJobs"), ("Bank of America", "workday", "ghr|wd1|Lateral-US"),
+    ("Morgan Stanley", "workday", "ms|wd5|External"), ("U.S. Bank", "workday", "usbank|wd1|US_Bank_Careers"),
+    ("PNC", "workday", "pnc|wd5|External"), ("Truist", "workday", "truist|wd1|Careers"),
+    ("Northern Trust", "workday", "ntrs|wd1|northerntrust"), ("State Street", "workday", "statestreet|wd1|Global"),
+    ("BlackRock", "workday", "blackrock|wd1|BlackRock_Professional"), ("Fidelity", "workday", "fmr|wd1|FidelityCareers"),
+    ("T. Rowe Price", "workday", "troweprice|wd5|TRowePrice"), ("Mastercard", "workday", "mastercard|wd1|CorporateCareers"),
+    ("PayPal", "workday", "paypal|wd1|jobs"), ("S&P Global", "workday", "spgi|wd5|SPGI_Careers"),
+    ("PwC", "workday", "pwc|wd3|Global_Experienced_Careers"), ("Accenture", "workday", "accenture|wd103|AccentureCareers"),
+    ("Travelers", "workday", "travelers|wd5|External"), ("Allstate", "workday", "allstate|wd5|allstate_careers"),
+    ("Nike", "workday", "nike|wd1|nke"), ("Target", "workday", "target|wd5|targetcareers"),
+    ("Unilever", "workday", "unilever|wd3|Unilever_Experienced_Professionals"), ("Gap Inc.", "workday", "gapinc|wd1|GAPINC"),
+    ("Nordstrom", "workday", "nordstrom|wd501|nordstrom_careers"), ("Salesforce", "workday", "salesforce|wd12|External_Career_Site"),
+    ("Disney", "workday", "disney|wd5|disneycareer"),
 ]
 
+
+def _default_companies():
+    out = {"greenhouse": [], "lever": [], "ashby": [], "workday": []}
+    for _, kind, slug in SUGGESTED_COMPANIES:
+        out[kind].append(slug)
+    return out
+
+
+DEFAULT_SEARCH["companies"] = _default_companies()
+
 DEFAULT_AUTOMATION = {
-    # Run a search on a timer while the server is up.
+    # Check employer job boards (Greenhouse, Lever, Ashby, Workday) every few minutes
+    # while JobBot runs, so new postings are caught as soon as they're published.
+    "watch_enabled": True,
+    "watch_minutes": 5,
+    # List and alert new postings that score at least this (location and fit included).
+    "alert_min_score": 50,
+    # Also search the aggregator boards on a timer (they lag behind employer sites).
     "enabled": False,
     "interval_hours": 6,
     # Fill (but don't send) applications for matches at or above this score.

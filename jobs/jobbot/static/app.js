@@ -36,7 +36,7 @@ async function guard(fn) {
 }
 
 const SOURCE_LABELS = {
-  greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", remotive: "Remotive", remoteok: "Remote OK",
+  greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", workday: "Workday", remotive: "Remotive", remoteok: "Remote OK",
   jobicy: "Jobicy", himalayas: "Himalayas", arbeitnow: "Arbeitnow", themuse: "The Muse",
 };
 const DIRECT = new Set(["greenhouse", "lever", "ashby"]);
@@ -78,16 +78,18 @@ async function refreshState() {
   const review = (c.ready || 0) + (c.needs_input || 0) + (c.blocked || 0) + (c.unconfirmed || 0);
   $("#nav-review").textContent = review || "";
   $("#nav-applied").textContent = c.applied || "";
-  const a = STATE.automation;
+  const w = STATE.watch || {};
   const pill = $("#auto-pill");
-  if (a.enabled) {
-    const next = STATE.next_run_sec;
+  if (w.enabled && w.feeds) {
     pill.className = "pill good";
-    pill.textContent = next != null ? `Auto on · next search in ${next > 3600 ? Math.round(next / 3600) + "h" : Math.max(1, Math.round(next / 60)) + "m"}` : "Auto on";
+    pill.textContent = `Watching ${w.feeds} employer sites · every ${fmtMin(w.interval_min)}`;
+    pill.title = w.last_check ? `Last checked ${ago(w.last_check)}` : "Starting up";
   } else {
-    pill.className = "pill";
-    pill.textContent = "Automation off";
+    pill.className = "pill warn";
+    pill.textContent = w.enabled ? "No employer sites to watch" : "Employer watch off";
+    pill.title = "";
   }
+  notifyFresh(STATE.fresh);
   const q = STATE.queue;
   $("#worker-status").textContent = q.current
     ? `Working: ${q.current[1] === "submit" ? "submitting" : "filling"} 1 application${q.pending.length ? `, ${q.pending.length} waiting` : ""}`
@@ -96,6 +98,32 @@ async function refreshState() {
   btn.disabled = STATE.search_running;
   btn.textContent = STATE.search_running ? "Searching…" : "Search now";
   if (onState) onState(STATE);
+}
+
+const fmtMin = (m) => (m == null ? "" : m >= 60 ? `${Math.round(m / 60)} h` : `${Math.round(m)} min`);
+const fmtLag = (m) => (m < 1 ? "under a minute" : m < 90 ? `${Math.round(m)} min` : `${(m / 60).toFixed(1)} h`);
+
+// Alert when a new posting appears on an employer site (in-app, plus desktop if allowed).
+const FRESH_KEY = "jobbot.freshSeen";
+let freshSeenMem = null;
+function notifyFresh(fresh) {
+  const latest = (fresh && fresh.latest) || [];
+  if (!latest.length) return;
+  let seen = freshSeenMem;
+  try { seen = localStorage.getItem(FRESH_KEY) ?? seen; } catch {}
+  const newest = latest[0].first_seen;
+  const remember = () => { freshSeenMem = newest; try { localStorage.setItem(FRESH_KEY, newest); } catch {} };
+  if (seen == null) return remember(); // first visit: don't replay the backlog
+  const news = latest.filter((j) => j.first_seen > seen);
+  if (!news.length) return;
+  remember();
+  toast(news.length === 1 ? `Just posted: ${news[0].title} at ${news[0].company}` : `${news.length} new postings on employer sites`);
+  if ("Notification" in window && Notification.permission === "granted") {
+    for (const j of news.slice(0, 3)) {
+      const n = new Notification(`Just posted: ${j.title}`, { body: `${j.company}${j.location ? " · " + j.location : ""}`, tag: j.id });
+      n.onclick = () => { window.focus(); openJob(j.id); };
+    }
+  }
 }
 
 $("#btn-search").addEventListener("click", () => guard(async () => {
@@ -107,9 +135,18 @@ $("#btn-search").addEventListener("click", () => guard(async () => {
 // ------------------------------------------------------------------ job rows
 const areaOf = (j) => ((j.score_reasons || []).find((r) => / role$/.test(r)) || "").replace(/ role$/, "");
 
+function postedText(j) {
+  if (!j.posted_at) return "";
+  if (j.source !== "workday") return `Posted ${ago(j.posted_at)}`;
+  const days = Math.floor((Date.now() - new Date(j.posted_at).getTime()) / 86400000); // Workday gives dates only
+  return days <= 0 ? "Posted today" : days === 1 ? "Posted yesterday" : `Posted ${days}d ago`;
+}
+
 function jobRow(j, { select = false } = {}) {
   const direct = DIRECT.has(j.ats);
   const area = areaOf(j);
+  const justPosted = j.fresh && j.first_seen && Date.now() - new Date(j.first_seen).getTime() < 48 * 3600e3;
+  const recent = j.posted_at && Date.now() - new Date(j.posted_at).getTime() < 24 * 3600e3;
   const canFill = ["new", "error", "blocked", "needs_input", "manual"].includes(j.status) && j.ats !== "manual";
   return `<div class="job" data-id="${esc(j.id)}">
     ${select ? `<input type="checkbox" class="sel" aria-label="Select ${esc(j.title)}">` : ""}
@@ -121,7 +158,8 @@ function jobRow(j, { select = false } = {}) {
         ${area ? `<span class="chip">${esc(area)}</span>` : ""}
         ${j.location ? `<span>${esc(j.location.slice(0, 60))}</span>` : ""}
         ${j.salary_text ? `<span>${esc(j.salary_text)}</span>` : ""}
-        ${j.posted_at ? `<span>${ago(j.posted_at)}</span>` : ""}
+        ${justPosted ? `<span class="chip good" title="Appeared on the employer's own site while JobBot was watching">Just posted</span>` : ""}
+        ${j.posted_at ? `<span class="${recent ? "fresh-time" : ""}">${postedText(j)}</span>` : ""}
         <span>via ${esc(SOURCE_LABELS[j.source] || j.source)}</span>
         ${direct ? `<span class="chip accent" title="JobBot can fill and submit this form">Direct apply</span>` : ""}
         ${j.status !== "new" ? statusChip(j.status) : ""}
@@ -131,6 +169,7 @@ function jobRow(j, { select = false } = {}) {
     <div class="actions">
       ${canFill ? `<button class="btn sm" data-act="prepare">${j.status === "new" ? "Fill" : "Fill again"}</button>` : ""}
       ${j.status === "ready" ? `<button class="btn sm primary" data-act="submit">Submit</button>` : ""}
+      ${j.ats === "manual" && j.status === "new" ? `<a class="btn sm" data-open href="${esc(safeUrl(j.apply_url || j.url))}" target="_blank" rel="noopener" title="Apply on the employer's site">Open ↗</a>` : ""}
       ${j.status === "new" ? `<button class="btn sm" data-act="skip">Skip</button>` : ""}
     </div>
   </div>`;
@@ -139,7 +178,7 @@ function jobRow(j, { select = false } = {}) {
 function bindJobList(container, reload) {
   container.addEventListener("click", (e) => {
     const row = e.target.closest(".job");
-    if (!row || e.target.matches("input.sel")) return;
+    if (!row || e.target.matches("input.sel") || e.target.closest("a[data-open]")) return;
     const act = e.target.closest("[data-act]");
     if (act) {
       e.stopPropagation();
@@ -176,18 +215,29 @@ async function viewDashboard(el) {
     [setup.profile, "Fill in your profile", "#/profile", "Name, contact details, work authorization."],
     [setup.resume, "Upload your resume", "#/profile", "Attached to every application."],
     [setup.keywords, "Choose your field and the areas you want", "#/search", "Business major: finance, marketing, sales, operations…"],
-    [setup.companies, "Add companies to watch", "#/search", "Their Greenhouse, Lever or Ashby boards can be applied to directly."],
+    [setup.companies, "Pick the employers to watch", "#/search", "Their own job sites are checked every few minutes for new postings."],
     [setup.automation, "Turn on automation", "#/settings", "Searches on a schedule and fills applications for you."],
   ];
   const [top, events] = await Promise.all([api("/api/jobs?status=new&limit=6&sort=score"), api("/api/events?limit=10")]);
   const needs = (c.needs_input || 0) + (c.blocked || 0) + (c.unconfirmed || 0);
   const tile = (n, label, href) => `<a class="tile" href="${href}"><div class="num">${esc(n)}</div><div class="label">${esc(label)}</div></a>`;
   const done = steps.filter((x) => x[0]).length;
+  const fresh = s.fresh || { latest: [] };
+  const w = s.watch || {};
+  const canAlert = "Notification" in window && Notification.permission === "default";
   el.innerHTML = `
     ${done === steps.length ? "" : `<div class="card" style="margin-bottom:16px">
       <div class="card-head"><h2>Get set up</h2><span class="muted small">${done} of ${steps.length} done</span></div>
       <ul class="checklist">${steps.map(([ok, t, href, hint]) => `<li><span class="dot ${ok ? "done" : ""}">${ok ? "✓" : ""}</span>
         <div><a href="${href}">${esc(t)}</a> <span class="muted small">${esc(hint)}</span></div></li>`).join("")}</ul></div>`}
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-head"><h2>Just posted on employer sites</h2>
+        <div class="btn-row"><span class="small muted">${w.enabled ? `Checking ${w.feeds || 0} sites every ${fmtMin(w.interval_min)}${w.last_check ? `, last ${ago(w.last_check)}` : ""}` : `Watching is off. <a href="#/settings">Turn it on</a>`}</span>
+          ${canAlert ? `<button class="btn sm" id="alerts">Turn on desktop alerts</button>` : ""}</div></div>
+      ${fresh.lag_median_min != null ? `<p class="small" style="margin-top:-4px">New postings reached you a median of <b>${fmtLag(fresh.lag_median_min)}</b> after the employer published them (${fresh.lag_samples} this week).</p>` : ""}
+      <div class="job-list" id="fresh">${fresh.latest.length ? fresh.latest.map((j) => jobRow(j)).join("")
+        : `<div class="empty">Nothing new yet. JobBot checks your employers' own job sites and lists new business roles here the moment they're published, before Indeed or LinkedIn have them.</div>`}</div>
+    </div>
     <div class="tiles">
       ${tile(c.new || 0, "New matches", "#/jobs")}
       ${tile(c.ready || 0, "Ready to submit", "#/review")}
@@ -219,6 +269,9 @@ async function viewDashboard(el) {
       </div>
     </div>`;
   bindJobList($("#top", el), () => route());
+  bindJobList($("#fresh", el), () => route());
+  const al = $("#alerts", el);
+  if (al) al.onclick = () => Notification.requestPermission().then((p) => { toast(p === "granted" ? "Desktop alerts on" : "Alerts not allowed"); route(); });
   $("#run-all", el).onclick = () => guard(async () => {
     const r = await api("/api/search", { method: "POST", body: { force: true, queue: true } });
     toast(r.started ? "Searching; top matches will be filled next" : r.reason);
@@ -259,7 +312,9 @@ async function viewJobs(el) {
         ${sources.map((s) => `<option value="${esc(s.name)}">${esc(s.label)}</option>`).join("")}</select>
       <select id="f-min" aria-label="Minimum score"><option value="">Any score</option><option value="50">50+</option>
         <option value="60">60+</option><option value="70">70+</option><option value="80">80+</option></select>
-      <select id="f-sort" aria-label="Sort"><option value="score">Best match</option><option value="newest">Newest</option><option value="company">Company</option></select>
+      <select id="f-posted" aria-label="Posted"><option value="">Any time</option><option value="24">Posted in 24 hours</option>
+        <option value="72">Posted in 3 days</option><option value="168">Posted this week</option></select>
+      <select id="f-sort" aria-label="Sort"><option value="score">Best match</option><option value="found">Newest found</option><option value="newest">Newest posted</option><option value="company">Company</option></select>
       <label class="check"><input type="checkbox" id="f-direct"> Direct apply only</label>
     </div>
     <div class="btn-row" style="margin-bottom:10px">
@@ -281,6 +336,7 @@ async function viewJobs(el) {
     });
     if ($("#f-min").value) qs.set("min_score", $("#f-min").value);
     if ($("#f-direct").checked) qs.set("ats_filter", "any");
+    if ($("#f-posted").value) qs.set("posted_hours", $("#f-posted").value);
     const r = await api(`/api/jobs?${qs}`);
     const html = r.jobs.map((j) => jobRow(j, { select: true })).join("");
     if (reset) list.innerHTML = html || `<div class="empty">No jobs here. Try another filter, or press <b>Search now</b>.</div>`;
@@ -291,7 +347,7 @@ async function viewJobs(el) {
   }
   let t;
   $("#f-q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(() => load(), 250); });
-  $$("#f-status, #f-source, #f-min, #f-sort, #f-direct", el).forEach((x) => x.addEventListener("change", () => load()));
+  $$("#f-status, #f-source, #f-min, #f-sort, #f-direct, #f-posted", el).forEach((x) => x.addEventListener("change", () => load()));
   $("#more").onclick = () => load(false);
   $("#sel-all").onclick = () => { const boxes = $$("input.sel", list); const on = boxes.some((b) => !b.checked); boxes.forEach((b) => (b.checked = on)); };
   const selected = () => $$("input.sel:checked", list).map((b) => b.closest(".job").dataset.id);
@@ -429,6 +485,8 @@ async function openJob(id) {
       <button class="btn sm close" id="d-close" aria-label="Close">✕</button>
       <h2 style="padding-right:40px">${esc(j.title)}</h2>
       <div class="muted">${esc(j.company)}${j.location ? " · " + esc(j.location) : ""}${j.salary_text ? " · " + esc(j.salary_text) : ""}</div>
+      ${j.posted_at ? `<div class="small" style="margin-top:2px">${postedText(j)} on ${esc(SOURCE_LABELS[j.source] || j.source)}${j.fresh && j.source !== "workday"
+        ? ` · JobBot found it ${fmtLag(Math.max(0, (new Date(j.first_seen) - new Date(j.posted_at)) / 60000))} later` : ""}</div>` : ""}
       <div class="btn-row" style="margin-top:8px">
         ${statusChip(j.status)}
         <span class="chip">Score ${Math.round(j.score || 0)}</span>
@@ -651,11 +709,12 @@ async function viewAnswers(el) {
 
 // ------------------------------------------------------------------ search setup
 async function viewSearch(el) {
-  const [s, sources, fieldDefs, suggested] = await Promise.all([
-    api("/api/settings/search"), api("/api/sources"), api("/api/fields"), api("/api/suggestions"),
+  const [s, sources, fieldDefs, suggested, names] = await Promise.all([
+    api("/api/settings/search"), api("/api/sources"), api("/api/fields"), api("/api/suggestions"), api("/api/company-names"),
   ]);
+  const coName = (k, slug) => (names[k] && names[k][slug]) || (k === "workday" ? slug.split("|")[0] : slug);
   const lines = (a) => (a || []).join("\n");
-  const ATS = [["greenhouse", "Greenhouse"], ["lever", "Lever"], ["ashby", "Ashby"]];
+  const ATS = [["greenhouse", "Greenhouse"], ["lever", "Lever"], ["ashby", "Ashby"], ["workday", "Workday"]];
   const areas = fieldDefs.business.areas;
   const chosen = new Set(s.families && s.families.length ? s.families : areas.map((a) => a.key));
   el.innerHTML = `<form id="sf" class="stack">
@@ -685,24 +744,27 @@ async function viewSearch(el) {
           <label class="field">Ignore jobs older than (days)<input type="number" name="max_age_days" value="${esc(s.max_age_days)}"></label>
         </div>
       </div></div>
-    <div class="card"><div class="card-head"><h2>Companies to watch</h2></div>
-      <p class="muted small" style="margin-top:-6px">Company job boards on Greenhouse, Lever and Ashby are where JobBot can fill <i>and</i> submit applications. Add a company by name or paste a link to one of its job posts.</p>
+    <div class="card"><div class="card-head"><h2>Employers to watch</h2></div>
+      <p class="muted small" style="margin-top:-6px">JobBot reads these employers' own job systems, so new postings appear here as soon as they're published. Greenhouse, Lever and Ashby jobs can be filled <i>and</i> submitted; Workday asks you to make an account with each employer, so those come as alerts with a link.
+        Add a company by name, or paste a link to one of its job posts (for Workday, a link from its <code>myworkdayjobs.com</code> careers site).</p>
       <div class="btn-row"><input type="text" id="co-name" placeholder="e.g. Stripe, Notion, or https://jobs.lever.co/…" style="max-width:420px"><button type="button" class="btn" id="co-add">Find &amp; add</button><span class="small muted" id="co-msg"></span></div>
-      <div class="grid grid-3" style="margin-top:14px">${ATS.map(([k, t]) => `<div><h3 style="margin-bottom:6px">${t}</h3>
-        <div class="tags" data-ats="${k}">${(s.companies[k] || []).map((c) => `<span class="tag">${esc(c)}<button type="button" data-rm="${k}|${esc(c)}" aria-label="Remove ${esc(c)}">×</button></span>`).join("") || '<span class="muted small">None yet</span>'}</div></div>`).join("")}</div>
+      <div class="grid grid-4" style="margin-top:14px">${ATS.map(([k, t]) => `<div><h3 style="margin-bottom:6px">${t} <span class="muted small">${(s.companies[k] || []).length}</span></h3>
+        <div class="tags" data-ats="${k}">${(s.companies[k] || []).map((c) => `<span class="tag">${esc(coName(k, c))}<button type="button" data-rm="${k}" data-slug="${esc(c)}" aria-label="Remove ${esc(coName(k, c))}">×</button></span>`).join("") || '<span class="muted small">None yet</span>'}</div></div>`).join("")}</div>
       ${suggested.length ? `<div style="margin-top:16px"><div class="card-head" style="margin-bottom:8px"><h3>Suggested: companies with lots of business roles</h3>
           <button type="button" class="btn sm" id="sug-all">Add all ${suggested.length}</button></div>
         <div class="tags">${suggested.map((c, i) => `<button type="button" class="btn sm" data-sug="${i}">+ ${esc(c.name)}</button>`).join("")}</div></div>` : ""}
     </div>
     <div class="card"><h2 class="section-title">Sources</h2>
-      <div class="grid grid-2">${sources.map((src) => {
+      ${[[true, "Employer sites: checked every few minutes, no delay"], [false, "Job boards: re-list employers' jobs, often days later"]].map(([emp, title]) => `
+      <h3 style="margin:${emp ? "0" : "14px"} 0 8px">${title}</h3>
+      <div class="grid grid-2">${sources.filter((src) => !!src.employer === emp).map((src) => {
         const runs = src.runs || [];
         const lastRun = runs[0];
         const err = runs.find((r) => !r.ok);
         return `<label class="check"><input type="checkbox" name="src_${src.name}" ${s.sources[src.name] ? "checked" : ""}>
           <span>${esc(src.label)} ${src.direct_apply ? '<span class="chip accent">Direct apply</span>' : ""}
           <span class="hint">${lastRun ? `Last fetched ${ago(lastRun.ts)} · ${runs.reduce((a, r) => a + (r.count || 0), 0)} matching` : "Not fetched yet"}${err ? ` · <span style="color:var(--bad)">${esc(err.error || "error")}</span>` : ""}</span></span></label>`;
-      }).join("")}</div>
+      }).join("")}</div>`).join("")}
       <p class="muted small" style="margin-bottom:0">Listings come from each site's public API and link back to the original post. Remotive asks for no more than a few requests a day, so JobBot refreshes it at most every 6 hours.</p>
     </div>
     <div class="sticky-save"><button class="btn primary" type="submit">Save search</button></div>
@@ -725,9 +787,9 @@ async function viewSearch(el) {
   };
   form.onsubmit = (e) => { e.preventDefault(); guard(() => save("Search saved. Scores updated.")); };
   $$("[data-rm]", el).forEach((b) => (b.onclick = () => guard(async () => {
-    const [k, c] = b.dataset.rm.split("|");
+    const k = b.dataset.rm, c = b.dataset.slug;
     s.companies[k] = (s.companies[k] || []).filter((x) => x !== c);
-    await save(`Removed ${c}`);
+    await save(`Removed ${coName(k, c)}`);
     viewSearch(el);
   })));
   const addSuggested = (list) => guard(async () => {
@@ -749,7 +811,7 @@ async function viewSearch(el) {
     const r = await api("/api/companies/detect", { method: "POST", body: { name, add: true } });
     $("#co-msg").textContent = "";
     if (!r.found.length) return toast(`No Greenhouse, Lever or Ashby board found for “${name}”. Try a link to one of its job posts.`);
-    toast(`Added ${r.found.map((f) => `${f.slug} (${SOURCE_LABELS[f.ats]})`).join(", ")}`);
+    toast(`Added ${r.found.map((f) => `${coName(f.ats, f.slug)} (${SOURCE_LABELS[f.ats]})`).join(", ")}`);
     viewSearch(el);
   });
   $("#co-add").onclick = add;
@@ -760,14 +822,21 @@ async function viewSearch(el) {
 async function viewSettings(el) {
   const [a, llm] = await Promise.all([api("/api/settings/automation"), api("/api/settings/llm")]);
   el.innerHTML = `<form id="af" class="stack">
+    <div class="card"><h2 class="section-title">Watch employer sites</h2>
+      <div class="form-grid">
+        <label class="check wide"><input type="checkbox" name="watch_enabled" ${a.watch_enabled ? "checked" : ""}>
+          <span>Check employers' own job sites for new postings<span class="hint">Greenhouse, Lever, Ashby and Workday boards of the companies in Search setup. New business roles show up within minutes of being published, days before Indeed or LinkedIn list them. Unchanged boards answer with an empty “no change”, so frequent checks are cheap and polite.</span></span></label>
+        <label class="field">Check every (minutes)<input type="number" min="1" max="60" name="watch_minutes" value="${esc(a.watch_minutes)}"></label>
+        <label class="field">Alert me about new postings scoring at least <span class="hint">Score includes location, so jobs you can't take from where you are stay quiet.</span><input type="number" min="0" max="100" name="alert_min_score" value="${esc(a.alert_min_score)}"></label>
+      </div></div>
     <div class="card"><h2 class="section-title">Automation</h2>
       <div class="form-grid">
         <label class="check wide"><input type="checkbox" name="enabled" ${a.enabled ? "checked" : ""}>
-          <span>Search automatically while JobBot is running<span class="hint">Runs every enabled source on the interval below.</span></span></label>
-        <label class="field">Search every (hours)<input type="number" min="1" name="interval_hours" value="${esc(a.interval_hours)}"></label>
+          <span>Also search job boards on a timer<span class="hint">Remotive, Remote OK, Jobicy, Himalayas and The Muse. They re-list employers' jobs, often hours or days later, but cover companies you aren't watching.</span></span></label>
+        <label class="field">Search job boards every (hours)<input type="number" min="1" name="interval_hours" value="${esc(a.interval_hours)}"></label>
         <span></span>
         <label class="check"><input type="checkbox" name="auto_prepare" ${a.auto_prepare ? "checked" : ""}>
-          <span>Fill applications for strong matches<span class="hint">Fills the form and takes a screenshot. Nothing is sent.</span></span></label>
+          <span>Fill applications for strong matches<span class="hint">New postings from watched employers are filled right away. Fills the form and takes a screenshot; nothing is sent.</span></span></label>
         <label class="field">…when the score is at least<input type="number" min="0" max="100" name="prepare_min_score" value="${esc(a.prepare_min_score)}"></label>
         <label class="check"><input type="checkbox" name="auto_submit" ${a.auto_submit ? "checked" : ""}>
           <span>Submit automatically<span class="hint">Only for Greenhouse, Lever and Ashby forms where every required question was answered.</span></span></label>
@@ -805,6 +874,8 @@ async function viewSettings(el) {
       const num = (n) => +f.elements[n].value || 0;
       const auto = {
         ...a, enabled: f.enabled.checked, interval_hours: Math.max(1, num("interval_hours")),
+        watch_enabled: f.watch_enabled.checked, watch_minutes: Math.min(60, Math.max(1, num("watch_minutes"))),
+        alert_min_score: Math.min(100, Math.max(0, num("alert_min_score"))),
         auto_prepare: f.auto_prepare.checked, prepare_min_score: num("prepare_min_score"),
         auto_submit: f.auto_submit.checked, submit_min_score: num("submit_min_score"),
         auto_submit_ai_answers: f.auto_submit_ai_answers.checked, daily_limit: Math.max(1, num("daily_limit")),

@@ -57,5 +57,13 @@ def display_name(slug):
 
 
 from . import (  # noqa: E402  (modules register themselves)
-    arbeitnow, ashby, greenhouse, himalayas, jobicy, lever, remoteok, remotive, themuse,
+    arbeitnow, ashby, greenhouse, himalayas, jobicy, lever, remoteok, remotive, themuse, workday,
 )
+
+# Employer-run job systems (not aggregators): watched every few minutes for new postings.
+EMPLOYER = [n for n, m in REGISTRY.items() if getattr(m, "EMPLOYER", False)]
+
+
+def id_prefix(name, key):
+    mod = REGISTRY[name]
+    return mod.id_prefix(key) if hasattr(mod, "id_prefix") else f"{name}:{key}:"

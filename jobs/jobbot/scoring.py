@@ -8,6 +8,25 @@ from .textutil import ALIASES, contains_phrase, norm, split_list, words
 DIRECT_APPLY = ("greenhouse", "lever", "ashby")
 STOP = {"and", "or", "the", "a", "an", "of", "for", "to", "in", "with", "&", "-", "/"}
 WORLDWIDE = re.compile(r"worldwide|anywhere|global|any location|all locations", re.I)
+UNSTATED = re.compile(r"^\s*(hybrid|in[- ]?office|on[- ]?site|multiple locations|various( locations)?|flexible|tbd|n/?a|)\s*$", re.I)
+_STATES = ("AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC "
+           "ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY").split()
+_STATE_NAMES = ("alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|"
+                "illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|"
+                "mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|"
+                "north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|"
+                "south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming")
+# "Bethesda, MD", "NC - Charlotte", "Austin, Texas", "USA", "U.S."
+US_LOCATION = re.compile(
+    r"\b(usa|u\.s\.a?\.?|us|united states( of america)?)\b|"
+    r"(^|,\s*|\s-\s*|\(\s*)(" + "|".join(_STATES) + r")(\b|\s*-)|"
+    r"^(" + "|".join(_STATES) + r")\s*-|\b(" + _STATE_NAMES + r")\b",
+    re.I,
+)
+
+
+def looks_us(loc):
+    return bool(US_LOCATION.search(loc or ""))
 
 
 def _stem_match(kw_word, title_words):
@@ -80,7 +99,7 @@ def location_fit(job, search):
     places = [w for w in wanted if norm(w) != "remote"]
     place_hit = next(
         (w for w in places if any(contains_phrase(loc, n) for n in _loc_names(w) if len(n) > 2)
-         or (norm(w) == "united states" and re.search(r"\b(US|USA|U\.S\.)\b", loc))),
+         or (norm(w) in _loc_names("united states") and looks_us(loc))),
         None,
     )
     if job.get("remote") and remote_wanted:
@@ -91,6 +110,8 @@ def location_fit(job, search):
         return 20, f"In {place_hit}"
     if not wanted:
         return 10, None
+    if UNSTATED.match(loc):
+        return 5, "Location not stated"
     if not places:  # you only asked for remote, and this job isn't
         return -20, f"On-site in {loc[:60] or 'unknown location'}"
     return -20, f"{loc[:60] or 'Unknown location'} isn't one of your locations"

@@ -14,7 +14,7 @@ JOB_FIELDS = (
     "ats", "ats_board", "ats_job_id", "description", "salary_min", "salary_max",
     "salary_text", "tags", "categories", "posted_at", "first_seen", "last_seen", "score",
     "score_reasons", "status", "status_note", "answers", "updated_at", "applied_at",
-    "dedupe_key",
+    "dedupe_key", "fresh",
 )
 
 # Statuses a job moves through. "Active" ones are owned by the apply worker.
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     description TEXT, salary_min REAL, salary_max REAL, salary_text TEXT, tags TEXT, categories TEXT,
     posted_at TEXT, first_seen TEXT, last_seen TEXT,
     score REAL DEFAULT 0, score_reasons TEXT, status TEXT DEFAULT 'new', status_note TEXT,
-    answers TEXT, updated_at TEXT, applied_at TEXT, dedupe_key TEXT
+    answers TEXT, updated_at TEXT, applied_at TEXT, dedupe_key TEXT, fresh INTEGER DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS jobs_score ON jobs(score);
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS source_runs (
 """
 
 # Columns added after the first release, added to older databases on startup.
-MIGRATIONS = {"categories": "TEXT"}
+MIGRATIONS = {"categories": "TEXT", "fresh": "INTEGER DEFAULT 0"}
 
 _init_lock = threading.Lock()
 _initialized = set()
@@ -153,7 +153,7 @@ def upsert_job(job):
     with connect() as c:
         existing = c.execute("SELECT id, status FROM jobs WHERE id=?", (job["id"],)).fetchone()
         if existing:
-            keep = {"status", "status_note", "answers", "first_seen", "applied_at"}
+            keep = {"status", "status_note", "answers", "first_seen", "applied_at", "fresh"}
             fields = {k: v for k, v in job.items() if k in JOB_FIELDS and k not in keep and k != "id"}
             fields["last_seen"] = ts
             fields["updated_at"] = ts
@@ -193,6 +193,7 @@ def find_by_dedupe(key, exclude_id):
 
 SORTS = {
     "score": "score DESC, posted_at DESC",
+    "found": "first_seen DESC, score DESC",
     "newest": "COALESCE(posted_at, first_seen) DESC",
     "updated": "updated_at DESC",
     "company": "company COLLATE NOCASE, title COLLATE NOCASE",
@@ -200,8 +201,12 @@ SORTS = {
 
 
 def list_jobs(statuses=None, min_score=None, q=None, source=None, ats=None,
-              sort="score", limit=200, offset=0, with_description=False):
+              sort="score", limit=200, offset=0, with_description=False, posted_hours=None):
     where, args = [], []
+    if posted_hours:
+        since = (datetime.now(timezone.utc) - timedelta(hours=posted_hours)).isoformat(timespec="seconds")
+        where.append("COALESCE(posted_at, first_seen) >= ?")
+        args.append(since)
     if statuses:
         where.append(f"status IN ({','.join('?' for _ in statuses)})")
         args += list(statuses)
@@ -232,6 +237,49 @@ def list_jobs(statuses=None, min_score=None, q=None, source=None, ats=None,
             args[:-2],
         ).fetchone()[0]
     return [_decode(r) for r in rows], total
+
+
+def known_ids(prefix):
+    """IDs of stored jobs from one employer board (prefix like 'greenhouse:stripe:')."""
+    with connect() as c:
+        rows = c.execute("SELECT id FROM jobs WHERE substr(id, 1, ?) = ?", (len(prefix), prefix)).fetchall()
+    return {r["id"] for r in rows}
+
+
+def fresh_jobs(hours=48, limit=20, min_score=0):
+    """Postings that appeared on an employer's own board after JobBot started watching it."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat(timespec="seconds")
+    cols = ", ".join(f for f in JOB_FIELDS if f != "description")
+    with connect() as c:
+        rows = c.execute(
+            f"SELECT {cols} FROM jobs WHERE fresh=1 AND first_seen >= ? AND score >= ? "
+            "AND status NOT IN ('skipped','duplicate') ORDER BY first_seen DESC LIMIT ?", (since, min_score, limit),
+        ).fetchall()
+        total = c.execute(
+            "SELECT COUNT(*) FROM jobs WHERE fresh=1 AND first_seen >= ? AND score >= ? "
+            "AND status NOT IN ('skipped','duplicate')", (since, min_score),
+        ).fetchone()[0]
+    return [_decode(r) for r in rows], total
+
+
+def detection_lags(days=7, sources=("greenhouse", "lever", "ashby")):
+    """Minutes between the employer publishing a job and JobBot finding it (exact-timestamp boards only)."""
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+    marks = ",".join("?" for _ in sources)
+    with connect() as c:
+        rows = c.execute(
+            f"SELECT first_seen, posted_at FROM jobs WHERE fresh=1 AND first_seen >= ? AND posted_at IS NOT NULL "
+            f"AND source IN ({marks})", (since, *sources),
+        ).fetchall()
+    lags = []
+    for r in rows:
+        try:
+            lag = (datetime.fromisoformat(r["first_seen"]) - datetime.fromisoformat(r["posted_at"])).total_seconds() / 60
+        except ValueError:
+            continue
+        if 0 <= lag < 7 * 24 * 60:  # ignore re-posts of old jobs
+            lags.append(lag)
+    return sorted(lags)
 
 
 def all_jobs_for_rescore():

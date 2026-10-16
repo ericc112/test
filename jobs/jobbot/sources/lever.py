@@ -6,6 +6,7 @@ from . import display_name, http, iso, make_job, register
 
 NAME = "lever"
 LABEL = "Lever boards"
+EMPLOYER = True  # the employer's own applicant-tracking system: listings appear here first
 MIN_INTERVAL = 30 * 60
 FORCE_MIN_INTERVAL = 2 * 60
 
@@ -35,7 +36,7 @@ def _salary(j):
 
 
 def fetch(site, search):
-    data = http.get_json(f"https://api.lever.co/v0/postings/{site}", {"mode": "json"})
+    data = http.get_json(f"https://api.lever.co/v0/postings/{site}", {"mode": "json"}, conditional=True)
     out = []
     for j in data:
         cat = j.get("categories") or {}

@@ -21,7 +21,7 @@ class PipelineTests(unittest.TestCase):
         self.tmp.close()
 
     def fake_fetch(self, source):
-        def fetch(key, search):
+        def fetch(key, search, known=None):
             if source == "greenhouse":
                 return [make_job("greenhouse", "acme:1", "Financial Analyst", "Acme", "https://acme.com/1",
                                  ats="greenhouse", ats_board="acme", ats_job_id="1", remote=True, location="Remote",
@@ -50,6 +50,13 @@ class PipelineTests(unittest.TestCase):
         # Same job on two boards: keep the one we can apply to directly.
         self.assertEqual({gh["status"], rm["status"]}, {"new", "duplicate"})
         self.assertEqual(gh["status"], "new")
+
+    def test_same_title_on_one_board_is_not_a_duplicate(self):
+        for n in (1, 2):
+            job = make_job("lever", f"acme:{n}", "Account Executive", "Acme", "u")
+            db.upsert_job(job)
+            pipeline._dedupe(job)
+        self.assertEqual({db.get_job(f"lever:acme:{n}")["status"] for n in (1, 2)}, {"new"})
 
     def test_rate_limit_skips_recent_feeds(self):
         self.run_search()

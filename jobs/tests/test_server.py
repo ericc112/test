@@ -76,6 +76,10 @@ class ServerTests(unittest.TestCase):
     def test_fields_and_suggestions(self):
         f = self.client.get("/api/fields").json()
         self.assertEqual(len(f["business"]["areas"]), 8)
+        self.assertEqual(self.client.get("/api/suggestions").json(), [])  # all watched by default
+        s = db.get_setting("search")
+        s["companies"] = {"greenhouse": [], "lever": [], "ashby": [], "workday": []}
+        db.set_setting("search", s)
         before = self.client.get("/api/suggestions").json()
         self.assertTrue(any(c["slug"] == "stripe" for c in before))
         s = db.get_setting("search")
@@ -91,6 +95,9 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(self.client.get("/shots/a.png").status_code, 200)
 
     def test_company_detection_adds_boards(self):
+        s = db.get_setting("search")
+        s["companies"] = {"greenhouse": [], "lever": [], "ashby": [], "workday": []}
+        db.set_setting("search", s)
         with mock.patch.object(sources.REGISTRY["greenhouse"], "probe", side_effect=lambda s: s == "acmecorp"), \
              mock.patch.object(sources.REGISTRY["lever"], "probe", return_value=False), \
              mock.patch.object(sources.REGISTRY["ashby"], "probe", side_effect=lambda s: s == "acme-corp"):
@@ -100,6 +107,24 @@ class ServerTests(unittest.TestCase):
         self.assertEqual((companies["greenhouse"], companies["ashby"]), (["acmecorp"], ["acme-corp"]))
         r = self.client.post("/api/companies/detect", json={"name": "https://jobs.lever.co/zeta/6ed76ce8-4156-4b60-b120-403538bd66cd"}).json()
         self.assertEqual(r["found"], [{"ats": "lever", "slug": "zeta"}])
+        with mock.patch.object(sources.REGISTRY["workday"], "probe", return_value=True):
+            r = self.client.post("/api/companies/detect", json={
+                "name": "https://acme.wd5.myworkdayjobs.com/en-US/AcmeCareers/job/NYC/Analyst_R1", "add": True}).json()
+        self.assertEqual(r["found"], [{"ats": "workday", "slug": "acme|wd5|AcmeCareers"}])
+        self.assertIn("acme|wd5|AcmeCareers", db.get_setting("search")["companies"]["workday"])
+
+    def test_state_reports_watcher_and_fresh_jobs(self):
+        db.update_job("greenhouse:acme:1", first_seen="2026-01-01T00:00:00+00:00")
+        db.upsert_job(make_job("lever", "acme:9", "Financial Analyst", "Acme", "u", fresh=1,
+                               posted_at=db.now(), score=80))
+        db.upsert_job(make_job("lever", "acme:10", "Financial Analyst", "Acme", "u", fresh=1,
+                               posted_at=db.now(), score=20, location="Manila"))  # below the alert threshold
+        st = self.client.get("/api/state").json()
+        self.assertEqual(st["fresh"]["total_48h"], 1)
+        self.assertEqual(st["fresh"]["latest"][0]["title"], "Financial Analyst")
+        self.assertEqual(st["fresh"]["lag_samples"], 2)  # speed counts every new posting
+        r = self.client.get("/api/jobs?sort=found&posted_hours=24").json()
+        self.assertEqual(r["jobs"][0]["id"], "lever:acme:9")
 
 
 if __name__ == "__main__":

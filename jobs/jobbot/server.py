@@ -21,6 +21,7 @@ ALLOWED_UPLOADS = {".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt"}
 class State:
     worker = None
     scheduler = None
+    watcher = None
     search_running = False
     last_search = None
 
@@ -38,7 +39,11 @@ def create_app(start_background=True, extra_hosts=()):
             State.worker.start()
             State.scheduler = pipeline.Scheduler(State.worker.enqueue)
             State.scheduler.start()
+            State.watcher = pipeline.Watcher(State.worker.enqueue)
+            State.watcher.start()
         yield
+        if State.watcher:
+            State.watcher.stop()
         if State.scheduler:
             State.scheduler.stop()
         if State.worker:
@@ -72,6 +77,8 @@ def create_app(start_background=True, extra_hosts=()):
         search = db.get_setting("search")
         companies = sum(len(v) for v in search.get("companies", {}).values())
         llm = db.get_setting("llm")
+        fresh, fresh_total = db.fresh_jobs(hours=48, limit=8, min_score=automation.get("alert_min_score", 50))
+        lags = db.detection_lags(days=7)
         return {
             "version": __version__,
             "counts": db.status_counts(),
@@ -82,6 +89,13 @@ def create_app(start_background=True, extra_hosts=()):
             "next_run_sec": State.scheduler.next_run if State.scheduler else None,
             "queue": State.worker.snapshot() if State.worker else {"current": None, "pending": []},
             "search_running": State.search_running,
+            "watch": dict(State.watcher.status) if State.watcher else {"enabled": False, "feeds": 0},
+            "fresh": {
+                "total_48h": fresh_total,
+                "latest": fresh,
+                "lag_median_min": round(lags[len(lags) // 2], 1) if lags else None,
+                "lag_samples": len(lags),
+            },
             "last_search": State.last_search,
             "setup": {
                 "profile": bool(profile.get("first_name") and profile.get("email")),
@@ -99,7 +113,8 @@ def create_app(start_background=True, extra_hosts=()):
         for r in db.source_runs():
             runs.setdefault(r["source"], []).append(r)
         return [
-            {"name": n, "label": getattr(m, "LABEL", n), "direct_apply": n in ats.SUPPORTED, "runs": runs.get(n, [])}
+            {"name": n, "label": getattr(m, "LABEL", n), "direct_apply": n in ats.SUPPORTED,
+             "employer": n in sources.EMPLOYER, "runs": runs.get(n, [])}
             for n, m in sources.REGISTRY.items()
         ]
 
@@ -109,6 +124,13 @@ def create_app(start_background=True, extra_hosts=()):
             name: {"label": f["label"], "areas": [{"key": k, "label": fields.FAMILIES[k]["label"]} for k in f["families"]]}
             for name, f in fields.FIELDS.items()
         }
+
+    @app.get("/api/company-names")
+    def company_names():
+        names = {}
+        for name, kind, slug in config.SUGGESTED_COMPANIES:
+            names.setdefault(kind, {})[slug] = name
+        return names
 
     @app.get("/api/suggestions")
     def suggestions():
@@ -122,10 +144,10 @@ def create_app(start_background=True, extra_hosts=()):
     # ---------------------------------------------------------------- jobs
     @app.get("/api/jobs")
     def jobs(status: str = "", q: str = "", min_score: float = None, source: str = "", ats_filter: str = "",
-             sort: str = "score", limit: int = 100, offset: int = 0):
+             sort: str = "score", limit: int = 100, offset: int = 0, posted_hours: int = 0):
         statuses = [s for s in status.split(",") if s] or None
         rows, total = db.list_jobs(statuses, min_score, q or None, source or None, ats_filter or None,
-                                   sort, min(limit, 500), offset)
+                                   sort, min(limit, 500), offset, posted_hours=posted_hours or None)
         return {"jobs": rows, "total": total}
 
     @app.get("/api/jobs/{job_id:path}/detail")
@@ -230,9 +252,14 @@ def create_app(start_background=True, extra_hosts=()):
         if not raw:
             raise HTTPException(400, "Enter a company name or job board URL")
         hit = ats.detect(raw)
+        workday_key = sources.REGISTRY["workday"].key_from_url(raw)
         found = []
         if hit[0]:
             found.append({"ats": hit[0], "slug": hit[1]})
+        elif workday_key:
+            if not sources.REGISTRY["workday"].probe(workday_key):
+                raise HTTPException(400, "That Workday careers site didn't answer. Copy the link from the company's job search page.")
+            found.append({"ats": "workday", "slug": workday_key})
         else:
             base = re.sub(r"https?://|www\.|\.(com|io|ai|co|org|net)\b.*$", "", raw.lower()).strip("/ ")
             words_ = re.findall(r"[a-z0-9]+", base)
@@ -280,6 +307,7 @@ def create_app(start_background=True, extra_hosts=()):
                 body.setdefault(f, old.get(f, ""))
         db.set_setting(key, body)
         if key in ("search", "profile"):
+            pipeline.search_changed()
             pipeline.rescore()
         return {"ok": True}
 

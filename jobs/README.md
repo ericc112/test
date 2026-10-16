@@ -5,10 +5,27 @@ A local web app that searches job boards for you, ranks what it finds against yo
 It's set up for **business majors**: it only shows and applies to roles that suit a business degree (finance & accounting, consulting & strategy, operations & supply chain, marketing & communications, sales & business development, HR & people, project & product management, and business analytics). Engineering, design, healthcare, trades, hospitality and similar roles are filtered out. You can narrow it to some of those areas, list specific titles, or switch the filter off.
 
 ```
- search ──► rank ──► fill the form ──► you review ──► submit ──► track
- 9 boards    0-100    real browser      answers +       one click     applied /
-             score    (Playwright)      screenshot      or automatic   history
+ watch ──► rank ──► fill the form ──► you review ──► submit ──► track
+ employer  0-100    real browser      answers +       one click     applied /
+ sites     score    (Playwright)      screenshot      or automatic   history
+ every 5 min
 ```
+
+## New postings, as soon as they're published
+
+Indeed, LinkedIn and other aggregators copy jobs from employers' sites, often hours or days later. JobBot goes to the source instead. It reads each employer's own job system, which is the same data the company's careers page shows:
+
+- **Greenhouse, Lever and Ashby** (Stripe, Toast, Brex, Ramp, Plaid…)
+- **Workday** (Capital One, Citi, Wells Fargo, Bank of America, PwC, Accenture, Fidelity, BlackRock, Nike, Target…)
+
+While JobBot is running, a watcher re-checks every employer on your list every 5 minutes (adjustable down to 1).
+- **Unchanged boards cost nothing:** they answer with an empty "no change" (HTTP 304), so this is cheap for both sides. Only new postings that fit your search are downloaded in full.
+- **New postings are flagged and acted on:** anything that appears after JobBot's first look at a board is marked **Just posted**, listed at the top of the dashboard, and (optionally) sent as a desktop alert. Strong matches are filled straight away, so they're waiting in your review queue.
+- **Speed is measured:** the dashboard shows how long, after the employer published it, each new posting took to reach you. In testing, new Stripe and Cloudflare postings were caught 0.6 to 1.3 minutes after they went live.
+
+JobBot ships watching about 50 employers with lots of business roles. Add or remove them in **Search setup**: type a company name, or paste a link to one of its job posts (for Workday, a link from its `…myworkdayjobs.com` careers site).
+
+Workday asks applicants to create an account with each employer, so for Workday jobs JobBot alerts you and links to the posting instead of filling the form.
 
 It runs on your own computer: it needs a real browser, your resume, and your personal details, and none of that should live on someone else's server.
 
@@ -65,13 +82,14 @@ A required question with no answer is **never guessed**. The job goes to *Review
 
 ## Job sources
 
-All free, public, no API keys. Every job links back to its original listing.
+All free, public, no API keys. Every job links back to its original listing. The first four are employers' own job systems. The rest are aggregators, which are useful for companies you don't watch but lag behind.
 
 | Source | What it covers | Refresh |
 |---|---|---|
-| Greenhouse boards | Companies you add (e.g. Stripe, Airbnb) | 30 min |
-| Lever boards | Companies you add (e.g. Palantir) | 30 min |
-| Ashby boards | Companies you add (e.g. Ramp, Notion) | 30 min |
+| Greenhouse boards | Employers you watch (e.g. Stripe, Toast) | every 5 min (watcher) |
+| Lever boards | Employers you watch (e.g. Palantir, Spotify) | every 5 min (watcher) |
+| Ashby boards | Employers you watch (e.g. Ramp, Notion) | every 5 min (watcher) |
+| Workday career sites | Employers you watch (e.g. Capital One, Citi, PwC) | every 5 min (watcher) |
 | Remotive | Remote jobs | 6 h (their terms ask for ≤ 4 calls a day) |
 | Remote OK | Latest remote jobs | 1 h |
 | Jobicy | Remote jobs | 1 h |
@@ -125,14 +143,14 @@ The browser tests drive local fixture forms modelled on Greenhouse, Lever and As
 
 ```
 jobbot/
-  sources/        one module per job board (fetch + normalise)
+  sources/        one module per job board (fetch + normalise); http.py does ETag/304 polling
   fields.py       business-major classifier (areas, blocked roles, board categories)
   scoring.py      0-100 match score with reasons
   ats.py          recognise Greenhouse/Lever/Ashby, resolve aggregator Apply links
   answers.py      question → answer rules, answer bank, safety checks
   llm.py          optional Claude answers and cover letters
   apply/          Playwright engine + in-page form extractor (extract.js)
-  pipeline.py     search, rescore, auto-submit policy, scheduler
+  pipeline.py     search, rescore, auto-submit policy, scheduler, employer-site watcher
   worker.py       background browser worker
   server.py       FastAPI app; static/ holds the UI
 ```

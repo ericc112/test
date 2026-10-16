@@ -25,6 +25,7 @@ BUSINESS = {
     "Management Trainee": "Project & Product Management",
     "Data Analyst": "Business Analytics",
     "Business Manager": "Project & Product Management",
+    "Personal Banker - Universal Branch": "Finance & Accounting",
 }
 NOT_BUSINESS = [
     "Senior Software Engineer", "Sales Engineer", "Solutions Architect", "Data Scientist", "Analytics Engineer",
@@ -32,7 +33,8 @@ NOT_BUSINESS = [
     "Shift Lead", "Solar Appointment Setter", "Legal Counsel", "Clinical Research Associate", "Security Analyst",
     "IT Support Specialist", "TIG Welder (Starship Components)", "Warehouse Associate", "Customer Service Representative",
     "Data Partner - Finance - Remote", "Personalized Internet Ads Assessor", "Project Manager - Construction",
-    "Customer Technology Advisor for Mainframe",
+    "Customer Technology Advisor for Mainframe", "Retail Sales - Stylist - Women's Core", "Beauty Advisor",
+    "Retail Sales Associate",
 ]
 
 

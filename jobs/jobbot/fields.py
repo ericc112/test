@@ -98,7 +98,8 @@ HARD_BLOCK = re.compile(
     r"picker|packer|laborer|cook|chef|barista|bartender|dishwasher|housekeep\w*|janitor|custodian|cashier|crew member|"
     r"teacher|tutor|professor|lifeguard|attorney|lawyer|paralegal|counsel|machinist|assembler|installer|pilot|"
     r"firefighter|police|appointment setter|telemarket\w*|door.to.door|commission.only|construction|"
-    r"data partner|annotat\w*|ads assessor|rater|ai trainer|data label\w*)\b",
+    r"data partner|annotat\w*|ads assessor|rater|ai trainer|data label\w*|"
+    r"stylist|beauty advisor|retail sales associate|sales floor|store associate|crew)\b",
     re.I,
 )
 # Not business on their own, but fine next to a clear business role

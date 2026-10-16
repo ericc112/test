@@ -51,6 +51,18 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(direct - plain, 5)
         self.assertEqual(scoring.score(job(title="Software Engineer"), biz, PROFILE)[2], "Not a business role")
 
+    def test_us_cities_count_as_united_states(self):
+        for loc in ["Bethesda, MD", "NC - Charlotte (28210)", "Austin, Texas", "New York, NY 10001", "McLean, VA",
+                    "Remote - USA", "Chicago, Illinois, United States"]:
+            self.assertTrue(scoring.looks_us(loc), loc)
+        for loc in ["London, UK", "Toronto, ON", "Amsterdam", "Bengaluru, India", "Paris, France"]:
+            self.assertFalse(scoring.looks_us(loc), loc)
+        pts, reason = scoring.location_fit(job(remote=False, location="Bethesda, MD"), SEARCH)
+        self.assertEqual((pts, reason), (20, "In United States"))
+
+    def test_unstated_location_is_neutral(self):
+        self.assertEqual(scoring.location_fit(job(remote=False, location="Hybrid"), SEARCH), (5, "Location not stated"))
+
     def test_location_mismatch_is_penalised(self):
         here, _, _ = scoring.score(job(remote=False, location="Austin, TX, USA"), SEARCH, PROFILE)
         abroad, _, _ = scoring.score(job(remote=False, location="Amsterdam"), SEARCH, PROFILE)
