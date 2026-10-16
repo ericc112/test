@@ -375,6 +375,8 @@ def run(takes_dir: str, out: str, watch: int = 0, max_minutes: int = 300) -> dic
         mem = {}
     doc = snapshot(takes, bets, mem=mem)
     json.dump(mem, open(memf, "w"))
+    if watch:
+        doc["watching"] = watch                         # the page doesn't ask for updates while a watcher is feeding it
     json.dump(doc, open(out, "w"), separators=(",", ":"))
     print(f"live {doc['updated']} in_progress {doc['in_progress']} takes {len(doc['items'])}", flush=True)
     if not watch:
@@ -394,6 +396,7 @@ def run(takes_dir: str, out: str, watch: int = 0, max_minutes: int = 300) -> dic
             print(f"live error {type(e).__name__}", flush=True)
             continue
         sig = _sig(doc)
+        doc["watching"] = watch
         if sig != last:
             json.dump(doc, open(out, "w"), separators=(",", ":"))
             changed = [i for i in doc["items"] if (i["id"], i.get("value"), i.get("status"), i.get("detail"), len(i.get("ticks") or [])) not in set(last)]
