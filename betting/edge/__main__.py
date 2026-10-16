@@ -127,6 +127,14 @@ def main(argv=None):
     rf.add_argument("--out", required=True)
     rf.add_argument("--league", default="", help="default: NHL,MLB,NBA,NFL,CS2,LOL,VAL,SOCCER")
     rf.add_argument("--no-log", action="store_true")
+    mlp = sub.add_parser("ml", help="moneylines (NFL, CFB, MLB, soccer, tennis) rated like props, and the 50->1k challenge")
+    mlp.add_argument("action", choices=["board", "challenge"])
+    mlp.add_argument("--out", required=True)
+    mlp.add_argument("--days", type=int, default=4)
+    mlp.add_argument("--no-tennis", action="store_true")
+    mlp.add_argument("--log", action="store_true", help="board: log each game's likelier side (graded and learned like props)")
+    mlp.add_argument("--state", help="challenge: the page's ml/challenge doc (ArtifactData get output)")
+    mlp.add_argument("--board", help="challenge: the board file from `edge ml board`")
     lv = sub.add_parser("live", help="live state of the user's open takes (stat so far, clock, score) for the page's Live view")
     lv.add_argument("folder", help="the takes/*.json documents (ArtifactData list with out_dir)")
     lv.add_argument("--out", required=True, help="the live/now document to upload")
@@ -342,6 +350,9 @@ def main(argv=None):
             print(f"{tid}: #{x.get('bets_id', '-')} {x.get('status')} {x.get('rating') or ''}{'/10' if x.get('rating') else ''} {x.get('why', '')}")
         rec = TK.record()
         print(f"your takes: {rec['hits']} of {rec['n']} hit" + "".join(f" | {k}: {v['hits']}/{v['n']}" for k, v in sorted(rec['bands'].items(), reverse=True)))
+    elif args.cmd == "ml":
+        from . import ml as ML
+        ML.cli(args)
     elif args.cmd == "live":
         from . import live as LV
         doc = LV.run(args.folder, args.out, args.watch, args.max_minutes)

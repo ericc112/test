@@ -294,6 +294,27 @@ def tennis_value(event_id: str, player_id: str, market: str, cache: dict):
     return tennis.result(event_id, player_id)
 
 
+# moneylines (edge ml): event_id = ESPN event, player_id = ESPN team id; tennis keeps its tour/event/comp id
+ML_PATH = {"nfl": "football/nfl", "cfb": "football/college-football", "mlb": "baseball/mlb", "nba": "basketball/nba",
+           "nhl": "hockey/nhl", "soccer": "soccer/all"}
+
+
+def ml_value(sport: str, event_id: str, team_id: str, cache: dict):
+    """Moneyline: 1 if the team won, 0 if it lost. A draw loses a soccer moneyline (line 0.5, side over)."""
+    if sport == "tennis":
+        return tennis_value(event_id, team_id, "moneyline", cache)
+    key = ("ml", sport, event_id)
+    if key not in cache:
+        cache[key] = _get(f"https://site.api.espn.com/apis/site/v2/sports/{ML_PATH[sport]}/summary?event={event_id}")
+    comp = cache[key]["header"]["competitions"][0]
+    if not comp["status"]["type"].get("completed"):
+        return "pending", None
+    for c in comp.get("competitors", []):
+        if str(c.get("id")) == str(team_id):
+            return "final", 1.0 if c.get("winner") else 0.0
+    return "void", None
+
+
 GRADERS = {"tennis": tennis_value, "mlb": mlb_value, "nhl": nhl_value, "nba": nba_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value, "lol": lol_value,
            "val": val_value}
 
@@ -310,7 +331,8 @@ def grade_rows(rows: list[dict]) -> dict:
     for r in rows:
         if r.get("status") not in ("pending", ""):
             continue
-        fn = GRADERS.get(r.get("sport", "").lower())
+        sport = r.get("sport", "").lower()
+        fn = (lambda ev, pid, m, c, s=sport: ml_value(s, ev, pid, c)) if r.get("market") == "moneyline" else GRADERS.get(sport)
         if not fn or not r.get("event_id") or not r.get("player_id"):
             counts["manual"] += 1  # no auto-grader for this sport/market: grade by hand
             continue

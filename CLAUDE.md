@@ -144,6 +144,27 @@ Every open take has a **Live** button, and the takes list has one for all of the
 - **Check-ins:** at check-ins during a slate the user has takes on, start the watcher without being asked (CLAUDE.md: check in with the live state before being asked).
 - **Cost:** the page never reaches the box scores itself (artifact pages can't fetch outside sites); everything live comes through this session.
 
+### Moneylines and the 50 -> 1K challenge (user, 10/15)
+The page's **50→1K · ML** tab holds two things.
+- **The ML board** (`ml/board`): every NFL, college football, MLB, soccer and tennis moneyline for the next 4 days, from `python3 -m edge ml board --out FILE --log`.
+  - **Market:** DraftKings via ESPN (soccer is 3-way, so the draw loses), or every book's consensus and the best price when `$ODDS_API_KEY` is set.
+  - **Model:** NFL from points per game; MLB from Pythagorean records, without starters; soccer from goals for and against (Poisson); tennis from the tennis model. College football has no model yet.
+  - **Rating:** the same blend, gates and 1-10 as props (segment `sport:moneyline:team`). A market-only line is Low. An even-money side rates 1-4 however it's priced, because the rating measures the chance it wins.
+  - **Logging and grading:** each game is logged once, on its likelier side, and graded from ESPN finals (`grade.ml_value`; a soccer draw loses).
+- **The challenge** (`ml/challenge`): the user's ladder from $50 to $1,000, the whole roll on one straight moneyline per step.
+  - **Plan:** double at +100 to +135 until one more double would overshoot, then a favourite priced to land on the target (from $800, about -400).
+  - **Candidates** (`edge ml challenge`) must clear all of these:
+    - start 15 minutes to 48 hours out;
+    - the model leans the same way as the book, and by no more than 15 points;
+    - EV at the price is 0 or better;
+    - never the draw.
+  - **On the page:** Lock in takes two taps, writes `open` and comments "Challenge: locked step N...". On that comment, or at any check-in:
+    1. `get ml/challenge`;
+    2. `edge ml challenge --state FILE --board ML.json --out OUT` (it logs the step to bets.csv as `user_entry`, `entry_id challenge-N`, and grades it after the final);
+    3. `set ml/challenge`;
+    4. answer the comment in one line.
+  - **Risk (flag it, don't lecture):** every step stakes 100% of the challenge roll, far past the 2% rule, so it is money set aside for this, not the bankroll. At fair prices any route from $50 to $1,000 gets there about 1 time in 20. When a run busts, never suggest restarting: a new run is the user's own call (no chasing, per the risk rules).
+
 ### Inbox (Check a slip)
 The page's "Check a slip" section takes screenshots or a screen recording (a slip, a board, someone's pick). The page splits a video into distinct frames on the device. Claude reads the props off the frames (the page's `sample` call), matches them to our boards and cards, and writes a short analysis. Each check is saved as `inbox/<id>` with status "new": `{kind, app, entry, props:[{player, sport, stat, line, side, odds_type, price}], page, analysis, frames:[asset ids], video}`.
 - **When to process:** at every check-in, whenever the user says they checked a slip, and at once when a page comment to Claude reads "Grade inbox <id>".

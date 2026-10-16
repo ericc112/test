@@ -1100,6 +1100,60 @@ class LiveTakes(unittest.TestCase):
         self.assertAlmostEqual(_clock_frac(2, "30.0", 4, 12), 23.5 / 48)              # ESPN's clock under a minute
 
 
+class Moneylines(unittest.TestCase):
+    def test_devig_and_prices(self):
+        from edge import ml
+        f = ml.devig({"home": -150, "away": 130})
+        self.assertAlmostEqual(f["home"] + f["away"], 1.0)
+        self.assertGreater(f["home"], 0.57)
+        three = ml.devig({"home": 215, "away": 120, "draw": 240})                       # soccer: the draw is its own outcome
+        self.assertAlmostEqual(sum(three.values()), 1.0)
+        self.assertAlmostEqual(ml.decimal(-400), 1.25)
+        self.assertEqual(ml.american(0.5), -100)
+
+    def test_ladder_steps(self):
+        from edge import ml
+        self.assertEqual(ml.step_plan(50, 1000)["kind"], "double")
+        fin = ml.step_plan(800, 1000)                                                    # from 800, a -400 lands on 1000
+        self.assertEqual(fin["kind"], "finish")
+        self.assertAlmostEqual(fin["need"], 1.25)
+        self.assertEqual(ml.step_plan(1000, 1000)["kind"], "done")
+        self.assertAlmostEqual(ml.chance(50, 1000), 0.05)
+
+    def test_candidates_need_the_model_on_side(self):
+        import datetime as dt
+        from edge import ml
+        now = dt.datetime(2026, 10, 16, tzinfo=dt.timezone.utc)
+        side = lambda t, price, pm, pmod: {"side": "home", "team": t, "team_id": t, "price": price, "book": "DK", "p_mkt": pm,
+                                           "p_model": pmod, "p": (pm + pmod) / 2, "ev": round((pm + pmod) / 2 * 2.1 - 1, 4), "rating": 1}
+        b = {"games": [{"lg": "NFL", "sport": "nfl", "id": str(i), "start": "2026-10-17T17:00Z", "name": t, "sides": [s]}
+                       for i, (t, s) in enumerate([("A", side("A", 110, 0.47, 0.52)), ("B", side("B", 110, 0.47, 0.40)),
+                                                   ("C", side("C", 110, 0.47, 0.70)), ("D", side("D", -150, 0.60, 0.65))])]}
+        self.assertEqual([c["team"] for c in ml.candidates(b, 50, 1000, now)], ["A"])   # B: model against; C: model 23 pts off; D: no double
+
+    def test_challenge_grades_and_moves_the_roll(self):
+        import datetime as dt
+        from unittest import mock
+        from edge import ml
+        st = {"start": 50, "target": 1000, "roll": 50, "history": [], "status": "active",
+              "open": {"sport": "nfl", "event_id": "1", "team_id": "7", "team": "A", "price": 110, "stake": 50, "p": 0.5, "status": "pending"}}
+        with mock.patch.object(ml, "ml_result", lambda *a: ("final", 1.0)):
+            out = ml.advance(st, {"games": []}, dt.datetime(2026, 10, 18, tzinfo=dt.timezone.utc))
+        self.assertEqual(out["roll"], 105.0)
+        self.assertEqual(out["step"], 2)
+        self.assertIsNone(out["open"])
+        with mock.patch.object(ml, "ml_result", lambda *a: ("final", 0.0)):
+            out = ml.advance({**st, "open": dict(st["open"])}, {"games": []})
+        self.assertEqual(out["status"], "busted")
+
+    def test_moneyline_grader(self):
+        from unittest import mock
+        summary = {"header": {"competitions": [{"status": {"type": {"completed": True}},
+                                                "competitors": [{"id": "7", "winner": False, "score": "1"}, {"id": "9", "winner": False, "score": "1"}]}]}}
+        with mock.patch.object(grade, "_get", lambda url: summary):
+            self.assertEqual(grade.ml_value("soccer", "5", "7", {}), ("final", 0.0))           # a draw loses the moneyline
+
+
 class NhlBoxStats(unittest.TestCase):
     def test_hits_come_from_the_box_score(self):
         """10/15: Podkolzin Less 3.5 hits couldn't be graded: the NHL game log has no hits; the box score does."""
