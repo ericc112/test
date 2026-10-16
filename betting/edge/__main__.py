@@ -127,6 +127,11 @@ def main(argv=None):
     rf.add_argument("--out", required=True)
     rf.add_argument("--league", default="", help="default: NHL,MLB,NBA,NFL,CS2,LOL,VAL,SOCCER")
     rf.add_argument("--no-log", action="store_true")
+    lv = sub.add_parser("live", help="live state of the user's open takes (stat so far, clock, score) for the page's Live view")
+    lv.add_argument("folder", help="the takes/*.json documents (ArtifactData list with out_dir)")
+    lv.add_argument("--out", required=True, help="the live/now document to upload")
+    lv.add_argument("--watch", type=int, default=0, help="keep rewriting --out every N seconds while games are live")
+    lv.add_argument("--max-minutes", type=int, default=300)
     tk = sub.add_parser("takes", help="link the user's takes from the Eight-Plus Board to bets.csv and read their status")
     tk.add_argument("folder", help="the takes/*.json documents (ArtifactData list with out_dir)")
     tk.add_argument("--out", help="write the per-take fields for the batch update")
@@ -337,6 +342,13 @@ def main(argv=None):
             print(f"{tid}: #{x.get('bets_id', '-')} {x.get('status')} {x.get('rating') or ''}{'/10' if x.get('rating') else ''} {x.get('why', '')}")
         rec = TK.record()
         print(f"your takes: {rec['hits']} of {rec['n']} hit" + "".join(f" | {k}: {v['hits']}/{v['n']}" for k, v in sorted(rec['bands'].items(), reverse=True)))
+    elif args.cmd == "live":
+        from . import live as LV
+        doc = LV.run(args.folder, args.out, args.watch, args.max_minutes)
+        if not args.watch:
+            for i in doc["items"]:
+                print(f"{i['status']:7s} {i['player']} {i['side']} {i['line']:g} {i['stat']}: {i.get('value')} "
+                      f"{i.get('need', '')} | {i.get('detail', '')} {i.get('score', '')}" + (f" | pace {i['pace']}" if i.get("pace") else ""))
     elif args.cmd == "refresh":
         from . import refresh as RF
         lgs = tuple(x.strip().upper() for x in args.league.split(",") if x.strip()) if args.league else RF.TIER + RF.EXTRA

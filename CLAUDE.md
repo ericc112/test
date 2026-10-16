@@ -126,6 +126,18 @@ PrizePicks moves lines, adds props and pulls them all day. **The user wants the 
 - The full scan (`edge board --props`) still runs before each slate; it is what rebuilds every card and the regular lines.
 - A refresh between daily runs messages the user only for a new 8+ pick, a withdrawn pick, or a moved or pulled line on one of their takes.
 
+### Live (user, 10/15)
+Every open take has a **Live** button, and the takes list has one for all of them. It opens a sheet showing each take's stat so far against its line, the clock, the score, what it still needs, and the pace. Statuses are In progress, Already hit (an over that cleared), Busted (an under already over), Final and Not started. The data is `live/now`, written by `python3 -m edge live TAKES_DIR --out FILE`. That reads the same box scores the grader reads (`grade.*_value(..., live=True)`): NHL, MLB, NBA, NFL and soccer.
+- **When the page asks:** a tap on Live sends the comment "Live takes: refresh live/now..." when the data is over 90 s old, at most every 2 minutes. On that comment:
+  1. list `takes` into a fresh folder;
+  2. run `edge live` and `set live/now` (`if_version`);
+  3. start the watcher in the background: `nohup python3 -m edge live DIR --out FILE --watch 90 --max-minutes 240 > LOG &`;
+  4. arm a Monitor on its log (`changed|live done|error`) and re-arm it at each 30-minute expiry.
+
+  Each "changed" event means uploading FILE to `live/now`. Stop when it prints "live done"; then grade the slate as usual. Answer the comment once, not per update.
+- **Check-ins:** at check-ins during a slate the user has takes on, start the watcher without being asked (CLAUDE.md: check in with the live state before being asked).
+- **Cost:** the page never reaches the box scores itself (artifact pages can't fetch outside sites); everything live comes through this session.
+
 ### Inbox (Check a slip)
 The page's "Check a slip" section takes screenshots or a screen recording (a slip, a board, someone's pick). The page splits a video into distinct frames on the device. Claude reads the props off the frames (the page's `sample` call), matches them to our boards and cards, and writes a short analysis. Each check is saved as `inbox/<id>` with status "new": `{kind, app, entry, props:[{player, sport, stat, line, side, odds_type, price}], page, analysis, frames:[asset ids], video}`.
 - **When to process:** at every check-in, whenever the user says they checked a slip, and at once when a page comment to Claude reads "Grade inbox <id>".

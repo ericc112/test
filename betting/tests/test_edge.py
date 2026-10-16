@@ -1054,6 +1054,26 @@ class Refresh(unittest.TestCase):
             self.assertEqual(B.read_board(tmp, "pp", "NFL"), {"rows": []})
 
 
+class LiveTakes(unittest.TestCase):
+    def test_status_while_the_game_runs(self):
+        from edge.live import verdict
+        self.assertEqual(verdict(1, 0.5, True, "in"), ("hit", "cleared"))              # an over that cleared can't lose
+        self.assertEqual(verdict(1, 2.5, True, "in"), ("live", "needs 2 more"))
+        self.assertEqual(verdict(5, 8.5, False, "in"), ("live", "3 more allowed"))
+        self.assertEqual(verdict(2, 4.0, False, "in"), ("live", "1 more allowed"))     # a 4th makes it a push
+        self.assertEqual(verdict(9, 8.5, False, "in"), ("dead", "over the line"))
+        self.assertEqual(verdict(None, 0.5, True, "pre"), ("pre", ""))
+        self.assertEqual(verdict(7, 7.0, True, "post"), ("push", ""))
+        self.assertEqual(verdict(0, 0.5, True, "post"), ("miss", ""))
+        self.assertEqual(verdict(None, 0.5, True, "post"), ("void", "didn't play"))
+
+    def test_share_of_the_game_played(self):
+        from edge.live import _clock_frac
+        self.assertAlmostEqual(_clock_frac(2, "10:00", 3, 20), 0.5)                    # NHL halfway through the 2nd
+        self.assertAlmostEqual(_clock_frac(4, "0:00", 4, 12), 1.0)
+        self.assertIsNone(_clock_frac(0, "", 4, 12))
+
+
 class NhlBoxStats(unittest.TestCase):
     def test_hits_come_from_the_box_score(self):
         """10/15: Podkolzin Less 3.5 hits couldn't be graded: the NHL game log has no hits; the box score does."""

@@ -56,7 +56,7 @@ MLB_STATS = {
 }
 
 
-def mlb_value(event_id: str, player_id: str, market: str, cache: dict):
+def mlb_value(event_id: str, player_id: str, market: str, cache: dict, live: bool = False):
     key = ("mlb", event_id)
     if key not in cache:
         sched = _get(f"https://statsapi.mlb.com/api/v1/schedule?gamePk={event_id}")
@@ -64,7 +64,7 @@ def mlb_value(event_id: str, player_id: str, market: str, cache: dict):
         cache[key] = {"final": game["status"]["abstractGameState"] == "Final",
                       "box": _get(f"https://statsapi.mlb.com/api/v1/game/{event_id}/boxscore")}
     c = cache[key]
-    if not c["final"]:
+    if not c["final"] and not live:                      # live: the box score so far (edge live)
         return "pending", None
     if market == "first_inning_pitches":
         pbp = _get(f"https://statsapi.mlb.com/api/v1/game/{event_id}/playByPlay")
@@ -94,16 +94,16 @@ def _nhl_num(v):
     return v
 
 
-def nhl_value(event_id: str, player_id: str, market: str, cache: dict):
+def nhl_value(event_id: str, player_id: str, market: str, cache: dict, live: bool = False):
     key = ("nhl", event_id)
     if key not in cache:
         cache[key] = _get(f"https://api-web.nhle.com/v1/gamecenter/{event_id}/boxscore")
     b = cache[key]
-    if b.get("gameState") not in ("OFF", "FINAL"):
+    if b.get("gameState") not in ("OFF", "FINAL") and not live:
         return "pending", None
     for side in ("homeTeam", "awayTeam"):
         for grp in ("forwards", "defense", "goalies"):
-            for p in b["playerByGameStats"][side].get(grp, []):
+            for p in (b.get("playerByGameStats") or {}).get(side, {}).get(grp, []):
                 if str(p["playerId"]) == str(player_id):
                     return "final", _nhl_num(p.get(NHL_STATS[market]))
     return "void", None
@@ -118,12 +118,12 @@ NFL_STATS = {
 }
 
 
-def nfl_value(event_id: str, player_id: str, market: str, cache: dict, league: str = "nfl"):
+def nfl_value(event_id: str, player_id: str, market: str, cache: dict, league: str = "nfl", live: bool = False):
     key = (league, event_id)
     if key not in cache:
         cache[key] = _get(f"https://site.api.espn.com/apis/site/v2/sports/football/{league}/summary?event={event_id}")
     s = cache[key]
-    if s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_FINAL":
+    if s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_FINAL" and not live:
         return "pending", None
 
     def stat(cat_name, label):
@@ -171,12 +171,12 @@ NBA_STATS = {"points": ("points",), "rebounds": ("rebounds",), "assists": ("assi
              "turnovers": ("turnovers",), "blks_stls": ("blocks", "steals")}
 
 
-def nba_value(event_id: str, player_id: str, market: str, cache: dict):
+def nba_value(event_id: str, player_id: str, market: str, cache: dict, live: bool = False):
     key = ("nba", event_id)
     if key not in cache:
         cache[key] = _get(f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={event_id}")
     s = cache[key]
-    if s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_FINAL":
+    if s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_FINAL" and not live:
         return "pending", None
     for team in s.get("boxscore", {}).get("players", []):
         for blk in team["statistics"]:
@@ -244,12 +244,12 @@ def soccer_player_stats(league: str, event_id: str, team_id: str, player_id: str
     return {s["name"]: s.get("value") for c in d["splits"]["categories"] for s in c["stats"]}
 
 
-def soccer_value(event_id: str, player_id: str, market: str, cache: dict):
+def soccer_value(event_id: str, player_id: str, market: str, cache: dict, live: bool = False):
     key = ("soccer", event_id)
     if key not in cache:
         cache[key] = _get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/all/summary?event={event_id}")
     s = cache[key]
-    if not s["header"]["competitions"][0]["status"]["type"].get("completed"):
+    if not s["header"]["competitions"][0]["status"]["type"].get("completed") and not live:
         return "pending", None
     for r in s.get("rosters", []):
         for p in r.get("roster", []):
