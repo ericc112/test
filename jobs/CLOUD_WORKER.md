@@ -18,13 +18,14 @@ worker fills in (or submits) those applications with JobBot and writes the resul
 
 ## Steps
 
-1. **Code.** In the `ericc112/test` checkout (clone it if it's missing), check out and pull
-   `claude/job-search-autoapply`. Then `pip install -q -r jobs/requirements.txt`.
-   Chromium for Playwright is preinstalled; don't run `playwright install`.
+1. **Requests first.** With the `ArtifactData` tool (load it with ToolSearch if it's deferred;
+   in some sessions it is the `Artifact` tool's `read_db`/`write_db` actions), `query` collection
+   `data/users/me/apps/items` for `status` in `["requested", "approved"]` (limit 10, oldest
+   `requested_at` first). If there are none, stop right away: say "Nothing to apply to."
 
-2. **Requests.** With the `ArtifactData` tool, `query` collection `data/users/me/apps/items`
-   for `status` in `["requested", "approved"]` (limit 10, oldest `requested_at` first).
-   If there are none, stop: say "Nothing to apply to." and end the session.
+2. **Code.** Only now: clone `https://github.com/ericc112/test` if it's missing, check out and pull
+   `claude/job-search-autoapply`, then `pip install -q -r jobs/requirements.txt`.
+   Chromium for Playwright is preinstalled; don't run `playwright install`.
 
 3. **Claim them.** Do one `batch` `update` setting `{"status": "working", "worker_at": <now ISO>}`
    on each, pinned with each document's `if_version`. Remember each document's original status.
@@ -68,4 +69,7 @@ worker fills in (or submits) those applications with JobBot and writes the resul
    If a pinned write fails because the owner changed the document meanwhile (for example,
    cancelled it), re-read it and leave it as they left it.
 
-8. **Report** in one or two lines: how many were filled, need answers, were submitted, failed.
+8. **Anything new?** Query step 1 again. If more requests arrived while you worked, do steps 3–7
+   once more for them (only once).
+
+9. **Report** in one or two lines: how many were filled, need answers, were submitted, failed.
