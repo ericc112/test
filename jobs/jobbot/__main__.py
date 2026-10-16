@@ -13,15 +13,27 @@ def cmd_serve(args):
 
     from .server import create_app
 
-    if args.host not in ("127.0.0.1", "localhost"):
+    if args.phone_address:
+        from . import phone
+        phone.ADDRESS, args.phone = args.phone_address, True
+    if args.phone:
+        args.host = "0.0.0.0"
+    elif args.host not in ("127.0.0.1", "localhost"):
         print("Warning: JobBot has no login. Anyone who can reach this address sees your profile "
-              "and can submit applications as you.", file=sys.stderr)
+              "and can submit applications as you. Use --phone for a private link instead.", file=sys.stderr)
     url = f"http://{'localhost' if args.host in ('0.0.0.0', '127.0.0.1') else args.host}:{args.port}"
     print(f"JobBot running at {url}  (data in {config.DATA_DIR})")
+    if args.phone:
+        from . import phone
+        link = phone.link(args.port)
+        where = "" if args.phone_address else " (same Wi-Fi)"
+        print(f"\nPhone access is on. On your phone{where}, scan this or open the link:\n")
+        phone.qr_terminal(link)
+        print(f"\n  {link}\n\nKeep it private: it signs a device in. The same QR is in Automation & AI on this computer.")
     if not args.no_browser:
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()
     extra = [] if args.host in ("127.0.0.1", "localhost", "0.0.0.0") else [args.host]
-    uvicorn.run(create_app(extra_hosts=extra), host=args.host, port=args.port, log_level="warning")
+    uvicorn.run(create_app(extra_hosts=extra, phone_access=args.phone), host=args.host, port=args.port, log_level="warning")
 
 
 def cmd_search(args):
@@ -79,6 +91,9 @@ def main(argv=None):
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8765)
     s.add_argument("--no-browser", action="store_true")
+    s.add_argument("--phone", action="store_true", help="also open JobBot on your phone (same Wi-Fi) with a private link")
+    s.add_argument("--phone-address", metavar="ADDRESS",
+                   help="address your phone uses to reach this computer, e.g. its Tailscale name (implies --phone)")
     s.set_defaults(fn=cmd_serve)
     s = sub.add_parser("search", help="fetch jobs from all enabled sources once")
     s.add_argument("--force", action="store_true", help="ignore the normal refresh interval")
@@ -97,9 +112,10 @@ def main(argv=None):
     s.add_argument("key", choices=["profile", "answers", "search", "automation", "llm"])
     s.add_argument("value", nargs="?")
     s.set_defaults(fn=cmd_settings)
+    argv = sys.argv[1:] if argv is None else argv
+    if not argv or argv[0].startswith("-") and argv[0] not in ("-h", "--help"):
+        argv = ["serve", *argv]  # `python -m jobbot --phone` means `serve --phone`
     args = p.parse_args(argv)
-    if not args.cmd:
-        args = p.parse_args(["serve", *(argv or sys.argv[1:])])
     args.fn(args)
 
 

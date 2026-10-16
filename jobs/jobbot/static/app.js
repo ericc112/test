@@ -849,9 +849,24 @@ async function viewSearch(el) {
 }
 
 // ------------------------------------------------------------------ automation & AI
+function phoneCard(ph) {
+  const head = `<div class="card" id="phone-card"><h2 class="section-title">Phone</h2>`;
+  if (!ph.enabled) {
+    return `${head}<p class="small">To use JobBot on your phone, start it on this computer with
+      <code>python3 -m jobbot --phone</code>. Your phone needs to be on the same Wi-Fi, and this computer needs to stay on.</p></div>`;
+  }
+  if (ph.on_phone) return `${head}<p class="small">This device is signed in. To sign every phone out, press <b>New link</b> here on your computer.</p></div>`;
+  return `${head}<div class="phone-row">${ph.qr ? `<div class="qr">${ph.qr}</div>` : ""}
+    <div class="stack"><p class="small">Scan this with your phone's camera (on the same Wi-Fi as this computer), or open this link on your phone:</p>
+      <code class="break">${esc(ph.link)}</code>
+      <p class="muted small">Keep it private: anyone with the link can use JobBot as you. Forms are still filled by this computer, so leave it on.</p>
+      <div><button type="button" class="btn sm" id="phone-reset">New link (signs phones out)</button></div></div></div></div>`;
+}
+
 async function viewSettings(el) {
-  const [a, llm] = await Promise.all([api("/api/settings/automation"), api("/api/settings/llm")]);
-  el.innerHTML = `<form id="af" class="stack">
+  const [a, llm, ph] = await Promise.all([api("/api/settings/automation"), api("/api/settings/llm"),
+    api("/api/phone").catch(() => ({ enabled: false }))]);
+  el.innerHTML = `<div class="stack">${phoneCard(ph)}<form id="af" class="stack">
     <div class="card"><h2 class="section-title">Watch employer sites</h2>
       <div class="form-grid">
         <label class="check wide"><input type="checkbox" name="watch_enabled" ${a.watch_enabled ? "checked" : ""}>
@@ -896,7 +911,17 @@ async function viewSettings(el) {
         ${llm.has_key ? `<label class="check"><input type="checkbox" name="clear_key"> Remove the saved key</label>` : ""}
       </div></div>
     <div class="sticky-save"><button class="btn primary" type="submit">Save settings</button></div>
-  </form>`;
+  </form></div>`;
+  const bindPhone = () => {
+    const pr = $("#phone-reset", el);
+    if (pr) pr.onclick = () => guard(async () => {
+      if (!confirm("Make a new phone link? Phones signed in with the old one are signed out.")) return;
+      $("#phone-card", el).outerHTML = phoneCard(await api("/api/phone/reset", { method: "POST" }));
+      bindPhone();
+      toast("New phone link ready");
+    });
+  };
+  bindPhone();
   const f = $("#af", el);
   f.onsubmit = (e) => {
     e.preventDefault();
@@ -937,6 +962,7 @@ async function route() {
   const name = (location.hash.replace(/^#\/?/, "") || "dashboard").split("?")[0];
   const v = VIEWS[name] ? name : "dashboard";
   $$("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === v));
+  $("#nav a.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });  // phone: swipeable menu
   $("#view-title").textContent = TITLES[v];
   document.title = `${TITLES[v]} · JobBot`;
   currentView = v;

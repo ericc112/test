@@ -231,3 +231,18 @@ td.answer { white-space: pre-wrap; word-break: break-word; }
   .job .actions { width: 100%; justify-content: flex-end; }
   .events li { grid-template-columns: 1fr; gap: 0; }
 }
+
+.phone-row { display: flex; gap: 20px; align-items: flex-start; }
+.phone-row .qr svg { display: block; border-radius: 6px; }
+code.break { word-break: break-all; padding: 6px 8px; display: block; }
+@media (max-width: 640px) {
+  .phone-row { flex-direction: column; }
+  /* Phone: the menu is one row you swipe sideways, pinned to the top. */
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { position: sticky; top: 0; z-index: 20; flex-direction: column; flex-wrap: nowrap; align-items: stretch;
+    padding: 8px 12px 6px; gap: 4px; min-width: 0; }
+  .brand { font-size: 15px; padding: 2px 4px; }
+  #nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  #nav::-webkit-scrollbar { display: none; }
+  #nav a { flex: none; white-space: nowrap; padding: 6px 10px; font-size: 14px; }
+}

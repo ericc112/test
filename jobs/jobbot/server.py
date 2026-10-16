@@ -5,11 +5,11 @@ from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from fastapi import Body, FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import Body, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__, ats, config, db, fields, pipeline, sources
+from . import __version__, ats, config, db, fields, phone, pipeline, sources
 from .textutil import norm, split_list
 from .worker import Worker
 
@@ -28,8 +28,18 @@ class State:
 
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "[::1]", "testserver"}
 
+SIGNED_OUT = """<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JobBot</title><body style="font:16px system-ui;margin:40px 20px;max-width:30em;color:#222">
+<h2>JobBot</h2><p>This device isn't signed in.</p>
+<p>On your computer, open JobBot and go to <b>Automation &amp; AI &rarr; Phone</b>, then scan the QR code
+or open its link here.</p></body>"""
 
-def create_app(start_background=True, extra_hosts=()):
+
+def _is_local(request):
+    return (request.client.host if request.client else "") in phone.LOOPBACK
+
+
+def create_app(start_background=True, extra_hosts=(), phone_access=False):
     allowed_hosts = LOCAL_HOSTS | set(extra_hosts)
 
     @asynccontextmanager
@@ -54,12 +64,24 @@ def create_app(start_background=True, extra_hosts=()):
 
     @app.middleware("http")
     async def local_only(request, call_next):
-        # Host check blocks DNS-rebinding; the custom header on writes forces a CORS
-        # preflight, so other websites open in your browser can't post to JobBot.
-        host = request.headers.get("host", "")
-        host = host[1:host.find("]")] if host.startswith("[") else host.rsplit(":", 1)[0]
-        if host not in allowed_hosts:
-            return JSONResponse({"detail": "Unknown host"}, status_code=403)
+        if phone_access and not _is_local(request):
+            # Another device (your phone): it must have opened the private link once.
+            k = request.query_params.get("key")
+            if k and request.method == "GET" and phone.check(k):
+                resp = RedirectResponse(request.url.path, status_code=303)  # drop the key from the address bar
+                resp.set_cookie(phone.COOKIE, k, max_age=180 * 86400, httponly=True, samesite="lax")
+                return resp
+            if not phone.check(request.cookies.get(phone.COOKIE)):
+                if request.url.path.startswith("/api/"):
+                    return JSONResponse({"detail": "Open the phone link from your computer first"}, status_code=401)
+                return HTMLResponse(SIGNED_OUT, status_code=401)
+        else:
+            # Host check blocks DNS-rebinding; the custom header on writes forces a CORS
+            # preflight, so other websites open in your browser can't post to JobBot.
+            host = request.headers.get("host", "")
+            host = host[1:host.find("]")] if host.startswith("[") else host.rsplit(":", 1)[0]
+            if host not in allowed_hosts:
+                return JSONResponse({"detail": "Unknown host"}, status_code=403)
         if request.method not in ("GET", "HEAD", "OPTIONS") and request.headers.get("x-jobbot") != "1":
             return JSONResponse({"detail": "Missing X-JobBot header"}, status_code=403)
         return await call_next(request)
@@ -106,6 +128,22 @@ def create_app(start_background=True, extra_hosts=()):
                 "ai": bool(llm.get("enabled")),
             },
         }
+
+    @app.get("/api/phone")
+    def phone_info(request: Request):
+        if not phone_access:
+            return {"enabled": False}
+        if not _is_local(request):
+            return {"enabled": True, "on_phone": True}
+        link = phone.link(request.url.port or 8765)
+        return {"enabled": True, "on_phone": False, "link": link, "qr": phone.qr_svg(link)}
+
+    @app.post("/api/phone/reset")
+    def phone_reset(request: Request):
+        if not phone_access or not _is_local(request):
+            raise HTTPException(403, "Only from the computer running JobBot")
+        phone.reset()
+        return phone_info(request)
 
     @app.get("/api/sources")
     def list_sources():

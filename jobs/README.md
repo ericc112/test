@@ -47,7 +47,7 @@ Needs Python 3.10+.
 cd jobs
 python3 -m pip install -r requirements.txt
 python3 -m playwright install chromium
-python3 -m jobbot            # opens http://localhost:8765
+python3 -m jobbot            # opens http://localhost:8765 (add --phone to use it on your phone too)
 ```
 
 Then, in the app:
@@ -57,6 +57,21 @@ Then, in the app:
 3. Press **Search now**, open a match, and press **Fill application**. JobBot fills the real form in a browser and shows you every answer plus a screenshot. Nothing is sent.
 4. Answer anything it flagged, then **Submit application**.
 5. When you trust it, turn on **Automation & AI → Search automatically** (and, optionally, **Submit automatically**).
+
+## Use it on your phone
+
+JobBot runs on your computer, and your phone can open it too:
+
+```bash
+python3 -m jobbot --phone
+```
+
+The terminal (and **Automation & AI → Phone** on the computer) shows a QR code. Scan it with your phone's camera and JobBot opens in your phone's browser. The link carries a private key: the phone stays signed in, and any other device that hasn't opened the link gets nothing. **New link** signs every phone out.
+
+- Your phone has to be on the **same Wi-Fi** as the computer, and the computer has to stay on with JobBot running: it's the computer that searches and fills the forms.
+- The first time, your computer may ask whether Python can accept incoming connections. Choose **Allow** (private networks).
+- **Campus, office and public Wi-Fi often block devices from reaching each other.** Install [Tailscale](https://tailscale.com) (free) on the computer and the phone, sign both into the same account, then start JobBot with `python3 -m jobbot --phone-address <computer's Tailscale name or 100.x address>`. That works from anywhere, including over cellular data, and the connection is encrypted.
+- Tip: on the phone, use **Share → Add to Home Screen** to open JobBot like an app.
 
 ## How applying works
 

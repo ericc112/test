@@ -127,5 +127,51 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(r["jobs"][0]["id"], "lever:acme:9")
 
 
+class PhoneAccessTests(unittest.TestCase):
+    """`--phone`: this computer is trusted; other devices need the private link once."""
+
+    def setUp(self):
+        self.tmp = TempData()
+        app = create_app(start_background=False, phone_access=True)
+        self.computer = TestClient(app, headers={"X-JobBot": "1"}, client=("127.0.0.1", 5000))
+        self.phone = TestClient(app, headers={"X-JobBot": "1"}, client=("192.168.1.20", 5000))
+
+    def tearDown(self):
+        self.tmp.close()
+
+    def link_key(self):
+        info = self.computer.get("/api/phone").json()
+        self.assertTrue(info["enabled"])
+        self.assertTrue(info["qr"] is None or info["qr"].startswith("<svg"))
+        return info["link"].split("?key=")[1]
+
+    def test_phone_needs_the_link_once(self):
+        self.assertEqual(self.phone.get("/").status_code, 401)
+        self.assertEqual(self.phone.get("/api/state").status_code, 401)
+        self.assertEqual(self.phone.get("/?key=wrong").status_code, 401)
+        r = self.phone.get(f"/?key={self.link_key()}", follow_redirects=False)
+        self.assertEqual((r.status_code, r.headers["location"]), (303, "/"))  # key leaves the address bar
+        self.assertIn("httponly", r.headers["set-cookie"].lower())
+        self.assertEqual(self.phone.get("/api/state").status_code, 200)
+        self.assertEqual(self.phone.get("/api/state", headers={"Host": "laptop.tailnet.ts.net"}).status_code, 200)
+        self.assertEqual(self.phone.get("/api/phone").json(), {"enabled": True, "on_phone": True})  # no key shown
+
+    def test_writes_still_need_the_header_and_reset_is_computer_only(self):
+        self.phone.get(f"/?key={self.link_key()}")
+        self.assertEqual(self.phone.post("/api/rescore", headers={"X-JobBot": ""}).status_code, 403)
+        self.assertEqual(self.phone.post("/api/phone/reset").status_code, 403)
+        old = self.link_key()
+        self.assertNotEqual(self.computer.post("/api/phone/reset").json()["link"].split("?key=")[1], old)
+        self.assertEqual(self.phone.get("/api/state").status_code, 401)  # signed out
+
+    def test_computer_keeps_the_host_check(self):
+        self.assertEqual(self.computer.get("/api/state").status_code, 200)
+        self.assertEqual(self.computer.get("/api/state", headers={"Host": "evil.example"}).status_code, 403)
+
+    def test_off_by_default(self):
+        app = create_app(start_background=False)
+        self.assertEqual(TestClient(app, client=("127.0.0.1", 1)).get("/api/phone").json(), {"enabled": False})
+
+
 if __name__ == "__main__":
     unittest.main()
