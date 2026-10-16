@@ -135,6 +135,7 @@ $("#btn-search").addEventListener("click", () => guard(async () => {
 // ------------------------------------------------------------------ job rows
 const areaOf = (j) => ((j.score_reasons || []).find((r) => / role$/.test(r)) || "").replace(/ role$/, "");
 const isIntern = (j) => (j.score_reasons || []).includes("Internship");
+const payOf = (j) => ((j.score_reasons || []).find((r) => r.startsWith("Pay: ")) || "").slice(5) || j.salary_text || "";
 const SEASON_RE = /\b(spring|summer|fall|autumn|winter)\b[\s,/-]*'?(20\d\d|\d\d)\b|\b(20\d\d)\b.{0,40}?\b(spring|summer|fall|autumn|winter)\b/i;
 function seasonOf(title) {
   const m = SEASON_RE.exec(title || "");
@@ -166,7 +167,7 @@ function jobRow(j, { select = false } = {}) {
         ${isIntern(j) ? `<span class="chip accent">Internship${seasonOf(j.title) ? " · " + esc(seasonOf(j.title)) : ""}</span>` : ""}
         ${area ? `<span class="chip">${esc(area)}</span>` : ""}
         ${j.location ? `<span>${esc(j.location.slice(0, 60))}</span>` : ""}
-        ${j.salary_text ? `<span>${esc(j.salary_text)}</span>` : ""}
+        ${payOf(j) ? `<span class="chip pay" title="${/^≈/.test(payOf(j)) ? "Estimated from yearly or monthly pay at 40 hours a week" : "Pay listed in the posting"}">${esc(payOf(j))}</span>` : ""}
         ${justPosted ? `<span class="chip good" title="Appeared on the employer's own site while JobBot was watching">Just posted</span>` : ""}
         ${j.posted_at ? `<span class="${recent ? "fresh-time" : ""}">${postedText(j)}</span>` : ""}
         <span>via ${esc(SOURCE_LABELS[j.source] || j.source)}</span>
@@ -493,7 +494,7 @@ async function openJob(id) {
     <div class="drawer-head">
       <button class="btn sm close" id="d-close" aria-label="Close">✕</button>
       <h2 style="padding-right:40px">${esc(j.title)}</h2>
-      <div class="muted">${esc(j.company)}${j.location ? " · " + esc(j.location) : ""}${j.salary_text ? " · " + esc(j.salary_text) : ""}</div>
+      <div class="muted">${esc(j.company)}${j.location ? " · " + esc(j.location) : ""}${payOf(j) ? " · " + esc(payOf(j)) : ""}</div>
       ${j.posted_at ? `<div class="small" style="margin-top:2px">${postedText(j)} on ${esc(SOURCE_LABELS[j.source] || j.source)}${j.fresh && j.source !== "workday"
         ? ` · JobBot found it ${fmtLag(Math.max(0, (new Date(j.first_seen) - new Date(j.posted_at)) / 60000))} later` : ""}</div>` : ""}
       <div class="btn-row" style="margin-top:8px">

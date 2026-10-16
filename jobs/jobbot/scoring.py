@@ -2,7 +2,7 @@
 import re
 from datetime import datetime, timezone
 
-from . import fields
+from . import fields, pay
 from .textutil import ALIASES, contains_phrase, norm, split_list, words
 
 DIRECT_APPLY = ("greenhouse", "lever", "ashby")
@@ -203,7 +203,10 @@ def score(job, search, profile):
         else:
             total -= 10
             reasons.append(f"{label} (you want {', '.join(terms)})")
-    if job.get("salary_text"):
+    hourly = pay.hourly(job)
+    if hourly:
+        reasons.append(f"Pay: {hourly['text']}")
+    elif job.get("salary_text"):
         reasons.append(f"Pay: {job['salary_text']}")
     min_salary = search.get("min_salary") or 0
     top = job.get("salary_max") or job.get("salary_min")

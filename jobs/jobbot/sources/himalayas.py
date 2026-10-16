@@ -45,7 +45,7 @@ def fetch(keyword, search):
                 description=html_to_text(j.get("description")) or j.get("excerpt"),
                 posted_at=iso(j.get("pubDate")),
                 salary_min=lo if annual else None, salary_max=hi if annual else None,
-                salary_text=f"{j.get('currency') or ''} {lo}-{hi}".strip() if lo else None,
+                salary_text=f"{j.get('currency') or ''} {lo}-{hi} {j.get('salaryPeriod') or ''}".strip() if lo else None,
                 tags=[t for t in [j.get("employmentType")] + (j.get("seniority") or [])[:4] if t],
                 categories=(j.get("parentCategories") or []) + (j.get("categories") or [])[:8],
             ))

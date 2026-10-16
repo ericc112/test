@@ -161,8 +161,13 @@ TEMPORARY = re.compile(r"\b(seasonal|temporary|temp|contract|contractor|freelanc
 def job_type(job):
     """internship | part_time | temporary | full_time, from the title and the board's own labels."""
     title = job.get("title") or ""
-    labels = " | ".join(str(t) for t in (job.get("tags") or []) + (job.get("categories") or []) if t)
-    if INTERN_TITLE.search(title) or INTERN_LABEL.search(labels):
+    tags = " | ".join(str(t) for t in job.get("tags") or [] if t)  # employment type, commitment, worker type
+    cats = " | ".join(str(t) for t in job.get("categories") or [] if t)  # departments, or a board's keyword lists
+    labels = tags + " | " + cats
+    if INTERN_TITLE.search(title) or INTERN_LABEL.search(tags):
+        return "internship"
+    # A department called "Internships" counts, but not a keyword list ("Analyst-Intern") on a job typed Full Time.
+    if INTERN_LABEL.search(cats) and not re.search(r"\bfull[- ]?time\b", tags, re.I):
         return "internship"
     if PART_TIME.search(title) or PART_TIME.search(labels):
         return "part_time"
@@ -188,21 +193,31 @@ def type_ok(job, search):
     return False, "Part-time or temporary"
 
 
-GRAD_ONLY = re.compile(r"\b(mba|ph\.?d|doctoral|post-?doc|master'?s|graduate (intern|student)|jd|law student)\b", re.I)
+GRAD_ONLY = re.compile(r"\b(mba|ph\.?d|doctoral|post-?doc|master'?s|graduate (interns?|internships?|students?)|jd|law student)\b", re.I)
+GRAD_REQUIRED = re.compile(r"\b(pursuing|enrolled in)\s+(an?\s+)?(mba|master'?s|graduate degree|graduate program|ph\.?d)", re.I)
 UNDERGRAD = re.compile(r"\b(undergrad\w*|bachelor'?s|college student)\b", re.I)
 
 
+SKILLBRIDGE = re.compile(r"\bskill\s?bridge\b", re.I)
+
+
 def level_mismatch(job, profile):
-    """Internships meant for MBA/PhD students when you're an undergraduate (or the reverse)."""
+    """Internships meant for MBA/PhD students when you're an undergraduate (or the reverse),
+    or for service members leaving the military (DoD SkillBridge) when you're a student."""
     if job_type(job) != "internship":
         return None
+    if profile.get("currently_enrolled") and SKILLBRIDGE.search(job.get("title") or ""):
+        return "For service members leaving the military (SkillBridge)"
     year = (profile.get("school_year") or "").lower()
     degree = (profile.get("degree") or "").lower()
     if not (year or degree):
         return None  # we don't know which you are
     grad = year == "graduate student" or bool(re.search(r"master|mba|ph\.?d|doctor", degree))
     title = job.get("title") or ""
-    if not grad and GRAD_ONLY.search(title) and not UNDERGRAD.search(title):
+    desc = job.get("description") or ""
+    grad_only = (GRAD_ONLY.search(title) and not UNDERGRAD.search(title)) or \
+        (GRAD_REQUIRED.search(desc) and not re.search(r"undergrad|bachelor", desc, re.I))
+    if not grad and grad_only:
         return "For MBA or graduate students"
     if grad and UNDERGRAD.search(title) and not GRAD_ONLY.search(title):
         return "For undergraduates"

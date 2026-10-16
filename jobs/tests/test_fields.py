@@ -71,6 +71,10 @@ class ClassifierTests(unittest.TestCase):
         # Workday/Lever/Ashby employment-type labels count too
         self.assertEqual(fields.job_type({"title": "Corporate Banking Program", "tags": ["Intern (Seasonal) (Trainee)"]}), "internship")
         self.assertEqual(fields.job_type({"title": "Marketing Associate", "tags": ["Intern"]}), "internship")
+        # A board's keyword categories don't override a Full Time employment type (Himalayas "Analyst-Intern")
+        self.assertEqual(fields.job_type({"title": "Analyst I", "tags": ["Full Time", "Entry-level"],
+                                          "categories": ["Finance", "Analyst-Intern", "Junior-Analyst"]}), "full_time")
+        self.assertEqual(fields.job_type({"title": "Finance Program", "categories": ["University Internships"]}), "internship")
 
     def test_mba_internships_skip_undergrads(self):
         undergrad = {"school_year": "Junior", "degree": "Bachelor's"}
@@ -85,6 +89,15 @@ class ClassifierTests(unittest.TestCase):
         self.assertIsNone(fields.level_mismatch({"title": "MBA Program Manager"}, undergrad))  # not an internship
         new_grad = {"title": "Finance Graduate Program", "tags": ["Internship"]}  # UK sense: for new graduates
         self.assertIsNone(fields.level_mismatch(new_grad, undergrad))
+        self.assertEqual(fields.level_mismatch({"title": "Supply Chain Planning Graduate Internship"}, undergrad),
+                         "For MBA or graduate students")
+        mba_desc = {"title": "Enterprise Planning Intern", "description": "Currently pursuing an MBA, graduating Spring 2028."}
+        self.assertEqual(fields.level_mismatch(mba_desc, undergrad), "For MBA or graduate students")
+        both = {"title": "Finance Intern", "description": "Pursuing a bachelor's degree, or enrolled in an MBA program."}
+        self.assertIsNone(fields.level_mismatch(both, undergrad))
+        skillbridge = {"title": "SkillBridge Intern - Product Manager", "tags": ["Intern"]}
+        self.assertEqual(fields.level_mismatch(skillbridge, dict(undergrad, currently_enrolled=True)),
+                         "For service members leaving the military (SkillBridge)")
 
     def test_seasons(self):
         from datetime import date
