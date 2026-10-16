@@ -41,8 +41,9 @@ def _clock_frac(period: int, clock: str, periods: int, minutes: float) -> float 
     if not period:
         return None
     try:
-        m, s = (clock or "0:00").split(":")
-        left = int(m) + int(float(s)) / 60
+        c = str(clock or "0:00")
+        m, s = c.split(":") if ":" in c else ("0", c)          # under a minute ESPN writes "41.5"
+        left = int(m) + float(s) / 60
     except ValueError:
         return None
     done = (min(period, periods) - 1) * minutes + max(0.0, minutes - left)

@@ -1097,6 +1097,7 @@ class LiveTakes(unittest.TestCase):
         self.assertAlmostEqual(_clock_frac(2, "10:00", 3, 20), 0.5)                    # NHL halfway through the 2nd
         self.assertAlmostEqual(_clock_frac(4, "0:00", 4, 12), 1.0)
         self.assertIsNone(_clock_frac(0, "", 4, 12))
+        self.assertAlmostEqual(_clock_frac(2, "30.0", 4, 12), 23.5 / 48)              # ESPN's clock under a minute
 
 
 class NhlBoxStats(unittest.TestCase):
