@@ -128,6 +128,7 @@ DEFAULT_SEARCH = {
         "themuse": True,
         "workday": True,
         "oracle": True,
+        "amazon": True,
     },
     # Employer job boards to watch; filled from SUGGESTED_COMPANIES below.
     "companies": {},
@@ -182,7 +183,7 @@ WATCHLIST_VERSION = 2  # raise when the default watch list grows, so saved searc
 
 
 def _default_companies():
-    out = {"greenhouse": [], "lever": [], "ashby": [], "workday": [], "oracle": []}
+    out = {"greenhouse": [], "lever": [], "ashby": [], "workday": [], "oracle": [], "amazon": []}
     for _, kind, slug in SUGGESTED_COMPANIES:
         out.setdefault(kind, []).append(slug)
     return out

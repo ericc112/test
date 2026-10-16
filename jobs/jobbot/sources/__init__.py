@@ -2,6 +2,7 @@
 import re
 from datetime import datetime, timezone
 
+from .. import pay
 from ..textutil import norm
 
 REGISTRY = {}
@@ -57,11 +58,12 @@ def display_name(slug):
 
 
 from . import (  # noqa: E402  (modules register themselves)
-    arbeitnow, ashby, greenhouse, himalayas, jobicy, lever, oracle, remoteok, remotive, themuse, workday,
+    amazon, arbeitnow, ashby, greenhouse, himalayas, jobicy, lever, oracle, remoteok, remotive, themuse, workday,
 )
 
 # Employer-run job systems (not aggregators): watched every few minutes for new postings.
 EMPLOYER = [n for n, m in REGISTRY.items() if getattr(m, "EMPLOYER", False)]
+pay.EMPLOYER_SITES.update(EMPLOYER)
 
 
 def id_prefix(name, key):

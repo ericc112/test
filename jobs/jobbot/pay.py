@@ -153,7 +153,7 @@ PAID = re.compile(
     r"\bcompetitive (pay|compensation|hourly|wage|salary|stipend)\b|\bhourly (pay|rate|wage)\b|"
     r"\b(pay|salary|compensation|wage) range\b|\bbase (pay|salary)\b",
     re.I)
-EMPLOYER_SITES = ("greenhouse", "lever", "ashby", "workday", "oracle")  # an employer's own careers site
+EMPLOYER_SITES = {"greenhouse", "lever", "ashby", "workday", "oracle"}  # employers' own careers sites (sources adds the rest)
 
 
 def status(job):

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from unittest import mock
 
 from jobbot import db, pipeline, sources
-from jobbot.sources import http, make_job, oracle, workday
+from jobbot.sources import amazon, http, make_job, oracle, workday
 
 from .helpers import PROFILE, TempData
 
@@ -172,6 +172,28 @@ class OracleTests(unittest.TestCase):
         self.assertIn("Pay: $50 per hour", j["description"])
         self.assertIn('keyword="intern"', calls[0][1]["finder"])
         self.assertIn("sortBy=RELEVANCY", calls[0][1]["finder"])
+
+
+class AmazonTests(unittest.TestCase):
+    def test_us_business_internships_from_amazon_jobs(self):
+        page = {"hits": 3, "jobs": [
+            {"id_icims": "1", "title": "Supply Chain Manager Intern - Summer 2027", "job_path": "/en/jobs/1/x",
+             "normalized_location": "Seattle, Washington, USA", "posted_date": "October  9, 2026", "is_intern": True,
+             "description": "Plan inventory.", "job_category": "Supply Chain/Transportation Management"},
+            {"id_icims": "2", "title": "2027 Applied Science Internship - United States, PhD Student Science Recruiting",
+             "job_path": "/en/jobs/2/y", "normalized_location": "Seattle, Washington, USA", "posted_date": "October 9, 2026",
+             "is_intern": True, "job_category": "Research Science", "business_category": "studentprograms"},
+            {"id_icims": "3", "title": "Sourcing Recruiter Intern – Summer 2027", "job_path": "/en/jobs/3/z",
+             "normalized_location": "Seattle, Washington, USA", "posted_date": "October 9, 2026", "is_intern": True}]}
+        seen = []
+        with mock.patch.object(http, "get_json", side_effect=lambda url, params=None, **kw: seen.append(params) or page):
+            jobs = amazon.fetch("amazon#intern", {"field": "business", "job_types": ["internship"],
+                                                  "locations": ["Remote", "United States"]})
+        self.assertEqual([j["title"] for j in jobs], ["Supply Chain Manager Intern - Summer 2027", "Sourcing Recruiter Intern – Summer 2027"])
+        self.assertEqual((jobs[0]["id"], jobs[0]["url"]), ("amazon:1", "https://www.amazon.jobs/en/jobs/1/x"))
+        self.assertTrue(jobs[0]["posted_at"].startswith("2026-10-09"))
+        self.assertEqual((seen[0]["base_query"], seen[0]["country"]), ("intern", "USA"))
+        self.assertEqual(amazon.keys({"companies": {"amazon": ["amazon"]}, "job_types": ["internship"]}), ["amazon#intern"])
 
 
 class WatcherTests(unittest.TestCase):

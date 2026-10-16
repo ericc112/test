@@ -36,7 +36,7 @@ async function guard(fn) {
 }
 
 const SOURCE_LABELS = {
-  greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", workday: "Workday", oracle: "Oracle", remotive: "Remotive", remoteok: "Remote OK",
+  greenhouse: "Greenhouse", lever: "Lever", ashby: "Ashby", workday: "Workday", oracle: "Oracle", amazon: "Amazon", remotive: "Remotive", remoteok: "Remote OK",
   jobicy: "Jobicy", himalayas: "Himalayas", arbeitnow: "Arbeitnow", themuse: "The Muse",
 };
 const DIRECT = new Set(["greenhouse", "lever", "ashby"]);
@@ -146,7 +146,7 @@ function seasonOf(title) {
 
 function postedText(j) {
   if (!j.posted_at) return "";
-  if (!["workday", "oracle"].includes(j.source)) return `Posted ${ago(j.posted_at)}`;
+  if (!["workday", "oracle", "amazon"].includes(j.source)) return `Posted ${ago(j.posted_at)}`;
   const days = Math.floor((Date.now() - new Date(j.posted_at).getTime()) / 86400000); // these sites give dates only
   return days <= 0 ? "Posted today" : days === 1 ? "Posted yesterday" : `Posted ${days}d ago`;
 }
@@ -495,7 +495,7 @@ async function openJob(id) {
       <button class="btn sm close" id="d-close" aria-label="Close">✕</button>
       <h2 style="padding-right:40px">${esc(j.title)}</h2>
       <div class="muted">${esc(j.company)}${j.location ? " · " + esc(j.location) : ""}${payOf(j) ? " · " + esc(payOf(j)) : ""}</div>
-      ${j.posted_at ? `<div class="small" style="margin-top:2px">${postedText(j)} on ${esc(SOURCE_LABELS[j.source] || j.source)}${j.fresh && !["workday", "oracle"].includes(j.source)
+      ${j.posted_at ? `<div class="small" style="margin-top:2px">${postedText(j)} on ${esc(SOURCE_LABELS[j.source] || j.source)}${j.fresh && !["workday", "oracle", "amazon"].includes(j.source)
         ? ` · JobBot found it ${fmtLag(Math.max(0, (new Date(j.first_seen) - new Date(j.posted_at)) / 60000))} later` : ""}</div>` : ""}
       <div class="btn-row" style="margin-top:8px">
         ${statusChip(j.status)}
@@ -731,9 +731,9 @@ async function viewSearch(el) {
   const [s, sources, fieldDefs, suggested, names] = await Promise.all([
     api("/api/settings/search"), api("/api/sources"), api("/api/fields"), api("/api/suggestions"), api("/api/company-names"),
   ]);
-  const coName = (k, slug) => (names[k] && names[k][slug]) || (k === "workday" ? slug.split("|")[0] : k === "oracle" ? slug.split(".")[0] : slug);
+  const coName = (k, slug) => (names[k] && names[k][slug]) || (k === "workday" ? slug.split("|")[0] : k === "oracle" ? slug.split(".")[0] : k === "amazon" ? "Amazon" : slug);
   const lines = (a) => (a || []).join("\n");
-  const ATS = [["greenhouse", "Greenhouse"], ["lever", "Lever"], ["ashby", "Ashby"], ["workday", "Workday"], ["oracle", "Oracle"]];
+  const ATS = [["greenhouse", "Greenhouse"], ["lever", "Lever"], ["ashby", "Ashby"], ["workday", "Workday"], ["oracle", "Oracle"], ["amazon", "Own sites"]];
   const areas = fieldDefs.business.areas;
   const chosen = new Set(s.families && s.families.length ? s.families : areas.map((a) => a.key));
   const types = new Set(s.job_types && s.job_types.length ? s.job_types : ["internship"]);

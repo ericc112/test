@@ -261,9 +261,13 @@ def _labels(job):
     return " | ".join(str(v) for v in vals if v)
 
 
+# "... - United States, PhD Student Recruiting": the recruiting program, not an HR role.
+PROGRAM_SUFFIX = re.compile(r"[-,|–—]\s*[\w' ]{0,40}?\b(student|university|campus|graduate|early careers?)\b[\w' ]{0,25}?\brecruiting\b.*$", re.I)
+
+
 def classify(job, search):
     """Return (True, area label) for a business-major role, else (False, reason)."""
-    title = norm(job.get("title"))
+    title = norm(PROGRAM_SUFFIX.sub("", job.get("title") or ""))
     if not title:
         return False, "No title"
     if HARD_BLOCK.search(title):
