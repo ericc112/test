@@ -24,7 +24,7 @@ def fetch(key, search):
                 NAME, j["slug"], j.get("title"), j.get("company_name"), j.get("url"),
                 location=j.get("location") or "", remote=bool(j.get("remote")),
                 description=html_to_text(j.get("description")), posted_at=iso(j.get("created_at")),
-                tags=(j.get("tags") or []) + (j.get("job_types") or []),
+                tags=j.get("job_types") or [], categories=j.get("tags") or [],
             ))
         if not (data.get("links") or {}).get("next"):
             break

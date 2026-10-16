@@ -105,8 +105,11 @@ $("#btn-search").addEventListener("click", () => guard(async () => {
 }));
 
 // ------------------------------------------------------------------ job rows
+const areaOf = (j) => ((j.score_reasons || []).find((r) => / role$/.test(r)) || "").replace(/ role$/, "");
+
 function jobRow(j, { select = false } = {}) {
   const direct = DIRECT.has(j.ats);
+  const area = areaOf(j);
   const canFill = ["new", "error", "blocked", "needs_input", "manual"].includes(j.status) && j.ats !== "manual";
   return `<div class="job" data-id="${esc(j.id)}">
     ${select ? `<input type="checkbox" class="sel" aria-label="Select ${esc(j.title)}">` : ""}
@@ -115,6 +118,7 @@ function jobRow(j, { select = false } = {}) {
       <div class="title">${esc(j.title)}</div>
       <div class="meta">
         <strong>${esc(j.company)}</strong>
+        ${area ? `<span class="chip">${esc(area)}</span>` : ""}
         ${j.location ? `<span>${esc(j.location.slice(0, 60))}</span>` : ""}
         ${j.salary_text ? `<span>${esc(j.salary_text)}</span>` : ""}
         ${j.posted_at ? `<span>${ago(j.posted_at)}</span>` : ""}
@@ -171,7 +175,7 @@ async function viewDashboard(el) {
   const steps = [
     [setup.profile, "Fill in your profile", "#/profile", "Name, contact details, work authorization."],
     [setup.resume, "Upload your resume", "#/profile", "Attached to every application."],
-    [setup.keywords, "Choose job titles to search for", "#/search", ""],
+    [setup.keywords, "Choose your field and the areas you want", "#/search", "Business major: finance, marketing, sales, operations…"],
     [setup.companies, "Add companies to watch", "#/search", "Their Greenhouse, Lever or Ashby boards can be applied to directly."],
     [setup.automation, "Turn on automation", "#/settings", "Searches on a schedule and fills applications for you."],
   ];
@@ -534,9 +538,10 @@ const PROFILE_SECTIONS = [
     ["address", "Street address", "text", "", "wide"]]],
   ["Links", [["linkedin", "LinkedIn URL", "url"], ["github", "GitHub URL", "url"], ["website", "Website / portfolio", "url"], ["twitter", "X / Twitter", "url"]]],
   ["Experience", [["current_company", "Current or most recent employer"], ["current_title", "Current or most recent title"],
-    ["years_experience", "Years of experience", "number"], ["skills", "Skills", "textarea", "Comma-separated. Used to rank jobs, e.g. Python, AWS, React."],
+    ["years_experience", "Years of experience", "number"], ["skills", "Skills", "textarea", "Comma-separated. Used to rank jobs, e.g. Excel, financial modeling, Salesforce, SQL, Tableau, PowerPoint."],
     ["summary", "Short professional summary", "textarea", "One or two sentences. Used in your cover letter template.", "wide"]]],
-  ["Education", [["school", "School"], ["degree", "Highest degree", "text", "e.g. Bachelor's, Master's, PhD"], ["discipline", "Field of study"], ["graduation_year", "Graduation year"]]],
+  ["Education", [["school", "School"], ["degree", "Highest degree", "text", "e.g. Bachelor's, MBA"],
+    ["discipline", "Major / field of study", "text", "e.g. Business Administration, Finance, Marketing"], ["graduation_year", "Graduation year"]]],
   ["Work eligibility & preferences", [
     ["work_authorized", "I'm legally authorized to work in the countries I'm applying to", "bool"],
     ["needs_sponsorship", "I need (or will need) visa sponsorship", "bool"],
@@ -646,14 +651,32 @@ async function viewAnswers(el) {
 
 // ------------------------------------------------------------------ search setup
 async function viewSearch(el) {
-  const [s, sources] = await Promise.all([api("/api/settings/search"), api("/api/sources")]);
+  const [s, sources, fieldDefs, suggested] = await Promise.all([
+    api("/api/settings/search"), api("/api/sources"), api("/api/fields"), api("/api/suggestions"),
+  ]);
   const lines = (a) => (a || []).join("\n");
   const ATS = [["greenhouse", "Greenhouse"], ["lever", "Lever"], ["ashby", "Ashby"]];
+  const areas = fieldDefs.business.areas;
+  const chosen = new Set(s.families && s.families.length ? s.families : areas.map((a) => a.key));
   el.innerHTML = `<form id="sf" class="stack">
-    <div class="card"><h2 class="section-title">What you're looking for</h2>
+    <div class="card"><h2 class="section-title">Your field</h2>
       <div class="form-grid">
-        <label class="field">Job titles <span class="hint">One per line. A job matches when every word of a line is in its title.</span><textarea name="keywords">${esc(lines(s.keywords))}</textarea></label>
-        <label class="field">Exclude titles containing <span class="hint">One per line, e.g. intern, principal, manager</span><textarea name="exclude">${esc(lines(s.exclude))}</textarea></label>
+        <label class="field">Only show jobs for
+          <select name="field">
+            <option value="business" ${s.field === "business" ? "selected" : ""}>A business major (strict)</option>
+            <option value="" ${!s.field ? "selected" : ""}>Any field</option>
+          </select>
+          <span class="hint">Strict: engineering, design, healthcare, trades and other non-business roles are never shown or applied to.</span></label>
+        <span></span>
+        <div class="wide" id="areas-box" ${s.field ? "" : "hidden"}>
+          <div style="font-weight:550;font-size:13px;margin-bottom:6px">Business areas</div>
+          <div class="grid grid-2" style="gap:6px 16px">${areas.map((a) => `<label class="check"><input type="checkbox" name="area_${a.key}" ${chosen.has(a.key) ? "checked" : ""}> ${esc(a.label)}</label>`).join("")}</div>
+        </div>
+      </div></div>
+    <div class="card"><h2 class="section-title">Narrow it down (optional)</h2>
+      <div class="form-grid">
+        <label class="field">Only these job titles <span class="hint">One per line, e.g. Financial Analyst. Leave empty for every role in your areas.</span><textarea name="keywords">${esc(lines(s.keywords))}</textarea></label>
+        <label class="field">Exclude titles containing <span class="hint">One per line, e.g. senior, director, intern</span><textarea name="exclude">${esc(lines(s.exclude))}</textarea></label>
         <label class="field">Locations <span class="hint">One per line. Include “Remote” to accept remote jobs.</span><textarea name="locations">${esc(lines(s.locations))}</textarea></label>
         <div class="stack">
           <label class="field">Remote / on-site<select name="remote">
@@ -667,6 +690,9 @@ async function viewSearch(el) {
       <div class="btn-row"><input type="text" id="co-name" placeholder="e.g. Stripe, Notion, or https://jobs.lever.co/…" style="max-width:420px"><button type="button" class="btn" id="co-add">Find &amp; add</button><span class="small muted" id="co-msg"></span></div>
       <div class="grid grid-3" style="margin-top:14px">${ATS.map(([k, t]) => `<div><h3 style="margin-bottom:6px">${t}</h3>
         <div class="tags" data-ats="${k}">${(s.companies[k] || []).map((c) => `<span class="tag">${esc(c)}<button type="button" data-rm="${k}|${esc(c)}" aria-label="Remove ${esc(c)}">×</button></span>`).join("") || '<span class="muted small">None yet</span>'}</div></div>`).join("")}</div>
+      ${suggested.length ? `<div style="margin-top:16px"><div class="card-head" style="margin-bottom:8px"><h3>Suggested: companies with lots of business roles</h3>
+          <button type="button" class="btn sm" id="sug-all">Add all ${suggested.length}</button></div>
+        <div class="tags">${suggested.map((c, i) => `<button type="button" class="btn sm" data-sug="${i}">+ ${esc(c.name)}</button>`).join("")}</div></div>` : ""}
     </div>
     <div class="card"><h2 class="section-title">Sources</h2>
       <div class="grid grid-2">${sources.map((src) => {
@@ -682,10 +708,13 @@ async function viewSearch(el) {
     <div class="sticky-save"><button class="btn primary" type="submit">Save search</button></div>
   </form>`;
   const form = $("#sf", el);
+  form.field.addEventListener("change", () => { $("#areas-box").hidden = !form.field.value; });
   const split = (v) => v.split(/\n|,/).map((x) => x.trim()).filter(Boolean);
   const save = async (msg) => {
+    const families = areas.map((a) => a.key).filter((k) => form.elements[`area_${k}`].checked);
+    if (form.field.value && !families.length) throw new Error("Pick at least one business area");
     const out = {
-      ...s,
+      ...s, field: form.field.value, families,
       keywords: split(form.keywords.value), exclude: split(form.exclude.value), locations: split(form.locations.value),
       remote: form.remote.value, min_salary: +form.min_salary.value || 0, max_age_days: +form.max_age_days.value || 0,
       sources: Object.fromEntries(sources.map((src) => [src.name, form.elements[`src_${src.name}`].checked])),
@@ -701,6 +730,17 @@ async function viewSearch(el) {
     await save(`Removed ${c}`);
     viewSearch(el);
   })));
+  const addSuggested = (list) => guard(async () => {
+    for (const c of list) {
+      const arr = (s.companies[c.ats] = s.companies[c.ats] || []);
+      if (!arr.includes(c.slug)) arr.push(c.slug);
+    }
+    await save(list.length === 1 ? `Added ${list[0].name}` : `Added ${list.length} companies`);
+    viewSearch(el);
+  });
+  $$("[data-sug]", el).forEach((b) => (b.onclick = () => addSuggested([suggested[+b.dataset.sug]])));
+  const all = $("#sug-all", el);
+  if (all) all.onclick = () => addSuggested(suggested);
   const add = () => guard(async () => {
     const name = $("#co-name").value.trim();
     if (!name) return;

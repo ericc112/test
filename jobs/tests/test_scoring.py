@@ -39,6 +39,18 @@ class ScoringTests(unittest.TestCase):
         self.assertGreaterEqual(s, 75)
         self.assertTrue(any("skills" in r for r in reasons))
 
+    def test_business_field_scoring(self):
+        biz = dict(SEARCH, field="business", keywords=[])
+        s, reasons, excluded = scoring.score(job(title="Financial Analyst", description="Bachelor's degree in Finance. Excel."),
+                                             biz, {"skills": "Excel"})
+        self.assertIsNone(excluded)
+        self.assertIn("Finance & Accounting role", reasons)
+        self.assertIn("Asks for a business degree", reasons)
+        direct, _, _ = scoring.score(job(title="Financial Analyst", ats="greenhouse"), biz, {"skills": "Excel"})
+        plain, _, _ = scoring.score(job(title="Financial Analyst"), biz, {"skills": "Excel"})
+        self.assertEqual(direct - plain, 5)
+        self.assertEqual(scoring.score(job(title="Software Engineer"), biz, PROFILE)[2], "Not a business role")
+
     def test_location_mismatch_is_penalised(self):
         here, _, _ = scoring.score(job(remote=False, location="Austin, TX, USA"), SEARCH, PROFILE)
         abroad, _, _ = scoring.score(job(remote=False, location="Amsterdam"), SEARCH, PROFILE)

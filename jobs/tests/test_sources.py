@@ -80,6 +80,25 @@ class SourceParserTests(unittest.TestCase):
         self.assertEqual(a["dedupe_key"], b["dedupe_key"])
 
 
+class FieldAwareKeysTests(unittest.TestCase):
+    BUSINESS = {"field": "business", "families": ["finance", "marketing"], "keywords": [], "locations": ["Remote"]}
+
+    def test_keyword_boards_use_business_areas(self):
+        self.assertEqual(sources.REGISTRY["jobicy"].keys(self.BUSINESS), ["industry:accounting-finance", "industry:marketing"])
+        self.assertEqual(sources.REGISTRY["himalayas"].keys(self.BUSINESS), ["financial analyst", "accountant", "marketing"])
+        self.assertEqual(sources.REGISTRY["remotive"].keys(self.BUSINESS), ["latest"])
+
+    def test_titles_you_list_win(self):
+        s = dict(self.BUSINESS, keywords=["Brand Manager"])
+        self.assertEqual(sources.REGISTRY["jobicy"].keys(s), ["tag:Brand Manager"])
+        self.assertEqual(sources.REGISTRY["himalayas"].keys(s), ["Brand Manager"])
+
+    def test_muse_sends_business_categories(self):
+        with mock.patch.object(http, "get_json", return_value={"results": [], "page_count": 1}) as get:
+            sources.REGISTRY["themuse"].fetch("Flexible / Remote", self.BUSINESS)
+        self.assertEqual(get.call_args.args[1]["category"], ["Accounting and Finance", "Advertising and Marketing"])
+
+
 class AtsTests(unittest.TestCase):
     def test_detect_and_form_urls(self):
         cases = {

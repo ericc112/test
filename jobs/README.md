@@ -2,6 +2,8 @@
 
 A local web app that searches job boards for you, ranks what it finds against your profile, and fills in (and, if you allow it, submits) applications.
 
+It's set up for **business majors**: it only shows and applies to roles that suit a business degree (finance & accounting, consulting & strategy, operations & supply chain, marketing & communications, sales & business development, HR & people, project & product management, and business analytics). Engineering, design, healthcare, trades, hospitality and similar roles are filtered out. You can narrow it to some of those areas, list specific titles, or switch the filter off.
+
 ```
  search ──► rank ──► fill the form ──► you review ──► submit ──► track
  9 boards    0-100    real browser      answers +       one click     applied /
@@ -24,7 +26,7 @@ python3 -m jobbot            # opens http://localhost:8765
 Then, in the app:
 
 1. **Profile**: your details, work authorisation, and resume (PDF works best).
-2. **Search setup**: job titles, locations, and **companies to watch** (type a company name; JobBot finds its Greenhouse, Lever or Ashby board).
+2. **Search setup**: pick your business areas and locations, and add **companies to watch**. There's a one-click list of companies with lots of business roles (Stripe, Toast, Brex, Flexport, Ramp…), or type any company name and JobBot finds its Greenhouse, Lever or Ashby board.
 3. Press **Search now**, open a match, and press **Fill application**. JobBot fills the real form in a browser and shows you every answer plus a screenshot. Nothing is sent.
 4. Answer anything it flagged, then **Submit application**.
 5. When you trust it, turn on **Automation & AI → Search automatically** (and, optionally, **Submit automatically**).
@@ -75,9 +77,13 @@ All free, public, no API keys. Every job links back to its original listing.
 | Jobicy | Remote jobs | 1 h |
 | Himalayas | Remote jobs (listing pages use a bot check, so these are *Apply on site*) | 1 h |
 | Arbeitnow | Europe, mostly Germany (off by default) | 1 h |
-| The Muse | Large US/global board (off by default) | 1 h |
+| The Muse | Large US/global board, queried by business categories | 1 h |
 
-Jobs are ranked 0-100. The score combines title match, your skills found in the description, location fit, how recent the posting is, and pay against your minimum. A remote job limited to other countries, or an on-site job elsewhere, loses points. The same job on two boards is shown once, preferring the one JobBot can apply to directly.
+### The business-major filter
+
+Every job is classified by its **title** first, because board categories are unreliable on their own: The Muse files baristas and welders under "Business Operations". A role passes when its title names a business function (e.g. *Financial Analyst*, *Account Executive*, *Supply Chain Analyst*, *Talent Acquisition Partner*), and nothing in it marks a technical, clinical or trade role (*engineer*, *developer*, *designer*, *nurse*, *technician*, *warehouse*…). Words like *medical*, *technical* or *retail* only pass alongside a clear business role, so *Medical Sales Representative* and *Retail Buyer* stay while *Store Manager* goes. Vague titles (*Associate*, *Analyst*) are decided by the job's department: Finance yes, Engineering no. Boards that support it are also queried by business category (The Muse, Jobicy) or business role names (Himalayas).
+
+Jobs are ranked 0-100. The score combines title match, your skills found in the description, location fit, how recent the posting is, and pay against your minimum. Roles that ask for a business degree get a small boost, as do jobs JobBot can apply to directly. A remote job limited to other countries, or an on-site job elsewhere, loses points. The same job on two boards is shown once, preferring the one JobBot can apply to directly.
 
 ## AI answers (optional)
 
@@ -120,6 +126,7 @@ The browser tests drive local fixture forms modelled on Greenhouse, Lever and As
 ```
 jobbot/
   sources/        one module per job board (fetch + normalise)
+  fields.py       business-major classifier (areas, blocked roles, board categories)
   scoring.py      0-100 match score with reasons
   ats.py          recognise Greenhouse/Lever/Ashby, resolve aggregator Apply links
   answers.py      question → answer rules, answer bank, safety checks

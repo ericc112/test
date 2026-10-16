@@ -57,7 +57,8 @@ def fetch(org, search):
             remote=bool(j.get("isRemote")) or j.get("workplaceType") == "Remote",
             description=j.get("descriptionPlain") or html_to_text(j.get("descriptionHtml")),
             posted_at=iso(j.get("publishedAt")), salary_min=lo, salary_max=hi, salary_text=stext,
-            tags=[t for t in (j.get("department"), j.get("team"), j.get("employmentType")) if t],
+            tags=[t for t in (j.get("employmentType"),) if t],
+            categories=[t for t in (j.get("department"), j.get("team")) if t],
         ))
     return out
 

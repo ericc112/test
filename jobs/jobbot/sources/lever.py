@@ -54,7 +54,8 @@ def fetch(site, search):
             description="\n".join(p for p in parts if p).strip(),
             posted_at=iso(j.get("createdAt")),
             salary_min=lo, salary_max=hi, salary_text=stext,
-            tags=[t for t in (cat.get("team"), cat.get("commitment"), j.get("workplaceType")) if t],
+            tags=[t for t in (cat.get("commitment"), j.get("workplaceType")) if t],
+            categories=[t for t in (cat.get("department"), cat.get("team")) if t],
         ))
     return out
 

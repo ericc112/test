@@ -73,6 +73,18 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(r.status_code, 403)
         self.assertEqual(bare.get("/api/state").status_code, 200)
 
+    def test_fields_and_suggestions(self):
+        f = self.client.get("/api/fields").json()
+        self.assertEqual(len(f["business"]["areas"]), 8)
+        before = self.client.get("/api/suggestions").json()
+        self.assertTrue(any(c["slug"] == "stripe" for c in before))
+        s = db.get_setting("search")
+        s["companies"]["greenhouse"] = ["stripe"]
+        db.set_setting("search", s)
+        after = self.client.get("/api/suggestions").json()
+        self.assertFalse(any(c["slug"] == "stripe" for c in after))
+        self.assertEqual(len(after), len(before) - 1)
+
     def test_screenshot_path_is_contained(self):
         self.assertEqual(self.client.get("/shots/..%2F..%2Fetc%2Fpasswd").status_code, 404)
         (self.tmp.dir / "screenshots" / "a.png").write_bytes(b"\x89PNG")

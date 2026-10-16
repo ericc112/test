@@ -12,7 +12,7 @@ class PipelineTests(unittest.TestCase):
         self.tmp = TempData()
         db.set_setting("profile", PROFILE)
         search = db.get_setting("search")
-        search.update(keywords=["backend engineer"], locations=["Remote"], sources={n: False for n in sources.REGISTRY})
+        search.update(field="business", keywords=[], locations=["Remote"], sources={n: False for n in sources.REGISTRY})
         search["sources"]["greenhouse"] = search["sources"]["remotive"] = True
         search["companies"]["greenhouse"] = ["acme"]
         db.set_setting("search", search)
@@ -23,12 +23,13 @@ class PipelineTests(unittest.TestCase):
     def fake_fetch(self, source):
         def fetch(key, search):
             if source == "greenhouse":
-                return [make_job("greenhouse", "acme:1", "Backend Engineer", "Acme", "https://acme.com/1",
+                return [make_job("greenhouse", "acme:1", "Financial Analyst", "Acme", "https://acme.com/1",
                                  ats="greenhouse", ats_board="acme", ats_job_id="1", remote=True, location="Remote",
-                                 description="python aws"),
-                        make_job("greenhouse", "acme:2", "Sales Director", "Acme", "https://acme.com/2")]
-            return [make_job("remotive", "77", "Backend Engineer", "Acme Inc", "https://remotive.com/77", remote=True,
-                             location="Remote", description="python")]
+                                 description="Bachelor's degree in finance or accounting. Excel.", categories=["Finance"]),
+                        make_job("greenhouse", "acme:2", "Senior Software Engineer", "Acme", "https://acme.com/2",
+                                 remote=True, location="Remote", categories=["Engineering"])]
+            return [make_job("remotive", "77", "Financial Analyst", "Acme Inc", "https://remotive.com/77", remote=True,
+                             location="Remote", description="excel")]
         return fetch
 
     def run_search(self):
@@ -41,8 +42,11 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(summary["new"], 2)
         gh = db.get_job("greenhouse:acme:1")
         rm = db.get_job("remotive:77")
-        self.assertIsNone(db.get_job("greenhouse:acme:2"))  # irrelevant title isn't stored
+        self.assertIsNone(db.get_job("greenhouse:acme:2"))  # not a business role: not stored
         self.assertGreater(gh["score"], 50)
+        self.assertIn("Finance & Accounting role", gh["score_reasons"])
+        self.assertIn("Asks for a business degree", gh["score_reasons"])
+        self.assertEqual(gh["categories"], ["Finance"])
         # Same job on two boards: keep the one we can apply to directly.
         self.assertEqual({gh["status"], rm["status"]}, {"new", "duplicate"})
         self.assertEqual(gh["status"], "new")
@@ -56,14 +60,14 @@ class PipelineTests(unittest.TestCase):
     def test_upsert_keeps_user_fields(self):
         self.run_search()
         db.update_job("greenhouse:acme:1", status="skipped", answers={"Why us?": "Because"})
-        db.upsert_job(make_job("greenhouse", "acme:1", "Backend Engineer II", "Acme", "u"))
+        db.upsert_job(make_job("greenhouse", "acme:1", "Financial Analyst II", "Acme", "u"))
         j = db.get_job("greenhouse:acme:1")
-        self.assertEqual((j["title"], j["status"], j["answers"]), ("Backend Engineer II", "skipped", {"Why us?": "Because"}))
+        self.assertEqual((j["title"], j["status"], j["answers"]), ("Financial Analyst II", "skipped", {"Why us?": "Because"}))
 
     def test_rescore_hides_newly_excluded_and_restores(self):
         self.run_search()
         s = db.get_setting("search")
-        s["exclude"] = ["backend"]
+        s["exclude"] = ["financial"]
         db.set_setting("search", s)
         pipeline.rescore()
         self.assertEqual(db.get_job("greenhouse:acme:1")["status"], "skipped")
@@ -89,6 +93,19 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual((ok, why), (False, "daily limit reached"))
         ok, why = pipeline.can_auto_submit(job, {"fields": []}, dict(auto, auto_submit=False))
         self.assertFalse(ok)
+
+    def test_switching_field_off_allows_any_role(self):
+        s = db.get_setting("search")
+        s["field"] = ""
+        db.set_setting("search", s)
+        self.run_search()
+        self.assertIsNotNone(db.get_job("greenhouse:acme:2"))
+
+    def test_rescore_hides_old_non_business_jobs(self):
+        db.upsert_job(make_job("lever", "x:1", "Software Engineer", "Zed", "u", status="new"))
+        pipeline.rescore()
+        j = db.get_job("lever:x:1")
+        self.assertEqual((j["status"], j["status_note"]), ("skipped", "auto: Not a business role"))
 
     def test_settings_merge_new_defaults(self):
         db.set_setting("automation", {"enabled": True})

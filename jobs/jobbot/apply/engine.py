@@ -392,18 +392,28 @@ class Engine:
         loc = self._loc(page, q.key)
         loc.scroll_into_view_if_needed(timeout=5000)
         loc.click()
-        wanted = [str(a.option or a.value), *[x for x in a.alternatives if x]]
+        primary = [str(a.option or a.value)]
+        fallbacks = [x for x in a.alternatives if x]
         options = self._combo_options(page, loc, timeout=800)
         if options and not q.options:
             q.options = [t for t, _ in options][:80]
-        choice = self._choose(options, wanted)
+        # A short list is the whole menu (Yes/No, consent): any acceptable answer will do.
+        # A long one is just the first page of a search box (schools): only an exact hit counts.
+        choice = self._choose(options, primary + (fallbacks if len(options) < 40 else []))
         for term in ([] if choice else self._search_terms(a)):
             loc.fill("")
             loc.press_sequentially(term[:40], delay=30)
             options = self._combo_options(page, loc, timeout=5000)
-            choice = self._choose(options, wanted, fuzzy=True)
+            choice = self._choose(options, primary, fuzzy=True)
             if not choice and a.search and term == a.search and options:
                 choice = options[0][0]  # city autocomplete: first suggestion for our search
+            if choice:
+                break
+        for alt in ([] if choice else fallbacks):  # e.g. "Other (school not listed)"
+            loc.fill("")
+            loc.press_sequentially(alt[:40], delay=30)
+            options = self._combo_options(page, loc, timeout=3000)
+            choice = self._choose(options, [alt])
             if choice:
                 break
         if not choice:
@@ -450,7 +460,7 @@ class Engine:
     @staticmethod
     def _search_terms(a):
         """What to type into a search-as-you-type box, most specific first."""
-        full = str(a.option or a.value)
+        full = str(a.value if a.option is None else a.option)
         terms = [a.search] if a.search else []
         terms.append(full)
         parts = [p.strip() for p in re.split(r",| - | \(", full) if p.strip()]
@@ -472,6 +482,6 @@ class Engine:
         if fuzzy and texts:
             from ..textutil import similarity
             best = max(texts, key=lambda t: max(similarity(w, t) for w in wanted))
-            if max(similarity(w, best) for w in wanted) >= 0.6:
+            if max(similarity(w, best) for w in wanted) >= 0.85:
                 return best
         return None

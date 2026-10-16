@@ -1,6 +1,7 @@
 """Himalayas remote jobs (himalayas.app/jobs/api/search)."""
 import sys
 
+from .. import fields
 from ..textutil import html_to_text
 from . import http, iso, make_job, register
 
@@ -8,7 +9,7 @@ NAME = "himalayas"
 LABEL = "Himalayas"
 MIN_INTERVAL = 60 * 60
 FORCE_MIN_INTERVAL = 10 * 60
-PAGES = 3
+PAGES = 2
 
 
 def _job_key(j):
@@ -17,7 +18,9 @@ def _job_key(j):
 
 
 def keys(search):
-    return list(search.get("keywords") or [])
+    if search.get("keywords"):
+        return list(search["keywords"])
+    return fields.source_terms(search, "search") if search.get("field") else []
 
 
 def fetch(keyword, search):
@@ -38,7 +41,8 @@ def fetch(keyword, search):
                 posted_at=iso(j.get("pubDate")),
                 salary_min=lo if annual else None, salary_max=hi if annual else None,
                 salary_text=f"{j.get('currency') or ''} {lo}-{hi}".strip() if lo else None,
-                tags=(j.get("categories") or [])[:8],
+                tags=(j.get("seniority") or [])[:4],
+                categories=(j.get("parentCategories") or []) + (j.get("categories") or [])[:8],
             ))
         if len(jobs) < 20:
             break

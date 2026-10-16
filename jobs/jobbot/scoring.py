@@ -2,8 +2,10 @@
 import re
 from datetime import datetime, timezone
 
+from . import fields
 from .textutil import ALIASES, contains_phrase, norm, split_list, words
 
+DIRECT_APPLY = ("greenhouse", "lever", "ashby")
 STOP = {"and", "or", "the", "a", "an", "of", "for", "to", "in", "with", "&", "-", "/"}
 WORLDWIDE = re.compile(r"worldwide|anywhere|global|any location|all locations", re.I)
 
@@ -36,7 +38,10 @@ def title_match(title, keywords):
 
 
 def relevant(job, search):
-    """Cheap pre-filter used while fetching: every word of some keyword is in the title."""
+    """Pre-filter used while fetching: right field (if one is set) and, if you listed
+    titles, every word of one of them is in the job title."""
+    if search.get("field") and not fields.classify(job, search)[0]:
+        return False
     keywords = split_list(search.get("keywords"))
     if not keywords:
         return True
@@ -93,6 +98,10 @@ def location_fit(job, search):
 
 def exclusion(job, search):
     """Reason the job should be hidden, or None."""
+    if search.get("field"):
+        ok, why = fields.classify(job, search)
+        if not ok:
+            return why
     title = job.get("title") or ""
     for ex in split_list(search.get("exclude")):
         if contains_phrase(title, ex):
@@ -117,7 +126,10 @@ def score(job, search, profile):
     """Return (score 0-100, reasons, exclusion reason or None)."""
     reasons = []
     keywords = split_list(search.get("keywords"))
-    t_pts, kw = title_match(job.get("title", ""), keywords) if keywords else (25, None)
+    in_field, area = fields.classify(job, search) if search.get("field") else (False, None)
+    t_pts, kw = title_match(job.get("title", ""), keywords) if keywords else ((34 if in_field else 25), None)
+    if in_field:
+        reasons.append(f"{area} role")
     if kw:
         reasons.append(f"Title matches “{kw}”")
 
@@ -144,6 +156,12 @@ def score(job, search, profile):
         reasons.append("Posted today" if days < 1 else f"Posted {int(days)}d ago")
 
     total = t_pts + s_pts + l_pts + r_pts
+    if in_field and fields.asks_for_business_degree(job):
+        total += 6
+        reasons.append("Asks for a business degree")
+    if job.get("ats") in DIRECT_APPLY:
+        total += 5
+        reasons.append("JobBot can apply directly")
     if job.get("salary_text"):
         reasons.append(f"Pay: {job['salary_text']}")
     min_salary = search.get("min_salary") or 0

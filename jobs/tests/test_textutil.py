@@ -38,6 +38,13 @@ class TextUtilTests(unittest.TestCase):
         opts = ["Berkeley College", "University of California - Berkeley", "University of California - Davis"]
         self.assertEqual(pick_option("University of California, Berkeley", opts), opts[1])
 
+    def test_pick_option_does_not_confuse_schools(self):
+        self.assertIsNone(pick_option("New York University", ["Andrews University", "Arizona State University"]))
+        self.assertEqual(pick_option("New York University", ["Andrews University", "New York University Abu Dhabi", "New York University"]),
+                         "New York University")
+        self.assertEqual(pick_option("Univ. of Michigan", ["University of Michigan", "Michigan State University"]), None)
+        self.assertEqual(pick_option("Michigan State", ["University of Michigan", "Michigan State University"]), "Michigan State University")
+
     def test_pick_option_prefers_closest_containing(self):
         opts = ["San Francisco, California, United States", "South San Francisco, California, United States"]
         self.assertEqual(pick_option("San Francisco, California", opts), opts[0])

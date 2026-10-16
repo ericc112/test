@@ -40,7 +40,7 @@ def fetch(board, search):
             location=loc, remote="remote" in loc.lower(),
             description=html_to_text(j.get("content")),
             posted_at=iso(j.get("first_published") or j.get("updated_at")),
-            tags=[d.get("name") for d in j.get("departments") or [] if d.get("name")],
+            categories=[d.get("name") for d in j.get("departments") or [] if d.get("name")],
         ))
     return out
 

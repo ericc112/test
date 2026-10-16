@@ -89,8 +89,13 @@ DEFAULT_ANSWERS = [
 ]
 
 DEFAULT_SEARCH = {
-    "keywords": ["software engineer"],
-    "exclude": ["intern", "principal", "director", "vice president"],
+    # "business" keeps only roles that suit a business major (see fields.py); "" = any field.
+    "field": "business",
+    # Business areas to include (all by default).
+    "families": ["finance", "consulting", "operations", "marketing", "sales", "hr", "management", "analytics"],
+    # Optional: only titles containing every word of one of these lines.
+    "keywords": [],
+    "exclude": ["director", "vice president", "vp", "head of"],
     "locations": ["Remote", "United States"],
     # any | remote_only | onsite_only
     "remote": "any",
@@ -105,11 +110,24 @@ DEFAULT_SEARCH = {
         "jobicy": True,
         "himalayas": True,
         "arbeitnow": False,
-        "themuse": False,
+        "themuse": True,
     },
     # Company job boards to watch. These are the ones JobBot can apply to directly.
     "companies": {"greenhouse": [], "lever": [], "ashby": []},
 }
+
+# Companies whose Greenhouse/Lever/Ashby boards list many business roles
+# (checked October 2026). Offered as one-click additions in Search setup.
+SUGGESTED_COMPANIES = [
+    ("Stripe", "greenhouse", "stripe"), ("Toast", "greenhouse", "toast"), ("Datadog", "greenhouse", "datadog"),
+    ("Databricks", "greenhouse", "databricks"), ("MongoDB", "greenhouse", "mongodb"), ("Cloudflare", "greenhouse", "cloudflare"),
+    ("Brex", "greenhouse", "brex"), ("Flexport", "greenhouse", "flexport"), ("Okta", "greenhouse", "okta"),
+    ("Samsara", "greenhouse", "samsara"), ("Ramp", "ashby", "ramp"), ("Coinbase", "greenhouse", "coinbase"),
+    ("Airbnb", "greenhouse", "airbnb"), ("Klaviyo", "greenhouse", "klaviyo"), ("Notion", "ashby", "notion"),
+    ("Plaid", "ashby", "plaid"), ("Palantir", "lever", "palantir"), ("Instacart", "greenhouse", "instacart"),
+    ("Affirm", "greenhouse", "affirm"), ("Gusto", "greenhouse", "gusto"), ("Pinterest", "greenhouse", "pinterest"),
+    ("Robinhood", "greenhouse", "robinhood"), ("Spotify", "lever", "spotify"), ("SoFi", "greenhouse", "sofi"),
+]
 
 DEFAULT_AUTOMATION = {
     # Run a search on a timer while the server is up.

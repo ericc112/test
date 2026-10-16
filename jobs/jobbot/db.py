@@ -8,11 +8,11 @@ from datetime import datetime, timedelta, timezone
 
 from . import config
 
-JSON_FIELDS = ("tags", "score_reasons", "answers")
+JSON_FIELDS = ("tags", "categories", "score_reasons", "answers")
 JOB_FIELDS = (
     "id", "source", "title", "company", "location", "remote", "url", "apply_url",
     "ats", "ats_board", "ats_job_id", "description", "salary_min", "salary_max",
-    "salary_text", "tags", "posted_at", "first_seen", "last_seen", "score",
+    "salary_text", "tags", "categories", "posted_at", "first_seen", "last_seen", "score",
     "score_reasons", "status", "status_note", "answers", "updated_at", "applied_at",
     "dedupe_key",
 )
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
     source TEXT, title TEXT, company TEXT, location TEXT, remote INTEGER,
     url TEXT, apply_url TEXT, ats TEXT, ats_board TEXT, ats_job_id TEXT,
-    description TEXT, salary_min REAL, salary_max REAL, salary_text TEXT, tags TEXT,
+    description TEXT, salary_min REAL, salary_max REAL, salary_text TEXT, tags TEXT, categories TEXT,
     posted_at TEXT, first_seen TEXT, last_seen TEXT,
     score REAL DEFAULT 0, score_reasons TEXT, status TEXT DEFAULT 'new', status_note TEXT,
     answers TEXT, updated_at TEXT, applied_at TEXT, dedupe_key TEXT
@@ -52,6 +52,9 @@ CREATE TABLE IF NOT EXISTS source_runs (
 );
 """
 
+# Columns added after the first release, added to older databases on startup.
+MIGRATIONS = {"categories": "TEXT"}
+
 _init_lock = threading.Lock()
 _initialized = set()
 
@@ -68,6 +71,10 @@ def connect():
             config.ensure_dirs()
             conn = sqlite3.connect(path)
             conn.executescript(SCHEMA)
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(jobs)")}
+            for col in MIGRATIONS:
+                if col not in cols:
+                    conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {MIGRATIONS[col]}")
             conn.execute("PRAGMA journal_mode=WAL")
             conn.close()
             _initialized.add(path)

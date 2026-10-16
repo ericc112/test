@@ -12,7 +12,9 @@ FORCE_MIN_INTERVAL = 6 * 3600  # honoured even on "search now"
 
 
 def keys(search):
-    return list(search.get("keywords") or [])
+    # Remotive's free feed returns the same recent jobs whatever you search for,
+    # so one call per refresh covers it (and keeps us well inside their terms).
+    return ["latest"]
 
 
 def _salary(text):
@@ -22,7 +24,7 @@ def _salary(text):
 
 
 def fetch(keyword, search):
-    data = http.get_json("https://remotive.com/api/remote-jobs", {"search": keyword, "limit": 100})
+    data = http.get_json("https://remotive.com/api/remote-jobs")
     out = []
     for j in data.get("jobs", []):
         lo, hi = _salary(j.get("salary"))
@@ -31,7 +33,7 @@ def fetch(keyword, search):
             location=j.get("candidate_required_location") or "Remote", remote=True,
             description=html_to_text(j.get("description")), posted_at=iso(j.get("publication_date")),
             salary_text=j.get("salary") or None, salary_min=lo, salary_max=hi,
-            tags=(j.get("tags") or [])[:12],
+            tags=(j.get("tags") or [])[:12], categories=[j["category"]] if j.get("category") else [],
         ))
     return out
 

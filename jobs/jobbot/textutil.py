@@ -122,5 +122,14 @@ def pick_option(answer, options):
     contained = [o for o in opts if len(norm(o)) >= 3 and (a in norm(o) or norm(o) in a)]
     if contained:
         return min(contained, key=lambda o: abs(len(norm(o)) - len(a)))
+    # Every meaningful word of the answer appears in the option ("NYU Stern" ≠ "Andrews University").
+    key_words = {w for w in words(a) if w not in _FILLER}
+    if key_words:
+        covering = [o for o in opts if key_words <= set(words(o))]
+        if covering:
+            return min(covering, key=lambda o: len(norm(o)))
     best = max(opts, key=lambda o: similarity(a, o))
-    return best if similarity(a, best) >= 0.75 else None
+    return best if similarity(a, best) >= 0.9 else None
+
+
+_FILLER = {"of", "the", "and", "at", "in", "a", "an", "for", "&"}

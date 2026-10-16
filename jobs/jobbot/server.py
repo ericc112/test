@@ -9,7 +9,7 @@ from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__, ats, config, db, pipeline, sources
+from . import __version__, ats, config, db, fields, pipeline, sources
 from .textutil import norm, split_list
 from .worker import Worker
 
@@ -86,7 +86,7 @@ def create_app(start_background=True, extra_hosts=()):
             "setup": {
                 "profile": bool(profile.get("first_name") and profile.get("email")),
                 "resume": bool(profile.get("resume_file")),
-                "keywords": bool(split_list(search.get("keywords"))),
+                "keywords": bool(search.get("field") or split_list(search.get("keywords"))),
                 "companies": companies > 0,
                 "automation": bool(automation.get("enabled")),
                 "ai": bool(llm.get("enabled")),
@@ -102,6 +102,18 @@ def create_app(start_background=True, extra_hosts=()):
             {"name": n, "label": getattr(m, "LABEL", n), "direct_apply": n in ats.SUPPORTED, "runs": runs.get(n, [])}
             for n, m in sources.REGISTRY.items()
         ]
+
+    @app.get("/api/fields")
+    def list_fields():
+        return {
+            name: {"label": f["label"], "areas": [{"key": k, "label": fields.FAMILIES[k]["label"]} for k in f["families"]]}
+            for name, f in fields.FIELDS.items()
+        }
+
+    @app.get("/api/suggestions")
+    def suggestions():
+        have = db.get_setting("search").get("companies", {})
+        return [{"name": n, "ats": a, "slug": s} for n, a, s in config.SUGGESTED_COMPANIES if s not in have.get(a, [])]
 
     @app.get("/api/events")
     def events(limit: int = 150):

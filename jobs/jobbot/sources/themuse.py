@@ -1,6 +1,7 @@
 """The Muse (themuse.com/api/public/jobs): large US/global board, filtered locally."""
 import sys
 
+from .. import fields
 from ..textutil import html_to_text
 from . import http, iso, make_job, register
 
@@ -20,10 +21,10 @@ def keys(search):
 def fetch(location, search):
     out = []
     for page in range(PAGES):
-        data = http.get_json(
-            "https://www.themuse.com/api/public/jobs",
-            {"page": page, "descending": "true", "location": location},
-        )
+        params = {"page": page, "descending": "true", "location": location}
+        if search.get("field"):
+            params["category"] = fields.source_terms(search, "muse")
+        data = http.get_json("https://www.themuse.com/api/public/jobs", params)
         for j in data.get("results", []):
             locs = [l.get("name", "") for l in j.get("locations") or []]
             out.append(make_job(
@@ -31,8 +32,8 @@ def fetch(location, search):
                 (j.get("refs") or {}).get("landing_page"),
                 location="; ".join(locs), remote=any("remote" in l.lower() for l in locs),
                 description=html_to_text(j.get("contents")), posted_at=iso(j.get("publication_date")),
-                tags=[c.get("name") for c in j.get("categories") or []]
-                + [lv.get("name") for lv in j.get("levels") or []],
+                tags=[lv.get("name") for lv in j.get("levels") or []],
+                categories=[c.get("name") for c in j.get("categories") or []],
             ))
         if page + 1 >= data.get("page_count", 0):
             break

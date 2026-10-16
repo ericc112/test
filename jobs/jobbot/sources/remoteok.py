@@ -29,7 +29,7 @@ def fetch(key, search):
             posted_at=iso(j.get("date") or j.get("epoch")),
             salary_min=lo, salary_max=hi,
             salary_text=f"${lo:,.0f} - ${hi:,.0f}" if lo and hi else None,
-            tags=(j.get("tags") or [])[:12],
+            tags=(j.get("tags") or [])[:12], categories=j.get("tags") or [],
         ))
     return out
 
