@@ -27,15 +27,17 @@ Indeed, LinkedIn and other aggregators copy jobs from employers' sites, often ho
 
 - **Greenhouse, Lever and Ashby** (Stripe, Toast, Brex, Ramp, Plaid…)
 - **Workday** (Capital One, Citi, Wells Fargo, Bank of America, PwC, Accenture, Fidelity, BlackRock, Nike, Target…)
+- **Oracle Recruiting Cloud** (JPMorgan Chase, and about 30 more large employers)
+- **Amazon's own careers site**
 
 While JobBot is running, a watcher re-checks every employer on your list every 5 minutes (adjustable down to 1).
 - **Unchanged boards cost nothing:** they answer with an empty "no change" (HTTP 304), so this is cheap for both sides. Only new postings that fit your search are downloaded in full.
 - **New postings are flagged and acted on:** anything that appears after JobBot's first look at a board is marked **Just posted**, listed at the top of the dashboard, and (optionally) sent as a desktop alert. Strong matches are filled straight away, so they're waiting in your review queue.
 - **Speed is measured:** the dashboard shows how long, after the employer published it, each new posting took to reach you. In testing, new Stripe and Cloudflare postings were caught 0.6 to 1.3 minutes after they went live.
 
-JobBot ships watching about 50 employers with lots of business roles. Add or remove them in **Search setup**: type a company name, or paste a link to one of its job posts (for Workday, a link from its `…myworkdayjobs.com` careers site).
+JobBot ships watching about 50 employers with lots of business roles, plus every **Fortune 500** company whose careers site runs on one of the systems above: 267 of the 500 (`jobbot/fortune500.json` lists all 500, with the system each one uses). The other 233 use systems JobBot can't read yet (SuccessFactors, Phenom, iCIMS and others) or have no public job feed. Add or remove them in **Search setup**: type a company name, or paste a link to one of its job posts (for Workday, a link from its `…myworkdayjobs.com` careers site).
 
-Workday asks applicants to create an account with each employer, so for Workday jobs JobBot alerts you and links to the posting instead of filling the form.
+Workday asks applicants to create an account with each employer. Once you set a Workday password (see *Workday accounts* below), JobBot signs in or creates that account and fills the form; without one it alerts you and links to the posting.
 
 It runs on your own computer: it needs a real browser, your resume, and your personal details, and none of that should live on someone else's server.
 
@@ -73,6 +75,17 @@ The terminal (and **Automation & AI → Phone** on the computer) shows a QR code
 - **Campus, office and public Wi-Fi often block devices from reaching each other.** Install [Tailscale](https://tailscale.com) (free) on the computer and the phone, sign both into the same account, then start JobBot with `python3 -m jobbot --phone-address <computer's Tailscale name or 100.x address>`. That works from anywhere, including over cellular data, and the connection is encrypted.
 - Tip: on the phone, use **Share → Add to Home Screen** to open JobBot like an app.
 
+## Apply from your phone, without a computer
+
+The JobBot page on claude.ai (see `CLOUD_WORKER.md`) lists the internships and can apply for you:
+
+1. Open **Your profile** on the page, fill in your details and upload your resume (PDF). Only you can see it.
+2. For Workday sites, set `JOBBOT_WORKDAY_PASSWORD` in your Claude cloud environment's settings (the environment menu → **Edit** → environment variables). Never paste it into a chat or the page.
+3. Tap **Apply for me** on an internship. A scheduled Claude cloud session runs JobBot every 3 hours (or right away when you tap **Start now**), fills in the application and brings back every answer and a screenshot.
+4. Check it under **Applying** and tap **Submit application**. Questions it couldn't answer show up there with the employer's own choices; answer them and tap **Fill in again**.
+
+The cloud session only submits applications you tapped Submit on, and stops at CAPTCHAs, bot checks and email confirmations.
+
 ## How applying works
 
 | Step | What happens | Sends anything? |
@@ -96,7 +109,14 @@ A required question with no answer is **never guessed**. The job goes to *Review
 |---|---|---|
 | Greenhouse, Lever, Ashby (company boards you add, plus aggregator jobs whose Apply link leads there) | ✅ | ✅ (and auto-submit) |
 | Other web forms reached from an aggregator listing | ✅ best effort | Only when you press Submit |
-| LinkedIn, Indeed, Workday, iCIMS, Taleo and other sign-in sites | ❌ | ❌ (marked *Apply on site*, with a link) |
+| Workday career sites (Target, Capital One, P&G and the other Workday employers JobBot watches), once you set a Workday password | ✅ signs in, or creates your account with that employer | Only when you press Submit |
+| LinkedIn, Indeed, iCIMS, Taleo, SuccessFactors and other sign-in sites | ❌ | ❌ (marked *Apply on site*, with a link) |
+
+### Workday accounts
+
+Workday makes you sign in to each employer's career site. JobBot uses your profile email and **one password** you choose, and creates the account the first time it applies to that employer (Workday's rule: 8+ characters with upper and lower case, a number and a symbol). It reads the password from the environment variable `JOBBOT_WORKDAY_PASSWORD`: start JobBot with it set (`JOBBOT_WORKDAY_PASSWORD='…' python3 -m jobbot`), or, for the phone page, set it in your Claude cloud environment. Without one, Workday jobs are marked *Apply on site*.
+
+Filling in saves a draft in your account with that employer and stops at Workday's Review step; nothing is sent until you press Submit. If Workday asks you to confirm your email, JobBot stops: click the link in the email, then try again.
 
 ### Things it won't do
 
@@ -107,7 +127,7 @@ A required question with no answer is **never guessed**. The job goes to *Review
 
 ## Job sources
 
-All free, public, no API keys. Every job links back to its original listing. The first four are employers' own job systems. The rest are aggregators, which are useful for companies you don't watch but lag behind.
+All free, public, no API keys. Every job links back to its original listing. The first six are employers' own job systems. With the Fortune 500 on the list (about 350 feeds) the watcher spreads its checks out, so each employer is re-checked about every 6 minutes. The rest are aggregators, which are useful for companies you don't watch but lag behind.
 
 | Source | What it covers | Refresh |
 |---|---|---|
@@ -115,6 +135,8 @@ All free, public, no API keys. Every job links back to its original listing. The
 | Lever boards | Employers you watch (e.g. Palantir, Spotify) | every 5 min (watcher) |
 | Ashby boards | Employers you watch (e.g. Ramp, Notion) | every 5 min (watcher) |
 | Workday career sites | Employers you watch (e.g. Capital One, Citi, PwC) | every 5 min (watcher) |
+| Oracle Recruiting Cloud | Employers you watch (e.g. JPMorgan Chase) | every 5 min (watcher) |
+| Amazon careers site | Amazon's US postings | every 5 min (watcher) |
 | Remotive | Remote jobs | 6 h (their terms ask for ≤ 4 calls a day) |
 | Remote OK | Latest remote jobs | 1 h |
 | Jobicy | Remote jobs | 1 h |
@@ -150,6 +172,7 @@ python3 -m jobbot search [--force]                     # fetch all enabled sourc
 python3 -m jobbot list [--status new,ready]            # what's stored
 python3 -m jobbot prepare JOB_ID                       # fill one application (no submit)
 python3 -m jobbot submit JOB_ID                        # fill and submit one application
+python3 -m jobbot apply-batch requests.json --profile profile.json [--resume cv.pdf] --out results.json  # the cloud worker's runner
 python3 -m jobbot settings search '{"keywords": ["data engineer"], ...}'
 ```
 
