@@ -151,6 +151,20 @@ The page's **50→1K · ML** tab holds two things.
   - **Model:** NFL from points per game; MLB from Pythagorean records, without starters; soccer from goals for and against (Poisson); tennis from the tennis model. College football has no model yet.
   - **Rating:** the same blend, gates and 1-10 as props (segment `sport:moneyline:team`). A market-only line is Low. An even-money side rates 1-4 however it's priced, because the rating measures the chance it wins.
   - **Logging and grading:** each game is logged once, on its likelier side, and graded from ESPN finals (`grade.ml_value`; a soccer draw loses).
+- **Breakdowns (user, 10/15): every moneyline gets an in-depth "why they can win".** Every ML game and challenge candidate has a **Breakdown** button.
+  - **Data:** `python3 -m edge ml notes --board ML.json --out DIR` gathers every factor from ESPN's game report and writes `mlnotes/p1..pN` (packed under 256 KB; it tags each board game with its pack, so upload the board after it). Delete packs past N. The factors:
+    - DraftKings line at open and now, spread, total, and ESPN's Matchup Predictor;
+    - last five with scores and rest days to kickoff;
+    - table, head to head;
+    - injury lists (fresh absences only count in the case for or against: 60-day IL and IR are old news);
+    - MLB probable starters with their numbers;
+    - team stats, leaders and against-the-spread records;
+    - venue, weather and ESPN's preview.
+  - **The sheet:** each side's verdict (our chance, book, model, predictor, fair price, EV, rating), then "Why X can win" and "What beats it" built from those numbers, then every section.
+  - **The full write-up** (`mlwrite/<event id>`): every challenge candidate gets one written by Claude at the scan, as an analyst. The sections are THE BET, WHY THEY CAN WIN, WHAT BEATS IT, HOW IT PLAYS OUT and VERDICT, with numbers only from the factor sheet.
+    - Say plainly when the edge rests only on our standings model, when the line is moving against the side, and the draw risk.
+    - Never call it a lock.
+    - For any other game the page writes one on demand (the `sample` capability, the same rules in its prompt) and saves it.
 - **The challenge** (`ml/challenge`): the user's ladder from $50 to $1,000, the whole roll on one straight moneyline per step.
   - **Plan:** double at +100 to +135 until one more double would overshoot, then a favourite priced to land on the target (from $800, about -400).
   - **Candidates** (`edge ml challenge`) must clear all of these:

@@ -128,7 +128,7 @@ def main(argv=None):
     rf.add_argument("--league", default="", help="default: NHL,MLB,NBA,NFL,CS2,LOL,VAL,SOCCER")
     rf.add_argument("--no-log", action="store_true")
     mlp = sub.add_parser("ml", help="moneylines (NFL, CFB, MLB, soccer, tennis) rated like props, and the 50->1k challenge")
-    mlp.add_argument("action", choices=["board", "challenge"])
+    mlp.add_argument("action", choices=["board", "challenge", "notes"], help="notes: every factor behind each board game (--board, --out DIR)")
     mlp.add_argument("--out", required=True)
     mlp.add_argument("--days", type=int, default=4)
     mlp.add_argument("--no-tennis", action="store_true")

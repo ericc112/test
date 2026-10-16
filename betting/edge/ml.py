@@ -556,6 +556,24 @@ def cli(args) -> None:
             print(f"{x['rating']:>2}/10 {x['lg']:12s} {x['team']} ({pr}, fair {x['fair']:+d}) {x['p']:.0%} "
                   f"[market {x['p_mkt'] if x['p_mkt'] is not None else '-'} model {x['p_model'] if x['p_model'] is not None else '-'}] {x['game']}")
         return
+    if args.action == "notes":
+        import pathlib
+        from . import mlnotes as MN
+        b = json.load(open(args.board))
+        notes = MN.build(b)
+        packs = MN.pack(notes)
+        out = pathlib.Path(args.out)
+        out.mkdir(parents=True, exist_ok=True)
+        where = {}
+        for i, pk in enumerate(packs, 1):
+            (out / f"p{i}.json").write_text(json.dumps({"updated": b.get("updated"), **pk}, separators=(",", ":")))
+            where.update({k: f"p{i}" for k in pk["games"]})
+        for g in b.get("games", []):
+            g["np"] = where.get(g["id"])
+        json.dump(b, open(args.board, "w"), separators=(",", ":"))
+        bad = [v for v in notes.values() if v.get("error")]
+        print(f"{len(notes)} breakdowns in {len(packs)} documents -> {out} (mlnotes/p1..p{len(packs)}); {len(bad)} failed; board tagged")
+        return
     if args.action == "challenge":
         st = {}
         if args.state and os.path.exists(args.state):

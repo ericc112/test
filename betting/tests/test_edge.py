@@ -1146,6 +1146,26 @@ class Moneylines(unittest.TestCase):
             out = ml.advance({**st, "open": dict(st["open"])}, {"games": []})
         self.assertEqual(out["status"], "busted")
 
+    def test_breakdown_form_and_cases(self):
+        import datetime as dt
+        from edge import mlnotes as MN
+        ev = lambda d, home, hs, as_, r: {"gameDate": d, "homeTeamId": "1" if home else "9", "homeTeamScore": hs, "awayTeamScore": as_,
+                                          "gameResult": r, "atVs": "vs" if home else "@", "opponent": {"abbreviation": "X"}}
+        s = {"lastFiveGames": [{"team": {"id": "1"}, "events": [ev("2026-10-11T19:00Z", True, "2", "0", "W"), ev("2026-09-05T19:00Z", False, "1", "3", "W")]}]}
+        f = MN.last_five(s, "1", dt.datetime(2026, 10, 16, tzinfo=dt.timezone.utc))
+        self.assertEqual(f["form"], "WW")
+        self.assertEqual(f["rest"], 4)                                                    # from the newest game, not the oldest
+        self.assertEqual(f["games"][0]["d"], "2026-10-11")
+        me = {"form": {"form": "WWWDL", "pf": 2.0, "pa": 1.0, "rest": 6}, "injuries": [{"name": "A", "status": "60-Day-IL"}]}
+        them = {"form": {"form": "LLDWL", "pf": 1.0, "pa": 2.0, "rest": 3}, "injuries": [{"name": "B", "pos": "QB", "status": "Out"}]}
+        side = {"p_model": 0.55, "p_mkt": 0.46, "p": 0.50, "price": 110, "ev": 0.05, "fair": -101}
+        pro, con = MN._cases("Dep", "Lev", me, them, {"predictor": {"home": 58}}, side, True, "soccer", 0.25)
+        text = " | ".join(pro)
+        for k in ("Form", "Recent margin", "Home", "Rest", "Lev injury list", "Predictor", "Our model", "Price"):
+            self.assertIn(k, text)
+        self.assertTrue(any("Draw risk" in c for c in con))
+        self.assertFalse(any("Dep injury list" in c for c in con))                        # a 60-day IL absence is old news
+
     def test_moneyline_grader(self):
         from unittest import mock
         summary = {"header": {"competitions": [{"status": {"type": {"completed": True}},
