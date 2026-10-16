@@ -24,6 +24,8 @@ def fetch(location, search):
         params = {"page": page, "descending": "true", "location": location}
         if search.get("field"):
             params["category"] = fields.source_terms(search, "muse")
+        if fields.wanted_types(search) == ["internship"]:
+            params["level"] = "Internship"
         data = http.get_json("https://www.themuse.com/api/public/jobs", params)
         for j in data.get("results", []):
             locs = [l.get("name", "") for l in j.get("locations") or []]

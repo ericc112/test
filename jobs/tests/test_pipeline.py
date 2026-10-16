@@ -12,7 +12,8 @@ class PipelineTests(unittest.TestCase):
         self.tmp = TempData()
         db.set_setting("profile", PROFILE)
         search = db.get_setting("search")
-        search.update(field="business", keywords=[], locations=["Remote"], sources={n: False for n in sources.REGISTRY})
+        search.update(field="business", job_types=["full_time"], keywords=[], locations=["Remote"],
+                      sources={n: False for n in sources.REGISTRY})
         search["sources"]["greenhouse"] = search["sources"]["remotive"] = True
         search["companies"]["greenhouse"] = ["acme"]
         db.set_setting("search", search)
@@ -113,6 +114,18 @@ class PipelineTests(unittest.TestCase):
         pipeline.rescore()
         j = db.get_job("lever:x:1")
         self.assertEqual((j["status"], j["status_note"]), ("skipped", "auto: Not a business role"))
+
+    def test_switching_to_internships_hides_full_time_and_back(self):
+        self.run_search()
+        s = db.get_setting("search")
+        s["job_types"] = ["internship"]
+        db.set_setting("search", s)
+        pipeline.rescore()
+        self.assertEqual(db.get_job("greenhouse:acme:1")["status_note"], "auto: Not an internship")
+        s["job_types"] = ["internship", "full_time"]
+        db.set_setting("search", s)
+        pipeline.rescore()
+        self.assertEqual(db.get_job("greenhouse:acme:1")["status"], "new")
 
     def test_settings_merge_new_defaults(self):
         db.set_setting("automation", {"enabled": True})

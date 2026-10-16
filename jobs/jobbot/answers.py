@@ -50,6 +50,7 @@ class Question:
     name: str = ""
     multi: bool = False
     value: object = None
+    section: str = ""  # "education" | "employment" when the field sits in such a block
 
 
 @dataclass
@@ -156,7 +157,7 @@ def _bucket(options, have):
             return o
         if len(nums) == 1 and ("+" in o or "more" in o.lower()) and have >= nums[0]:
             return o
-        if len(nums) == 1 and re.search(r"less|under|<", o, re.I) and have < nums[0]:
+        if len(nums) == 1 and re.search(r"less|under|below|<", o, re.I) and have < nums[0]:
             return o
     return None
 
@@ -170,6 +171,8 @@ def _relocate(q, c):
 
 
 def _start(q, c):
+    if re.search(r"\b(month|year)\b", norm(q.label)):
+        return None  # "Start date month/year" is a past job's or degree's start, not when you can begin
     if q.input_type == "date":
         return (date.today() + timedelta(days=14)).isoformat()
     return c.profile.get("availability") or None
@@ -193,10 +196,92 @@ def _languages(q, c):
     return langs[0]
 
 
+EMPLOYER_SITES = ("greenhouse", "lever", "ashby", "workday")  # found on the company's own careers site
+
+
 def _how_heard(q, c):
     first = c.profile.get("how_heard") or "Job board"
-    return [first, "Job board", "Online job board", "Job posting", "Website", "Company website",
-            "Careers page", "Internet search", "Other"]
+    rest = ["Job board", "Online job board", "Job posting", "Website", "Company website", "Careers page",
+            "Internet search", "Other"]
+    if (c.job or {}).get("source") in EMPLOYER_SITES and first == "Job board":
+        name = re.split(r",| (inc|llc|ltd|corp)\b", (c.job or {}).get("company") or "", flags=re.I)[0].strip()
+        own = [f"{name} website", f"{name} careers", f"{name} careers page"] if name else []
+        return own + ["Company website", "Company careers page", "Careers page", "Website"] + rest
+    return [first] + rest
+
+
+MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+          "november", "december"]
+
+
+def _gpa(q, c):
+    gpa = str(c.profile.get("gpa") or "").strip()
+    if not gpa:
+        return None
+    if q.options:
+        try:
+            have = float(re.findall(r"\d+(?:\.\d+)?", gpa)[0])
+        except IndexError:
+            return None
+        bucket = _bucket(q.options, have)  # "3.5 - 4.0", "3.75+", "Below 3.0"
+        return Answer(gpa, "profile", alternatives=[bucket] if bucket else [])
+    return gpa
+
+
+def _graduation(q, c):
+    """Expected graduation, as a date, a month, a year, "May 2028" or "Class of 2028"."""
+    p = c.profile
+    exp = (p.get("expected_graduation") or "").strip()
+    year = str(p.get("graduation_year") or (re.findall(r"20\d\d", exp) or [""])[0])
+    if not exp and not year:
+        return None
+    month = next((i + 1 for i, m in enumerate(MONTHS) if m[:3] in exp.lower()), 5)
+    if q.input_type == "date":
+        return f"{year}-{month:02d}-01"
+    if q.input_type == "month":
+        return f"{year}-{month:02d}"
+    label = norm(q.label)
+    if q.kind in ("text", "textarea") and "year" in label and "month" not in label:
+        return year
+    if re.search(r"\bmonth\b", label) and "year" not in label:  # "End date month"
+        name = MONTHS[month - 1].capitalize()
+        return Answer(name, "profile", alternatives=[name[:3], f"{month:02d}", str(month)])
+    season = "Spring" if month <= 5 else "Summer" if month <= 8 else "Fall"
+    first = exp or year
+    # Most specific first: a bare year would match "Fall 2028" as happily as "Spring 2028".
+    alts = [f"{MONTHS[month - 1].capitalize()} {year}", f"{season} {year}", f"Class of {year}", f"{month:02d}/{year}", year]
+    return Answer(first, "profile", alternatives=[a for a in alts if a and a != first])
+
+
+def _school_year(q, c):
+    y = (c.profile.get("school_year") or "").strip()
+    if not y:
+        return None
+    alts = {"freshman": ["First year", "1st year"], "sophomore": ["Second year", "2nd year"],
+            "junior": ["Third year", "3rd year"], "senior": ["Fourth year", "4th year"],
+            "graduate student": ["Graduate", "Master's", "MBA"]}
+    return Answer(y, "profile", alternatives=alts.get(y.lower(), []))
+
+
+def _enrolled(q, c):
+    return yn(c.profile.get("currently_enrolled"))
+
+
+def _terms(q, c):
+    terms = split_list(c.profile.get("internship_terms"))
+    if not terms:
+        return None
+    if q.options and all(norm(o) in ("yes", "no") for o in q.options):
+        asked = re.search(r"(spring|summer|fall|autumn|winter)\D{0,3}(20\d\d)?", q.label or "", re.I)
+        if not asked:
+            return None
+        hit = any(asked.group(1).lower() in norm(t) and (not asked.group(2) or asked.group(2) in t) for t in terms)
+        return yn(hit)
+    if q.kind == "checkboxes":
+        return Answer(terms, "profile")
+    if q.kind in ("text", "textarea"):
+        return ", ".join(terms)
+    return Answer(terms[0], "profile", alternatives=terms[1:] + [t.split()[0] for t in terms])
 
 
 def _today(q, c):
@@ -235,7 +320,7 @@ def _eeo(field_name):
 
 RULES = [
     # Voluntary self-identification (EEO)
-    (r"sexual orientation|transgender|lgbt", ANY, lambda q, c: Answer("decline", "profile")),
+    (r"sexual orientation|transgender|lgbt|first[- ]generation", CHOICE, lambda q, c: Answer("decline", "profile")),
     (r"\bgender\b|\bsex\b", ANY, _eeo("eeo_gender")),
     (r"hispanic|latin[oax]", ANY, _eeo("eeo_hispanic")),
     (r"\brace\b|ethnicit", ANY, _eeo("eeo_race")),
@@ -270,10 +355,24 @@ RULES = [
      r"terms (and|&) conditions|terms of (use|service)|data (processing|protection|retention)|gdpr|"
      r"consent to|by (checking|submitting|clicking)|certify that|attest|true and (complete|accurate)",
      CHOICE, _consent),
+    # Students and internships
+    (r"\bgpa\b|grade point", ANY, _gpa),
+    (r"have you graduated|already graduated", CHOICE, lambda q, c: yn(not c.profile.get("currently_enrolled"))),
+    (r"return(ing)? to (school|university|college|campus)|continue (your|with) (studies|education|degree)",
+     CHOICE, _enrolled),
+    (r"currently (enrolled|pursuing|attending|a student|studying)|are you (a |currently a |currently )?(current |full[- ]time )?"
+     r"(student|enrolled)|enrolled (in|at) (a|an|your)|pursuing (a|an|your) .{0,30}degree", CHOICE | {"text"}, _enrolled),
+    (r"(year|level|standing) (in|of) (school|study|college|university|program)|class standing|"
+     r"current (academic )?(year|standing|level)|what year are you|academic (year|standing|level)|year of study|grade level",
+     ANY, _school_year),
+    (r"which (term|season|session)|internship (term|season|period|session|dates|start)|what (term|season)|"
+     r"(summer|fall|spring|winter) (internship|program)|available (for|during) (the )?(summer|fall|spring|winter)|start term",
+     ANY, _terms),
+    (r"\bminor\b", TEXT | {"select"}, _p("minor")),
     # Education
     (r"\bdegree\b|level of education|highest education|education level|highest level", ANY, _p("degree")),
     (r"discipline|\bmajor\b|field of study|area of study|concentration", ANY, _p("discipline")),
-    (r"graduat|year of completion|end date year", ANY, _p("graduation_year")),
+    (r"graduat|year of completion|class of|class year", ANY, _graduation),
     (r"\b(school|university|college|institution)\b", TEXT | {"select"}, _school),
     (r"language", ANY, _languages),
     # Documents
@@ -314,6 +413,8 @@ RULES = [
 _COMPILED = [(re.compile(rx, re.I), kinds, fn) for rx, kinds, fn in RULES]
 
 NAME_GUARD = re.compile(r"company|school|university|manager|refer|reference|emergency|recruiter|employer|business|project|team|pronunc", re.I)
+# "Are you a first-generation college student?" mentions a college but isn't asking which one.
+SCHOOL_GUARD = re.compile(r"^\W*(are|do|did|have|has|is|were|will|would|tell|describe|why|how)\b|first[- ]generation", re.I)
 
 
 def _bank_lookup(label, bank):
@@ -351,12 +452,36 @@ def _coerce(result, source="profile"):
     return Answer(result, source)
 
 
+HISTORY_DATE = re.compile(r"\b(start|end|from|to)\b.{0,12}\b(date|month|year)\b|^(month|year)$|current(ly)? (role|job|position|work)")
+
+
+def _section_answer(q, ctx, label):
+    """Fields in a repeated education/employment block. None = not handled here."""
+    if HISTORY_DATE.search(label):
+        # The end of your degree is your graduation. A past job's dates, or when a degree
+        # started, only you know: leave them for you rather than guess.
+        if q.section == "education" and re.search(r"\b(end|to|completion)\b", label):
+            return _coerce(_graduation(q, ctx)) or Answer(None, "profile")
+        return Answer(None, "profile")
+    if q.section == "employment" and re.search(r"\b(company|employer)\b", label):
+        return Answer(ctx.profile.get("current_company") or None, "profile")
+    if q.section == "employment" and re.search(r"\b(title|position|role)\b", label):
+        return Answer(ctx.profile.get("current_title") or None, "profile")
+    return None
+
+
 def rule_answer(q, ctx):
     label = norm(q.label)
+    if q.section:
+        a = _section_answer(q, ctx, label)
+        if a is not None:
+            return a if a.value not in (None, "", []) else None
     for rx, kinds, fn in _COMPILED:
         if q.kind not in kinds or not rx.search(label):
             continue
         if fn is _full_name and NAME_GUARD.search(label):
+            continue
+        if fn is _school and SCHOOL_GUARD.search(label):
             continue
         a = _coerce(fn(q, ctx))
         if a is not None:

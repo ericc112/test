@@ -61,6 +61,40 @@ class ClassifierTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("isn't one of your areas", why)
 
+    def test_job_types(self):
+        cases = {"Summer 2027 Finance Intern": "internship", "Investment Banking Summer Analyst": "internship",
+                 "Co-op, Supply Chain": "internship", "Internal Audit Associate": "full_time",
+                 "International Sales Manager": "full_time", "Part-Time Universal Banker": "part_time",
+                 "Seasonal Sales Associate": "temporary", "Financial Analyst": "full_time"}
+        for title, kind in cases.items():
+            self.assertEqual(fields.job_type({"title": title}), kind, title)
+        # Workday/Lever/Ashby employment-type labels count too
+        self.assertEqual(fields.job_type({"title": "Corporate Banking Program", "tags": ["Intern (Seasonal) (Trainee)"]}), "internship")
+        self.assertEqual(fields.job_type({"title": "Marketing Associate", "tags": ["Intern"]}), "internship")
+
+    def test_mba_internships_skip_undergrads(self):
+        undergrad = {"school_year": "Junior", "degree": "Bachelor's"}
+        grad = {"school_year": "Graduate student", "degree": "MBA"}
+        mba = {"title": "Strategic Finance Intern (MBA)"}
+        ug = {"title": "Undergraduate Summer Analyst Intern"}
+        self.assertEqual(fields.level_mismatch(mba, undergrad), "For MBA or graduate students")
+        self.assertIsNone(fields.level_mismatch(mba, grad))
+        self.assertEqual(fields.level_mismatch(ug, grad), "For undergraduates")
+        self.assertIsNone(fields.level_mismatch({"title": "Finance Intern"}, undergrad))
+        self.assertIsNone(fields.level_mismatch(mba, {}))  # unknown: don't filter
+        self.assertIsNone(fields.level_mismatch({"title": "MBA Program Manager"}, undergrad))  # not an internship
+        new_grad = {"title": "Finance Graduate Program", "tags": ["Internship"]}  # UK sense: for new graduates
+        self.assertIsNone(fields.level_mismatch(new_grad, undergrad))
+
+    def test_seasons(self):
+        from datetime import date
+        self.assertEqual(fields.season_of("2027 Investment Banking Summer Associate"), ("Summer", 2027))
+        self.assertEqual(fields.season_of("Finance Intern (Fall 2026)"), ("Fall", 2026))
+        self.assertEqual(fields.season_of("Summer '27 Intern"), ("Summer", 2027))
+        self.assertIsNone(fields.season_of("Finance Intern"))
+        self.assertTrue(fields.season_over("Summer 2026 Intern", date(2026, 10, 16)))
+        self.assertFalse(fields.season_over("Fall 2026 Intern", date(2026, 10, 16)))
+
     def test_business_degree_detection(self):
         self.assertTrue(fields.asks_for_business_degree({"description": "Bachelor's degree in Finance or related field"}))
         self.assertTrue(fields.asks_for_business_degree({"description": "BBA or MBA preferred"}))

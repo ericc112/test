@@ -16,9 +16,14 @@ _lock = threading.Lock()  # Jobicy answers 403 to concurrent requests
 
 def keys(search):
     # With a field filter, browse Jobicy's matching industries; otherwise search by tag.
-    if search.get("field") and not search.get("keywords"):
-        return [f"industry:{i}" for i in fields.source_terms(search, "jobicy")]
-    return [f"tag:{k}" for k in search.get("keywords") or []]
+    wanted = fields.wanted_types(search)
+    out = ["tag:internship"] if "internship" in wanted else []
+    if "full_time" in wanted:
+        if search.get("field") and not search.get("keywords"):
+            out += [f"industry:{i}" for i in fields.source_terms(search, "jobicy")]
+        else:
+            out += [f"tag:{k}" for k in search.get("keywords") or []]
+    return out
 
 
 def fetch(key, search):

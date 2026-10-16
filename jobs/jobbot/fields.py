@@ -22,6 +22,7 @@ FAMILIES = {
         "muse": ["Accounting and Finance"],
         "jobicy": ["accounting-finance"],
         "search": ["financial analyst", "accountant"],
+        "intern_search": ["finance intern", "accounting intern"],
     },
     "consulting": {
         "label": "Consulting & Strategy",
@@ -30,6 +31,7 @@ FAMILIES = {
         "muse": ["Business Operations", "Management"],
         "jobicy": ["business"],
         "search": ["business analyst", "consultant"],
+        "intern_search": ["business analyst intern", "consulting intern"],
     },
     "operations": {
         "label": "Operations & Supply Chain",
@@ -39,6 +41,7 @@ FAMILIES = {
         "muse": ["Business Operations"],
         "jobicy": ["management"],
         "search": ["operations analyst", "supply chain analyst"],
+        "intern_search": ["operations intern", "supply chain intern"],
     },
     "marketing": {
         "label": "Marketing & Communications",
@@ -49,6 +52,7 @@ FAMILIES = {
         "muse": ["Advertising and Marketing"],
         "jobicy": ["marketing"],
         "search": ["marketing"],
+        "intern_search": ["marketing intern"],
     },
     "sales": {
         "label": "Sales & Business Development",
@@ -59,6 +63,7 @@ FAMILIES = {
         "muse": ["Sales", "Account Management"],
         "jobicy": ["marketing", "business"],
         "search": ["account executive", "business development"],
+        "intern_search": ["sales intern", "business development intern"],
     },
     "hr": {
         "label": "HR & People",
@@ -68,6 +73,7 @@ FAMILIES = {
         "muse": ["Human Resources and Recruitment"],
         "jobicy": ["hr"],
         "search": ["human resources", "recruiter"],
+        "intern_search": ["human resources intern", "recruiting intern"],
     },
     "management": {
         "label": "Project & Product Management",
@@ -78,6 +84,7 @@ FAMILIES = {
         "muse": ["Project Management", "Product Management", "Management"],
         "jobicy": ["project-management", "management"],
         "search": ["project manager", "product manager"],
+        "intern_search": ["project management intern", "product management intern"],
     },
     "analytics": {
         "label": "Business Analytics",
@@ -87,6 +94,7 @@ FAMILIES = {
         "muse": ["Data and Analytics"],
         "jobicy": ["data-science"],
         "search": ["business intelligence analyst", "data analyst"],
+        "intern_search": ["data analyst intern", "business intelligence intern"],
     },
 }
 
@@ -136,6 +144,97 @@ _DEPT = {k: re.compile(f["dept"], re.I) for k, f in FAMILIES.items()}
 
 FIELDS = {"business": {"label": "Business major", "families": list(FAMILIES)}}
 
+# ---------------------------------------------------------------- job types
+JOB_TYPES = {"internship": "Internships", "full_time": "Full-time jobs"}
+DEFAULT_JOB_TYPES = ["internship"]
+
+INTERN_TITLE = re.compile(
+    r"\b(intern|interns|internship|internships|co-?op|externship|summer (analyst|associate|scholar|fellow\w*|program)|"
+    r"off-?cycle|working student|werkstudent|praktikant\w*|praktikum|stagiaire)\b",
+    re.I,
+)
+INTERN_LABEL = re.compile(r"\bintern(ship)?s?\b|co-?op|student program", re.I)  # board fields ("Intern (Fixed Term)")
+PART_TIME = re.compile(r"part[- ]?time", re.I)
+TEMPORARY = re.compile(r"\b(seasonal|temporary|temp|contract|contractor|freelance)\b", re.I)
+
+
+def job_type(job):
+    """internship | part_time | temporary | full_time, from the title and the board's own labels."""
+    title = job.get("title") or ""
+    labels = " | ".join(str(t) for t in (job.get("tags") or []) + (job.get("categories") or []) if t)
+    if INTERN_TITLE.search(title) or INTERN_LABEL.search(labels):
+        return "internship"
+    if PART_TIME.search(title) or PART_TIME.search(labels):
+        return "part_time"
+    if TEMPORARY.search(title) or re.search(r"\b(seasonal|temporary|contract)\b", labels, re.I):
+        return "temporary"
+    return "full_time"
+
+
+def wanted_types(search):
+    return [t for t in (search.get("job_types") or DEFAULT_JOB_TYPES) if t in JOB_TYPES] or DEFAULT_JOB_TYPES
+
+
+def type_ok(job, search):
+    """Return (ok, reason). Part-time, seasonal and temporary roles never match."""
+    kind = job_type(job)
+    wanted = wanted_types(search)
+    if kind in wanted:
+        return True, None
+    if wanted == ["internship"]:
+        return False, "Not an internship"
+    if wanted == ["full_time"]:
+        return False, "Internship" if kind == "internship" else "Not full-time"
+    return False, "Part-time or temporary"
+
+
+GRAD_ONLY = re.compile(r"\b(mba|ph\.?d|doctoral|post-?doc|master'?s|graduate (intern|student)|jd|law student)\b", re.I)
+UNDERGRAD = re.compile(r"\b(undergrad\w*|bachelor'?s|college student)\b", re.I)
+
+
+def level_mismatch(job, profile):
+    """Internships meant for MBA/PhD students when you're an undergraduate (or the reverse)."""
+    if job_type(job) != "internship":
+        return None
+    year = (profile.get("school_year") or "").lower()
+    degree = (profile.get("degree") or "").lower()
+    if not (year or degree):
+        return None  # we don't know which you are
+    grad = year == "graduate student" or bool(re.search(r"master|mba|ph\.?d|doctor", degree))
+    title = job.get("title") or ""
+    if not grad and GRAD_ONLY.search(title) and not UNDERGRAD.search(title):
+        return "For MBA or graduate students"
+    if grad and UNDERGRAD.search(title) and not GRAD_ONLY.search(title):
+        return "For undergraduates"
+    return None
+
+
+# ---------------------------------------------------------------- internship seasons
+_SEASON = re.compile(
+    r"\b(spring|summer|fall|autumn|winter)\b[\s,/-]*'?(20\d\d|\d\d)\b|\b(20\d\d)\b.{0,40}?\b(spring|summer|fall|autumn|winter)\b",
+    re.I,
+)
+_SEASON_END = {"spring": (5, 31), "summer": (8, 31), "fall": (12, 31), "autumn": (12, 31), "winter": (3, 31)}
+
+
+def season_of(title):
+    """'Summer 2027 Finance Intern' → ('Summer', 2027)."""
+    m = _SEASON.search(title or "")
+    if not m:
+        return None
+    season = (m.group(1) or m.group(4)).lower()
+    year = int(m.group(2) or m.group(3))
+    year = year + 2000 if year < 100 else year
+    return ("Fall" if season == "autumn" else season.capitalize()), year
+
+
+def season_over(title, today):
+    s = season_of(title)
+    if not s:
+        return False
+    month, day = _SEASON_END[s[0].lower()]
+    return (s[1], month, day) < (today.year, today.month, today.day)
+
 
 def enabled_families(search):
     chosen = search.get("families") or list(FAMILIES)
@@ -184,7 +283,7 @@ def source_terms(search, kind):
     """Board-specific filters for the enabled areas (muse categories, jobicy industries, search terms)."""
     out = []
     for f in enabled_families(search):
-        for v in FAMILIES[f][kind]:
+        for v in FAMILIES[f].get(kind, []):
             if v not in out:
                 out.append(v)
     return out

@@ -242,6 +242,14 @@
       name: "", multi: false, value: pressed ? clean(text(pressed)) : null });
   }
 
+  // Which repeated block a field sits in, so "End date year" can mean graduation (education)
+  // or a past job (employment).
+  for (const q of questions) {
+    const el = document.querySelector(`[data-jobbot="${q.key}"], [data-jobbot^="${q.key}:"]`);
+    const box = el && el.closest("[class*=employment], [class*=experience], [class*=work-history], [class*=workHistory], [class*=education], [class*=Education]");
+    q.section = !box ? "" : /education/i.test(box.className) ? "education" : "employment";
+  }
+
   // Page-level signals.
   const bodyText = text(document.body).slice(0, 20000);
   const frames = [...document.querySelectorAll("iframe")].filter(visible).map((f) => f.src || "");

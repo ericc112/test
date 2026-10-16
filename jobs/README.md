@@ -2,7 +2,7 @@
 
 A local web app that searches job boards for you, ranks what it finds against your profile, and fills in (and, if you allow it, submits) applications.
 
-It's set up for **business majors**: it only shows and applies to roles that suit a business degree (finance & accounting, consulting & strategy, operations & supply chain, marketing & communications, sales & business development, HR & people, project & product management, and business analytics). Engineering, design, healthcare, trades, hospitality and similar roles are filtered out. You can narrow it to some of those areas, list specific titles, or switch the filter off.
+It's set up for **business majors looking for internships**. Full-time jobs are one checkbox away in **Search setup** (*What you're looking for*), for when you graduate. It only shows and applies to roles that suit a business degree (finance & accounting, consulting & strategy, operations & supply chain, marketing & communications, sales & business development, HR & people, project & product management, and business analytics). Engineering, design, healthcare, trades, hospitality and similar roles are filtered out. You can narrow it to some of those areas, list specific titles, or switch the filter off.
 
 ```
  watch ──► rank ──► fill the form ──► you review ──► submit ──► track
@@ -10,6 +10,16 @@ It's set up for **business majors**: it only shows and applies to roles that sui
  sites     score    (Playwright)      screenshot      or automatic   history
  every 5 min
 ```
+
+## Internships first
+
+By default JobBot looks for internships only: summer, semester and co-op internships, including *Summer Analyst* and similar programs. Part-time, seasonal and temporary jobs are always left out.
+
+- **Every source asks for internships:** Workday sites are queried through their own intern/student filter (each employer's *Intern* worker type or *Students & Graduates* category), The Muse by its *Internship* level, Himalayas and Jobicy by intern searches. Greenhouse, Lever and Ashby boards are read in full and filtered by title and the board's own job-type labels.
+- **Only internships you can still do:** an internship for a season that's already over (e.g. *Summer 2026* in October 2026) is hidden. Internships for MBA or graduate students are hidden while you're an undergraduate, and undergraduate programs are hidden if you're in grad school. A UK-style *Graduate Program* (for new graduates) is not counted as grad school.
+- **The term you want ranks first:** set *Internship terms you want* (e.g. *Summer 2027*) in **Profile → Student**. Each listing shows its season, e.g. *Internship · Summer 2027*.
+- **Student questions are answered for you:** fill in **Profile → Student** (currently enrolled, year in school, expected graduation, GPA, minor) and JobBot answers GPA ranges, graduation date in any format (*May 2028*, *Spring 2028*, *Class of 2028*, a date picker or separate month and year boxes), year in school, "will you return to school", which term, and "can you commit to the full 12 weeks". Leave GPA blank to answer GPA questions yourself.
+- **It won't make up your history:** Greenhouse's employment block takes the company and title from your profile, but the dates of past jobs are left for you. The end date in an education block is your graduation date.
 
 ## New postings, as soon as they're published
 
@@ -42,8 +52,8 @@ python3 -m jobbot            # opens http://localhost:8765
 
 Then, in the app:
 
-1. **Profile**: your details, work authorisation, and resume (PDF works best).
-2. **Search setup**: pick your business areas and locations, and add **companies to watch**. There's a one-click list of companies with lots of business roles (Stripe, Toast, Brex, Flexport, Ramp…), or type any company name and JobBot finds its Greenhouse, Lever or Ashby board.
+1. **Profile**: your details, work authorisation, resume (PDF works best), and the **Student** section (graduation date, year in school, GPA, the internship term you want).
+2. **Search setup**: choose internships and/or full-time jobs, pick your business areas and locations, and add **companies to watch**. There's a one-click list of companies with lots of business roles (Stripe, Toast, Brex, Flexport, Ramp…), or type any company name and JobBot finds its Greenhouse, Lever or Ashby board.
 3. Press **Search now**, open a match, and press **Fill application**. JobBot fills the real form in a browser and shows you every answer plus a screenshot. Nothing is sent.
 4. Answer anything it flagged, then **Submit application**.
 5. When you trust it, turn on **Automation & AI → Search automatically** (and, optionally, **Submit automatically**).
@@ -60,7 +70,7 @@ Each answer comes from the first of these that applies:
 
 1. what you typed for this job in the review screen
 2. your **answer bank**: "question contains X → answer Y", saved once and reused everywhere (answers you give in the review screen can be saved here with one tick)
-3. rules that read your profile: name, contact details, links, location, work authorisation and sponsorship, education, salary, start date, "how did you hear about us", EEO questions (default: decline to answer)
+3. rules that read your profile: name, contact details, links, location, work authorisation and sponsorship, education and student questions, salary, start date, "how did you hear about us" (for jobs found on the employer's own site: their website or careers page), EEO questions (default: decline to answer)
 4. Claude, if you turn on AI, for required questions nothing else covered
 
 A required question with no answer is **never guessed**. The job goes to *Review → Needs you* with the question ready to answer.

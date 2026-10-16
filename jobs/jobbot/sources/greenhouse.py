@@ -42,7 +42,8 @@ VAGUE_LOCATION = ("hybrid", "remote", "in office", "in-office", "onsite", "on-si
 
 def _job(board, j):
     loc = (j.get("location") or {}).get("name") or ""
-    offices = [o.get("name") for o in j.get("offices") or [] if o.get("name") and o.get("name").lower() != "no office"]
+    offices = [o.get("name") for o in j.get("offices") or []
+               if o.get("name") and o.get("name").lower() != "no office" and o.get("name").lower() not in loc.lower()]
     if offices and (loc.strip().lower() in VAGUE_LOCATION or "," not in loc):
         loc = f"{loc} · {'; '.join(offices[:3])}" if loc else "; ".join(offices[:3])  # "Hybrid" → where?
     job = make_job(

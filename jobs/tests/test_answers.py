@@ -96,6 +96,73 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(ans(q("Autofill from resume", "file", required=False)).source, "skip")
 
 
+STUDENT = dict(PROFILE, gpa="3.62", expected_graduation="May 2028", graduation_year="", school_year="Junior",
+               currently_enrolled=True, internship_terms="Summer 2027", minor="Economics")
+
+
+class StudentTests(unittest.TestCase):
+    def a(self, *args, **kw):
+        r = ans(q(*args, **kw), profile=STUDENT)
+        return r.option if r.option not in (None, []) else r.value
+
+    def test_gpa(self):
+        self.assertEqual(self.a("What is your cumulative GPA?"), "3.62")
+        self.assertEqual(self.a("GPA", "select", ["Below 3.0", "3.0 - 3.49", "3.5 - 4.0"]), "3.5 - 4.0")
+        self.assertEqual(self.a("GPA", "select", ["3.75+", "3.5-3.74", "Under 3.5"]), "3.5-3.74")
+
+    def test_graduation_in_any_format(self):
+        self.assertEqual(self.a("Expected graduation date", input_type="date"), "2028-05-01")
+        self.assertEqual(self.a("Expected Graduation Date"), "May 2028")
+        self.assertEqual(self.a("Graduation Year"), "2028")
+        self.assertEqual(self.a("Anticipated graduation", "select", ["Spring 2028", "Fall 2028"]), "Spring 2028")
+        self.assertEqual(self.a("Class year", "select", ["Class of 2027", "Class of 2028"]), "Class of 2028")
+        self.assertEqual(self.a("Graduation year", "select", ["2027", "2028", "2029"]), "2028")
+
+    def test_enrollment_year_and_term(self):
+        yn = ["Yes", "No"]
+        self.assertEqual(self.a("What is your current year in school?", "select", ["Freshman", "Sophomore", "Junior", "Senior"]), "Junior")
+        self.assertEqual(self.a("Current academic standing", "select", ["1st year", "2nd year", "3rd year", "4th year"]), "3rd year")
+        self.assertEqual(self.a("Are you currently enrolled in a degree program?", "radio", yn), "Yes")
+        self.assertEqual(self.a("Will you be returning to school after the internship?", "radio", yn), "Yes")
+        self.assertEqual(self.a("Which internship term are you applying for?", "select", ["Spring 2027", "Summer 2027"]), "Summer 2027")
+        self.assertEqual(self.a("Are you available for the Summer 2027 internship?", "radio", yn), "Yes")
+        self.assertEqual(self.a("Are you available for the Fall 2027 internship?", "radio", yn), "No")
+        self.assertEqual(self.a("Minor"), "Economics")
+        self.assertEqual(self.a("Are you available to work full-time (40 hours/week) during the internship?", "radio", yn), "Yes")
+
+    def test_questions_from_a_live_internship_form(self):
+        yn = ["Yes", "No"]
+        self.assertEqual(self.a("Have you ever, or are you currently working at Gusto in any capacity?", "select", yn), "No")
+        self.assertEqual(self.a("I identify as a first-generation professional (please select one):", "select",
+                                ["Yes", "No", "I don't wish to answer"]), "I don't wish to answer")
+        self.assertIsNone(ans(q("Are you a first-generation college student? Tell us more."), profile=STUDENT).value)
+
+    def test_employment_and_education_blocks(self):
+        months = [m.capitalize() for m in ("january", "february", "march", "april", "may", "june")]
+        job = lambda label, kind="text", **kw: ans(q(label, kind, section="employment", **kw), profile=STUDENT)
+        edu = lambda label, kind="text", **kw: ans(q(label, kind, section="education", **kw), profile=STUDENT)
+        # A past job's dates are never "Two weeks after an offer" or your graduation date.
+        self.assertIsNone(job("Start date month", "combobox").value)
+        self.assertIsNone(job("Start date year").value)
+        self.assertIsNone(job("End date year").value)
+        self.assertIsNone(ans(q("Start date year"), profile=STUDENT).value)  # no block info: still not availability
+        self.assertEqual(job("Company name").value, "Example Corp")
+        self.assertEqual(job("Title").value, "Software Engineer")
+        # The end of your degree is your graduation.
+        self.assertEqual(edu("End date year").value, "2028")
+        self.assertEqual(edu("End date month", "select", options=months).option, "May")
+        self.assertIsNone(edu("Start date year").value)
+
+    def test_how_heard_names_the_company_site_for_employer_postings(self):
+        opts = ["LinkedIn", "Glassdoor", "Indeed", "Gusto Blog", "Gusto Employee", "Gusto Website"]
+        question = q("How did you hear about this opportunity?", "checkboxes", opts)
+        ctx = dict(profile=STUDENT, bank=DEFAULT_ANSWERS)
+        on_site = Context(job={"source": "greenhouse", "company": "Gusto, Inc.", "title": "Finance Intern"}, **ctx)
+        self.assertEqual(answer(question, on_site).option, ["Gusto Website"])
+        via_board = Context(job={"source": "himalayas", "company": "Gusto, Inc.", "title": "Finance Intern"}, **ctx)
+        self.assertFalse(answer(question, via_board).resolved(question))  # found on a job board: don't claim the company site
+
+
 class SafetyTests(unittest.TestCase):
     def test_anti_bot_questions_are_left_to_you(self):
         for label in ["To prove you're not a bot auto-applying, what is 3+4?",

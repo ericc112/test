@@ -61,6 +61,8 @@ def relevant(job, search):
     titles, every word of one of them is in the job title."""
     if search.get("field") and not fields.classify(job, search)[0]:
         return False
+    if not fields.type_ok(job, search)[0]:
+        return False
     keywords = split_list(search.get("keywords"))
     if not keywords:
         return True
@@ -123,7 +125,13 @@ def exclusion(job, search):
         ok, why = fields.classify(job, search)
         if not ok:
             return why
+    ok, why = fields.type_ok(job, search)
+    if not ok:
+        return why
     title = job.get("title") or ""
+    if fields.job_type(job) == "internship" and fields.season_over(title, datetime.now(timezone.utc).date()):
+        season, year = fields.season_of(title)
+        return f"{season} {year} has already passed"
     for ex in split_list(search.get("exclude")):
         if contains_phrase(title, ex):
             return f"Title contains '{ex}'"
@@ -149,6 +157,8 @@ def score(job, search, profile):
     keywords = split_list(search.get("keywords"))
     in_field, area = fields.classify(job, search) if search.get("field") else (False, None)
     t_pts, kw = title_match(job.get("title", ""), keywords) if keywords else ((34 if in_field else 25), None)
+    if fields.job_type(job) == "internship":
+        reasons.append("Internship")
     if in_field:
         reasons.append(f"{area} role")
     if kw:
@@ -183,10 +193,21 @@ def score(job, search, profile):
     if job.get("ats") in DIRECT_APPLY:
         total += 5
         reasons.append("JobBot can apply directly")
+    season = fields.season_of(job.get("title"))
+    terms = split_list(profile.get("internship_terms"))
+    if season and terms and fields.job_type(job) == "internship":
+        label = f"{season[0]} {season[1]}"
+        if any(norm(t) == norm(label) for t in terms):
+            total += 5
+            reasons.append(f"{label}, the term you want")
+        else:
+            total -= 10
+            reasons.append(f"{label} (you want {', '.join(terms)})")
     if job.get("salary_text"):
         reasons.append(f"Pay: {job['salary_text']}")
     min_salary = search.get("min_salary") or 0
     top = job.get("salary_max") or job.get("salary_min")
     if min_salary and top and top < min_salary:
         total -= 25
-    return max(0, min(100, round(total))), reasons, exclusion(job, search)
+    excluded = exclusion(job, search) or fields.level_mismatch(job, profile)
+    return max(0, min(100, round(total))), reasons, excluded

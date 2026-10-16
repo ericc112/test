@@ -18,9 +18,14 @@ def _job_key(j):
 
 
 def keys(search):
+    wanted = fields.wanted_types(search)
     if search.get("keywords"):
-        return list(search["keywords"])
-    return fields.source_terms(search, "search") if search.get("field") else []
+        base = list(search["keywords"])
+        return ([f"{k} intern" for k in base] if "internship" in wanted else []) + (base if "full_time" in wanted else [])
+    if not search.get("field"):
+        return ["intern", "internship"] if "internship" in wanted else []
+    return ((fields.source_terms(search, "intern_search") if "internship" in wanted else [])
+            + (fields.source_terms(search, "search") if "full_time" in wanted else []))
 
 
 def fetch(keyword, search):
@@ -41,7 +46,7 @@ def fetch(keyword, search):
                 posted_at=iso(j.get("pubDate")),
                 salary_min=lo if annual else None, salary_max=hi if annual else None,
                 salary_text=f"{j.get('currency') or ''} {lo}-{hi}".strip() if lo else None,
-                tags=(j.get("seniority") or [])[:4],
+                tags=[t for t in [j.get("employmentType")] + (j.get("seniority") or [])[:4] if t],
                 categories=(j.get("parentCategories") or []) + (j.get("categories") or [])[:8],
             ))
         if len(jobs) < 20:

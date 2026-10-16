@@ -134,6 +134,14 @@ $("#btn-search").addEventListener("click", () => guard(async () => {
 
 // ------------------------------------------------------------------ job rows
 const areaOf = (j) => ((j.score_reasons || []).find((r) => / role$/.test(r)) || "").replace(/ role$/, "");
+const isIntern = (j) => (j.score_reasons || []).includes("Internship");
+const SEASON_RE = /\b(spring|summer|fall|autumn|winter)\b[\s,/-]*'?(20\d\d|\d\d)\b|\b(20\d\d)\b.{0,40}?\b(spring|summer|fall|autumn|winter)\b/i;
+function seasonOf(title) {
+  const m = SEASON_RE.exec(title || "");
+  if (!m) return "";
+  const s = (m[1] || m[4]).toLowerCase(), y = m[2] || m[3];
+  return `${s === "autumn" ? "Fall" : s[0].toUpperCase() + s.slice(1)} ${y.length === 2 ? "20" + y : y}`;
+}
 
 function postedText(j) {
   if (!j.posted_at) return "";
@@ -155,6 +163,7 @@ function jobRow(j, { select = false } = {}) {
       <div class="title">${esc(j.title)}</div>
       <div class="meta">
         <strong>${esc(j.company)}</strong>
+        ${isIntern(j) ? `<span class="chip accent">Internship${seasonOf(j.title) ? " · " + esc(seasonOf(j.title)) : ""}</span>` : ""}
         ${area ? `<span class="chip">${esc(area)}</span>` : ""}
         ${j.location ? `<span>${esc(j.location.slice(0, 60))}</span>` : ""}
         ${j.salary_text ? `<span>${esc(j.salary_text)}</span>` : ""}
@@ -214,7 +223,7 @@ async function viewDashboard(el) {
   const steps = [
     [setup.profile, "Fill in your profile", "#/profile", "Name, contact details, work authorization."],
     [setup.resume, "Upload your resume", "#/profile", "Attached to every application."],
-    [setup.keywords, "Choose your field and the areas you want", "#/search", "Business major: finance, marketing, sales, operations…"],
+    [setup.keywords, "Choose internships or jobs, and your business areas", "#/search", "Finance, marketing, sales, operations…"],
     [setup.companies, "Pick the employers to watch", "#/search", "Their own job sites are checked every few minutes for new postings."],
     [setup.automation, "Turn on automation", "#/settings", "Searches on a schedule and fills applications for you."],
   ];
@@ -236,7 +245,7 @@ async function viewDashboard(el) {
           ${canAlert ? `<button class="btn sm" id="alerts">Turn on desktop alerts</button>` : ""}</div></div>
       ${fresh.lag_median_min != null ? `<p class="small" style="margin-top:-4px">New postings reached you a median of <b>${fmtLag(fresh.lag_median_min)}</b> after the employer published them (${fresh.lag_samples} this week).</p>` : ""}
       <div class="job-list" id="fresh">${fresh.latest.length ? fresh.latest.map((j) => jobRow(j)).join("")
-        : `<div class="empty">Nothing new yet. JobBot checks your employers' own job sites and lists new business roles here the moment they're published, before Indeed or LinkedIn have them.</div>`}</div>
+        : `<div class="empty">Nothing new yet. JobBot checks your employers' own job sites and lists new business internships and roles here the moment they're published, before Indeed or LinkedIn have them.</div>`}</div>
     </div>
     <div class="tiles">
       ${tile(c.new || 0, "New matches", "#/jobs")}
@@ -598,7 +607,16 @@ const PROFILE_SECTIONS = [
   ["Experience", [["current_company", "Current or most recent employer"], ["current_title", "Current or most recent title"],
     ["years_experience", "Years of experience", "number"], ["skills", "Skills", "textarea", "Comma-separated. Used to rank jobs, e.g. Excel, financial modeling, Salesforce, SQL, Tableau, PowerPoint."],
     ["summary", "Short professional summary", "textarea", "One or two sentences. Used in your cover letter template.", "wide"]]],
-  ["Education", [["school", "School"], ["degree", "Highest degree", "text", "e.g. Bachelor's, MBA"],
+  ["Student", [
+    ["currently_enrolled", "I'm currently a student", "bool"],
+    ["school_year", "Year in school", "select", "", "", [["", "Choose…"], ["Freshman", "Freshman"], ["Sophomore", "Sophomore"],
+      ["Junior", "Junior"], ["Senior", "Senior"], ["Graduate student", "Graduate student"]]],
+    ["expected_graduation", "Expected graduation", "text", "Month and year, e.g. May 2028"],
+    ["gpa", "GPA", "text", "e.g. 3.6. Leave blank to answer GPA questions yourself."],
+    ["minor", "Minor"],
+    ["internship_terms", "Internship terms you want", "text", "e.g. Summer 2027. Matching internships rank higher; others rank lower."]],
+    "Used for internship questions: graduation date, year in school, GPA, enrollment and which term you're applying for."],
+  ["Education", [["school", "School"], ["degree", "Degree you're earning", "text", "e.g. Bachelor's, BBA"],
     ["discipline", "Major / field of study", "text", "e.g. Business Administration, Finance, Marketing"], ["graduation_year", "Graduation year"]]],
   ["Work eligibility & preferences", [
     ["work_authorized", "I'm legally authorized to work in the countries I'm applying to", "bool"],
@@ -717,7 +735,17 @@ async function viewSearch(el) {
   const ATS = [["greenhouse", "Greenhouse"], ["lever", "Lever"], ["ashby", "Ashby"], ["workday", "Workday"]];
   const areas = fieldDefs.business.areas;
   const chosen = new Set(s.families && s.families.length ? s.families : areas.map((a) => a.key));
+  const types = new Set(s.job_types && s.job_types.length ? s.job_types : ["internship"]);
   el.innerHTML = `<form id="sf" class="stack">
+    <div class="card"><h2 class="section-title">What you're looking for</h2>
+      <div class="grid grid-2" style="gap:6px 16px">
+        <label class="check"><input type="checkbox" name="type_internship" ${types.has("internship") ? "checked" : ""}>
+          <span>Internships<span class="hint">Summer, semester and co-op internships, including Summer Analyst programs.</span></span></label>
+        <label class="check"><input type="checkbox" name="type_full_time" ${types.has("full_time") ? "checked" : ""}>
+          <span>Full-time jobs<span class="hint">Turn this on when you're ready for full-time roles.</span></span></label>
+      </div>
+      <p class="muted small" style="margin-bottom:0">Part-time, seasonal and temporary roles are always left out. Internships for a season that has already passed are hidden.</p>
+    </div>
     <div class="card"><h2 class="section-title">Your field</h2>
       <div class="form-grid">
         <label class="field">Only show jobs for
@@ -735,7 +763,7 @@ async function viewSearch(el) {
     <div class="card"><h2 class="section-title">Narrow it down (optional)</h2>
       <div class="form-grid">
         <label class="field">Only these job titles <span class="hint">One per line, e.g. Financial Analyst. Leave empty for every role in your areas.</span><textarea name="keywords">${esc(lines(s.keywords))}</textarea></label>
-        <label class="field">Exclude titles containing <span class="hint">One per line, e.g. senior, director, intern</span><textarea name="exclude">${esc(lines(s.exclude))}</textarea></label>
+        <label class="field">Exclude titles containing <span class="hint">One per line, e.g. senior, director</span><textarea name="exclude">${esc(lines(s.exclude))}</textarea></label>
         <label class="field">Locations <span class="hint">One per line. Include “Remote” to accept remote jobs.</span><textarea name="locations">${esc(lines(s.locations))}</textarea></label>
         <div class="stack">
           <label class="field">Remote / on-site<select name="remote">
@@ -775,8 +803,10 @@ async function viewSearch(el) {
   const save = async (msg) => {
     const families = areas.map((a) => a.key).filter((k) => form.elements[`area_${k}`].checked);
     if (form.field.value && !families.length) throw new Error("Pick at least one business area");
+    const job_types = ["internship", "full_time"].filter((t) => form.elements[`type_${t}`].checked);
+    if (!job_types.length) throw new Error("Pick internships, full-time jobs, or both");
     const out = {
-      ...s, field: form.field.value, families,
+      ...s, field: form.field.value, families, job_types,
       keywords: split(form.keywords.value), exclude: split(form.exclude.value), locations: split(form.locations.value),
       remote: form.remote.value, min_salary: +form.min_salary.value || 0, max_age_days: +form.max_age_days.value || 0,
       sources: Object.fromEntries(sources.map((src) => [src.name, form.elements[`src_${src.name}`].checked])),
@@ -915,7 +945,7 @@ async function route() {
   try { await VIEWS[v](el); } catch (e) { el.innerHTML = `<div class="notice bad">${esc(e.message)}</div>`; }
 }
 
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", () => { closeDrawer(); route(); });
 refreshState();
 route();
 setInterval(refreshState, 4000);

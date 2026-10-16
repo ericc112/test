@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 from jobbot import scoring
 
-SEARCH = {"keywords": ["software engineer", "backend engineer"], "exclude": ["intern", "manager"],
+SEARCH = {"job_types": ["full_time"], "keywords": ["software engineer", "backend engineer"], "exclude": ["intern", "manager"],
           "locations": ["Remote", "United States"], "remote": "any", "min_salary": 120000, "max_age_days": 30}
 PROFILE = {"skills": "python, go, aws, kubernetes"}
 
@@ -26,7 +26,7 @@ class ScoringTests(unittest.TestCase):
         self.assertFalse(scoring.relevant(job(title="Account Executive"), SEARCH))
 
     def test_exclusions(self):
-        self.assertIn("intern", scoring.exclusion(job(title="Software Engineer Intern"), SEARCH))
+        self.assertIn("intern", scoring.exclusion(job(title="Software Engineer Intern"), SEARCH).lower())
         old = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
         self.assertIn("days ago", scoring.exclusion(job(posted_at=old), SEARCH))
         self.assertIn("below", scoring.exclusion(job(salary_max=90000), SEARCH))
@@ -62,6 +62,24 @@ class ScoringTests(unittest.TestCase):
 
     def test_unstated_location_is_neutral(self):
         self.assertEqual(scoring.location_fit(job(remote=False, location="Hybrid"), SEARCH), (5, "Location not stated"))
+
+    def test_internship_mode(self):
+        interns = {"job_types": ["internship"], "field": "business", "locations": ["United States"]}
+        today_title = "Summer 2027 Finance Intern"
+        s, reasons, excluded = scoring.score(job(title=today_title, location="New York, NY", remote=False), interns,
+                                             {"internship_terms": "Summer 2027"})
+        self.assertIsNone(excluded)
+        self.assertIn("Internship", reasons)
+        self.assertIn("Summer 2027, the term you want", reasons)
+        self.assertEqual(scoring.exclusion(job(title="Financial Analyst"), interns), "Not an internship")
+        self.assertIn("has already passed", scoring.exclusion(job(title="Summer 2025 Finance Intern"), interns))
+        other, reasons2, _ = scoring.score(job(title="Spring 2027 Finance Intern", location="New York, NY", remote=False),
+                                           interns, {"internship_terms": "Summer 2027"})
+        self.assertLess(other, s)
+        self.assertIn("Spring 2027 (you want Summer 2027)", reasons2)
+        both = dict(interns, job_types=["internship", "full_time"])
+        self.assertIsNone(scoring.exclusion(job(title="Financial Analyst"), both))
+        self.assertEqual(scoring.exclusion(job(title="Part-Time Financial Analyst"), both), "Part-time or temporary")
 
     def test_location_mismatch_is_penalised(self):
         here, _, _ = scoring.score(job(remote=False, location="Austin, TX, USA"), SEARCH, PROFILE)

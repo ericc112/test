@@ -55,7 +55,7 @@ def wd_page(ids, posted="Posted Today"):
 
 class WorkdayTests(unittest.TestCase):
     KEY = "acme|wd5|Careers"
-    SEARCH = {"field": "business"}
+    SEARCH = {"field": "business", "job_types": ["full_time"]}
 
     def setUp(self):
         workday._looked_at.clear()
@@ -82,6 +82,35 @@ class WorkdayTests(unittest.TestCase):
         self.assertEqual(get.call_count, 1)  # the engineer never got a detail request
         self.assertEqual(post.call_count, 1)  # short page: no more pages
 
+    def test_keys_per_job_type(self):
+        s = {"companies": {"workday": ["acme|wd5|Careers"]}}
+        self.assertEqual(workday.keys(dict(s, job_types=["internship"])), ["acme|wd5|Careers#intern"])
+        self.assertEqual(workday.keys(dict(s, job_types=["internship", "full_time"])),
+                         ["acme|wd5|Careers", "acme|wd5|Careers#intern"])
+        self.assertEqual(workday.id_prefix("acme|wd5|Careers#intern"), "workday:acme:")
+
+    def test_intern_feed_uses_the_sites_intern_filter(self):
+        workday._intern_facets.clear()
+        facets = {"facets": [
+            {"facetParameter": "locations", "values": [{"id": "L1", "descriptor": "Summerville, SC"}]},
+            {"facetParameter": "jobFamilyGroup", "values": [{"id": "F1", "descriptor": "Internal Audit"}]},
+            {"facetParameter": "workerSubType", "values": [{"id": "W1", "descriptor": "Intern (Fixed Term)"},
+                                                            {"id": "W2", "descriptor": "Regular"}]}],
+            "jobPostings": []}
+        interns = wd_page([("R7", "Corporate Banking Summer Program")])
+        bodies = []
+
+        def post(url, body, **kw):
+            bodies.append(body)
+            return facets if body["limit"] == 1 else interns
+
+        with mock.patch.object(http, "post_json", side_effect=post), \
+             mock.patch.object(http, "get_json", return_value={"jobPostingInfo": {}}):
+            jobs = workday.fetch("acme|wd5|Careers#intern", {"field": "business", "job_types": ["internship"]})
+        self.assertEqual(bodies[1]["appliedFacets"], {"workerSubType": ["W1"]})
+        self.assertEqual([j["title"] for j in jobs], ["Corporate Banking Summer Program"])
+        self.assertIn("Internship", jobs[0]["tags"])
+
     def test_paging_stops_once_caught_up(self):
         full = wd_page([(f"R{i}", "Financial Analyst") for i in range(20)])
         known = {f"workday:acme:R{i}" for i in range(20)}
@@ -96,7 +125,7 @@ class WatcherTests(unittest.TestCase):
         self.tmp = TempData()
         db.set_setting("profile", PROFILE)
         s = db.get_setting("search")
-        s.update(sources={n: n == "greenhouse" for n in sources.REGISTRY}, locations=["Remote"],
+        s.update(sources={n: n == "greenhouse" for n in sources.REGISTRY}, locations=["Remote"], job_types=["full_time"],
                  companies={"greenhouse": ["acme"], "lever": [], "ashby": [], "workday": []})
         db.set_setting("search", s)
         db.set_setting("automation", dict(db.get_setting("automation"), watch_minutes=5, prepare_min_score=10))

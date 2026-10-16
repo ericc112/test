@@ -130,6 +130,8 @@ class Claude:
             item = {"key": q.key, "question": q.label, "type": q.kind}
             if q.options:
                 item["options"] = q.options
+            if q.section:
+                item["section"] = q.section  # e.g. "Start date year" of a past job, not availability
             if q.kind == "checkboxes":
                 item["note"] = "Several options may apply; separate them with ' | '."
             items.append(item)

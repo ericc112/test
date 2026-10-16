@@ -40,6 +40,13 @@ DEFAULT_PROFILE = {
     "degree": "",
     "discipline": "",
     "graduation_year": "",
+    # Students
+    "currently_enrolled": True,
+    "school_year": "",  # Freshman | Sophomore | Junior | Senior | Graduate student
+    "expected_graduation": "",  # e.g. "May 2028"
+    "gpa": "",
+    "minor": "",
+    "internship_terms": "",  # e.g. "Summer 2027"
     "languages": "English",
     "skills": "",
     "summary": "",
@@ -81,11 +88,13 @@ DEFAULT_ANSWERS = [
     {"q": "security clearance", "a": "No"},
     {"q": r"non-?compete|non-?solicit", "a": "No", "regex": True},
     {
-        "q": r"(ever|previously|formerly|currently) (been )?(employed|worked) (by|for|at)|former employee",
+        "q": r"(ever|previously|formerly|currently) (been )?(employed|work(ed|ing)) (by|for|at)|former employee",
         "a": "No",
         "regex": True,
     },
     {"q": r"(were|are) you referred|referred by|employee referral", "a": "No", "regex": True},
+    {"q": r"available .{0,25}(full[- ]time|40 hours)|commit to (the )?(full|entire)|(10|11|12|ten|eleven|twelve)[- ]week",
+     "a": "Yes", "regex": True},
 ]
 
 DEFAULT_SEARCH = {
@@ -93,9 +102,11 @@ DEFAULT_SEARCH = {
     "field": "business",
     # Business areas to include (all by default).
     "families": ["finance", "consulting", "operations", "marketing", "sales", "hr", "management", "analytics"],
+    # internship and/or full_time. Part-time, seasonal and temporary roles never match.
+    "job_types": ["internship"],
     # Optional: only titles containing every word of one of these lines.
     "keywords": [],
-    "exclude": ["director", "vice president", "vp", "head of", "part time", "part-time", "seasonal", "temporary"],
+    "exclude": ["director", "vice president", "vp", "head of"],
     "locations": ["Remote", "United States"],
     # any | remote_only | onsite_only
     "remote": "any",

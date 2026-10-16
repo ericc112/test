@@ -51,7 +51,7 @@ class SourceParserTests(unittest.TestCase):
         self.patch.stop()
 
     def test_greenhouse(self):
-        [j] = sources.REGISTRY["greenhouse"].fetch("acme", {"field": "business"})
+        [j] = sources.REGISTRY["greenhouse"].fetch("acme", {"field": "business", "job_types": ["full_time"]})
         self.assertEqual(j["id"], "greenhouse:acme:101")
         self.assertEqual(j["ats"], "greenhouse")
         self.assertEqual(j["apply_url"], "https://job-boards.greenhouse.io/embed/job_app?for=acme&token=101")
@@ -65,10 +65,13 @@ class SourceParserTests(unittest.TestCase):
         j = greenhouse._job("acme", {"id": 1, "title": "BDR", "location": {"name": "Hybrid"}, "content": "",
                                      "offices": [{"name": "Dubai, United Arab Emirates"}]})
         self.assertEqual(j["location"], "Hybrid · Dubai, United Arab Emirates")
+        same = greenhouse._job("acme", {"id": 2, "title": "BDR", "location": {"name": "United States"}, "content": "",
+                                        "offices": [{"name": "United States"}]})
+        self.assertEqual(same["location"], "United States")
 
     def test_greenhouse_only_fetches_details_for_new_matching_jobs(self):
         gh = sources.REGISTRY["greenhouse"]
-        self.assertEqual(gh.fetch("acme", {"field": "business"}, known={"greenhouse:acme:101"}), [])
+        self.assertEqual(gh.fetch("acme", {"field": "business", "job_types": ["full_time"]}, known={"greenhouse:acme:101"}), [])
         urls = [c.args[0] for c in http.get_json.call_args_list]
         self.assertNotIn("https://boards-api.greenhouse.io/v1/boards/acme/jobs/102", urls)  # engineer: never detailed
 
@@ -99,7 +102,8 @@ class SourceParserTests(unittest.TestCase):
 
 
 class FieldAwareKeysTests(unittest.TestCase):
-    BUSINESS = {"field": "business", "families": ["finance", "marketing"], "keywords": [], "locations": ["Remote"]}
+    BUSINESS = {"field": "business", "families": ["finance", "marketing"], "keywords": [], "locations": ["Remote"],
+                "job_types": ["full_time"]}
 
     def test_keyword_boards_use_business_areas(self):
         self.assertEqual(sources.REGISTRY["jobicy"].keys(self.BUSINESS), ["industry:accounting-finance", "industry:marketing"])
@@ -110,6 +114,16 @@ class FieldAwareKeysTests(unittest.TestCase):
         s = dict(self.BUSINESS, keywords=["Brand Manager"])
         self.assertEqual(sources.REGISTRY["jobicy"].keys(s), ["tag:Brand Manager"])
         self.assertEqual(sources.REGISTRY["himalayas"].keys(s), ["Brand Manager"])
+
+    def test_internship_mode_queries(self):
+        s = dict(self.BUSINESS, job_types=["internship"])
+        self.assertEqual(sources.REGISTRY["jobicy"].keys(s), ["tag:internship"])
+        self.assertEqual(sources.REGISTRY["himalayas"].keys(s), ["finance intern", "accounting intern", "marketing intern"])
+        with mock.patch.object(http, "get_json", return_value={"results": [], "page_count": 1}) as get:
+            sources.REGISTRY["themuse"].fetch("Flexible / Remote", s)
+        self.assertEqual(get.call_args.args[1]["level"], "Internship")
+        both = dict(s, job_types=["internship", "full_time"])
+        self.assertEqual(sources.REGISTRY["jobicy"].keys(both), ["tag:internship", "industry:accounting-finance", "industry:marketing"])
 
     def test_muse_sends_business_categories(self):
         with mock.patch.object(http, "get_json", return_value={"results": [], "page_count": 1}) as get:

@@ -9,9 +9,10 @@ A board key is "tenant|wdN|site", e.g. "capitalone|wd12|Capital_One".
 """
 import re
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 
-from .. import config, scoring
+from .. import config, fields, scoring
 from ..textutil import html_to_text
 from . import display_name, http, iso, make_job, register
 
@@ -30,12 +31,28 @@ URL_RE = re.compile(r"https?://([\w-]+)\.(wd\d+)\.myworkdayjobs\.com/(?:[a-z]{2}
 NAMES = {slug.split("|")[0]: name for name, kind, slug in config.SUGGESTED_COMPANIES if kind == NAME}
 
 
+INTERN_FACET = re.compile(r"\bintern(ship)?s?\b|co-?op|student program", re.I)
+FACET_PRIORITY = ("workerSubType", "jobFamilyGroup", "jobFamily", "jobFamilies")
+FACET_TTL = 6 * 3600
+_intern_facets = {}  # key -> (fetched_at, {param: [ids]} or None)
+
+
 def keys(search):
-    return [k for k in search.get("companies", {}).get(NAME, []) if k.count("|") == 2]
+    """One feed per employer and job type: "tenant|wdN|site" (all jobs) and "...#intern"."""
+    wanted = fields.wanted_types(search)
+    out = []
+    for k in search.get("companies", {}).get(NAME, []):
+        if k.count("|") != 2:
+            continue
+        if "full_time" in wanted:
+            out.append(k)
+        if "internship" in wanted:
+            out.append(f"{k}#intern")
+    return out
 
 
 def parse_key(key):
-    tenant, wd, site = key.split("|")
+    tenant, wd, site = key.split("#")[0].split("|")
     return tenant, wd, site
 
 
@@ -64,6 +81,32 @@ def probe(key):
         return "jobPostings" in data
     except http.FetchError:
         return False
+
+
+def _walk(facets, param=None):
+    for f in facets or []:
+        p = f.get("facetParameter") or param
+        for v in f.get("values") or []:
+            if v.get("values"):
+                yield from _walk([{"facetParameter": v.get("facetParameter") or p, "values": v["values"]}], p)
+            else:
+                yield p, v
+
+
+def intern_facets(key):
+    """The site's own "Intern" filter (worker type or job family), e.g. {"workerSubType": ["…"]}."""
+    base = key.split("#")[0]
+    cached = _intern_facets.get(base)
+    if cached and time.time() - cached[0] < FACET_TTL:
+        return cached[1]
+    data = http.post_json(f"{_api(key)[1]}/jobs", {"appliedFacets": {}, "limit": 1, "offset": 0, "searchText": ""})
+    found = {}
+    for param, v in _walk(data.get("facets")):
+        if param in FACET_PRIORITY and v.get("id") and INTERN_FACET.search(v.get("descriptor") or ""):
+            found.setdefault(param, []).append(v["id"])
+    best = next(({p: found[p]} for p in FACET_PRIORITY if p in found), None)
+    _intern_facets[base] = (time.time(), best)
+    return best
 
 
 def posted_from_text(text, now=None):
@@ -95,9 +138,13 @@ def fetch(key, search, known=None):
     tenant, _, site = parse_key(key)
     base, api = _api(key)
     name = company_name(key)
+    facets, label = {}, []
+    if key.endswith("#intern"):
+        facets = intern_facets(key) or {}
+        label = ["Internship"] if facets else []  # no intern filter on this site: titles decide
     out, details_left = [], DETAIL_LIMIT
     for page in range(MAX_PAGES):
-        data = http.post_json(f"{api}/jobs", {"appliedFacets": {}, "limit": PAGE, "offset": page * PAGE, "searchText": ""})
+        data = http.post_json(f"{api}/jobs", {"appliedFacets": facets, "limit": PAGE, "offset": page * PAGE, "searchText": ""})
         posts = data.get("jobPostings") or []
         unseen = 0
         for p in posts:
@@ -107,7 +154,7 @@ def fetch(key, search, known=None):
                 NAME, f"{tenant}:{_job_key(p)}", p["title"], name, f"{base}/{site}{p['externalPath']}",
                 ats="manual", location=p.get("locationsText") or "",
                 remote="remote" in (p.get("locationsText") or "").lower(),
-                posted_at=posted_from_text(p.get("postedOn")),
+                posted_at=posted_from_text(p.get("postedOn")), tags=list(label),
             )
             if job["id"] in known:
                 continue
@@ -125,7 +172,7 @@ def fetch(key, search, known=None):
                     job["location"] = info.get("location") or job["location"]
                     job["remote"] = job["remote"] or (info.get("remoteType") or "").lower() == "remote"
                     job["apply_url"] = info.get("externalUrl") or job["url"]
-                    job["tags"] = [t for t in (info.get("timeType"), info.get("remoteType")) if t]
+                    job["tags"] = label + [t for t in (info.get("timeType"), info.get("remoteType")) if t]
                 except http.FetchError:
                     pass
             out.append(job)
