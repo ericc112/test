@@ -128,6 +128,12 @@ PrizePicks moves lines, adds props and pulls them all day. **The user wants the 
 
 ### Live (user, 10/15)
 Every open take has a **Live** button, and the takes list has one for all of them. It opens a sheet showing each take's stat so far against its line, the clock, the score, what it still needs, and the pace. Statuses are In progress, Already hit (an over that cleared), Busted (an under already over), Final and Not started. The data is `live/now`, written by `python3 -m edge live TAKES_DIR --out FILE`. That reads the same box scores the grader reads (`grade.*_value(..., live=True)`): NHL, MLB, NBA, NFL and soccer.
+- **Pulse:** the Live sheet has a Takes / Pulse switch. Each take in progress has a Pulse button that opens a chart of its stat over the game (a step for every change, the line dashed, the pace dotted) and the plays behind it, e.g. "Q1 6:19 · Towns makes 2-foot floater (+2 → 11)". The Pulse view is one feed of every tick across the takes, newest first, with the play that cleared an over or busted an under marked. The ticks (`ticks` on each `live/now` item) come from the play-by-play:
+  - NHL (`api-web.nhle.com .../play-by-play`): shots, goals, assists, points, hits, blocks and saves;
+  - MLB (`statsapi .../playByPlay`): total bases, hits, singles, home runs, H+R+RBI, hitter fantasy score without steals, strikeouts, walks, and pitcher strikeouts, hits allowed and walks;
+  - NBA (ESPN summary `plays`): points, rebounds, assists, threes and their combos.
+
+  Other stats and sports log each box-score change the watcher sees, with the clock at that moment. The watcher keeps its tick times in `FILE.mem.json`.
 - **When the page asks:** a tap on Live sends the comment "Live takes: refresh live/now..." when the data is over 90 s old, at most every 2 minutes. On that comment:
   1. list `takes` into a fresh folder;
   2. run `edge live` and `set live/now` (`if_version`);

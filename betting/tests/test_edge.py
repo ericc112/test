@@ -1067,6 +1067,31 @@ class LiveTakes(unittest.TestCase):
         self.assertEqual(verdict(0, 0.5, True, "post"), ("miss", ""))
         self.assertEqual(verdict(None, 0.5, True, "post"), ("void", "didn't play"))
 
+    def test_pulse_from_the_play_by_play(self):
+        from edge import live as L
+        nhl = {"plays": [
+            {"eventId": 1, "typeDescKey": "shot-on-goal", "periodDescriptor": {"number": 1}, "timeInPeriod": "05:00", "timeRemaining": "15:00",
+             "details": {"shootingPlayerId": 77, "shotType": "wrist", "goalieInNetId": 30}},
+            {"eventId": 2, "typeDescKey": "missed-shot", "periodDescriptor": {"number": 1}, "timeInPeriod": "06:00", "details": {"shootingPlayerId": 77}},
+            {"eventId": 3, "typeDescKey": "goal", "periodDescriptor": {"number": 2}, "timeInPeriod": "10:00", "timeRemaining": "10:00",
+             "details": {"scoringPlayerId": 77, "assist1PlayerId": 88, "goalieInNetId": 30}}]}
+        cache = {("nhlpbp", "9"): nhl}
+        sog = L.nhl_ticks("9", "77", "skater_sog", cache)
+        self.assertEqual([(t["x"], t["v"], t["c"]) for t in sog], [("Shot on goal (wrist)", 1, "1st 15:00"), ("Goal", 2, "2nd 10:00")])
+        self.assertAlmostEqual(sog[1]["f"], 0.5)
+        self.assertEqual([t["x"] for t in L.nhl_ticks("9", "88", "skater_points", cache)], ["Assist"])
+        self.assertEqual(len(L.nhl_ticks("9", "30", "goalie_saves", cache)), 1)      # a goal against isn't a save
+        mlb = {"allPlays": [
+            {"about": {"isComplete": True, "inning": 1, "halfInning": "bottom", "atBatIndex": 0}, "result": {"eventType": "double", "description": "Ortiz doubles.", "rbi": 1},
+             "matchup": {"batter": {"id": 5}, "pitcher": {"id": 9}}, "runners": []},
+            {"about": {"isComplete": True, "inning": 3, "halfInning": "bottom", "atBatIndex": 7}, "result": {"eventType": "single", "description": "Muncy singles; Ortiz scores.", "rbi": 1},
+             "matchup": {"batter": {"id": 6}, "pitcher": {"id": 9}}, "runners": [{"details": {"runner": {"id": 5}}, "movement": {"end": "score"}}]}]}
+        cache = {("mlbpbp", "1"): mlb}
+        self.assertEqual([t["v"] for t in L.mlb_ticks("1", "5", "batter_total_bases", cache)], [2])
+        self.assertEqual([t["d"] for t in L.mlb_ticks("1", "5", "batter_hrr", cache)], [2, 1])   # hit + RBI, then a run scored
+        self.assertEqual([t["v"] for t in L.mlb_ticks("1", "9", "pitcher_hits_allowed", cache)], [1, 2])
+        self.assertIsNone(L.mlb_ticks("1", "9", "pitcher_outs", cache))                 # no reader: the box-score changes instead
+
     def test_share_of_the_game_played(self):
         from edge.live import _clock_frac
         self.assertAlmostEqual(_clock_frac(2, "10:00", 3, 20), 0.5)                    # NHL halfway through the 2nd
