@@ -128,6 +128,11 @@ def exclusion(job, search):
     ok, why = fields.type_ok(job, search)
     if not ok:
         return why
+    if search.get("paid_only", True):
+        why = pay.unpaid_reason(job) if fields.job_type(job) == "internship" else \
+            ("Unpaid" if pay.status(job) == "unpaid" else None)
+        if why:
+            return why
     title = job.get("title") or ""
     if fields.job_type(job) == "internship" and fields.season_over(title, datetime.now(timezone.utc).date()):
         season, year = fields.season_of(title)

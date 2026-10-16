@@ -113,6 +113,9 @@ DEFAULT_SEARCH = {
     "remote": "any",
     "min_salary": 0,
     "max_age_days": 30,
+    # Paid work only (on by default): unpaid, credit-only and commission-only roles are hidden, and so are
+    # job-board internships that don't mention pay (employers' own career sites pay their interns).
+    "paid_only": True,
     "sources": {
         "greenhouse": True,
         "lever": True,

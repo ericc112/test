@@ -138,3 +138,44 @@ def fmt(lo, hi, estimate=False):
         return f"{round(x)}" if estimate or abs(x - round(x)) < 0.005 else f"{x:.2f}"
     a, b = one(lo), one(hi)
     return f"{'≈' if estimate else ''}${a}{'' if a == b else '–' + b}/hr"
+
+
+# ---------------------------------------------------------------- paid or not
+UNPAID = re.compile(
+    r"\bunpaid\b(?!\s+(leave|time off|vacation|holiday|sick))|\bnot (a )?paid\b|\bpro[- ]?bono (role|position|internship)s?\b|"
+    r"\bvoluntary internships?\b|\bvolunteer (position|role|internship|opportunity)\b|"
+    r"\b(academic|college|school|course|university) credit only\b|\bfor (academic|college|school|course) credit\b(?! or pay)|"
+    r"\bno (monetary )?(compensation|pay|salary)\b|\bwithout (pay|compensation|salary)\b|"
+    r"\b(commission|equity)[- ]only\b|\b100% commission\b",
+    re.I)
+PAID = re.compile(
+    r"\bpaid (internship|intern|position|role|opportunity|program)s?\b|\b(internship|position|role) is (a )?paid\b|"
+    r"\bcompetitive (pay|compensation|hourly|wage|salary|stipend)\b|\bhourly (pay|rate|wage)\b|"
+    r"\b(pay|salary|compensation|wage) range\b|\bbase (pay|salary)\b",
+    re.I)
+EMPLOYER_SITES = ("greenhouse", "lever", "ashby", "workday", "oracle")  # an employer's own careers site
+
+
+def status(job):
+    """"paid", "unpaid" or "unknown", from what the posting says."""
+    text = f"{job.get('title') or ''}\n{job.get('description') or ''}"
+    if UNPAID.search(text) or re.search(r"\bvolunteer\b", job.get("title") or "", re.I):
+        return "unpaid"
+    if hourly(job) or PAID.search(text):
+        return "paid"
+    return "unknown"
+
+
+def unpaid_reason(job):
+    """Why a job doesn't count as paid, or None.
+
+    Stated unpaid (or credit-, commission- or equity-only) work never counts. A posting that
+    doesn't mention pay counts only from an employer's own careers site (large employers pay
+    their interns); on job boards, that silence is where unpaid "internships" hide.
+    """
+    st = status(job)
+    if st == "unpaid":
+        return "Unpaid"
+    if st == "unknown" and job.get("source") not in EMPLOYER_SITES:
+        return "Pay not stated"
+    return None

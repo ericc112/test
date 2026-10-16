@@ -66,14 +66,14 @@ class ScoringTests(unittest.TestCase):
     def test_internship_mode(self):
         interns = {"job_types": ["internship"], "field": "business", "locations": ["United States"]}
         today_title = "Summer 2027 Finance Intern"
-        s, reasons, excluded = scoring.score(job(title=today_title, location="New York, NY", remote=False), interns,
+        s, reasons, excluded = scoring.score(job(title=today_title, location="New York, NY", remote=False, source="greenhouse"), interns,
                                              {"internship_terms": "Summer 2027"})
         self.assertIsNone(excluded)
         self.assertIn("Internship", reasons)
         self.assertIn("Summer 2027, the term you want", reasons)
         self.assertEqual(scoring.exclusion(job(title="Financial Analyst"), interns), "Not an internship")
-        self.assertIn("has already passed", scoring.exclusion(job(title="Summer 2025 Finance Intern"), interns))
-        other, reasons2, _ = scoring.score(job(title="Spring 2027 Finance Intern", location="New York, NY", remote=False),
+        self.assertIn("has already passed", scoring.exclusion(job(title="Summer 2025 Finance Intern", source="greenhouse"), interns))
+        other, reasons2, _ = scoring.score(job(title="Spring 2027 Finance Intern", location="New York, NY", remote=False, source="greenhouse"),
                                            interns, {"internship_terms": "Summer 2027"})
         self.assertLess(other, s)
         self.assertIn("Spring 2027 (you want Summer 2027)", reasons2)

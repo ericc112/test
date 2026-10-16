@@ -61,5 +61,37 @@ class PayTests(unittest.TestCase):
         self.assertIn("Pay: $25/hr", reasons)
 
 
+class PaidOnlyTests(unittest.TestCase):
+    INTERNS = {"field": "business", "job_types": ["internship"]}
+
+    def intern(self, description, source="himalayas", title="Marketing Intern"):
+        return {"title": title, "description": description, "source": source, "location": "Remote", "remote": True}
+
+    def test_stated_unpaid_work_is_hidden_everywhere(self):
+        for text in ["Compensation: Unpaid, designed for educational purposes only.",
+                     "Please note that this is an unpaid internship.",
+                     "Compensation: This is not a paid internship.",
+                     "All roles are pro-bono (unpaid) positions.",
+                     "This internship is for academic credit only.",
+                     "Compensation is commission-only."]:
+            self.assertEqual(pay.status(self.intern(text)), "unpaid", text)
+            self.assertEqual(scoring.exclusion(self.intern(text, source="workday"), self.INTERNS), "Unpaid", text)
+        self.assertEqual(pay.status(self.intern("", title="Executive Marketing Intern/Volunteer")), "unpaid")
+
+    def test_benefits_wording_is_not_unpaid(self):
+        for text in ["Volunteer time off and employee resource groups.", "Up to 12 weeks of unpaid leave.",
+                     "Opportunities to join volunteer activities."]:
+            self.assertNotEqual(pay.status(self.intern(text)), "unpaid", text)
+
+    def test_job_boards_must_say_it_is_paid(self):
+        self.assertEqual(scoring.exclusion(self.intern("Great team, learn a lot."), self.INTERNS), "Pay not stated")
+        self.assertIsNone(scoring.exclusion(self.intern("This is a paid internship."), self.INTERNS))
+        self.assertIsNone(scoring.exclusion(self.intern("Pay: $20 per hour"), self.INTERNS))
+        # An employer's own careers site: large employers pay their interns.
+        self.assertIsNone(scoring.exclusion(self.intern("Great team.", source="workday"), self.INTERNS))
+        # Your choice: switch it off to see everything except stated-unpaid roles... and those too.
+        self.assertIsNone(scoring.exclusion(self.intern("Great team."), dict(self.INTERNS, paid_only=False)))
+
+
 if __name__ == "__main__":
     unittest.main()

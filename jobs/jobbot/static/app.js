@@ -744,6 +744,8 @@ async function viewSearch(el) {
           <span>Internships<span class="hint">Summer, semester and co-op internships, including Summer Analyst programs.</span></span></label>
         <label class="check"><input type="checkbox" name="type_full_time" ${types.has("full_time") ? "checked" : ""}>
           <span>Full-time jobs<span class="hint">Turn this on when you're ready for full-time roles.</span></span></label>
+        <label class="check"><input type="checkbox" name="paid_only" ${s.paid_only !== false ? "checked" : ""}>
+          <span>Paid only<span class="hint">Unpaid, credit-only and commission-only roles are hidden. So are job-board internships that don't say they're paid; internships on employers' own career sites stay.</span></span></label>
       </div>
       <p class="muted small" style="margin-bottom:0">Part-time, seasonal and temporary roles are always left out. Internships for a season that has already passed are hidden.</p>
     </div>
@@ -807,7 +809,7 @@ async function viewSearch(el) {
     const job_types = ["internship", "full_time"].filter((t) => form.elements[`type_${t}`].checked);
     if (!job_types.length) throw new Error("Pick internships, full-time jobs, or both");
     const out = {
-      ...s, field: form.field.value, families, job_types,
+      ...s, field: form.field.value, families, job_types, paid_only: form.paid_only.checked,
       keywords: split(form.keywords.value), exclude: split(form.exclude.value), locations: split(form.locations.value),
       remote: form.remote.value, min_salary: +form.min_salary.value || 0, max_age_days: +form.max_age_days.value || 0,
       sources: Object.fromEntries(sources.map((src) => [src.name, form.elements[`src_${src.name}`].checked])),
