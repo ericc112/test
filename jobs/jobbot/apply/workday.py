@@ -14,6 +14,7 @@ anything it can't answer, and it never touches Workday's hidden bot-trap field.
 """
 import os
 import re
+from datetime import date
 from pathlib import Path
 
 from ..answers import Question, answer_all, as_dict, missing
@@ -34,6 +35,7 @@ EMAIL_CHOICE = r"^\s*(sign in|continue|log in) with email\s*$"
 READY_JS = f"""(sel) => !!document.querySelector(sel) || /{WENT_WRONG}/i.test(document.body ? document.body.innerText : "")
   || [...document.querySelectorAll("button")].some((b) => /{EMAIL_CHOICE}/i.test(b.innerText))"""
 SKILLS = re.compile(r"^(type to )?add (your )?skills|^(your )?skills$")
+SOON = re.compile(r"immediately|as soon as|\basap\b|right away", re.I)
 NO_ITEMS = re.compile(r"^no items\b", re.I)
 PASSWORD_RULES = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$")
 
@@ -387,6 +389,8 @@ class WorkdayEngine(Engine):
                         a.note = f"Chose “{picked}” in the second list"
                 page.keyboard.press("Escape")
                 return True
+            if q.input_type in ("wd_date", "month", "wd_year") and SOON.search(str(a.value)):
+                a.value = date.today().isoformat() if q.input_type == "wd_date" else date.today().strftime("%Y-%m")  # "Immediately"
             if q.input_type == "wd_date":  # month / day / year boxes: each one clicked and typed, as a person would
                 m = re.match(r"(\d{4})-(\d{2})-(\d{2})", str(a.value))
                 if not m:

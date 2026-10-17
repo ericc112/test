@@ -165,6 +165,23 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(ans(q("Highest level of education", "select", ["Master's Degree", "Bachelor's Degree"]), profile=me).option,
                          "Bachelor's Degree")
 
+    def test_graduation_date_and_degree_type_come_before_degree_and_enrollment(self):
+        me = dict(PROFILE, degree="Bachelor's", degree_type="BBA", expected_graduation="May 2027", graduation_year="")
+        tyson = ("Expected Graduation / Graduation Date? If you are continuing education further than your current degree "
+                 "program, enter your expected graduation date for that future program")
+        self.assertEqual(ans(q(tyson, input_type="wd_date"), profile=me).value, "2027-05-01")
+        merck = ["Bachelors", "Masters", "MBA", "Ph.D./Doctorate", "I am not currently pursing a degree"]
+        self.assertEqual(ans(q("Please select the degree type you are currently pursuing", "select", merck), profile=me).option,
+                         "Bachelors")
+
+    def test_no_sponsorship_never_claims_a_temporary_visa(self):
+        me = dict(PROFILE, needs_sponsorship=False)
+        merck = ["Yes", "No – I hold a temporary visa status that provides work authorization through OPT or CPT",
+                 "No – I am a U.S. citizen, national, permanent resident, refugee or asylee"]
+        label = "Will you require our Company to provide immigration sponsorship now or in the future?"
+        self.assertEqual(ans(q(label, "select", merck), profile=me).option, merck[2])
+        self.assertEqual(ans(q(label, "select", ["Yes", "No"]), profile=me).option, "No")
+
     def test_school_falls_back_to_other(self):
         a = ans(q("Which university did you attend?", "select", ["MIT", "Stanford", "Other (School Not Listed)"]))
         self.assertEqual(a.option, "Other (School Not Listed)")

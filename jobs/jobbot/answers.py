@@ -372,6 +372,18 @@ def _veteran(q, c):
     return _eeo("eeo_veteran")(q, c)
 
 
+TEMPORARY_STATUS = re.compile(r"temporary|i (hold|have) an? .{0,30}visa|on an? .{0,20}visa|\bopt\b|\bcpt\b|\bstem\b|h-?1b|\bead\b|\bf-?1\b", re.I)
+
+
+def _sponsorship(q, c):
+    """No sponsorship needed is a plain "No": never "No – I hold a temporary visa status that provides work
+    authorization", which some forms list first among several kinds of No."""
+    if c.profile.get("needs_sponsorship"):
+        return "Yes"
+    nos = [o for o in q.options or [] if re.match(r"\s*no\b", o, re.I)]
+    return next((o for o in nos if not TEMPORARY_STATUS.search(o)), "No")
+
+
 def _blank(q, c):
     return Answer("", "blank")  # should be empty: clear anything already in it
 
@@ -398,8 +410,7 @@ RULES = [
      r"(receive|get) (future )?(updates|communications|news|emails)", CHOICE, lambda q, c: yn(c.profile.get("marketing_opt_in"))),
     # Work authorisation and visas. Sponsorship first: "require sponsorship for work authorization" isn't
     # asking whether you're authorized.
-    (r"sponsor|\bstem opt\b|optional practical training|curricular practical training|\bcpt\b",
-     ANY, lambda q, c: yn(c.profile.get("needs_sponsorship"))),
+    (r"sponsor|\bstem opt\b|optional practical training|curricular practical training|\bcpt\b", ANY, _sponsorship),
     (r"(do|does) you (currently )?(have|hold|possess).{0,40}(work permit|visa|authori[sz]ation|right to work)",
      ANY, lambda q, c: yn(c.profile.get("work_authorized"))),
     (r"authori[sz]ed (to work|for employment)|legally authori[sz]ed|eligible to work|right to work|work authori[sz]ation|"
@@ -431,6 +442,10 @@ RULES = [
     (r"have you graduated|already graduated", CHOICE, lambda q, c: yn(not c.profile.get("currently_enrolled"))),
     (r"return(ing)? to (school|university|college|campus)|continue (your|with) (studies|education|degree)",
      CHOICE, _enrolled),
+    # Before "currently pursuing" and "degree": "Please select the degree type you are currently pursuing",
+    # "Expected Graduation / Graduation Date? If you are continuing ... your current degree program".
+    (r"\bgraduation\b.{0,25}\bdate\b|expected graduation|anticipated graduation", ANY, _graduation),
+    (r"degree type|type of degree|which degree|what degree", ANY, _degree),
     (r"currently (enrolled|pursuing|attending|a student|studying)|are you (a |currently a |currently )?(current |full[- ]time )?"
      r"(student|enrolled)|enrolled (in|at) (a|an|your)|pursuing (a|an|your) .{0,30}degree", CHOICE | {"text"}, _enrolled),
     (r"(year|level|standing) (in|of) (school|study|college|university|program)|class standing|"
