@@ -1,6 +1,6 @@
 # JobBot
 
-A local web app that searches job boards for you, ranks what it finds against your profile, and fills in (and, if you allow it, submits) applications.
+A local web app that watches employers' own career sites for you, ranks what it finds against your profile, and fills in (and, if you allow it, submits) applications.
 
 It's set up for **business majors looking for internships**. Full-time jobs are one checkbox away in **Search setup** (*What you're looking for*), for when you graduate. It only shows and applies to roles that suit a business degree (finance & accounting, consulting & strategy, operations & supply chain, marketing & communications, sales & business development, HR & people, project & product management, and business analytics). Engineering, design, healthcare, trades, hospitality and similar roles are filtered out. You can narrow it to some of those areas, list specific titles, or switch the filter off.
 
@@ -128,7 +128,7 @@ Filling in saves a draft in your account with that employer and stops at Workday
 
 ## Job sources
 
-All free, public, no API keys. Every job links back to its original listing. The first nine are employers' own job systems. With the Fortune 500 on the list (about 450 feeds) the watcher spreads its checks out, so each employer is re-checked about every 5 minutes. The rest are aggregators, which are useful for companies you don't watch but lag behind.
+All free, public, no API keys. Every job links back to its original listing. The first nine are employers' own job systems. With the Fortune 500 on the list (about 450 feeds) the watcher spreads its checks out, so each employer is re-checked about every 5 minutes. The rest are job boards. They re-list employers' jobs later and link to their own pages instead of the employer's, so they're off by default; turn any of them on in **Search setup → Sources**.
 
 | Source | What it covers | Refresh |
 |---|---|---|
@@ -141,12 +141,12 @@ All free, public, no API keys. Every job links back to its original listing. The
 | Jibe career sites | Employers you watch (e.g. State Farm, AMD, Principal) | every 5 min (watcher) |
 | Phenom career sites | Employers you watch (e.g. Molson Coors, Zimmer Biomet) | every 5 min (watcher) |
 | Amazon careers site | Amazon's US postings | every 5 min (watcher) |
-| Remotive | Remote jobs | 6 h (their terms ask for ≤ 4 calls a day) |
-| Remote OK | Latest remote jobs | 1 h |
-| Jobicy | Remote jobs | 1 h |
-| Himalayas | Remote jobs (listing pages use a bot check, so these are *Apply on site*) | 1 h |
+| Remotive | Remote jobs (off by default) | 6 h (their terms ask for ≤ 4 calls a day) |
+| Remote OK | Latest remote jobs (off by default) | 1 h |
+| Jobicy | Remote jobs (off by default) | 1 h |
+| Himalayas | Remote jobs (off by default; listing pages use a bot check, so these are *Apply on site*) | 1 h |
 | Arbeitnow | Europe, mostly Germany (off by default) | 1 h |
-| The Muse | Large US/global board, queried by business categories | 1 h |
+| The Muse | Large US/global board, queried by business categories (off by default) | 1 h |
 
 ### The business-major filter
 
@@ -199,7 +199,7 @@ The browser tests drive local fixture forms modelled on Greenhouse, Lever and As
 
 ```
 jobbot/
-  sources/        one module per job board (fetch + normalise); http.py does ETag/304 polling
+  sources/        one module per job source (fetch + normalise); http.py does ETag/304 polling
   fields.py       business-major classifier (areas, blocked roles, board categories)
   scoring.py      0-100 match score with reasons
   ats.py          recognise Greenhouse/Lever/Ashby, resolve aggregator Apply links

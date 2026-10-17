@@ -116,16 +116,18 @@ DEFAULT_SEARCH = {
     # Paid work only (on by default): unpaid, credit-only and commission-only roles are hidden, and so are
     # job-board internships that don't mention pay (employers' own career sites pay their interns).
     "paid_only": True,
+    # Employers' own job systems only. The job boards (Remotive, Remote OK, Jobicy, Himalayas,
+    # Arbeitnow, The Muse) re-list jobs later and link to their own pages, so they start off.
     "sources": {
         "greenhouse": True,
         "lever": True,
         "ashby": True,
-        "remotive": True,
-        "remoteok": True,
-        "jobicy": True,
-        "himalayas": True,
+        "remotive": False,
+        "remoteok": False,
+        "jobicy": False,
+        "himalayas": False,
         "arbeitnow": False,
-        "themuse": True,
+        "themuse": False,
         "workday": True,
         "oracle": True,
         "amazon": True,
