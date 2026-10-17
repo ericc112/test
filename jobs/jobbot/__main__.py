@@ -122,6 +122,7 @@ def cmd_apply_batch(args):
         shot = att and att.get("screenshot")
         results.append({
             "k": r["k"], "mode": mode, "status": done["status"], "note": done.get("status_note") or "",
+            "title": done.get("title") or "", "company": done.get("company") or "", "apply_url": done.get("apply_url") or "",
             "fields": [{k: f.get(k) for k in ("label", "answer", "source", "note", "required")} for f in (att or {}).get("fields", [])],
             "missing": [{k: m.get(k) for k in ("label", "kind", "options", "note")} for m in (att or {}).get("missing", [])],
             "screenshot": str(config.SHOTS_DIR / shot) if shot else None,

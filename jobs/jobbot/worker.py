@@ -116,20 +116,29 @@ class Worker(threading.Thread):
             return
         automation = db.get_setting("automation")
         label = f"{job['title']} at {job['company']}"
-        workday = is_workday(job) and bool(password(db.get_setting("profile")))  # sign in and apply there
-        taleo = is_taleo(job) and bool(password(db.get_setting("profile")))  # register or sign in, then apply
-
-        if not workday and not taleo and not job.get("ats"):
+        has_password = bool(password(db.get_setting("profile")))  # JobBot's one password for employer accounts
+        link = job.get("apply_url") or job.get("url") or ""
+        if not (has_password and (is_workday(job) or is_taleo(job))) and (
+                not job.get("ats") or job.get("ats") == "manual" and ats.JOB_BOARDS.search(link)):
             db.log(f"Finding the application form for {label}", job_id=job_id)
-            found = ats.resolve(job)
+            found = ats.resolve(job)  # for a LinkedIn or Indeed link: the employer's own posting
             db.update_job(job_id, **found)
             job.update(found)
-        if not workday and not taleo and job.get("ats") == "manual":
-            note = ("Workday needs an account with each employer, and no Workday password is set. Set "
-                    "JOBBOT_WORKDAY_PASSWORD (in your cloud environment's settings, or before starting JobBot) "
-                    "and try again: JobBot creates the account and applies." if is_workday(job) else
-                    "The employer's careers site asks you to create an account with them, so apply there."
-                    if job.get("source") in ("oracle", "amazon") else "Needs an account on another site, so apply there directly.")
+            link = job.get("apply_url") or job.get("url") or ""
+        workday = has_password and is_workday(job)  # sign in (or create the account) and apply there
+        taleo = has_password and is_taleo(job)
+        sign_in_site = job.get("ats") == "account" or job.get("ats") == "manual" and bool(ats.ACCOUNT_SITES.search(link))
+        if not workday and not taleo and (sign_in_site and not has_password or job.get("ats") == "manual" and not sign_in_site):
+            company = job.get("company") or "The employer"
+            if sign_in_site:
+                note = (f"{company}'s careers site needs an account with them, and no password is set. Set "
+                        "JOBBOT_WORKDAY_PASSWORD (in your cloud environment's settings, or before starting JobBot) and try "
+                        "again: JobBot creates the account and applies.")
+            elif ats.JOB_BOARDS.search(link):
+                note = (f"Couldn't find this job on {company}'s own careers site, and the job board's Apply needs you signed "
+                        "in there. Open the posting, tap Apply, and give JobBot the employer page it opens.")
+            else:
+                note = "Needs an account on another site, so apply there directly."
             db.update_job(job_id, status="manual", status_note=note)
             db.log(f"{label}: apply manually", job_id=job_id)
             return
@@ -147,6 +156,10 @@ class Worker(threading.Thread):
         if engine.found_ats and job.get("ats") not in ats.SUPPORTED:
             db.update_job(job_id, **engine.found_ats)  # next time, go straight to the real form
         db.finish_attempt(attempt, res.result, res.fields, res.missing, res.screenshot, res.message, res.url)
+        if res.result == "moved":  # Apply led to a Workday or Taleo site: their own engine takes it from here
+            db.update_job(job_id, apply_url=res.url, ats="account", status="new")
+            db.log(f"{label}: {res.message}", job_id=job_id)
+            return self.process(job_id, action)
 
         fields = {"status": res.result, "status_note": res.message}
         if res.result in ("applied", "unconfirmed"):

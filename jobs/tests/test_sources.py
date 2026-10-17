@@ -152,9 +152,22 @@ class AtsTests(unittest.TestCase):
         self.assertEqual(out["ats"], "lever")
         self.assertTrue(out["apply_url"].endswith("/apply"))
 
-    def test_resolve_login_walled(self):
-        out = ats.resolve({"url": "https://www.linkedin.com/jobs/view/1"})
+    def test_resolve_job_board_link_to_the_employers_posting(self):
+        from jobbot import finder
+        info = {"title": "Supply Chain Intern", "company": "Acme", "location": "Houston, TX", "website": ""}
+        wd = "https://acme.wd1.myworkdayjobs.com/Careers/job/Houston/Supply-Chain-Intern_R1"
+        with mock.patch.object(finder, "details", return_value=info), mock.patch.object(finder, "find", return_value=wd):
+            out = ats.resolve({"url": "https://www.linkedin.com/jobs/view/4464168018", "title": "Job at linkedin.com"})
+        self.assertEqual((out["ats"], out["apply_url"], out["title"], out["company"]), ("account", wd, "Supply Chain Intern", "Acme"))
+        with mock.patch.object(finder, "details", return_value=info), mock.patch.object(finder, "find", return_value=None):
+            out = ats.resolve({"url": "https://www.indeed.com/viewjob?jk=abc", "title": "Supply Chain Intern"})
         self.assertEqual(out["ats"], "manual")
+        self.assertNotIn("title", out)  # a job that already has its name keeps it
+
+    def test_resolve_sign_in_sites(self):
+        for url in ("https://careers-acme.icims.com/jobs/1234/intern/job", "https://career4.successfactors.com/career?company=acme",
+                    "https://acme.wd5.myworkdayjobs.com/External/job/X_R1"):
+            self.assertEqual(ats.resolve({"url": url})["ats"], "account", url)
 
 
 if __name__ == "__main__":

@@ -38,7 +38,7 @@ While JobBot is running, a watcher re-checks every employer on your list every 5
 
 JobBot ships watching about 50 employers with lots of business roles, plus every **Fortune 500** company whose careers site runs on one of the systems above: 322 of them. `jobbot/fortune500.json` lists the 498 companies in Fortune's data (it skips ranks 161 and 351), with each one's careers site and job system. Each feed was checked against the live site, including the employer each Workday site says it hires for. Of the other 176, 45 use systems JobBot can't read yet (Eightfold, iCIMS, Taleo, Avature and others), and 131 have no public job feed JobBot could find (Walmart, Apple and Microsoft among them). Add or remove them in **Search setup**: type a company name, or paste a link to one of its job posts (for Workday, a link from its `…myworkdayjobs.com` careers site).
 
-Workday asks applicants to create an account with each employer. Once you set a Workday password (see *Workday accounts* below), JobBot signs in or creates that account and fills the form; without one it alerts you and links to the posting.
+Workday, Taleo and other careers sites ask applicants to create an account with each employer. Once you set the password (see *Employer accounts* below), JobBot signs in or creates that account and fills the form; without one it alerts you and links to the posting.
 
 It runs on your own computer: it needs a real browser, your resume, and your personal details, and none of that should live on someone else's server.
 
@@ -81,11 +81,11 @@ The terminal (and **Automation & AI → Phone** on the computer) shows a QR code
 The JobBot page on claude.ai (see `CLOUD_WORKER.md`) lists the internships and can apply for you:
 
 1. Open **Your profile** on the page, fill in your details and upload your resume (PDF). Only you can see it.
-2. For Workday sites, set `JOBBOT_WORKDAY_PASSWORD` in your Claude cloud environment's settings (the environment menu → **Edit** → environment variables). Never paste it into a chat or the page.
+2. Set `JOBBOT_WORKDAY_PASSWORD` in your Claude cloud environment's settings (the environment menu → **Edit** → environment variables): the one password JobBot uses for your accounts on employers' careers sites (Workday, Taleo, iCIMS, SuccessFactors and the rest). Never paste it into a chat or the page.
 3. Tap **Apply** on an internship. That's it: a scheduled Claude cloud session runs JobBot every 3 hours (or right away when you tap **Start now**), fills in the application and sends it. The result, every answer and a screenshot show up under **Applying**.
 4. If the form asks something your profile doesn't answer, nothing is guessed or sent: the question shows up under **Applying** with the employer's own choices. Answer it and tap **Apply with these answers**.
 
-The page lists only internships JobBot can send by itself (Workday, Greenhouse, Lever and Ashby sites); tick **Show ones you apply to on their site** for the rest. The cloud session only sends applications you tapped Apply on, and stops if a site shows a CAPTCHA, a bot check or an email confirmation.
+The page lists the internships JobBot can send by itself; tick **Show ones you apply to on their site** for the rest. **Add a link** takes a posting from any site, LinkedIn and Indeed included (see *Where it can apply*). The cloud session only sends applications you tapped Apply on, and stops if a site shows a CAPTCHA, a bot check or an email confirmation.
 
 ## How applying works
 
@@ -109,15 +109,19 @@ A required question with no answer is **never guessed**. The job goes to *Review
 | Form | Fill | Submit |
 |---|---|---|
 | Greenhouse, Lever, Ashby (company boards you add, plus aggregator jobs whose Apply link leads there) | ✅ | ✅ (and auto-submit) |
-| Other web forms reached from an aggregator listing | ✅ best effort | Only when you press Submit |
-| Workday career sites (Target, Capital One, P&G and the other Workday employers JobBot watches), once you set a Workday password | ✅ signs in, or creates your account with that employer | Only when you press Submit |
-| LinkedIn, Indeed, iCIMS, Taleo, SuccessFactors and other sign-in sites | ❌ | ❌ (marked *Apply on site*, with a link) |
+| Workday career sites (Target, Capital One, P&G and the other Workday employers JobBot watches), once you set the password | ✅ signs in, or creates your account with that employer | Only when you press Submit |
+| Taleo Business Edition sites (`…tbe.taleo.net`, e.g. Olin) | ✅ signs in, or creates your account | Only when you press Submit |
+| Any other careers site: iCIMS, SuccessFactors, Workable, SmartRecruiters, Jobvite, Paylocity, employers' own forms… | ✅ best effort: follows Apply, signs in or creates your account if asked, fills each page and presses Next until Submit, including forms inside a frame | Only when you press Submit |
+| LinkedIn, Indeed, Glassdoor, ZipRecruiter and other job boards | ✅ on the employer's own site, when JobBot finds the same job there | Only when you press Submit |
+| LinkedIn Easy Apply, Indeed Apply, Oracle and Amazon careers sites | ❌ (marked *Apply on site*, with a link) | ❌ |
 
-### Workday accounts
+**Job boards.** LinkedIn, Indeed and the like copy employers' postings, and their Apply needs you signed in to the board (LinkedIn shows the employer's link only to members). JobBot never signs in to a job board; it reads the posting's title, company and location, and looks for the same job where the employer posts it: the job systems it knows for that company, the company's careers page (and the Workday, Taleo, iCIMS, SuccessFactors, Greenhouse, Lever, Ashby, Workable or SmartRecruiters site it links to), and boards under the company's name (`jobbot/finder.py`). Some employers' sites turn scripted visits away; then the job is marked *Apply on site* and you can paste the employer's link instead.
 
-Workday makes you sign in to each employer's career site. JobBot uses your profile email and **one password** you choose, and creates the account the first time it applies to that employer (Workday's rule: 8+ characters with upper and lower case, a number and a symbol). It reads the password from the environment variable `JOBBOT_WORKDAY_PASSWORD`: start JobBot with it set (`JOBBOT_WORKDAY_PASSWORD='…' python3 -m jobbot`), or, for the phone page, set it in your Claude cloud environment. Without one, Workday jobs are marked *Apply on site*.
+### Employer accounts
 
-Filling in saves a draft in your account with that employer and stops at Workday's Review step; nothing is sent until you press Submit. If Workday asks you to confirm your email, JobBot stops: click the link in the email, then try again.
+Workday, Taleo and many other careers sites make you sign in to each employer's site. JobBot uses your profile email (or `JOBBOT_WORKDAY_EMAIL`) and **one password** you choose, signs in when you have an account there, and creates it the first time it applies to that employer otherwise (Workday's rule: 8+ characters with upper and lower case, a number and a symbol). It reads the password from the environment variable `JOBBOT_WORKDAY_PASSWORD`: start JobBot with it set (`JOBBOT_WORKDAY_PASSWORD='…' python3 -m jobbot`), or, for the phone page, set it in your Claude cloud environment. Without one, these jobs are marked *Apply on site*.
+
+Filling in can save a draft in your account with that employer (Workday stops at its Review step); nothing is sent until you press Submit. If a site asks you to confirm your email, JobBot stops: click the link in the email, then try again. If you already have an account there with another password, JobBot says so: use the site's "Forgot password" to set it to JobBot's.
 
 ### Things it won't do
 

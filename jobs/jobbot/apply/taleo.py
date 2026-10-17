@@ -21,7 +21,7 @@ EXISTS = re.compile(r"already (exists|registered|in use|been registered)|is (alr
 
 
 def is_taleo(job):
-    return bool(TBE.search(job.get("url") or job.get("apply_url") or ""))
+    return any(TBE.search(job.get(k) or "") for k in ("apply_url", "url"))
 
 
 class TaleoEngine(Engine):

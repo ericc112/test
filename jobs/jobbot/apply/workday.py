@@ -12,14 +12,13 @@ application and presses Submit on the Review step.
 It stops for you, without working around them, at CAPTCHAs, email verification and
 anything it can't answer, and it never touches Workday's hidden bot-trap field.
 """
-import os
 import re
 from datetime import date
 from pathlib import Path
 
 from ..answers import Question, answer_all, as_dict, missing
 from ..textutil import norm, pick_option
-from .engine import Engine, Result
+from .engine import Engine, Result, account_email, password  # noqa: F401  (others import them from here)
 
 WD_JS = Path(__file__).with_name("wd_extract.js").read_text()
 NEXT = '[data-automation-id="bottom-navigation-next-button"], [data-automation-id="pageFooterNextButton"]'
@@ -40,16 +39,8 @@ NO_ITEMS = re.compile(r"^no items\b", re.I)
 PASSWORD_RULES = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$")
 
 
-def password(profile):
-    return os.environ.get("JOBBOT_WORKDAY_PASSWORD") or profile.get("workday_password") or ""
-
-
-def account_email(profile):
-    return (os.environ.get("JOBBOT_WORKDAY_EMAIL") or profile.get("email") or "").strip()
-
-
 def is_workday(job):
-    return job.get("source") == "workday" or "myworkdayjobs.com" in (job.get("url") or job.get("apply_url") or "")
+    return job.get("source") == "workday" or any("myworkdayjobs.com" in (job.get(k) or "") for k in ("apply_url", "url"))
 
 
 class WorkdayEngine(Engine):

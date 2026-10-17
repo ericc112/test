@@ -208,3 +208,69 @@ class WorkdayFlowTests(unittest.TestCase):
     def test_needs_a_strong_password(self):
         self.assertIn("password", self.run_wd(password="").message.lower())
         self.assertIn("8+ characters", self.run_wd(password="short").message)
+
+
+@unittest.skipUnless(HAS_BROWSER, "Chromium for Playwright isn't installed (python -m playwright install chromium)")
+class AnySiteTests(unittest.TestCase):
+    """Careers sites JobBot has no code of its own for: sign in or create the account, go through each page, submit."""
+
+    def setUp(self):
+        self.tmp = TempData()
+        without_account_env(self)
+
+    def tearDown(self):
+        self.tmp.close()
+
+    def run_site(self, fixture, mode="prepare", query="", password="Str0ng!Pass1"):
+        job = {"id": "test:any", "title": "Procurement Intern", "company": "Acme",
+               "url": (FIXTURES / fixture).as_uri() + query}
+        me = dict(PROFILE, workday_password=password, work_authorized=True, needs_sponsorship=False, state="Texas", city="Austin")
+        ctx = Context(profile=me, bank=DEFAULT_ANSWERS, job=job, files={"resume": str(FIXTURES / "resume.txt")})
+        return Engine(headless=True).run(job, ctx, mode)
+
+    def test_creates_the_account_goes_through_each_page_and_submits(self):
+        res = self.run_site("account_site.html", "submit")
+        self.assertEqual(res.result, "applied", res.message)
+
+    def test_prepare_stops_at_submit(self):
+        res = self.run_site("account_site.html")
+        self.assertEqual(res.result, "ready", res.message)
+        self.assertIn("3 pages", res.message)
+        self.assertEqual(next(f["answer"] for f in res.fields if "sponsorship" in f["label"]), "No")
+
+    def test_signs_in_to_an_existing_account(self):
+        res = self.run_site("account_site.html", "submit", "?account=1")
+        self.assertEqual(res.result, "applied", res.message)
+
+    def test_an_account_with_another_password_is_handed_to_you(self):
+        res = self.run_site("account_site.html", "submit", "?wrong=1")
+        self.assertEqual(res.result, "needs_input", res.message)
+        self.assertIn("Forgot password", res.message)
+
+    def test_a_password_the_sign_up_rejects_is_reported(self):
+        res = self.run_site("account_site.html", "submit", password="weakpassword")
+        self.assertEqual(res.result, "needs_input", res.message)
+        self.assertIn("Couldn't create your account", res.message)
+        self.assertIn("8+ characters", res.message)
+
+    def test_stops_when_the_site_asks_you_to_confirm_your_email(self):
+        res = self.run_site("account_site.html", "submit", "?verify=1")
+        self.assertEqual(res.result, "blocked", res.message)
+        self.assertIn("Confirm it", res.message)
+
+    def test_applies_as_a_guest_when_offered(self):
+        res = self.run_site("account_site.html", "submit", "?guest=1")
+        self.assertEqual(res.result, "applied", res.message)
+
+    def test_a_job_alert_box_is_not_a_sign_in(self):
+        res = self.run_site("account_site.html", "submit", "?alerts=1&account=1")
+        self.assertEqual(res.result, "applied", res.message)
+
+    def test_without_a_password_you_apply_there(self):
+        res = self.run_site("account_site.html", password="")
+        self.assertEqual(res.result, "manual", res.message)
+        self.assertIn("JOBBOT_WORKDAY_PASSWORD", res.message)
+
+    def test_a_form_inside_a_frame(self):
+        res = self.run_site("embedded_form.html", "submit")
+        self.assertEqual(res.result, "applied", res.message)

@@ -1,4 +1,5 @@
 """Recognise applicant-tracking systems (ATS) and find a job's real application form."""
+import html
 import re
 import urllib.parse
 from html.parser import HTMLParser
@@ -8,18 +9,31 @@ from .sources import http
 # Forms JobBot knows how to fill and submit end to end.
 SUPPORTED = ("greenhouse", "lever", "ashby")
 
-# Sites that need an account or block automation. JobBot links you there instead.
-LOGIN_WALLED = re.compile(
-    r"linkedin\.com|indeed\.com|myworkdayjobs\.com|workday\.com|icims\.com|taleo\.net|"
-    r"successfactors|glassdoor\.|ziprecruiter\.com|monster\.com|dice\.com|wellfound\.com|"
-    r"angel\.co|upwork\.com|oraclecloud\.com",
+# Careers sites that make you create an account with each employer. With a password set, JobBot signs in there or
+# creates that account (Workday and Taleo Business Edition have engines of their own); without one, you apply there.
+ACCOUNT_SITES = re.compile(
+    r"myworkdayjobs\.com|workday\.com|icims\.com|taleo\.net|successfactors|oraclecloud\.com|brassring\.com|"
+    r"avature\.net|ultipro\.com|ukg\.net|kenexa|dayforcehcm\.com|paycomonline",
     re.I,
 )
+
+# Job boards that copy employers' postings. Their Apply signs you in to the board, so JobBot looks for the same
+# job on the employer's own site instead (finder.py).
+JOB_BOARDS = re.compile(
+    r"linkedin\.com|indeed\.com|glassdoor\.|ziprecruiter\.com|monster\.com|dice\.com|simplyhired\.com|"
+    r"wellfound\.com|angel\.co|joinhandshake\.com|careerbuilder\.com",
+    re.I,
+)
+
+# Not job applications JobBot can make for you.
+MANUAL_ONLY = re.compile(r"upwork\.com|fiverr\.com", re.I)
 
 _ATS_IN_HTML = re.compile(
     r"https?://(?:job-boards|boards)(?:\.eu)?\.greenhouse\.io/[^\"'\s<>\\]+|"
     r"https?://jobs(?:\.eu)?\.lever\.co/[^\"'\s<>\\]+|"
-    r"https?://jobs\.ashbyhq\.com/[^\"'\s<>\\]+",
+    r"https?://jobs\.ashbyhq\.com/[^\"'\s<>\\]+|"
+    r"https?://[\w-]+\.wd\d+\.myworkdayjobs\.com/[^\"'\s<>\\]*/job/[^\"'\s<>\\]+|"
+    r"https?://[\w-]+\.tbe\.taleo\.net/[^\"'\s<>\\]*viewRequisition[^\"'\s<>\\]+",
     re.I,
 )
 
@@ -89,19 +103,38 @@ def _classify(url):
     if ats:
         return {"ats": ats, "ats_board": board, "ats_job_id": job_id,
                 "apply_url": form_url(ats, board, job_id, host)}
-    if LOGIN_WALLED.search(url or ""):
+    if ACCOUNT_SITES.search(url or ""):
+        return {"ats": "account", "apply_url": url}
+    if MANUAL_ONLY.search(url or ""):
         return {"ats": "manual", "apply_url": url}
     return None
+
+
+def from_job_board(url, job):
+    """Job fields for a job-board link: the employer's own posting of the job when JobBot finds it, else "manual"."""
+    from . import finder
+    info = finder.details(url) or {}
+    title, company = info.get("title") or job.get("title") or "", info.get("company") or job.get("company") or ""
+    found = finder.find(title, company, info.get("location") or job.get("location") or "", info.get("website") or "")
+    if found:
+        out = _classify(found) or {"ats": "generic", "apply_url": found}
+    else:
+        out = {"ats": "manual", "apply_url": url}
+    if info and (not job.get("title") or str(job.get("title")).startswith("Job at ")):  # a pasted link: name it
+        out.update(title=title, company=company)
+    return out
 
 
 def resolve(job):
     """Work out where a job is actually applied to.
 
-    Returns a dict of job fields to update: ats is one of SUPPORTED, "generic"
-    (an unknown web form JobBot can try to fill but you should review), or
-    "manual" (account required or no form found).
+    Returns a dict of job fields to update: ats is one of SUPPORTED, "account" (a careers site
+    that needs an account with the employer), "generic" (an unknown web form JobBot can try to
+    fill but you should review), or "manual" (no form JobBot can reach).
     """
     for u in (job.get("apply_url"), job.get("url")):
+        if JOB_BOARDS.search(u or ""):
+            return from_job_board(u, job)
         hit = _classify(u)
         if hit:
             return hit
@@ -116,8 +149,8 @@ def resolve(job):
     if hit:
         return hit
     for m in _ATS_IN_HTML.findall(body):
-        hit = _classify(m.rstrip(".,);"))
-        if hit and hit["ats"] in SUPPORTED:
+        hit = _classify(html.unescape(m).rstrip(".,);"))
+        if hit and hit["ats"] in SUPPORTED + ("account",):  # a Workday or Taleo posting has an engine of its own
             return hit
     parser = _Links()
     try:
