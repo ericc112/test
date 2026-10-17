@@ -1,4 +1,5 @@
 import unittest
+from datetime import date
 
 from jobbot.answers import Answer, Context, Question, answer, answer_all, missing
 from jobbot.config import DEFAULT_ANSWERS
@@ -181,6 +182,13 @@ class RuleTests(unittest.TestCase):
         label = "Will you require our Company to provide immigration sponsorship now or in the future?"
         self.assertEqual(ans(q(label, "select", merck), profile=me).option, merck[2])
         self.assertEqual(ans(q(label, "select", ["Yes", "No"]), profile=me).option, "No")
+
+    def test_the_disability_form(self):
+        me = dict(PROFILE, eeo_disability="No, I don't have a disability")
+        opts = ["Yes, I have a disability, or have had one in the past",
+                "No, I do not have a disability and have not had one in the past", "I do not want to answer"]
+        self.assertEqual(ans(q("Please check one of the boxes below:", "checkboxes", opts), profile=me).option, [opts[1]])
+        self.assertEqual(ans(q("Date", input_type="wd_date")).value, date.today().isoformat())
 
     def test_school_falls_back_to_other(self):
         a = ans(q("Which university did you attend?", "select", ["MIT", "Stanford", "Other (School Not Listed)"]))

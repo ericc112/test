@@ -291,7 +291,7 @@ def _terms(q, c):
 
 def _today(q, c):
     d = date.today()
-    return d.isoformat() if q.input_type == "date" else d.strftime("%m/%d/%Y")
+    return d.isoformat() if q.input_type in ("date", "wd_date") else d.strftime("%m/%d/%Y")
 
 
 def _school(q, c):
@@ -384,6 +384,30 @@ def _sponsorship(q, c):
     return next((o for o in nos if not TEMPORARY_STATUS.search(o)), "No")
 
 
+def _disability(q, c):
+    """The voluntary disability form: "No, I don't have a disability" is its "No, I do not have a disability and
+    have not had one in the past"."""
+    v = c.profile.get("eeo_disability") or "decline"
+    if q.kind in ("text", "textarea") and v == "decline":
+        return Answer(None, "skip")
+    lead = re.match(r"\s*(yes|no)\b", v, re.I)
+    if lead and q.options:
+        same = [o for o in q.options if re.match(rf"\s*{lead.group(1)}\b", o, re.I)]
+        if len(same) == 1:
+            return Answer(same[0], "profile")
+    return _eeo("eeo_disability")(q, c)
+
+
+def _check_one(q, c):
+    """"Please check one of the boxes below": the form says what it's about only in its options."""
+    opts = " ".join(q.options or [])
+    if re.search(r"disabilit", opts, re.I):
+        return _disability(q, c)
+    if re.search(r"veteran", opts, re.I):
+        return _veteran(q, c)
+    return None
+
+
 def _blank(q, c):
     return Answer("", "blank")  # should be empty: clear anything already in it
 
@@ -404,7 +428,8 @@ RULES = [
     (r"hispanic|latin[oax]", ANY, _eeo("eeo_hispanic")),
     (r"\brace\b|ethnicit", ANY, _eeo("eeo_race")),
     (r"veteran", ANY, _veteran),
-    (r"disabilit", ANY, _eeo("eeo_disability")),
+    (r"disabilit", ANY, _disability),
+    (r"check one of the boxes|select one of the (boxes|options) below", CHOICE, _check_one),
     # Messages and consent
     (r"text messages?|\bsms\b|whatsapp|newsletter|marketing|promotional|job alerts|talent (community|network|pool)|"
      r"(receive|get) (future )?(updates|communications|news|emails)", CHOICE, lambda q, c: yn(c.profile.get("marketing_opt_in"))),
