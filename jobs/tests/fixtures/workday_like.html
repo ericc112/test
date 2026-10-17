@@ -21,14 +21,15 @@ const slow = params.get("slow") === "1";
 let applyPresses = 0;
 let signedIn = false, view = "job", step = 0;
 const STEPS = ["Create Account/Sign In", "My Information", "My Experience", "Application Questions", "Voluntary Disclosures", "Review"];
+if (params.get("assess") === "1") STEPS.splice(5, 0, "Take Assessment");  // an employer's assessment test
 const values = { ext: params.get("ext") || "" };  // ext=...: a draft with a bad Phone Extension
 const app = document.getElementById("app");
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 function progress() {
   return `<ol data-automation-id="progressBar">${STEPS.map((s, i) => i === step
-    ? `<li data-automation-id="progressBarActiveStep">current step ${i + 1} of 6 ${s}</li>`
-    : `<li data-automation-id="progressBarInactiveStep">step ${i + 1} of 6 ${s}</li>`).join("")}</ol>`;
+    ? `<li data-automation-id="progressBarActiveStep">current step ${i + 1} of ${STEPS.length} ${s}</li>`
+    : `<li data-automation-id="progressBarInactiveStep">step ${i + 1} of ${STEPS.length} ${s}</li>`).join("")}</ol>`;
 }
 const button = (id, text) => `<span class="btnwrap"><button data-automation-id="${id}">${text}</button><div data-automation-id="click_filter"></div></span>`;
 const text = (id, label, req) => `<div class="ff" data-automation-id="formField-${id}"><label for="${id}">${label}${req ? "*" : ""}</label>

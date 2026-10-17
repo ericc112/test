@@ -75,6 +75,12 @@ class WorkdayEngine(Engine):
         stop = self._account(page, job, email, pw, company)
         if stop:
             return stop
+        # Applications with an assessment test (Workday lists it as a step, e.g. "Take Assessment") are skipped
+        # before anything is filled in: that test is yours to take, not JobBot's.
+        bar = page.locator('[data-automation-id="progressBar"]')
+        if bar.count() and re.search(r"assessment", bar.first.inner_text(), re.I):
+            return Result("manual", f"{company}'s application includes an assessment test, so JobBot skipped it. Nothing was sent.",
+                          screenshot=self._shot(page, job, "assessment"), url=page.url)
 
         questions, answers, seen, retried = [], {}, set(), {}
         info = self._info(page)

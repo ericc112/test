@@ -144,6 +144,11 @@ class WorkdayFlowTests(unittest.TestCase):
         res = self.run_wd(query="?slow=1&ext=4155550134", overrides={"Which Acme office would you prefer?": "New York"})
         self.assertEqual(res.result, "ready", res.message)
 
+    def test_an_application_with_an_assessment_is_skipped(self):
+        res = self.run_wd("submit", "?account=1&assess=1")
+        self.assertEqual(res.result, "manual", res.message)
+        self.assertIn("assessment", res.message)
+
     def test_submit_signs_in_and_is_confirmed(self):
         res = self.run_wd("submit", "?account=1", overrides={"Which Acme office would you prefer?": "New York"})
         self.assertEqual(res.result, "applied", res.message)
