@@ -1,0 +1,64 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Job Application for Engineer at Acme</title></head>
+<body>
+<!-- Mimics Greenhouse's job-boards form: labelled inputs, react-select style comboboxes,
+     a fieldset checkbox group, an upload widget and EEO selects. -->
+<form id="application-form" novalidate>
+  <div><label for="first_name">First Name<span>*</span></label><input id="first_name" type="text" aria-required="true"></div>
+  <div><label for="last_name">Last Name<span>*</span></label><input id="last_name" type="text" aria-required="true"></div>
+  <div><label for="email">Email<span>*</span></label><input id="email" type="text" aria-required="true"></div>
+  <div><label for="phone">Phone</label><input id="phone" type="tel"></div>
+  <div class="field"><div class="label">Resume/CV*</div>
+    <div><button type="button">Attach</button><label for="resume">Attach</label>
+      <input id="resume" type="file" style="position:absolute;width:1px;height:1px;opacity:0"></div>
+    <p>Accepted file types: pdf, doc, docx, txt</p></div>
+  <div class="select"><label id="q1-label" for="q1">Are you legally authorized to work in the United States?*</label>
+    <div class="select__control"><div class="single-value"></div>
+      <input id="q1" role="combobox" type="text" autocomplete="off" aria-labelledby="q1-label" aria-required="true" aria-controls="q1-listbox"></div>
+    <div class="select__menu" id="q1-listbox" role="listbox" hidden><div role="option">Yes</div><div role="option">No</div></div></div>
+  <div class="select"><label id="q2-label" for="q2">Will you now or in the future require sponsorship?*</label>
+    <div class="select__control"><div class="single-value"></div>
+      <input id="q2" role="combobox" type="text" autocomplete="off" aria-labelledby="q2-label" aria-required="true" aria-controls="q2-listbox"></div>
+    <div class="select__menu" id="q2-listbox" role="listbox" hidden><div role="option">Yes</div><div role="option">No</div></div></div>
+  <fieldset id="q3" aria-required="true"><legend>Which countries could you work in? <span>*</span></legend>
+    <div><input type="checkbox" id="q3_1" name="q3[]" value="1"><label for="q3_1">Canada</label></div>
+    <div><input type="checkbox" id="q3_2" name="q3[]" value="2"><label for="q3_2">US</label></div></fieldset>
+  <div><label for="q4">LinkedIn Profile</label><input id="q4" type="text"></div>
+  <div><label for="q5">Why do you want to work at Acme?</label><textarea id="q5"></textarea></div>
+  <div><label for="gender">Gender</label><select id="gender"><option value="">Select...</option><option>Male</option><option>Female</option><option>Decline To Self Identify</option></select></div>
+  <button type="submit">Submit application</button>
+</form>
+<script>
+  document.querySelectorAll("[role=combobox]").forEach((inp) => {
+    const menu = document.getElementById(inp.getAttribute("aria-controls"));
+    const shown = inp.parentElement.querySelector(".single-value");
+    const show = () => {
+      menu.hidden = false;
+      const q = inp.value.toLowerCase();
+      menu.querySelectorAll("[role=option]").forEach((o) => (o.hidden = !!q && !o.textContent.toLowerCase().includes(q)));
+    };
+    inp.addEventListener("focus", show);
+    inp.addEventListener("click", show);
+    inp.addEventListener("input", show);
+    inp.addEventListener("keydown", (e) => { if (e.key === "Escape") menu.hidden = true; });
+    menu.querySelectorAll("[role=option]").forEach((o) => o.addEventListener("click", () => {
+      shown.textContent = o.textContent; inp.value = ""; inp.dataset.chosen = o.textContent; menu.hidden = true;
+    }));
+  });
+  document.getElementById("application-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const missing = [];
+    ["first_name", "last_name", "email"].forEach((id) => { if (!document.getElementById(id).value) missing.push(id); });
+    ["q1", "q2"].forEach((id) => { if (!document.getElementById(id).dataset.chosen) missing.push(id); });
+    if (!document.querySelector('input[name="q3[]"]:checked')) missing.push("q3");
+    if (!document.getElementById("resume").files.length) missing.push("resume");
+    if (missing.length) {
+      const a = document.getElementById("err") || document.body.insertBefore(Object.assign(document.createElement("div"), { id: "err" }), document.body.firstChild);
+      a.setAttribute("role", "alert");
+      a.textContent = "Please complete: " + missing.join(", ");
+      return;
+    }
+    document.body.innerHTML = "<h1>Thank you for applying to Acme!</h1>";
+  });
+</script>
+</body></html>

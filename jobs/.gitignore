@@ -1,0 +1,4 @@
+# Personal data: profile, resume, database, screenshots. Never commit.
+data/
+__pycache__/
+*.pyc
