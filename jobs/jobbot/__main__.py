@@ -1,6 +1,7 @@
 """Command line: `python -m jobbot` starts the web app; other commands run single steps."""
 import argparse
 import json
+import os
 import sys
 import threading
 import webbrowser
@@ -82,8 +83,8 @@ SOURCE_NAMES = {"the muse": "themuse", "remote ok": "remoteok"}
 def cmd_apply_batch(args):
     """Fill (or submit) a list of applications and write the results as JSON.
 
-    Used by the cloud runner behind the JobBot page: requests come from the page's
-    "Apply for me" and "Submit" buttons, and the results go back to it. Each request:
+    Used by the cloud runner behind the JobBot page: requests come from the page's Apply
+    button, and the results go back to it. Results are saved after each request. Each request:
     {"k", "mode": "prepare"|"submit", "title", "company", "url", "source", "answers": {question: answer}}.
     """
     import shutil
@@ -126,8 +127,16 @@ def cmd_apply_batch(args):
             "screenshot": str(config.SHOTS_DIR / shot) if shot else None,
         })
         print(f"  -> {done['status']}: {done.get('status_note') or ''}", flush=True)
-    json.dump(results, open(args.out, "w"), indent=1)
+        _write_json(args.out, results)  # after each one: a run cut off midway keeps what it finished
+    _write_json(args.out, results)
     print(f"wrote {len(results)} result(s) to {args.out}")
+
+
+def _write_json(path, data):
+    tmp = f"{path}.tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=1)
+    os.replace(tmp, path)
 
 
 def cmd_settings(args):

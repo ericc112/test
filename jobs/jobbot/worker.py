@@ -123,8 +123,9 @@ class Worker(threading.Thread):
             db.update_job(job_id, **found)
             job.update(found)
         if not workday and job.get("ats") == "manual":
-            note = ("Workday asks for an account with each employer: add a Workday password in Profile and JobBot "
-                    "will create it and apply." if is_workday(job) else
+            note = ("Workday needs an account with each employer, and no Workday password is set. Set "
+                    "JOBBOT_WORKDAY_PASSWORD (in your cloud environment's settings, or before starting JobBot) "
+                    "and try again: JobBot creates the account and applies." if is_workday(job) else
                     "The employer's careers site asks you to create an account with them, so apply there."
                     if job.get("source") in ("oracle", "amazon") else "Needs an account on another site, so apply there directly.")
             db.update_job(job_id, status="manual", status_note=note)
