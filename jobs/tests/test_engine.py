@@ -91,6 +91,15 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class WorkdaySkillTests(unittest.TestCase):
+    def test_the_exact_skill_wins_over_look_alikes(self):
+        from jobbot.apply.workday import WorkdayEngine
+        pick = WorkdayEngine._best_skill
+        self.assertEqual(pick("Excel", ["Excel-DNA", "Microsoft Excel", "Excel Macros"]), "Microsoft Excel")
+        self.assertEqual(pick("SQL", ["MySQL", "SQL Server", "SQL"]), "SQL")
+        self.assertEqual(pick("Forecasting", ["Demand Forecasting", "Sales Forecasting Software"]), "Demand Forecasting")
+
+
 @unittest.skipUnless(HAS_BROWSER, "Chromium for Playwright isn't installed (python -m playwright install chromium)")
 class WorkdayFlowTests(unittest.TestCase):
     """The Workday flow against a local stand-in for a Workday careers site."""
@@ -128,6 +137,12 @@ class WorkdayFlowTests(unittest.TestCase):
         self.assertEqual(res.missing[0]["label"], "Which Acme office would you prefer?")
         self.assertEqual(res.missing[0]["options"], ["Minneapolis", "New York"])
         self.assertIn("saved in your draft", res.message)
+
+    def test_waits_for_a_slow_site(self):
+        # Apply pressed before the page is ready, and a progress bar that comes before the sign-in form.
+        # Also a draft from an earlier run with a phone number left in Phone Extension, which has to be cleared.
+        res = self.run_wd(query="?slow=1&ext=4155550134", overrides={"Which Acme office would you prefer?": "New York"})
+        self.assertEqual(res.result, "ready", res.message)
 
     def test_submit_signs_in_and_is_confirmed(self):
         res = self.run_wd("submit", "?account=1", overrides={"Which Acme office would you prefer?": "New York"})

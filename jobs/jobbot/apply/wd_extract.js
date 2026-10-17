@@ -29,6 +29,7 @@
     const listbox = box.querySelector('button[aria-haspopup="listbox"]');
     const prompt = box.querySelector('[data-automation-id="multiselectInputContainer"], [data-automation-id="searchBox"]');
     const month = box.querySelector('[data-automation-id="dateSectionMonth-input"]');
+    const day = box.querySelector('[data-automation-id="dateSectionDay-input"]');
     const year = box.querySelector('[data-automation-id="dateSectionYear-input"]');
     const area = box.querySelector("textarea");
     const text = box.querySelector('input[type=text], input[type=email], input[type=tel], input:not([type])');
@@ -47,8 +48,8 @@
       const chosen = [...box.querySelectorAll('[data-automation-id="selectedItem"]')].map((e) => clean(e.innerText));
       q.value = chosen.length ? chosen.join(", ") : null;
     } else if (month || year) {
-      q.kind = "text"; q.input_type = month ? "month" : "wd_year";
-      q.value = [month && month.value, year && year.value].filter(Boolean).join("/") || null;
+      q.kind = "text"; q.input_type = day ? "wd_date" : month ? "month" : "wd_year";
+      q.value = [month && month.value, day && day.value, year && year.value].filter(Boolean).join("/") || null;
     } else if (checks.length === 1) {
       q.kind = "checkbox"; q.value = checks[0].checked;
       if (!q.label) q.label = clean((box.querySelector(`label[for="${checks[0].id}"]`) || box).innerText);
@@ -73,7 +74,7 @@
     signIn: !!document.querySelector('[data-automation-id="email"]') && !!document.querySelector('[data-automation-id="password"]'),
     createAccount: !!document.querySelector('[data-automation-id="verifyPassword"]'),
     verify: /verify (your )?(email|account)|verification (email|link)|check your (email|inbox)/i.test(bodyText),
-    submitted: /application (was |has been )?(successfully )?submitted|thank you for (applying|your application)|congratulations.{0,40}submitted/i.test(bodyText),
+    submitted: /application (was |has )?(been )?(successfully )?(been )?submitted|thank you for (applying|your application)|congratulations[\s\S]{0,80}submitted/i.test(bodyText),
     captcha: [...document.querySelectorAll("iframe")].some((f) => /captcha|challenges\.cloudflare/.test(f.src || "")),
   };
 }

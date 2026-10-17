@@ -83,6 +83,58 @@ class RuleTests(unittest.TestCase):
         a = ans(q("Please tell us how you heard about this opportunity.", "select", ["LinkedIn", "Job Board (Indeed, Monster, etc.)", "Other"]))
         self.assertEqual(a.option, "Job Board (Indeed, Monster, etc.)")
 
+    def test_how_heard_takes_any_choice_when_none_of_the_usual_ones_is_there(self):
+        # Target's Workday list: no website, job board or "Other" choice.
+        opts = ["Select One", "Events", "Personal Connection", "Radio/Newspaper", "Signage"]
+        self.assertEqual(ans(q("How Did You Hear About Us?", "select", opts)).option, "Events")
+
+    def test_phone_extension_and_address_line_2_are_left_blank(self):
+        me = dict(PROFILE, address="1 Main St")
+        self.assertEqual(ans(q("Phone Extension", required=False), profile=me).source, "blank")
+        self.assertEqual(ans(q("Address Line 2", required=False), profile=me).source, "blank")
+        self.assertEqual(ans(q("Address Line 2", required=False), profile=dict(me, address_line2="Apt 4")).value, "Apt 4")
+        self.assertEqual(ans(q("Address Line 1"), profile=me).value, "1 Main St")
+
+    def test_a_bare_upload_field_gets_the_resume(self):
+        ctx = Context(profile=PROFILE, bank=DEFAULT_ANSWERS, job={}, files={"resume": "/r.pdf"})
+        self.assertEqual(answer(q("Upload a file (5MB max)", "file"), ctx).value, "/r.pdf")
+        self.assertEqual(answer(q("Upload a transcript", "file", required=False), ctx).source, "skip")
+
+    def test_skills_come_from_the_profile_or_the_resume(self):
+        self.assertEqual(ans(q("Type to Add Skills"), profile=dict(PROFILE, skills="SQL, Tableau")).value, "SQL")
+        a = ans(q("Type to Add Skills"), profile=dict(PROFILE, skills="", resume_text="Built Excel models and SQL reports"))
+        self.assertEqual([a.value] + a.alternatives, ["Excel", "SQL"])
+        self.assertIsNone(ans(q("Describe your leadership skills", "textarea"), profile=dict(PROFILE, resume_text="Excel")).value)
+        # The posting's skills first, and only skills the resume shows.
+        ctx = Context(profile=dict(PROFILE, skills="", resume_text="Excel, SQL and Tableau dashboards"), bank=DEFAULT_ANSWERS,
+                      job={"description": "You will build Tableau reports. Python a plus."})
+        a = answer(q("Type to Add Skills"), ctx)
+        self.assertEqual([a.value] + a.alternatives, ["Tableau", "Excel", "SQL"])
+
+    def test_sponsorship_isnt_mistaken_for_work_authorization(self):
+        me, yn = dict(PROFILE, work_authorized=True, needs_sponsorship=False), ["Select One", "Yes", "No"]
+        for label in ("Will you now or in the future require employer sponsorship for work authorization (e.g., H-1B)?",
+                      "Is your current work authorization through STEM OPT or will you need employer sponsorship in the future?"):
+            self.assertEqual(ans(q(label, "select", yn), profile=me).option, "No", label)
+        self.assertEqual(ans(q("Are you legally authorized to work in the United States?", "select", yn), profile=me).option, "Yes")
+        target = ["Select One", "Yes, I am legally authorized for employment in the United States.",
+                  "No, I am not legally authorized for employment in the United States."]
+        self.assertEqual(ans(q("Are you legally authorized for employment in the United States?", "select", target), profile=me).option,
+                         target[1])
+
+    def test_role_type_and_education_dates(self):
+        ctx = Context(profile=dict(PROFILE, expected_graduation="May 2027", graduation_year="", education_start="August 2023"), bank=DEFAULT_ANSWERS,
+                      job={"title": "Inventory Analyst Intern"})
+        self.assertEqual(answer(q("Which type of role are you applying for?", "select", ["Internship", "Full Time"]), ctx).option,
+                         "Internship")
+        self.assertEqual(answer(q("From", input_type="month", section="education"), ctx).value, "2023-08")
+        self.assertEqual(answer(q("To (Actual or Expected)", input_type="month", section="education"), ctx).value, "2027-05")
+
+    def test_phone_device_type_and_a_full_graduation_date(self):
+        self.assertEqual(ans(q("Phone Device Type", "select", ["Landline", "Mobile"])).option, "Mobile")
+        me = dict(PROFILE, expected_graduation="May 2027", graduation_year="")
+        self.assertEqual(ans(q("Please input your anticipated graduation date", input_type="wd_date"), profile=me).value, "2027-05-01")
+
     def test_school_falls_back_to_other(self):
         a = ans(q("Which university did you attend?", "select", ["MIT", "Stanford", "Other (School Not Listed)"]))
         self.assertEqual(a.option, "Other (School Not Listed)")
