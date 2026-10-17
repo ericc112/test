@@ -75,6 +75,9 @@ class ClassifierTests(unittest.TestCase):
         self.assertEqual(fields.job_type({"title": "Analyst I", "tags": ["Full Time", "Entry-level"],
                                           "categories": ["Finance", "Analyst-Intern", "Junior-Analyst"]}), "full_time")
         self.assertEqual(fields.job_type({"title": "Finance Program", "categories": ["University Internships"]}), "internship")
+        # ...but a board's intern label doesn't make a senior title an internship (J&J filed one that way)
+        self.assertEqual(fields.job_type({"title": "Sr. Manager, Technical Product Owner", "tags": ["Intern"]}), "full_time")
+        self.assertEqual(fields.job_type({"title": "Project Manager Intern", "tags": ["Intern"]}), "internship")
 
     def test_mba_internships_skip_undergrads(self):
         undergrad = {"school_year": "Junior", "degree": "Bachelor's"}

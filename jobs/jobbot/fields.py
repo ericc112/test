@@ -155,6 +155,9 @@ INTERN_TITLE = re.compile(
 )
 INTERN_LABEL = re.compile(r"\bintern(ship)?s?\b|co-?op|student program", re.I)  # board fields ("Intern (Fixed Term)")
 PART_TIME = re.compile(r"part[- ]?time", re.I)
+# A board's intern label can be wrong (J&J filed a "Sr. Manager, Technical Product Owner" as an intern):
+# a senior title only counts as an internship when the title itself says so.
+SENIOR_TITLE = re.compile(r"\b(sr\.?|senior|manager|director|principal|vice president|vp|head of)\b", re.I)
 TEMPORARY = re.compile(r"\b(seasonal|temporary|temp|contract|contractor|freelance)\b", re.I)
 
 
@@ -164,10 +167,13 @@ def job_type(job):
     tags = " | ".join(str(t) for t in job.get("tags") or [] if t)  # employment type, commitment, worker type
     cats = " | ".join(str(t) for t in job.get("categories") or [] if t)  # departments, or a board's keyword lists
     labels = tags + " | " + cats
-    if INTERN_TITLE.search(title) or INTERN_LABEL.search(tags):
+    if INTERN_TITLE.search(title):
+        return "internship"
+    senior = SENIOR_TITLE.search(title)
+    if INTERN_LABEL.search(tags) and not senior:
         return "internship"
     # A department called "Internships" counts, but not a keyword list ("Analyst-Intern") on a job typed Full Time.
-    if INTERN_LABEL.search(cats) and not re.search(r"\bfull[- ]?time\b", tags, re.I):
+    if INTERN_LABEL.search(cats) and not senior and not re.search(r"\bfull[- ]?time\b", tags, re.I):
         return "internship"
     if PART_TIME.search(title) or PART_TIME.search(labels):
         return "part_time"

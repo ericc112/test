@@ -155,20 +155,9 @@
   "name": "Costco Wholesale",
   "website": "https://www.costco.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "cw|wd1|External"
-   ],
-   [
-    "workday",
-    "cw|wd1|CWServices"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 14,
@@ -276,10 +265,6 @@
    [
     "workday",
     "ghr|wd1|lateral-us"
-   ],
-   [
-    "workday",
-    "ghr|wd1|Lateral-US"
    ]
   ],
   "systems": [
@@ -414,11 +399,16 @@
   "name": "Phillips 66",
   "website": "https://www.phillips66.com",
   "careers": "https://www.phillips66.com/careers/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.phillips66.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 30,
@@ -443,12 +433,17 @@
   "name": "State Farm Insurance",
   "website": "https://www.statefarm.com",
   "careers": "https://jobs.statefarm.com/main/",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "jobs.statefarm.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 33,
@@ -523,9 +518,16 @@
   "name": "Comcast",
   "website": "https://corporate.comcast.com",
   "careers": "https://corporate.comcast.com/careers",
-  "feeds": [],
-  "systems": [],
-  "status": "not_found"
+  "feeds": [
+   [
+    "workday",
+    "comcast|wd115|Comcast_Careers"
+   ]
+  ],
+  "systems": [
+   "workday"
+  ],
+  "status": "watched"
  },
  {
   "rank": 38,
@@ -697,7 +699,7 @@
   "systems": [
    "phenom"
   ],
-  "status": "unsupported"
+  "status": "not_found"
  },
  {
   "rank": 50,
@@ -779,27 +781,26 @@
   "name": "Sysco",
   "website": "https://www.sysco.com",
   "careers": "https://careers.sysco.com/en",
-  "feeds": [],
-  "systems": [
-   "radancy"
+  "feeds": [
+   [
+    "workday",
+    "sysco|wd5|syscocareers"
+   ]
   ],
-  "status": "unsupported"
+  "systems": [
+   "radancy",
+   "workday"
+  ],
+  "status": "watched"
  },
  {
   "rank": 56,
   "name": "American Express",
   "website": "https://www.americanexpress.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "american|wd1|AU"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 57,
@@ -863,7 +864,7 @@
   "systems": [
    "phenom"
   ],
-  "status": "unsupported"
+  "status": "not_found"
  },
  {
   "rank": 63,
@@ -1028,16 +1029,9 @@
   "name": "TD Synnex",
   "website": "https://uk.tdsynnex.com/",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "td|wd3|TD_Bank_Careers"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 75,
@@ -1105,11 +1099,17 @@
   "name": "TJX",
   "website": "https://www.tjx.com",
   "careers": "https://jobs.tjx.com/global/en",
-  "feeds": [],
-  "systems": [
-   "phenom"
+  "feeds": [
+   [
+    "workday",
+    "tjx|wd1|TJX_EXTERNAL"
+   ]
   ],
-  "status": "unsupported"
+  "systems": [
+   "phenom",
+   "workday"
+  ],
+  "status": "watched"
  },
  {
   "rank": 80,
@@ -1127,11 +1127,16 @@
   "name": "United Airlines Holdings",
   "website": "https://www.united.com",
   "careers": "https://careers.united.com/us/en",
-  "feeds": [],
+  "feeds": [
+   [
+    "phenom",
+    "careers.united.com/us/en"
+   ]
+  ],
   "systems": [
    "phenom"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 82,
@@ -1179,32 +1184,18 @@
   "name": "Charter Communications",
   "website": "https://www.charter.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "cc|wd3|ChanelCareers"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 86,
   "name": "American Airlines Group",
   "website": "https://www.aa.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "aa|wd105|AA"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 87,
@@ -1388,16 +1379,9 @@
   "name": "Coca-Cola",
   "website": "https://www.coca-colacompany.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "cc|wd3|ChanelCareers"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 99,
@@ -1460,13 +1444,18 @@
   "name": "Deere",
   "website": "https://www.deere.com",
   "careers": "https://careers.deere.com/careers",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.deere.com"
+   ]
+  ],
   "systems": [
    "eightfold",
    "phenom",
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 103,
@@ -1526,12 +1515,18 @@
   "name": "Thermo Fisher Scientific",
   "website": "https://www.thermofisher.com",
   "careers": "https://jobs.thermofisher.com/global/en",
-  "feeds": [],
+  "feeds": [
+   [
+    "workday",
+    "thermofisher|wd5|ThermoFisherCareers"
+   ]
+  ],
   "systems": [
    "brassring",
-   "phenom"
+   "phenom",
+   "workday"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 107,
@@ -1639,20 +1634,9 @@
   "name": "Best Buy",
   "website": "https://www.investors.bestbuy.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "bb|wd3|BlackBerry"
-   ],
-   [
-    "workday",
-    "bb|wd3|QNX"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 114,
@@ -1712,11 +1696,16 @@
   "name": "Philip Morris International",
   "website": "https://www.pmi.com",
   "careers": "https://www.pmi.com/careers/overview",
-  "feeds": [],
+  "feeds": [
+   [
+    "phenom",
+    "join.pmicareers.com/gb/en"
+   ]
+  ],
   "systems": [
    "phenom"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 118,
@@ -1768,16 +1757,9 @@
   "name": "US Foods Holding",
   "website": "https://www.usfoods.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "us|wd103|Tobii_Dynavox"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 122,
@@ -1834,11 +1816,17 @@
   "name": "Warner Bros. Discovery",
   "website": "https://wbd.com",
   "careers": "https://careers.wbd.com/global/en",
-  "feeds": [],
-  "systems": [
-   "phenom"
+  "feeds": [
+   [
+    "workday",
+    "warnerbros|wd5|global"
+   ]
   ],
-  "status": "unsupported"
+  "systems": [
+   "phenom",
+   "workday"
+  ],
+  "status": "watched"
  },
  {
   "rank": 127,
@@ -1889,24 +1877,34 @@
   "name": "CHS",
   "website": "https://www.chsinc.com",
   "careers": "https://jobs.chsinc.com/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.chsinc.com"
+   ]
+  ],
   "systems": [
    "radancy",
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 131,
   "name": "Advanced Micro Devices",
   "website": "https://www.amd.com",
   "careers": "https://www.amd.com/en/corporate/careers.html",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "careers.amd.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 132,
@@ -2085,11 +2083,16 @@
   "name": "Nucor",
   "website": "https://www.nucor.com",
   "careers": "https://nucor.com/careers/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.nucor.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 143,
@@ -2141,16 +2144,9 @@
   "name": "United Natural Foods",
   "website": "https://www.unfi.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "unf|wd5|unfjobs"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 147,
@@ -2194,11 +2190,16 @@
   "name": "NRG Energy",
   "website": "https://www.nrg.com",
   "careers": "https://www.nrg.com/en/about/careers",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.nrgenergy.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 150,
@@ -2290,11 +2291,16 @@
   "name": "Paramount Skydance",
   "website": "https://www.paramount.com",
   "careers": "https://careers.paramount.com",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.paramount.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 156,
@@ -2321,11 +2327,16 @@
   "name": "Paccar",
   "website": "https://www.paccar.com",
   "careers": "https://www.paccar.com/careers/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.paccar.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 159,
@@ -2426,77 +2437,93 @@
   "name": "AutoNation",
   "website": "https://www.autonation.com",
   "careers": "https://careers.autonation.com/us/en",
-  "feeds": [],
-  "systems": [
-   "phenom"
+  "feeds": [
+   [
+    "workday",
+    "autonation|wd5|Careers"
+   ]
   ],
-  "status": "unsupported"
+  "systems": [
+   "phenom",
+   "workday"
+  ],
+  "status": "watched"
  },
  {
   "rank": 167,
   "name": "NextEra Energy",
   "website": "https://www.nexteraenergy.com",
   "careers": "https://www.nexteraenergy.com/careers/search-jobs.html",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.nexteraenergy.com"
+   ]
+  ],
   "systems": [
    "avature",
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 168,
   "name": "Marsh & McLennan",
   "website": "https://www.marshmclennan.com",
   "careers": "https://careers.marsh.com/global/en",
-  "feeds": [],
-  "systems": [
-   "phenom"
+  "feeds": [
+   [
+    "workday",
+    "mmc|wd1|MMC"
+   ]
   ],
-  "status": "unsupported"
+  "systems": [
+   "phenom",
+   "workday"
+  ],
+  "status": "watched"
  },
  {
   "rank": 169,
   "name": "Booking Holdings",
   "website": "https://www.booking.com/",
   "careers": "https://careers.booking.com",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "jobs.booking.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 170,
   "name": "McDonald's",
   "website": "https://www.investor.mcdonalds.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "ms|wd5|External"
-   ],
-   [
-    "workday",
-    "ms|wd5|private"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 171,
   "name": "HF Sinclair",
   "website": "https://www.hfsinclair.com",
   "careers": "https://careers.hfsinclair.com",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.hfsinclair.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 172,
@@ -2599,23 +2626,33 @@
   "name": "Freeport-McMoRan",
   "website": "https://fcx.com",
   "careers": "https://fcx.com/careers",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.fcx.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 178,
   "name": "Constellation Energy",
   "website": "https://www.constellationenergy.com",
   "careers": "https://jobs.constellationenergy.com/careers-home",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "jobs.constellationenergy.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 179,
@@ -2711,20 +2748,9 @@
   "name": "PG&E",
   "website": "https://www.pgecorp.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "pg|wd5|1000"
-   ],
-   [
-    "workday",
-    "pg|wd5|1001"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 186,
@@ -2747,12 +2773,17 @@
   "name": "Union Pacific",
   "website": "https://www.up.com",
   "careers": "https://up.jobs/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "up.jobs"
+   ]
+  ],
   "systems": [
    "phenom",
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 188,
@@ -2775,12 +2806,17 @@
   "name": "Exelon",
   "website": "https://www.exeloncorp.com",
   "careers": "https://jobs.exeloncorp.com/careers-home/",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "jobs.exeloncorp.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 190,
@@ -2870,11 +2906,16 @@
   "name": "Lear",
   "website": "https://www.lear.com",
   "careers": "https://www.lear.com/careers",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.lear.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 197,
@@ -2913,11 +2954,16 @@
   "name": "Newmont",
   "website": "https://www.newmont.com",
   "careers": "https://jobs.newmont.com/us/en",
-  "feeds": [],
+  "feeds": [
+   [
+    "phenom",
+    "jobs.newmont.com/us/en"
+   ]
+  ],
   "systems": [
    "phenom"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 201,
@@ -2953,20 +2999,9 @@
   "name": "Macy's",
   "website": "https://www.macysinc.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "ms|wd5|External"
-   ],
-   [
-    "workday",
-    "ms|wd5|private"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 204,
@@ -3007,32 +3042,26 @@
   "name": "Halliburton",
   "website": "https://www.halliburton.com",
   "careers": "https://careers.halliburton.com",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.halliburton.com"
+   ]
+  ],
   "systems": [
    "radancy",
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 208,
   "name": "Super Micro Computer",
   "website": "https://www.supermicro.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "super|wd103|EXT"
-   ],
-   [
-    "workday",
-    "super|wd103|TGS"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 209,
@@ -3209,20 +3238,25 @@
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "not_found"
  },
  {
   "rank": 222,
   "name": "Boston Scientific",
   "website": "https://www.bostonscientific.com",
   "careers": "https://www.bostonscientific.com/en-US/careers.html",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.bostonscientific.com"
+   ]
+  ],
   "systems": [
    "eightfold",
    "phenom",
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 223,
@@ -3371,16 +3405,9 @@
   "name": "Cleveland-Cliffs",
   "website": "https://www.clevelandcliffs.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "cc|wd3|ChanelCareers"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 234,
@@ -3504,22 +3531,32 @@
   "name": "Peter Kiewit Sons'",
   "website": "https://www.kiewit.com",
   "careers": "https://www.kiewit.com/careers/students-and-recent-graduates/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.allcraftjobs.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 243,
   "name": "Lincoln National",
   "website": "https://www.lincolnfinancial.com",
   "careers": "https://jobs.lincolnfinancial.com",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.lincolnfinancial.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 244,
@@ -3582,11 +3619,16 @@
   "name": "W.W. Grainger",
   "website": "https://www.grainger.com",
   "careers": "https://jobs.grainger.com",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.grainger.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 249,
@@ -3602,11 +3644,16 @@
   "name": "O'Reilly Automotive",
   "website": "https://www.oreillyauto.com",
   "careers": "https://careers.oreillyauto.com/us/en",
-  "feeds": [],
+  "feeds": [
+   [
+    "phenom",
+    "careers.oreillyauto.com/us/en"
+   ]
+  ],
   "systems": [
    "phenom"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 251,
@@ -3665,12 +3712,17 @@
   "name": "Universal Health Services",
   "website": "https://www.uhs.com",
   "careers": "https://jobs.uhs.com/careers/",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "jobs.uhs.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 256,
@@ -3718,9 +3770,16 @@
   "name": "Devon Energy",
   "website": "https://www.devonenergy.com",
   "careers": "https://www.devonenergy.com/careers",
-  "feeds": [],
-  "systems": [],
-  "status": "not_found"
+  "feeds": [
+   [
+    "workday",
+    "devonenergy|wd5|Careers"
+   ]
+  ],
+  "systems": [
+   "workday"
+  ],
+  "status": "watched"
  },
  {
   "rank": 260,
@@ -3743,11 +3802,16 @@
   "name": "Aflac",
   "website": "https://www.aflac.com",
   "careers": "https://careers.aflac.com",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.aflac.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 262,
@@ -3802,12 +3866,17 @@
   "name": "Kinder Morgan",
   "website": "https://www.kindermorgan.com",
   "careers": "https://careers.kindermorgan.com/careers-home/",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "careers.kindermorgan.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 267,
@@ -3881,11 +3950,16 @@
   "name": "Dominion Energy",
   "website": "https://www.dominionenergy.com",
   "careers": "https://careers.dominionenergy.com/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.dominionenergy.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 273,
@@ -4009,11 +4083,17 @@
   "name": "Ecolab",
   "website": "https://www.ecolab.com",
   "careers": "https://jobs.ecolab.com/global/en",
-  "feeds": [],
-  "systems": [
-   "phenom"
+  "feeds": [
+   [
+    "workday",
+    "ecolab|wd1|Ecolab_External"
+   ]
   ],
-  "status": "unsupported"
+  "systems": [
+   "phenom",
+   "workday"
+  ],
+  "status": "watched"
  },
  {
   "rank": 281,
@@ -4066,22 +4146,33 @@
   "name": "PPG Industries",
   "website": "https://www.ppg.com",
   "careers": "https://www.ppg.com/en-US/about-ppg/careers-at-ppg",
-  "feeds": [],
-  "systems": [
-   "phenom"
+  "feeds": [
+   [
+    "workday",
+    "ppg|wd5|PPG_CAREERS"
+   ]
   ],
-  "status": "unsupported"
+  "systems": [
+   "phenom",
+   "workday"
+  ],
+  "status": "watched"
  },
  {
   "rank": 285,
   "name": "DTE Energy",
   "website": "https://www.dteenergy.com",
   "careers": "https://www.dteenergy.com/us/en/residential/about-dte/careers/careers.html",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.dteenergy.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 286,
@@ -4097,12 +4188,17 @@
   "name": "Principal Financial",
   "website": "https://www.principal.com",
   "careers": "https://www.principal.com/about-us/careers/principal-financial-network",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "careers.principal.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 288,
@@ -4127,20 +4223,9 @@
   "name": "Tractor Supply",
   "website": "https://www.tractorsupply.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "ts|wd5|tishmanspeyer"
-   ],
-   [
-    "workday",
-    "ts|wd5|rainbowroom"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 291,
@@ -4218,16 +4303,9 @@
   "name": "Builders FirstSource",
   "website": "https://www.bldr.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "bf|wd5|USA_Canada"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 297,
@@ -4385,23 +4463,33 @@
   "name": "Erie Insurance Group",
   "website": "https://www.erieinsurance.com",
   "careers": "https://jobs.erieinsurance.com",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.erieinsurance.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 309,
   "name": "First Citizens BancShares",
   "website": "https://www.firstcitizens.com",
   "careers": "https://www.firstcitizens.com/personal/insights/career",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "jobs.firstcitizens.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 310,
@@ -4563,24 +4651,34 @@
   "name": "MasTec",
   "website": "https://www.mastec.com",
   "careers": "https://www.mastec.com/careers",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "careers.mastec.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 320,
   "name": "Reliance",
   "website": "https://reliance.com/",
   "careers": "https://careers.reliance.com/",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "careers.reliance.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 321,
@@ -4603,16 +4701,9 @@
   "name": "Alaska Air Group",
   "website": "https://www.alaskaair.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "aa|wd105|AA"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 323,
@@ -4795,22 +4886,32 @@
   "name": "GXO Logistics",
   "website": "https://www.gxo.com",
   "careers": "https://gxo.com/careers/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.gxo.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 337,
   "name": "Ball",
   "website": "https://www.ball.com",
   "careers": "https://www.ball.com/careers",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.ball.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 338,
@@ -4853,11 +4954,16 @@
   "name": "Entergy",
   "website": "https://www.entergy.com",
   "careers": "https://jobs.entergy.com",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.entergy.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 341,
@@ -4961,12 +5067,17 @@
   "name": "Intercontinental Exchange",
   "website": "https://www.ice.com",
   "careers": "https://www.ice.com/careers",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "careers.ice.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 348,
@@ -4984,11 +5095,17 @@
   "name": "Chewy",
   "website": "https://www.chewy.com",
   "careers": "https://careers.chewy.com/us/en",
-  "feeds": [],
-  "systems": [
-   "phenom"
+  "feeds": [
+   [
+    "workday",
+    "chewy|wd5|External"
+   ]
   ],
-  "status": "unsupported"
+  "systems": [
+   "phenom",
+   "workday"
+  ],
+  "status": "watched"
  },
  {
   "rank": 350,
@@ -5048,12 +5165,17 @@
   "name": "Ulta Beauty",
   "website": "https://ulta.com/investor/",
   "careers": "https://careers.ulta.com/careers",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "careers.ulta.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 356,
@@ -5112,22 +5234,32 @@
   "name": "Norfolk Southern",
   "website": "https://www.norfolksouthern.com",
   "careers": "https://www.norfolksouthern.com/en/careers/find-your-future",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.nscorp.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 360,
   "name": "Public Service Enterprise Group",
   "website": "https://www.pseg.com",
   "careers": "https://jobs.pseg.com",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.pseg.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 361,
@@ -5154,11 +5286,16 @@
   "name": "Expand Energy",
   "website": "https://www.expandenergy.com/",
   "careers": "https://www.expandenergy.com/careers/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.expandenergy.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 363,
@@ -5399,11 +5536,16 @@
   "name": "Hershey",
   "website": "https://www.thehersheycompany.com",
   "careers": "https://careers.thehersheycompany.com/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.thehersheycompany.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 378,
@@ -5599,12 +5741,17 @@
   "name": "Molson Coors Beverage",
   "website": "https://www.molsoncoors.com",
   "careers": "https://careers.molsoncoors.com/us/en",
-  "feeds": [],
+  "feeds": [
+   [
+    "phenom",
+    "careers.molsoncoors.com/us/en"
+   ]
+  ],
   "systems": [
    "phenom",
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 391,
@@ -5620,12 +5767,17 @@
   "name": "FM",
   "website": "https://fm.com/",
   "careers": "https://careers.fm.com/careers-home/",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "careers.fm.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 393,
@@ -5764,22 +5916,32 @@
   "name": "Mohawk Industries",
   "website": "https://www.mohawkind.com",
   "careers": "https://careers.mohawkind.com/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.mohawkind.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 405,
   "name": "Delek US Holdings",
   "website": "https://www.delekus.com",
   "careers": "https://jobs.delekus.com",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.delekus.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 406,
@@ -5806,32 +5968,18 @@
   "name": "Accendra Health",
   "website": "https://accendrahealth.com/",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "ah|wd108|AvenHospitalityJobs"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 408,
   "name": "American Tower",
   "website": "https://www.americantower.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "american|wd1|AU"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 409,
@@ -5877,11 +6025,16 @@
   "name": "Cintas",
   "website": "https://www.cintas.com",
   "careers": "https://www.cintas.com/careers/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.cintas.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 413,
@@ -5920,16 +6073,9 @@
   "name": "Global Payments",
   "website": "https://www.globalpaymentsinc.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "global|wd1|globalpartnerscareers"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 416,
@@ -5952,11 +6098,16 @@
   "name": "AGCO",
   "website": "https://www.agcocorp.com",
   "careers": "https://careers.agcocorp.com/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.agcocorp.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 418,
@@ -5999,11 +6150,16 @@
   "name": "Dana",
   "website": "https://www.dana.com",
   "careers": "https://jobs.dana.com/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.dana.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 421,
@@ -6052,11 +6208,16 @@
   "name": "WEC Energy Group",
   "website": "https://www.wecenergygroup.com",
   "careers": "https://www.wecenergygroup.com/careers/index.htm",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.wecenergygroup.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 425,
@@ -6101,11 +6262,17 @@
   "name": "Regions Financial",
   "website": "https://www.regions.com",
   "careers": "https://careers.regions.com/us/en",
-  "feeds": [],
-  "systems": [
-   "phenom"
+  "feeds": [
+   [
+    "workday",
+    "regions|wd5|Regions_Careers"
+   ]
   ],
-  "status": "unsupported"
+  "systems": [
+   "phenom",
+   "workday"
+  ],
+  "status": "watched"
  },
  {
   "rank": 429,
@@ -6208,11 +6375,16 @@
   "name": "CenterPoint Energy",
   "website": "https://www.centerpointenergy.com",
   "careers": "https://careers.centerpointenergy.com/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.centerpointenergy.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 436,
@@ -6245,16 +6417,9 @@
   "name": "APA",
   "website": "https://www.apacorp.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "apa|wd105|APA-PrivateCareersPage01102026"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 439,
@@ -6297,11 +6462,16 @@
   "name": "JetBlue Airways",
   "website": "https://www.jetblue.com",
   "careers": "https://careers.jetblue.com/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.jetblue.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 442,
@@ -6321,9 +6491,16 @@
   "name": "Xylem",
   "website": "https://www.xylem.com",
   "careers": "",
-  "feeds": [],
-  "systems": [],
-  "status": "not_found"
+  "feeds": [
+   [
+    "workday",
+    "xylem|wd5|xylem-careers"
+   ]
+  ],
+  "systems": [
+   "workday"
+  ],
+  "status": "watched"
  },
  {
   "rank": 444,
@@ -6404,12 +6581,17 @@
   "name": "Sprouts Farmers Market",
   "website": "https://www.sprouts.com",
   "careers": "https://www.sprouts.com/careers/",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "jobs.sprouts.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 451,
@@ -6456,11 +6638,16 @@
   "name": "Eastman Chemical",
   "website": "https://www.eastman.com",
   "careers": "https://www.eastman.com/en/careers",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.eastman.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 454,
@@ -6562,34 +6749,50 @@
   "name": "Advance Auto Parts",
   "website": "https://www.advanceautoparts.com",
   "careers": "https://jobs.advanceautoparts.com/us/en",
-  "feeds": [],
-  "systems": [
-   "phenom"
+  "feeds": [
+   [
+    "workday",
+    "advanceauto|wd5|AdvanceExternalCareers"
+   ]
   ],
-  "status": "unsupported"
+  "systems": [
+   "phenom",
+   "workday"
+  ],
+  "status": "watched"
  },
  {
   "rank": 462,
   "name": "Optimum Communications",
   "website": "https://www.optimum.com/",
   "careers": "https://www.optimumcareers.com/",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "www.optimumcareers.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 463,
   "name": "Sirius XM Holdings",
   "website": "https://www.siriusxm.com",
   "careers": "https://careers.siriusxm.com/careers/",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "careers.siriusxm.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 464,
@@ -6726,9 +6929,16 @@
   "name": "Zimmer Biomet Holdings",
   "website": "https://www.zimmerbiomet.eu/en",
   "careers": "https://www.zimmerbiomet.eu/en/careers",
-  "feeds": [],
-  "systems": [],
-  "status": "not_found"
+  "feeds": [
+   [
+    "phenom",
+    "careers.zimmerbiomet.com/us/en"
+   ]
+  ],
+  "systems": [
+   "phenom"
+  ],
+  "status": "watched"
  },
  {
   "rank": 474,
@@ -6785,39 +6995,42 @@
   "name": "American Financial Group",
   "website": "https://www.afginc.com",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "american|wd1|AU"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 479,
   "name": "Post Holdings",
   "website": "https://www.postholdings.com",
   "careers": "https://jobs.postholdings.com/careers-home",
-  "feeds": [],
+  "feeds": [
+   [
+    "jibe",
+    "jobs.postholdings.com"
+   ]
+  ],
   "systems": [
    "icims",
    "jibe"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 480,
   "name": "XPO",
   "website": "https://www.xpo.com",
   "careers": "https://jobs.xpo.com",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.xpo.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 481,
@@ -6968,31 +7181,25 @@
   "name": "Commercial Metals",
   "website": "https://www.cmc.com",
   "careers": "https://www.cmc.com/careers",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "jobs.cmc.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 492,
   "name": "Moody's",
   "website": "https://ir.moodys.com/",
   "careers": "",
-  "feeds": [
-   [
-    "workday",
-    "ms|wd5|External"
-   ],
-   [
-    "workday",
-    "ms|wd5|private"
-   ]
-  ],
-  "systems": [
-   "workday"
-  ],
-  "status": "watched"
+  "feeds": [],
+  "systems": [],
+  "status": "not_found"
  },
  {
   "rank": 493,
@@ -7019,11 +7226,16 @@
   "name": "Ingersoll Rand",
   "website": "https://www.irco.com",
   "careers": "https://careers.irco.com",
-  "feeds": [],
+  "feeds": [
+   [
+    "successfactors",
+    "careers.irco.com"
+   ]
+  ],
   "systems": [
    "successfactors"
   ],
-  "status": "unsupported"
+  "status": "watched"
  },
  {
   "rank": 495,

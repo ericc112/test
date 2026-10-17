@@ -129,6 +129,9 @@ DEFAULT_SEARCH = {
         "workday": True,
         "oracle": True,
         "amazon": True,
+        "jibe": True,
+        "successfactors": True,
+        "phenom": True,
     },
     # Employer job boards to watch; filled from SUGGESTED_COMPANIES below.
     "companies": {},
@@ -179,11 +182,20 @@ for _co in FORTUNE500:
         if (_kind, _slug) not in _known:
             SUGGESTED_COMPANIES.append((_co["name"], _kind, _slug))
             _known.add((_kind, _slug))
-WATCHLIST_VERSION = 2  # raise when the default watch list grows, so saved searches pick up the new employers
+WATCHLIST_VERSION = 3  # raise when the default watch list changes, so saved searches pick up the new employers
+# Feeds that were on the default list but belong to other companies (e.g. "ms" is Morgan Stanley's
+# Workday site, not Macy's or Moody's). Saved searches drop them when they upgrade.
+RETIRED_FEEDS = {
+    "workday": ["cw|wd1|External", "cw|wd1|CWServices", "american|wd1|AU", "td|wd3|TD_Bank_Careers", "cc|wd3|ChanelCareers",
+                "aa|wd105|AA", "bb|wd3|BlackBerry", "bb|wd3|QNX", "us|wd103|Tobii_Dynavox", "unf|wd5|unfjobs",
+                "super|wd103|EXT", "super|wd103|TGS", "ts|wd5|tishmanspeyer", "ts|wd5|rainbowroom", "bf|wd5|USA_Canada",
+                "ah|wd108|AvenHospitalityJobs", "apa|wd105|APA-PrivateCareersPage01102026", "ghr|wd1|lateral-us"],
+}
 
 
 def _default_companies():
-    out = {"greenhouse": [], "lever": [], "ashby": [], "workday": [], "oracle": [], "amazon": []}
+    out = {"greenhouse": [], "lever": [], "ashby": [], "workday": [], "oracle": [], "amazon": [], "jibe": [],
+           "successfactors": [], "phenom": []}
     for _, kind, slug in SUGGESTED_COMPANIES:
         out.setdefault(kind, []).append(slug)
     return out
@@ -193,7 +205,7 @@ DEFAULT_SEARCH["companies"] = _default_companies()
 DEFAULT_SEARCH["watchlist_version"] = WATCHLIST_VERSION
 
 DEFAULT_AUTOMATION = {
-    # Check employer job boards (Greenhouse, Lever, Ashby, Workday, Oracle) every few minutes
+    # Check employer job boards (Greenhouse, Lever, Ashby, Workday, Oracle and others) every few minutes
     # while JobBot runs, so new postings are caught as soon as they're published.
     "watch_enabled": True,
     "watch_minutes": 5,

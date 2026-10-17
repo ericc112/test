@@ -130,7 +130,11 @@ def get_setting(key):
     stored = json.loads(row["value"]) if row else None
     merged = _merge(config.DEFAULTS.get(key), stored)
     if key == "search" and stored is not None and (stored.get("watchlist_version") or 1) < config.WATCHLIST_VERSION:
-        # JobBot now watches more employers by default (e.g. the Fortune 500): add the new ones once.
+        # JobBot now watches more employers by default (e.g. the Fortune 500): add the new ones once,
+        # and drop default feeds that turned out to belong to other companies.
+        for kind, slugs in config.RETIRED_FEEDS.items():
+            if kind in merged["companies"]:
+                merged["companies"][kind] = [s for s in merged["companies"][kind] if s not in slugs]
         for kind, slugs in config.DEFAULT_SEARCH["companies"].items():
             have = merged["companies"].setdefault(kind, [])
             have.extend(s for s in slugs if s not in have)

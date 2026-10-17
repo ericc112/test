@@ -28,6 +28,7 @@ Indeed, LinkedIn and other aggregators copy jobs from employers' sites, often ho
 - **Greenhouse, Lever and Ashby** (Stripe, Toast, Brex, Ramp, Plaid…)
 - **Workday** (Capital One, Citi, Wells Fargo, Bank of America, PwC, Accenture, Fidelity, BlackRock, Nike, Target…)
 - **Oracle Recruiting Cloud** (JPMorgan Chase, and about 30 more large employers)
+- **SAP SuccessFactors**, **Jibe** and **Phenom** career sites (John Deere, Union Pacific, State Farm, AMD, Molson Coors…)
 - **Amazon's own careers site**
 
 While JobBot is running, a watcher re-checks every employer on your list every 5 minutes (adjustable down to 1).
@@ -35,7 +36,7 @@ While JobBot is running, a watcher re-checks every employer on your list every 5
 - **New postings are flagged and acted on:** anything that appears after JobBot's first look at a board is marked **Just posted**, listed at the top of the dashboard, and (optionally) sent as a desktop alert. Strong matches are filled straight away, so they're waiting in your review queue.
 - **Speed is measured:** the dashboard shows how long, after the employer published it, each new posting took to reach you. In testing, new Stripe and Cloudflare postings were caught 0.6 to 1.3 minutes after they went live.
 
-JobBot ships watching about 50 employers with lots of business roles, plus every **Fortune 500** company whose careers site runs on one of the systems above: 267 of the 500 (`jobbot/fortune500.json` lists all 500, with the system each one uses). The other 233 use systems JobBot can't read yet (SuccessFactors, Phenom, iCIMS and others) or have no public job feed. Add or remove them in **Search setup**: type a company name, or paste a link to one of its job posts (for Workday, a link from its `…myworkdayjobs.com` careers site).
+JobBot ships watching about 50 employers with lots of business roles, plus every **Fortune 500** company whose careers site runs on one of the systems above: 322 of them. `jobbot/fortune500.json` lists the 498 companies in Fortune's data (it skips ranks 161 and 351), with each one's careers site and job system. Each feed was checked against the live site, including the employer each Workday site says it hires for. Of the other 176, 45 use systems JobBot can't read yet (Eightfold, iCIMS, Taleo, Avature and others), and 131 have no public job feed JobBot could find (Walmart, Apple and Microsoft among them). Add or remove them in **Search setup**: type a company name, or paste a link to one of its job posts (for Workday, a link from its `…myworkdayjobs.com` careers site).
 
 Workday asks applicants to create an account with each employer. Once you set a Workday password (see *Workday accounts* below), JobBot signs in or creates that account and fills the form; without one it alerts you and links to the posting.
 
@@ -127,7 +128,7 @@ Filling in saves a draft in your account with that employer and stops at Workday
 
 ## Job sources
 
-All free, public, no API keys. Every job links back to its original listing. The first six are employers' own job systems. With the Fortune 500 on the list (about 350 feeds) the watcher spreads its checks out, so each employer is re-checked about every 6 minutes. The rest are aggregators, which are useful for companies you don't watch but lag behind.
+All free, public, no API keys. Every job links back to its original listing. The first nine are employers' own job systems. With the Fortune 500 on the list (about 450 feeds) the watcher spreads its checks out, so each employer is re-checked about every 5 minutes. The rest are aggregators, which are useful for companies you don't watch but lag behind.
 
 | Source | What it covers | Refresh |
 |---|---|---|
@@ -136,6 +137,9 @@ All free, public, no API keys. Every job links back to its original listing. The
 | Ashby boards | Employers you watch (e.g. Ramp, Notion) | every 5 min (watcher) |
 | Workday career sites | Employers you watch (e.g. Capital One, Citi, PwC) | every 5 min (watcher) |
 | Oracle Recruiting Cloud | Employers you watch (e.g. JPMorgan Chase) | every 5 min (watcher) |
+| SuccessFactors career sites | Employers you watch (e.g. John Deere, CHS, Hershey) | every 5 min (watcher) |
+| Jibe career sites | Employers you watch (e.g. State Farm, AMD, Principal) | every 5 min (watcher) |
+| Phenom career sites | Employers you watch (e.g. Molson Coors, Zimmer Biomet) | every 5 min (watcher) |
 | Amazon careers site | Amazon's US postings | every 5 min (watcher) |
 | Remotive | Remote jobs | 6 h (their terms ask for ≤ 4 calls a day) |
 | Remote OK | Latest remote jobs | 1 h |

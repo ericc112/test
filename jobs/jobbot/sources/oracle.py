@@ -9,9 +9,9 @@ A board key is "host|site", e.g. "jpmc.fa.oraclecloud.com|CX_1001".
 import re
 import sys
 
-from .. import config, fields, scoring
+from .. import fields, scoring
 from ..textutil import html_to_text
-from . import display_name, http, iso, make_job, register
+from . import display_name, http, iso, make_job, register, suggested_names
 
 NAME = "oracle"
 LABEL = "Oracle career sites"
@@ -24,7 +24,7 @@ PAGES = 4  # intern feeds: the 100 best matches for "intern"; others: the newest
 DETAIL_LIMIT = 15
 
 URL_RE = re.compile(r"https?://([\w.-]+\.oraclecloud\.com)/hcmUI/CandidateExperience/[a-z]{2}(?:-[A-Z]{2})?/sites/([\w]+)", re.I)
-NAMES = {slug.split("|")[0]: name for name, kind, slug in config.SUGGESTED_COMPANIES if kind == NAME}
+NAMES = suggested_names(NAME, lambda slug: slug.split("|")[0])
 _looked_at = set()
 
 

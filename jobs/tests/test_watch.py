@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from unittest import mock
 
 from jobbot import db, pipeline, sources
-from jobbot.sources import amazon, http, make_job, oracle, workday
+from jobbot.sources import amazon, http, jibe, make_job, oracle, phenom, successfactors, workday
 
 from .helpers import PROFILE, TempData
 
@@ -194,6 +194,122 @@ class AmazonTests(unittest.TestCase):
         self.assertTrue(jobs[0]["posted_at"].startswith("2026-10-09"))
         self.assertEqual((seen[0]["base_query"], seen[0]["country"]), ("intern", "USA"))
         self.assertEqual(amazon.keys({"companies": {"amazon": ["amazon"]}, "job_types": ["internship"]}), ["amazon#intern"])
+
+
+SEARCH = {"field": "business", "job_types": ["internship"]}
+
+
+class JibeTests(unittest.TestCase):
+    def test_reads_the_api_and_keeps_business_internships(self):
+        def post(slug, title, kind="INTERN"):
+            return {"data": {"slug": slug, "req_id": slug, "language": "en-us", "title": title, "description": "Paid: $22 per hour.",
+                             "full_location": "Bloomington, Illinois", "country": "United States", "employment_type": kind,
+                             "posted_date": "2026-10-15T14:00:00+0000", "hiring_organization": "State Farm",
+                             "meta_data": {"canonical_url": f"https://jobs.statefarm.com/jobs/{slug}?lang=en-us"}}}
+        page = {"totalCount": 2, "jobs": [post("46413", "Summer 2027 Intern - Marketing"), post("1", "Software Engineer Intern")]}
+        seen = []
+        with mock.patch.object(http, "get_json", side_effect=lambda url, params=None, **kw: seen.append((url, params)) or page):
+            jobs = jibe.fetch("jobs.statefarm.com#intern", SEARCH)
+        self.assertEqual([j["title"] for j in jobs], ["Summer 2027 Intern - Marketing"])
+        j = jobs[0]
+        self.assertEqual((j["id"], j["company"]), ("jibe:jobs.statefarm.com:46413", "State Farm"))
+        self.assertEqual(j["url"], "https://jobs.statefarm.com/jobs/46413?lang=en-us")
+        self.assertEqual(j["location"], "Bloomington, Illinois, United States")
+        self.assertTrue(j["posted_at"].startswith("2026-10-15T14:00"))
+        self.assertEqual(seen[0][0], "https://jobs.statefarm.com/api/jobs")
+        self.assertEqual((seen[0][1]["keywords"], seen[0][1]["sortBy"]), ("intern", "posted_date"))
+        self.assertEqual(jibe.keys({"companies": {"jibe": ["jobs.statefarm.com", "not a host"]}, "job_types": ["internship"]}),
+                         ["jobs.statefarm.com#intern"])
+
+
+def sf_table(rows, total):
+    body = "".join(f"""<tr class="data-row"><td class="colTitle"><span class="jobTitle hidden-phone">
+        <a href="{path}" class="jobTitle-link">{title}</a></span></td>
+        <td class="colLocation"><span class="jobLocation"> {loc} </span></td>
+        <td class="colDate"><span class="jobDate">Oct 16, 2026
+        </span></td></tr>""" for path, title, loc in rows)
+    return f'<span class="paginationLabel">Results <b>1 – {len(rows)}</b> of <b>{total}</b></span><table><tbody>{body}</tbody></table>'
+
+
+class SuccessFactorsTests(unittest.TestCase):
+    def test_table_layout_with_a_path_prefix(self):
+        rows, total = successfactors.parse_results(sf_table(
+            [("/eightfold/job/Moline-2027-Intern-Finance-IL-61265/1431021000/", "2027 Intern - Finance &amp; Accounting", "Moline, IL, US, 61265")], 14))
+        self.assertEqual(total, 14)
+        self.assertEqual(rows, [{"path": "/eightfold/job/Moline-2027-Intern-Finance-IL-61265/1431021000/",
+                                 "title": "2027 Intern - Finance & Accounting", "location": "Moline, IL, US, 61265",
+                                 "posted_at": "2026-10-16T00:00:00+00:00"}])
+
+    def test_tile_layout(self):
+        tile = """<li class="job-tile job-id-1389579300" data-url="/job/Denver-Marketing-Intern-CO-80203/1389579300/">
+            <a class="jobTitle-link fontcolor7222" data-focus-tile=".job-id-1389579300" href="/job/Denver-Marketing-Intern-CO-80203/1389579300/"> Marketing Intern </a>
+            <div id="job-1389579300-desktop-section-location-value">Denver, CO, US, 80203</div>
+            <ul><li>nested</li></ul>
+            <div id="job-1389579300-desktop-section-date-value">Oct 16, 2026</div></li>"""
+        rows, total = successfactors.parse_results("<ul>" + tile * 2 + "</ul>")
+        self.assertIsNone(total)  # tile pages don't print a count
+        self.assertEqual(len(rows), 2)
+        self.assertEqual((rows[0]["title"], rows[0]["location"], rows[0]["posted_at"]),
+                         ("Marketing Intern", "Denver, CO, US, 80203", "2026-10-16T00:00:00+00:00"))
+
+    def test_no_results_page_is_empty_not_the_newest_jobs(self):
+        page = '<div id="noresults">There are currently no open positions.</div>' + sf_table([("/job/x/1/", "Mining Technician", "Bagdad, AZ, US")], 10)
+        with mock.patch.object(http, "get", return_value=("u", page)):
+            self.assertEqual(successfactors._search("jobs.example.com", True), ([], 0))
+
+    def test_fetch_opens_matching_postings_only(self):
+        listing = sf_table([("/job/Inver-Grove-Heights-Supply-Chain-Intern-MN/1431172000/", "Supply Chain Intern", "Inver Grove Heights, MN, US"),
+                            ("/job/Grand-Forks-Agronomy-Intern-ND/1420999400/", "Crop Science Research Intern", "Grand Forks, ND, US")], 2)
+        detail = ('<meta itemprop="datePosted" content="Fri Oct 16 07:00:00 UTC 2026">'
+                  '<span itemprop="description"><span class="jobdescription"><p>Plan freight. $21 per hour.</p></span></span>')
+        urls = []
+
+        def get(url, params=None, **kw):
+            urls.append(url)
+            return url, detail if "/job/" in url else listing
+
+        with mock.patch.object(http, "get", side_effect=get):
+            jobs = successfactors.fetch("careers.chsinc.com#intern", SEARCH)
+        self.assertEqual([j["title"] for j in jobs], ["Supply Chain Intern"])
+        j = jobs[0]
+        self.assertEqual(j["id"], "successfactors:careers.chsinc.com:1431172000")
+        self.assertIn("$21 per hour", j["description"])
+        self.assertEqual(j["posted_at"], "2026-10-16T07:00:00+00:00")
+        self.assertEqual(sum("/job/" in u for u in urls), 1)  # the research posting was never opened
+
+
+class PhenomTests(unittest.TestCase):
+    KEY = "careers.molsoncoors.com/us/en"
+
+    def test_reads_the_search_service(self):
+        hits = {"refineSearch": {"status": 200, "totalHits": 2, "data": {"jobs": [
+            {"jobId": "40096", "title": "Finance Intern", "type": "Student/Intern", "cityStateCountry": "Milwaukee, US-WI, United States",
+             "postedDate": "2026-10-16T16:42:36.451+0000", "descriptionTeaser": "Support our FP&A team.", "multi_category": ["Finance"]},
+            {"jobId": "39744", "title": "Brewery Operations Intern - Packaging", "type": "Student/Intern",
+             "cityStateCountry": "Fort Worth, US-TX, United States", "postedDate": "2026-10-16T16:42:36.451+0000"}]}}}
+        job_page = 'phApp.ddo = {"jobDetail": {"data": {"job": {"description": "<p>Pay: $24 per hour</p>"}}}}; phApp.x = 1;'
+        sent = []
+        with mock.patch.object(http, "post_json", side_effect=lambda url, payload, **kw: sent.append((url, payload)) or hits), \
+             mock.patch.object(http, "get", return_value=("u", job_page)):
+            jobs = phenom.fetch(self.KEY + "#intern", SEARCH)
+        titles = [j["title"] for j in jobs]
+        self.assertIn("Finance Intern", titles)
+        j = jobs[titles.index("Finance Intern")]
+        self.assertEqual((j["id"], j["url"]), ("phenom:careers.molsoncoors.com:40096", "https://careers.molsoncoors.com/us/en/job/40096"))
+        self.assertIn("$24 per hour", j["description"])
+        self.assertEqual(sent[0][0], "https://careers.molsoncoors.com/widgets")
+        self.assertEqual((sent[0][1]["keywords"], sent[0][1]["lang"], sent[0][1]["country"]), ("intern", "en_us", "us"))
+        self.assertEqual(phenom.keys({"companies": {"phenom": [self.KEY, "careers.example.com"]}, "job_types": ["internship"]}),
+                         [self.KEY + "#intern"])
+
+
+class CompanyNameTests(unittest.TestCase):
+    def test_first_listed_name_wins_for_a_shared_tenant(self):
+        from jobbot import config
+        with mock.patch.object(config, "SUGGESTED_COMPANIES", [("Morgan Stanley", "workday", "ms|wd5|External"),
+                                                                ("Moody's", "workday", "ms|wd5|private")]):
+            names = sources.suggested_names("workday", lambda slug: slug.split("|")[0])
+        self.assertEqual(names, {"ms": "Morgan Stanley"})
 
 
 class WatcherTests(unittest.TestCase):

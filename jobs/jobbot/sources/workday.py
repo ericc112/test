@@ -12,9 +12,9 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 
-from .. import config, fields, scoring
+from .. import fields, scoring
 from ..textutil import html_to_text
-from . import display_name, http, iso, make_job, register
+from . import display_name, http, iso, make_job, register, suggested_names
 
 NAME = "workday"
 LABEL = "Workday career sites"
@@ -28,7 +28,7 @@ DETAIL_LIMIT = 25
 
 _looked_at = set()  # postings already looked at this session (incl. non-matches), for paging
 URL_RE = re.compile(r"https?://([\w-]+)\.(wd\d+)\.myworkdayjobs\.com/(?:[a-z]{2}-[A-Z]{2}/)?([\w-]+)", re.I)
-NAMES = {slug.split("|")[0]: name for name, kind, slug in config.SUGGESTED_COMPANIES if kind == NAME}
+NAMES = suggested_names(NAME, lambda slug: slug.split("|")[0])
 
 
 INTERN_FACET = re.compile(r"\bintern(ship)?s?\b|co-?op|student program", re.I)

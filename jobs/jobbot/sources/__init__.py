@@ -2,7 +2,7 @@
 import re
 from datetime import datetime, timezone
 
-from .. import pay
+from .. import config, pay
 from ..textutil import norm
 
 REGISTRY = {}
@@ -53,12 +53,23 @@ def make_job(source, external_id, title, company, url, **kw):
     return job
 
 
+def suggested_names(kind, key=lambda slug: slug):
+    """Company names for one source's board keys. The first entry wins: the hand-picked list comes
+    before the Fortune 500, and one Workday tenant can be listed under more than one company."""
+    out = {}
+    for name, k, slug in config.SUGGESTED_COMPANIES:
+        if k == kind:
+            out.setdefault(key(slug), name)
+    return out
+
+
 def display_name(slug):
     return " ".join(w.capitalize() for w in re.split(r"[-_]+", slug or "") if w)
 
 
 from . import (  # noqa: E402  (modules register themselves)
-    amazon, arbeitnow, ashby, greenhouse, himalayas, jobicy, lever, oracle, remoteok, remotive, themuse, workday,
+    amazon, arbeitnow, ashby, greenhouse, himalayas, jibe, jobicy, lever, oracle, phenom, remoteok, remotive,
+    successfactors, themuse, workday,
 )
 
 # Employer-run job systems (not aggregators): watched every few minutes for new postings.

@@ -157,3 +157,14 @@ class WatchListUpgradeTests(unittest.TestCase):
             s["companies"]["workday"].remove("new|wd1|Jobs")  # you remove one afterwards: it stays removed
             db.set_setting("search", s)
             self.assertNotIn("new|wd1|Jobs", db.get_setting("search")["companies"]["workday"])
+
+    def test_upgrade_drops_feeds_that_belong_to_other_companies(self):
+        from jobbot import config
+        with mock.patch.object(config, "RETIRED_FEEDS", {"workday": ["cc|wd3|ChanelCareers"]}), \
+             mock.patch.object(config, "WATCHLIST_VERSION", 3):
+            db.set_setting("search", {"watchlist_version": 2,
+                                      "companies": {"workday": ["cc|wd3|ChanelCareers", "mine|wd3|X"]}})
+            s = db.get_setting("search")
+            self.assertNotIn("cc|wd3|ChanelCareers", s["companies"]["workday"])
+            self.assertIn("mine|wd3|X", s["companies"]["workday"])
+            self.assertEqual(s["watchlist_version"], 3)
