@@ -43,6 +43,7 @@ DEFAULT_PROFILE = {
     "school": "",
     "degree": "",
     "degree_type": "",  # e.g. "BBA", "BS" or "BA": forms that list them separately
+    "citizenship": "",  # e.g. "U.S. citizen": picks the right kind of "No" on sponsorship questions
     "discipline": "",
     "graduation_year": "",
     # Students

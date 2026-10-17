@@ -182,6 +182,11 @@ class RuleTests(unittest.TestCase):
         label = "Will you require our Company to provide immigration sponsorship now or in the future?"
         self.assertEqual(ans(q(label, "select", merck), profile=me).option, merck[2])
         self.assertEqual(ans(q(label, "select", ["Yes", "No"]), profile=me).option, "No")
+        # A citizen's No even when it mentions an EAD; never the temporary visa one; none that fits: left for you.
+        merck2 = ["Yes", "No – I hold a temporary visa status that provides work authorization",
+                  "No – I am a U.S. citizen, permanent resident, refugee, asylee or hold an EAD"]
+        self.assertEqual(ans(q(label, "select", merck2), profile=dict(me, citizenship="U.S. citizen")).option, merck2[2])
+        self.assertIsNone(ans(q(label, "select", merck2[:2] + ["No – I hold an H-1B visa"]), profile=me).option)
 
     def test_the_disability_form(self):
         me = dict(PROFILE, eeo_disability="No, I don't have a disability")
@@ -211,6 +216,11 @@ class RuleTests(unittest.TestCase):
         self.assertIsNone(ans(q("Degree", "select", ["Bachelor of Arts", "Bachelor of Science"]), profile=me).option)
         self.assertEqual(ans(q("Degree", "select", ["BA", "BS", "BBA"]), profile=me).option, "BBA")
         self.assertEqual(ans(q("Degree", "select", ["Bachelors", "Masters", "MBA"]), profile=me).option, "Bachelors")
+
+    def test_level_of_degree_is_the_degree(self):
+        me = dict(PROFILE, degree="Bachelor's", degree_type="BBA")
+        opts = ["Associates", "Bachelors", "Masters non-MBA", "Doctorate", "MBA"]
+        self.assertEqual(ans(q("What level of degree are you currently attending?", "checkboxes", opts), profile=me).option, ["Bachelors"])
 
     def test_school_falls_back_to_other(self):
         a = ans(q("Which university did you attend?", "select", ["MIT", "Stanford", "Other (School Not Listed)"]))

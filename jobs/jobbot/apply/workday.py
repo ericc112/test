@@ -339,7 +339,7 @@ class WorkdayEngine(Engine):
             page.wait_for_selector(OPTION, timeout=3000)
             opts = [t for t in self._options(page) if t]
             page.keyboard.press("Escape")
-            return opts[:150]
+            return opts[:1000]  # some degree lists run to hundreds, medical degrees first
         except Exception:
             return []
 

@@ -380,18 +380,26 @@ def _veteran(q, c):
 
 
 TEMPORARY_STATUS = re.compile(r"temporary|i (hold|have) an? .{0,30}visa|on an? .{0,20}visa|\bopt\b|\bcpt\b|\bstem\b|h-?1b|\bead\b|\bf-?1\b", re.I)
+HOLDS_TEMPORARY = re.compile(r"\bi (hold|have|am on) (an? )?(temporary|[\w-]+ visa)|temporary (visa|status|work)", re.I)
+CITIZEN = re.compile(r"citizen|national\b|permanent resident|green card|u\.?s\.? worker|lawful permanent", re.I)
 
 
 def _sponsorship(q, c):
     """No sponsorship needed is a plain "No": never "No – I hold a temporary visa status that provides work
-    authorization", which some forms list first among several kinds of No."""
+    authorization", which some forms list first among several kinds of No. A U.S. citizen gets the citizen's No;
+    when no No fits, the question is left for you."""
     if re.search(r"without (the )?(need (for|of) )?(any |employer |visa )*sponsor", q.label or "", re.I):
         # "Are you authorized to work ... without the need for sponsorship?" asks about authorization.
         return yn(bool(c.profile.get("work_authorized")) and not c.profile.get("needs_sponsorship"))
     if c.profile.get("needs_sponsorship"):
         return "Yes"
     nos = [o for o in q.options or [] if re.match(r"\s*no\b", o, re.I)]
-    return next((o for o in nos if not TEMPORARY_STATUS.search(o)), "No")
+    if len(nos) <= 1:
+        return nos[0] if nos and not HOLDS_TEMPORARY.search(nos[0]) else ("No" if not nos else None)
+    citizen = re.search(r"citizen", c.profile.get("citizenship") or "", re.I)
+    fits = [o for o in nos if citizen and CITIZEN.search(o) and not HOLDS_TEMPORARY.search(o)] + \
+           [o for o in nos if not TEMPORARY_STATUS.search(o)]
+    return Answer(fits[0], "profile") if fits else Answer(None, "", note="Which kind of No fits you?")
 
 
 def _disability(q, c):
@@ -480,7 +488,7 @@ RULES = [
     # Before "currently pursuing" and "degree": "Please select the degree type you are currently pursuing",
     # "Expected Graduation / Graduation Date? If you are continuing ... your current degree program".
     (r"\bgraduation\b.{0,25}\bdate\b|expected graduation|anticipated graduation", ANY, _graduation),
-    (r"degree type|type of degree|which degree|what degree", ANY, _degree),
+    (r"degree type|type of degree|which degree|what degree|level of degree", ANY, _degree),
     (r"currently (enrolled|pursuing|attending|a student|studying)|are you (a |currently a |currently )?(current |full[- ]time )?"
      r"(student|enrolled)|enrolled (in|at) (a|an|your)|pursuing (a|an|your) .{0,30}degree", CHOICE | {"text"}, _enrolled),
     (r"(year|level|standing) (in|of) (school|study|college|university|program)|class standing|"
