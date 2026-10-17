@@ -96,7 +96,7 @@ class WorkdayEngine(Engine):
                 q = Question(key=f"{step_no}:{raw['key']}", kind=raw["kind"], label=raw["label"] or raw["auto"], required=raw["required"],
                              options=raw["options"], input_type=raw.get("input_type") or "", value=raw.get("value"),
                              section=raw.get("section") or "")
-                self._where[q.key] = (raw["auto"], raw["nth"])
+                self._where[q.key] = (raw["auto"], raw["nth"], raw["key"])
                 if q.input_type == "wd_listbox":
                     q.options = self._listbox_options(page, q)
                 elif q.input_type == "wd_prompt" and q.value in (None, ""):
@@ -189,10 +189,15 @@ class WorkdayEngine(Engine):
     _where = None
 
     def _box(self, page, q):
-        """A question's block, found by Workday's own name (our markers vanish when the page re-renders)."""
-        auto, nth = (self._where or {}).get(q.key, (None, 0))
+        """A question's block: by the marker set when the step was read, else by Workday's own name and its place
+        among the visible blocks of that name (the marker vanishes when the page re-renders). Counting hidden
+        blocks too put an answer into the wrong question when a form reuses one name."""
+        auto, nth, key = (self._where or {}).get(q.key, (None, 0, None))
+        marked = page.locator(f'[data-jobbot="{key}"]') if key else None
+        if marked is not None and marked.count() == 1:
+            return marked.first
         if auto:
-            return page.locator(f'[data-automation-id="{auto}"]').nth(nth)
+            return page.locator(f'[data-automation-id="{auto}"]').filter(visible=True).nth(nth)
         return page.locator(f'[data-jobbot="{q.key}"]').first
 
     def _info(self, page):
