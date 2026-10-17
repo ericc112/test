@@ -361,6 +361,10 @@ class WorkdayEngine(Engine):
         box = self._box(page, q)
         want = [str(x) for x in ([a.option] if not isinstance(a.option, list) else a.option) + [a.value] + list(a.alternatives) if x]
         try:
+            try:  # mid-screen, clear of Workday's sticky Save and Continue bar, which takes clicks meant for the bottom row
+                box.evaluate("e => e.scrollIntoView({block: 'center'})")
+            except Exception:
+                pass
             if q.input_type in ("wd_listbox", "wd_prompt"):
                 self._close_lists(page)
             if q.input_type == "wd_listbox":
