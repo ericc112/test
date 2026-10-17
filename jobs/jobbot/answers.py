@@ -343,6 +343,35 @@ def _role_type(q, c):
     return ["Full Time", "Full-time", "Regular"]
 
 
+DEGREE_NAMES = {
+    "bba": ["Bachelor of Business Administration", "BBA", "B.B.A."],
+    "bs": ["Bachelor of Science", "BS", "B.S."],
+    "ba": ["Bachelor of Arts", "BA", "B.A."],
+}
+
+
+def _degree(q, c):
+    """Your degree: its exact name first ("Bachelor of Business Administration", "BBA"), then its level ("Bachelor's"),
+    so a list of BA / BS / BBA doesn't get the first bachelor's it finds."""
+    level = c.profile.get("degree") or None
+    names = DEGREE_NAMES.get(norm(c.profile.get("degree_type") or "").replace(".", ""), [])
+    return (names + [level] if level else names) or None
+
+
+def _veteran(q, c):
+    """Not a veteran never lands on "I am a veteran, but I am not a protected veteran", which merely contains
+    the words "I am not a protected veteran"."""
+    v = c.profile.get("eeo_veteran") or "decline"
+    if q.kind in ("text", "textarea") and v == "decline":
+        return Answer(None, "skip")
+    if re.search(r"\bnot\b", v, re.I) and q.options:
+        says_veteran = re.compile(r"\bi am a veteran\b|\bidentify as\b|\bam a protected\b", re.I)
+        never = [o for o in q.options if re.search(r"not a veteran|never served", o, re.I) and not says_veteran.search(o)]
+        not_protected = [o for o in q.options if re.search(r"not a protected veteran", o, re.I) and not says_veteran.search(o)]
+        return Answer((never + not_protected or ["decline"])[0], "profile")
+    return _eeo("eeo_veteran")(q, c)
+
+
 def _blank(q, c):
     return Answer("", "blank")  # should be empty: clear anything already in it
 
@@ -362,7 +391,7 @@ RULES = [
     (r"\bgender\b|\bsex\b", ANY, _eeo("eeo_gender")),
     (r"hispanic|latin[oax]", ANY, _eeo("eeo_hispanic")),
     (r"\brace\b|ethnicit", ANY, _eeo("eeo_race")),
-    (r"veteran", ANY, _eeo("eeo_veteran")),
+    (r"veteran", ANY, _veteran),
     (r"disabilit", ANY, _eeo("eeo_disability")),
     # Messages and consent
     (r"text messages?|\bsms\b|whatsapp|newsletter|marketing|promotional|job alerts|talent (community|network|pool)|"
@@ -395,7 +424,7 @@ RULES = [
     # Agreements
     (r"privacy|i (have read|agree|acknowledge|consent|certify|confirm|understand|accept)|acknowledg|"
      r"terms (and|&) conditions|terms of (use|service)|data (processing|protection|retention)|gdpr|"
-     r"consent to|by (checking|submitting|clicking)|certify that|attest|true and (complete|accurate)",
+     r"consent to|by (checking|submitting|clicking)|certify that|attest|true and (complete|accurate)|must agree|agree to proceed",
      CHOICE, _consent),
     # Students and internships
     (r"\bgpa\b|grade point", ANY, _gpa),
@@ -414,7 +443,7 @@ RULES = [
     (r"^(type to )?add (your )?skills|^(your )?skills$", ANY, _skills),
     (r"(type|kind) of (role|position|job|employment) (are )?you|^(role|position|employment|job) type$", CHOICE, _role_type),
     # Education
-    (r"\bdegree\b|level of education|highest education|education level|highest level", ANY, _p("degree")),
+    (r"\bdegree\b|level of education|highest education|education level|highest level", ANY, _degree),
     (r"discipline|\bmajor\b|field of study|area of study|concentration", ANY, _p("discipline")),
     (r"graduat|year of completion|class of|class year", ANY, _graduation),
     (r"\b(school|university|college|institution)\b", TEXT | {"select"}, _school),
@@ -511,6 +540,18 @@ def _section_answer(q, ctx, label):
             if start else Answer(None, "profile")
     if q.section == "education" and re.match(r"(to|end)\b|.*actual or expected", label):  # "To (Actual or Expected)"
         return _coerce(_graduation(q, ctx)) or Answer(None, "profile")
+    if q.section == "employment":  # your current job, when your profile has it
+        p = ctx.profile
+        start = (p.get("current_job_start") or "").strip()
+        if re.search(r"currently work here|current(ly)? (employed|work) (here|there)", label):
+            return Answer(True if start else None, "profile")
+        if re.match(r"(from|start)\b", label):
+            return _coerce(_graduation(q, replace(ctx, profile={**p, "expected_graduation": start, "graduation_year": ""}))) \
+                if start else Answer(None, "profile")
+        if re.search(r"description|responsibilit|duties", label):
+            return Answer(p.get("current_job_description") or None, "profile")
+        if re.match(r"location\b", label):
+            return Answer(p.get("current_job_location") or None, "profile")
     if HISTORY_DATE.search(label):
         # The end of your degree is your graduation. A past job's dates, or when a degree
         # started, only you know: leave them for you rather than guess.

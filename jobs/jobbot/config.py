@@ -36,9 +36,13 @@ DEFAULT_PROFILE = {
     "twitter": "",
     "current_company": "",
     "current_title": "",
+    "current_job_start": "",  # e.g. "August 2024": your current job, for work-experience blocks
+    "current_job_location": "",  # e.g. "Houston, TX"
+    "current_job_description": "",
     "years_experience": "",
     "school": "",
     "degree": "",
+    "degree_type": "",  # e.g. "BBA", "BS" or "BA": forms that list them separately
     "discipline": "",
     "graduation_year": "",
     # Students

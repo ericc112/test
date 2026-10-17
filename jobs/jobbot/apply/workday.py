@@ -29,7 +29,10 @@ OPTION = ('[role="listbox"]:not([data-automation-id="selectedItemList"]) [role="
           '[data-automation-id="activeListContainer"] [data-automation-id="menuItem"]')
 # Workday's own error page asks for a refresh.
 WENT_WRONG = r"something went wrong[\s\S]{0,300}refresh the page"
-READY_JS = f"""(sel) => !!document.querySelector(sel) || /{WENT_WRONG}/i.test(document.body ? document.body.innerText : "")"""
+# Some sites (Tyson Foods) first ask how to sign in: Apple, Google, LinkedIn or email.
+EMAIL_CHOICE = r"^\s*(sign in|continue|log in) with email\s*$"
+READY_JS = f"""(sel) => !!document.querySelector(sel) || /{WENT_WRONG}/i.test(document.body ? document.body.innerText : "")
+  || [...document.querySelectorAll("button")].some((b) => /{EMAIL_CHOICE}/i.test(b.innerText))"""
 SKILLS = re.compile(r"^(type to )?add (your )?skills|^(your )?skills$")
 NO_ITEMS = re.compile(r"^no items\b", re.I)
 PASSWORD_RULES = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$")
@@ -93,10 +96,11 @@ class WorkdayEngine(Engine):
                 qs.append(q)
             # "From" and "To (Actual or Expected)" next to your school are your education's dates, even where
             # Workday doesn't mark the block as education.
-            if any(re.search(r"school|university|degree", q.label, re.I) for q in qs) and not any(q.section == "employment" for q in qs):
-                for q in qs:
-                    if not q.section and re.match(r"(from|to)\b", norm(q.label)):
-                        q.section = "education"
+            dates = [q for q in qs if not q.section and re.match(r"(from|to)\b", norm(q.label))]
+            if any(re.search(r"school|university|degree", q.label, re.I) for q in qs) and len(dates) <= 2 \
+                    and not any(q.section == "employment" for q in qs):  # a single From/To pair: no doubt whose it is
+                for q in dates:
+                    q.section = "education"
             new = answer_all(qs, ctx)
             for q in qs:  # a search box (schools, skills) lists nothing until you type: the answer is what to search for
                 a = new[q.key]
@@ -227,6 +231,10 @@ class WorkdayEngine(Engine):
         except Exception:
             return False
         self._wait_step(page)  # the progress bar shows a few seconds before the sign-in form or the step itself
+        choice = page.get_by_role("button", name=re.compile(EMAIL_CHOICE, re.I))
+        if choice.count():  # "Sign in with email" rather than Apple, Google or LinkedIn
+            self._press(page, choice.first)
+            self._wait_step(page)
         return True
 
     def _next(self, page, step):
@@ -403,6 +411,9 @@ class WorkdayEngine(Engine):
                     box.locator('[data-automation-id="dateSectionYear-input"]').first.fill(year.group(0))
                     return True
                 return False
+            if q.kind == "checkboxes":  # "check all that apply"
+                picks = a.option if isinstance(a.option, list) else [a.option]
+                return all(self._check(page, box.get_by_label(str(o), exact=True).first) for o in picks if o)
             if q.kind == "radio":
                 label = box.locator("label", has_text=re.compile(rf"^\s*{re.escape(str(a.option))}\s*$", re.I)).first
                 label.click()

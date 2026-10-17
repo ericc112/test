@@ -135,6 +135,36 @@ class RuleTests(unittest.TestCase):
         me = dict(PROFILE, expected_graduation="May 2027", graduation_year="")
         self.assertEqual(ans(q("Please input your anticipated graduation date", input_type="wd_date"), profile=me).value, "2027-05-01")
 
+    def test_a_required_agreement_is_accepted(self):
+        self.assertEqual(ans(q("You must AGREE to proceed.", "checkbox")).option, True)
+
+    def test_current_job_fills_a_work_experience_block(self):
+        me = dict(PROFILE, current_company="Best Cheer Stone", current_title="Supply Chain Analyst Intern",
+                  current_job_start="August 2024", current_job_location="Houston, TX", current_job_description="Sourcing.")
+        job = lambda label, **kw: ans(q(label, section="employment", **kw), profile=me)
+        self.assertEqual(job("Job Title").value, "Supply Chain Analyst Intern")
+        self.assertEqual(job("Company").value, "Best Cheer Stone")
+        self.assertEqual(job("Location").value, "Houston, TX")
+        self.assertEqual(job("I currently work here", kind="checkbox", required=False).option, True)
+        self.assertEqual(job("From", input_type="month").value, "2024-08")
+        self.assertEqual(job("Role Description", kind="textarea").value, "Sourcing.")
+
+    def test_not_a_veteran_never_says_veteran(self):
+        me = dict(PROFILE, eeo_veteran="I am not a protected veteran")
+        travelers = ["I identify as one or more of the classifications of protected veteran",
+                     "I am a veteran, but I am not a protected veteran", "I am not a veteran", "I don't wish to answer"]
+        self.assertEqual(ans(q("Veteran Status:", "select", travelers), profile=me).option, "I am not a veteran")
+        pnc = ["I am not a protected veteran", "I identify as one or more of the classifications of protected veteran"]
+        self.assertEqual(ans(q("Please confirm your veteran status:", "select", pnc), profile=me).option, pnc[0])
+
+    def test_the_exact_degree_comes_before_the_first_bachelors(self):
+        me = dict(PROFILE, degree="Bachelor's", degree_type="BBA")
+        self.assertEqual(ans(q("Degree", "select", ["BA", "BS", "BBA", "MBA"]), profile=me).option, "BBA")
+        self.assertEqual(ans(q("Degree type", "select", ["Bachelor of Arts", "Bachelor of Business Administration"]), profile=me).option,
+                         "Bachelor of Business Administration")
+        self.assertEqual(ans(q("Highest level of education", "select", ["Master's Degree", "Bachelor's Degree"]), profile=me).option,
+                         "Bachelor's Degree")
+
     def test_school_falls_back_to_other(self):
         a = ans(q("Which university did you attend?", "select", ["MIT", "Stanford", "Other (School Not Listed)"]))
         self.assertEqual(a.option, "Other (School Not Listed)")

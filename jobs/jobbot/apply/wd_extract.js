@@ -21,8 +21,11 @@
     const nth = seenAuto[id] = (id in seenAuto) ? seenAuto[id] + 1 : 0;  // Workday's own name: survives re-renders
     const q = { key, label, required, section: "", options: [], value: null, auto: id, nth };
     const sec = box.closest('[data-automation-id$="Section"],[role=group][aria-labelledby]');
-    if (sec && /education/i.test(sec.getAttribute("data-automation-id") || "")) q.section = "education";
-    if (sec && /workExperience/i.test(sec.getAttribute("data-automation-id") || "")) q.section = "employment";
+    // A block's name: its automation id, or the heading it's labelled by ("Work Experience 1", "Education 1").
+    const head = sec && document.getElementById((sec.getAttribute("aria-labelledby") || "").split(" ")[0]);
+    const secName = sec ? `${sec.getAttribute("data-automation-id") || ""} ${head ? head.innerText : ""}` : "";
+    if (/education/i.test(secName)) q.section = "education";
+    if (/workExperience|work experience/i.test(secName)) q.section = "employment";
     const file = box.querySelector('input[type=file]');
     const radios = [...box.querySelectorAll('input[type=radio]')];
     const checks = [...box.querySelectorAll('input[type=checkbox]')];
