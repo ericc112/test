@@ -45,6 +45,7 @@ DEFAULT_PROFILE = {
     "currently_enrolled": True,
     "school_year": "",  # Freshman | Sophomore | Junior | Senior | Graduate student
     "expected_graduation": "",  # e.g. "May 2028"
+    "education_start": "",  # e.g. "August 2024": when you started at your school
     "gpa": "",
     "minor": "",
     "internship_terms": "",  # e.g. "Summer 2027"

@@ -9,7 +9,7 @@ Anything still unanswered and required is reported as missing, never guessed.
 """
 import re
 from collections import defaultdict
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, timedelta
 
 from .textutil import contains_phrase, norm, pick_option, split_list, words
@@ -206,8 +206,13 @@ def _how_heard(q, c):
     if (c.job or {}).get("source") in EMPLOYER_SITES and first == "Job board":
         name = re.split(r",| (inc|llc|ltd|corp)\b", (c.job or {}).get("company") or "", flags=re.I)[0].strip()
         own = [f"{name} website", f"{name} careers", f"{name} careers page"] if name else []
-        return own + ["Company website", "Company careers page", "Careers page", "Website"] + rest
-    return [first] + rest
+        return own + ["Company website", "Company careers page", "Careers page", "Website"] + rest + _any_option(q)
+    return [first] + rest + _any_option(q)
+
+
+def _any_option(q):
+    """Any answer will do for how you heard: when none of the usual ones is offered, the first choice there is."""
+    return [o for o in q.options or [] if norm(o) not in ("", "select one")][:1]
 
 
 MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
@@ -236,7 +241,7 @@ def _graduation(q, c):
     if not exp and not year:
         return None
     month = next((i + 1 for i, m in enumerate(MONTHS) if m[:3] in exp.lower()), 5)
-    if q.input_type == "date":
+    if q.input_type in ("date", "wd_date"):
         return f"{year}-{month:02d}-01"
     if q.input_type == "month":
         return f"{year}-{month:02d}"
@@ -309,6 +314,39 @@ def _skip(q, c):
     return Answer(None, "skip")
 
 
+COMMON_SKILLS = ["Microsoft Excel", "Excel", "PowerPoint", "Microsoft Word", "Microsoft Office", "Data Analysis",
+                 "Supply Chain Management", "Supply Chain", "Inventory Management", "Inventory", "Logistics", "Procurement",
+                 "Purchasing", "Forecasting", "Demand Planning", "SAP", "ERP", "SQL", "Python", "Tableau", "Power BI",
+                 "Project Management", "Operations", "Marketing", "Sales", "Customer Service", "Negotiation",
+                 "Communication", "Leadership", "Teamwork", "Problem Solving", "Time Management"]
+
+
+def _has(skill, text):
+    return bool(re.search(rf"\b{re.escape(norm(skill))}\b", text))
+
+
+def _skills(q, c):
+    """Skills from your profile, else every common one your resume names: the ones the posting asks for first.
+    Only skills your resume shows, never ones it doesn't."""
+    if c.profile.get("skills"):
+        return split_list(c.profile["skills"])
+    resume, posting = norm(c.profile.get("resume_text") or ""), norm((c.job or {}).get("description") or "")
+    found = [s for s in COMMON_SKILLS if _has(s, resume)]
+    found.sort(key=lambda s: not _has(s, posting))
+    return found or None
+
+
+def _role_type(q, c):
+    """"Which type of role are you applying for?": an internship when the posting is one."""
+    if re.search(r"\bintern(ship)?\b|co-?op", (c.job or {}).get("title") or "", re.I):
+        return ["Internship", "Intern", "Co-op", "Student"]
+    return ["Full Time", "Full-time", "Regular"]
+
+
+def _blank(q, c):
+    return Answer("", "blank")  # should be empty: clear anything already in it
+
+
 def _eeo(field_name):
     def f(q, c):
         v = c.profile.get(field_name) or "decline"
@@ -329,10 +367,14 @@ RULES = [
     # Messages and consent
     (r"text messages?|\bsms\b|whatsapp|newsletter|marketing|promotional|job alerts|talent (community|network|pool)|"
      r"(receive|get) (future )?(updates|communications|news|emails)", CHOICE, lambda q, c: yn(c.profile.get("marketing_opt_in"))),
-    # Work authorisation and visas
+    # Work authorisation and visas. Sponsorship first: "require sponsorship for work authorization" isn't
+    # asking whether you're authorized.
+    (r"sponsor|\bstem opt\b|optional practical training|curricular practical training|\bcpt\b",
+     ANY, lambda q, c: yn(c.profile.get("needs_sponsorship"))),
     (r"(do|does) you (currently )?(have|hold|possess).{0,40}(work permit|visa|authori[sz]ation|right to work)",
      ANY, lambda q, c: yn(c.profile.get("work_authorized"))),
-    (r"authori[sz]ed to work|eligible to work|right to work|work authori[sz]ation|legally (able|permitted|allowed|eligible)",
+    (r"authori[sz]ed (to work|for employment)|legally authori[sz]ed|eligible to work|right to work|work authori[sz]ation|"
+     r"legally (able|permitted|allowed|eligible)",
      ANY, lambda q, c: yn(c.profile.get("work_authorized"))),
     (r"sponsor|\bvisa\b|h-?1b|work permit|immigration", ANY, lambda q, c: yn(c.profile.get("needs_sponsorship"))),
     # Where and how you'll work
@@ -369,6 +411,8 @@ RULES = [
      r"(summer|fall|spring|winter) (internship|program)|available (for|during) (the )?(summer|fall|spring|winter)|start term",
      ANY, _terms),
     (r"\bminor\b", TEXT | {"select"}, _p("minor")),
+    (r"^(type to )?add (your )?skills|^(your )?skills$", ANY, _skills),
+    (r"(type|kind) of (role|position|job|employment) (are )?you|^(role|position|employment|job) type$", CHOICE, _role_type),
     # Education
     (r"\bdegree\b|level of education|highest education|education level|highest level", ANY, _p("degree")),
     (r"discipline|\bmajor\b|field of study|area of study|concentration", ANY, _p("discipline")),
@@ -392,6 +436,8 @@ RULES = [
      TEXT, _full_name),
     (r"pronoun", ANY, _p("pronouns")),
     (r"e-?mail", TEXT, _p("email")),
+    (r"phone (device )?type|type of phone", CHOICE, lambda q, c: ["Mobile", "Cell", "Cell Phone", "Mobile Phone", "Personal Cell"]),
+    (r"\bextension\b|^ext\.?$", TEXT, _blank),  # "Phone Extension": your number doesn't have one
     (r"phone|mobile|\bcell\b|telephone", TEXT, _p("phone")),
     (r"linkedin", TEXT, _p("linkedin")),
     (r"github", TEXT, _p("github")),
@@ -408,6 +454,8 @@ RULES = [
      ANY, _location),
     (r"\bstate\b|province", TEXT | {"select"}, _p("state")),
     (r"\bzip\b|postal", TEXT, _p("postal_code")),
+    (r"address line 2|^address 2$|\bline 2\b|apartment|\bapt\b|\bsuite\b", TEXT,
+     lambda q, c: c.profile.get("address_line2") or _blank(q, c)),
     (r"street|address line|mailing address|^address$|home address", TEXT, _p("address")),
 ]
 _COMPILED = [(re.compile(rx, re.I), kinds, fn) for rx, kinds, fn in RULES]
@@ -457,6 +505,12 @@ HISTORY_DATE = re.compile(r"\b(start|end|from|to)\b.{0,12}\b(date|month|year)\b|
 
 def _section_answer(q, ctx, label):
     """Fields in a repeated education/employment block. None = not handled here."""
+    if q.section == "education" and re.match(r"(from|start)\b", label):  # Workday: "From"
+        start = (ctx.profile.get("education_start") or "").strip()
+        return _coerce(_graduation(q, replace(ctx, profile={**ctx.profile, "expected_graduation": start, "graduation_year": ""}))) \
+            if start else Answer(None, "profile")
+    if q.section == "education" and re.match(r"(to|end)\b|.*actual or expected", label):  # "To (Actual or Expected)"
+        return _coerce(_graduation(q, ctx)) or Answer(None, "profile")
     if HISTORY_DATE.search(label):
         # The end of your degree is your graduation. A past job's dates, or when a degree
         # started, only you know: leave them for you rather than guess.
@@ -528,7 +582,9 @@ def answer(q, ctx):
         label = norm(q.label)
         if "autofill" in label:
             return Answer(None, "skip")
-        if re.search(r"resume|\bcv\b|curriculum", label) or (not label and q.required):
+        # Workday's resume box is just "Upload a file (5MB max)": a bare upload field is for your resume.
+        if re.search(r"resume|\bcv\b|curriculum", label) or re.match(r"(upload|attach|select|drop)( a| your)? files?\b", label) \
+                or (not label and q.required):
             path = ctx.files.get("resume")
             return Answer(path, "file") if path else Answer(None, "", note="Upload your resume in Profile")
         if "cover letter" in label:
