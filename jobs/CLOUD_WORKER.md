@@ -33,7 +33,7 @@ documents are filled in only, for the owner to review.)
    "Nothing to apply to."
 
 2. **Code.** Only now: clone `https://github.com/ericc112/test` if it's missing, check out and pull
-   `claude/job-search-autoapply`, then `pip install -q -r jobs/requirements.txt`.
+   `main`, then `pip install -q -r jobs/requirements.txt`.
    Chromium for Playwright is preinstalled; don't run `playwright install`.
 
 3. **Claim them.** Do one `batch` `update` setting `{"status": "working", "worker_at": <now ISO>,
