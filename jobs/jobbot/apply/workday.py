@@ -146,7 +146,7 @@ class WorkdayEngine(Engine):
             self.log(f"{company}: {step or 'step'} filled, saving")
             after = self._next(page, step)
             if after["step"] == step and "review" not in step.lower() and retried.get(step, 0) < 1 \
-                    and not [q for q in qs if q.required and not new[q.key].resolved(q)]:
+                    and not [q for q in qs if q.required and not new[q.key].resolved(q) and self._shown(page, q)]:
                 # Every answer was in, yet Workday kept the step: one it dropped. Fill the step again, once.
                 retried[step] = 1
                 self.log(f"{company}: “{step}” lost an answer, filling it again")
@@ -154,7 +154,7 @@ class WorkdayEngine(Engine):
                 continue
             if after["step"] == step and "review" not in step.lower():
                 # Still on the same step: Workday says what's missing.
-                miss = [q for q in qs if q.required and not new[q.key].resolved(q)] or \
+                miss = [q for q in qs if q.required and not new[q.key].resolved(q) and self._shown(page, q)] or \
                        [q for q in qs if any(norm(q.label)[:30] in norm(e) for e in after["errors"])]
                 fields = [as_dict(q, answers[q.key]) for q in questions]
                 miss_list = [{"key": q.key, "label": q.label, "kind": q.kind, "options": q.options,
@@ -510,12 +510,17 @@ class WorkdayEngine(Engine):
 
     @staticmethod
     def _best_skill(term, opts):
-        """"Excel" is "Excel" or "Microsoft Excel", not "Excel-DNA": the exact name, else the shortest one naming
-        it as a whole word, else the usual match."""
+        """"Excel" is "Excel" or "Microsoft Excel": only the skill itself, never a near miss ("Excel-DNA",
+        "Lean Supply Chain Management" for "Supply Chain Management", "DP Operations" for "Operations")."""
         t = norm(term)
-        exact = [o for o in opts if norm(o) in (t, f"microsoft {t}", f"google {t}")]
-        whole = sorted((o for o in opts if re.search(rf"(^|\s){re.escape(t)}($|\s)", norm(o))), key=len)
-        return (exact or whole or [pick_option(term, opts)])[0]
+        return next((o for o in opts if norm(o) in (t, f"microsoft {t}", f"google {t}")), None)
+
+    def _shown(self, page, q):
+        """A required field Workday has hidden (the end date once "I currently work here" is ticked) isn't missing."""
+        try:
+            return self._box(page, q).is_visible()
+        except Exception:
+            return True
 
     def _clear(self, page, q):
         try:

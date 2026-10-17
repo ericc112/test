@@ -97,7 +97,8 @@ class WorkdaySkillTests(unittest.TestCase):
         pick = WorkdayEngine._best_skill
         self.assertEqual(pick("Excel", ["Excel-DNA", "Microsoft Excel", "Excel Macros"]), "Microsoft Excel")
         self.assertEqual(pick("SQL", ["MySQL", "SQL Server", "SQL"]), "SQL")
-        self.assertEqual(pick("Forecasting", ["Demand Forecasting", "Sales Forecasting Software"]), "Demand Forecasting")
+        self.assertIsNone(pick("Supply Chain Management", ["Lean Supply Chain Management"]))
+        self.assertIsNone(pick("Operations", ["DP Operations", "Operations Research"]))
 
 
 @unittest.skipUnless(HAS_BROWSER, "Chromium for Playwright isn't installed (python -m playwright install chromium)")
