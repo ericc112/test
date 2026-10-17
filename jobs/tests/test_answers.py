@@ -224,12 +224,26 @@ class RuleTests(unittest.TestCase):
         opts = ["Associates", "Bachelors", "Masters non-MBA", "Doctorate", "MBA"]
         self.assertEqual(ans(q("What level of degree are you currently attending?", "checkboxes", opts), profile=me).option, ["Bachelors"])
 
+    def test_taleo_wording(self):
+        me = dict(PROFILE, state="Texas", work_authorized=True, needs_sponsorship=False, gpa="3.8")
+        states = ["US-AK", "US-TN", "US-TX", "US-UT"]
+        self.assertEqual(ans(q("State/Territory", "select", states), profile=me).option, "US-TX")
+        auth = ["I am authorized to work in this country for any employer", "I am authorized to work in this country for my present employer only",
+                "I require sponsorship to work in this country"]
+        self.assertEqual(ans(q("Work Authorization", "select", auth), profile=me).option, auth[0])
+        sponsor = ["I NEED sponsorship to work in the US", "I do NOT need sponsorship to work in the US"]
+        self.assertEqual(ans(q("Sponsorship", "select", sponsor), profile=me).option, sponsor[1])
+        self.assertEqual(ans(q("Is your cumulative GPA a 3.0 or greater?", "select", ["Yes", "No"]), profile=me).option, "Yes")
+        self.assertEqual(ans(q("Is your cumulative GPA a 3.0 or greater?", "select", ["Yes", "No"]), profile=dict(me, gpa="2.7")).option, "No")
+
     def test_school_falls_back_to_other(self):
         a = ans(q("Which university did you attend?", "select", ["MIT", "Stanford", "Other (School Not Listed)"]))
         self.assertEqual(a.option, "Other (School Not Listed)")
 
     def test_signature_date(self):
         self.assertRegex(ans(q("Date")).value, r"^\d{2}/\d{2}/\d{4}$")
+        self.assertRegex(ans(q("Candidate eSignature Date")).value, r"^\d{2}/\d{2}/\d{4}$")  # not your name
+        self.assertEqual(ans(q("Candidate eSignature")).value, "Test Applicant")
 
     def test_resume_file(self):
         a = ans(q("Resume/CV", "file"), files={"resume": "/tmp/r.pdf"})

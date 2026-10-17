@@ -1,5 +1,7 @@
 """Drive the real browser against local fixture forms. Nothing touches the network."""
+import os
 import unittest
+from unittest import mock
 
 from jobbot.answers import Context
 from jobbot.apply.engine import Engine
@@ -9,6 +11,15 @@ from jobbot.textutil import norm
 from .helpers import FIXTURES, PROFILE, TempData, browser_available
 
 HAS_BROWSER = browser_available()
+
+
+def without_account_env(test):
+    """Use the test's own email and password, not the JOBBOT_WORKDAY_* account set in this environment."""
+    env = mock.patch.dict(os.environ)
+    env.start()
+    test.addCleanup(env.stop)
+    for key in ("JOBBOT_WORKDAY_EMAIL", "JOBBOT_WORKDAY_PASSWORD"):
+        os.environ.pop(key, None)
 
 
 @unittest.skipUnless(HAS_BROWSER, "Chromium for Playwright isn't installed (python -m playwright install chromium)")
@@ -91,6 +102,45 @@ if __name__ == "__main__":
     unittest.main()
 
 
+@unittest.skipUnless(HAS_BROWSER, "Chromium for Playwright isn't installed (python -m playwright install chromium)")
+class TaleoFlowTests(unittest.TestCase):
+    """The Taleo Business Edition flow against a local stand-in: register, fill each step, submit."""
+
+    def setUp(self):
+        self.tmp = TempData()
+        without_account_env(self)
+
+    def tearDown(self):
+        self.tmp.close()
+
+    def run_taleo(self, mode, password="Str0ng!Passw0rd", query=""):
+        from jobbot.apply.taleo import TaleoEngine
+        job = {"id": "test:taleo", "title": "Procurement Intern", "company": "Acme", "source": "other",
+               "url": (FIXTURES / "taleo_like.html").as_uri() + query}
+        ctx = Context(profile=dict(PROFILE, workday_password=password, work_authorized=True), bank=DEFAULT_ANSWERS, job=job,
+                      files={"resume": str(FIXTURES / "resume.txt")})
+        return TaleoEngine(headless=True).run(job, ctx, mode)
+
+    def test_registers_fills_each_step_and_submits(self):
+        res = self.run_taleo("submit")
+        self.assertEqual(res.result, "applied", res.message)
+
+    def test_the_voluntary_page_after_submit_is_answered_and_sent(self):
+        res = self.run_taleo("submit", query="?eeo=1")
+        self.assertEqual(res.result, "applied", res.message)
+        self.assertIn("Gender", [f["label"] for f in res.fields])
+
+    def test_prepare_stops_before_submit(self):
+        res = self.run_taleo("prepare")
+        self.assertEqual(res.result, "ready", res.message)
+        self.assertIn("nothing has been sent", res.message)
+
+    def test_a_password_the_site_rejects_is_reported(self):
+        res = self.run_taleo("submit", password="Sh0rt!pass1")  # 11 characters: the site wants 12
+        self.assertEqual(res.result, "needs_input", res.message)
+        self.assertIn("twelve (12) characters", res.message)
+
+
 class WorkdaySkillTests(unittest.TestCase):
     def test_the_exact_skill_wins_over_look_alikes(self):
         from jobbot.apply.workday import WorkdayEngine
@@ -107,6 +157,7 @@ class WorkdayFlowTests(unittest.TestCase):
 
     def setUp(self):
         self.tmp = TempData()
+        without_account_env(self)
 
     def tearDown(self):
         self.tmp.close()

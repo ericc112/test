@@ -5,6 +5,7 @@ import threading
 from . import ats, config, db, pipeline
 from .answers import Context
 from .apply.engine import Engine
+from .apply.taleo import TaleoEngine, is_taleo
 from .apply.workday import WorkdayEngine, is_workday, password
 from .llm import Claude
 from .textutil import norm
@@ -116,13 +117,14 @@ class Worker(threading.Thread):
         automation = db.get_setting("automation")
         label = f"{job['title']} at {job['company']}"
         workday = is_workday(job) and bool(password(db.get_setting("profile")))  # sign in and apply there
+        taleo = is_taleo(job) and bool(password(db.get_setting("profile")))  # register or sign in, then apply
 
-        if not workday and not job.get("ats"):
+        if not workday and not taleo and not job.get("ats"):
             db.log(f"Finding the application form for {label}", job_id=job_id)
             found = ats.resolve(job)
             db.update_job(job_id, **found)
             job.update(found)
-        if not workday and job.get("ats") == "manual":
+        if not workday and not taleo and job.get("ats") == "manual":
             note = ("Workday needs an account with each employer, and no Workday password is set. Set "
                     "JOBBOT_WORKDAY_PASSWORD (in your cloud environment's settings, or before starting JobBot) "
                     "and try again: JobBot creates the account and applies." if is_workday(job) else
@@ -133,7 +135,7 @@ class Worker(threading.Thread):
             return
 
         db.update_job(job_id, status="preparing" if action == "prepare" else "submitting")
-        engine = (WorkdayEngine if workday else Engine)(
+        engine = (WorkdayEngine if workday else TaleoEngine if taleo else Engine)(
             headless=automation.get("headless", True),
             assist_timeout_min=automation.get("assist_timeout_min", 10),
             log=lambda m: db.log(m, job_id=job_id),

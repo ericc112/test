@@ -229,6 +229,9 @@ def _gpa(q, c):
             have = float(re.findall(r"\d+(?:\.\d+)?", gpa)[0])
         except IndexError:
             return None
+        threshold = re.search(r"(\d(?:\.\d+)?)\s*(or (greater|higher|above|better|more)|\+)", q.label or "", re.I)
+        if threshold and any(norm(o) in ("yes", "no") for o in q.options):  # "Is your cumulative GPA a 3.0 or greater?"
+            return yn(have >= float(threshold.group(1)))
         bucket = _bucket(q.options, have)  # "3.5 - 4.0", "3.75+", "Below 3.0"
         return Answer(gpa, "profile", alternatives=[bucket] if bucket else [])
     return gpa
@@ -394,6 +397,8 @@ def _sponsorship(q, c):
     if c.profile.get("needs_sponsorship"):
         return "Yes"
     nos = [o for o in q.options or [] if re.match(r"\s*no\b", o, re.I)]
+    if not nos:  # "I do NOT need sponsorship to work in the US"
+        nos = [o for o in q.options or [] if re.search(r"\b(do not|don't|will not|won't) (need|require)|\bnot need\b|without sponsorship", o, re.I)]
     if len(nos) <= 1:
         return nos[0] if nos and not HOLDS_TEMPORARY.search(nos[0]) else ("No" if not nos else None)
     citizen = re.search(r"citizen", c.profile.get("citizenship") or "", re.I)
@@ -426,6 +431,35 @@ def _check_one(q, c):
     return None
 
 
+US_STATES = {"alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA", "colorado": "CO",
+             "connecticut": "CT", "delaware": "DE", "district of columbia": "DC", "florida": "FL", "georgia": "GA", "hawaii": "HI",
+             "idaho": "ID", "illinois": "IL", "indiana": "IN", "iowa": "IA", "kansas": "KS", "kentucky": "KY", "louisiana": "LA",
+             "maine": "ME", "maryland": "MD", "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
+             "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV", "new hampshire": "NH", "new jersey": "NJ",
+             "new mexico": "NM", "new york": "NY", "north carolina": "NC", "north dakota": "ND", "ohio": "OH", "oklahoma": "OK",
+             "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI", "south carolina": "SC", "south dakota": "SD",
+             "tennessee": "TN", "texas": "TX", "utah": "UT", "vermont": "VT", "virginia": "VA", "washington": "WA",
+             "west virginia": "WV", "wisconsin": "WI", "wyoming": "WY"}
+
+
+def _state(q, c):
+    """Your state, also as its code: Taleo lists "US-TX", others "TX"."""
+    state = (c.profile.get("state") or "").strip()
+    if not state:
+        return None
+    code = US_STATES.get(norm(state)) or (state.upper() if len(state) == 2 else "")
+    return [state] + ([code, f"US-{code}", f"{code} - {state}"] if code else [])
+
+
+def _authorized(q, c):
+    """Authorized to work: "Yes", or the sentence some forms use instead ("I am authorized to work in this country
+    for any employer")."""
+    if c.profile.get("work_authorized"):
+        return ["Yes", "I am authorized to work in this country for any employer",
+                "authorized to work in the united states for any employer", "authorized to work for any employer"]
+    return ["No", "I require sponsorship to work in this country"]
+
+
 def _blank(q, c):
     return Answer("", "blank")  # should be empty: clear anything already in it
 
@@ -455,10 +489,10 @@ RULES = [
     # asking whether you're authorized.
     (r"sponsor|\bstem opt\b|optional practical training|curricular practical training|\bcpt\b", ANY, _sponsorship),
     (r"(do|does) you (currently )?(have|hold|possess).{0,40}(work permit|visa|authori[sz]ation|right to work)",
-     ANY, lambda q, c: yn(c.profile.get("work_authorized"))),
+     ANY, _authorized),
     (r"authori[sz]ed (to work|for employment)|legally authori[sz]ed|eligible to work|right to work|work authori[sz]ation|"
      r"legally (able|permitted|allowed|eligible)",
-     ANY, lambda q, c: yn(c.profile.get("work_authorized"))),
+     ANY, _authorized),
     (r"sponsor|\bvisa\b|h-?1b|work permit|immigration", ANY, lambda q, c: yn(c.profile.get("needs_sponsorship"))),
     # Where and how you'll work
     (r"relocat", CHOICE | {"text"}, _relocate),
@@ -512,7 +546,7 @@ RULES = [
     (r"resume|\bcv\b|curriculum", {"textarea", "text"}, _skip),
     (r"additional information|anything else|comments|message to (the )?hiring", {"text", "textarea"}, _skip),
     # Signature blocks (e.g. the voluntary disability form)
-    (r"^(today'?s )?date$|^signature date$|^date signed$", {"text"}, _today),
+    (r"^(today'?s )?date$|signature date$|^date signed$|^date of signature$", {"text"}, _today),  # "Candidate eSignature Date"
     (r"signature|^sign here", {"text"}, _full_name),
     # Who you are
     (r"pronunciation", TEXT, _skip),
@@ -540,7 +574,7 @@ RULES = [
     (r"\bcity\b|where .{0,30}(live|located|based|reside)|where .{0,40}work(ing)? from|current location|"
      r"^location\b|\breside\b",
      ANY, _location),
-    (r"\bstate\b|province", TEXT | {"select"}, _p("state")),
+    (r"\bstate\b|province", TEXT | {"select"}, _state),
     (r"\bzip\b|postal", TEXT, _p("postal_code")),
     (r"address line 2|^address 2$|\bline 2\b|apartment|\bapt\b|\bsuite\b", TEXT,
      lambda q, c: c.profile.get("address_line2") or _blank(q, c)),
