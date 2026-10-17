@@ -252,6 +252,13 @@ DEFAULTS = {
 }
 
 
+def use_data_dir(path):
+    """Point JobBot at another data folder (like JOBBOT_DATA, but set from a command option)."""
+    global DATA_DIR, DB_PATH, FILES_DIR, SHOTS_DIR
+    DATA_DIR = Path(path)
+    DB_PATH, FILES_DIR, SHOTS_DIR = DATA_DIR / "jobbot.db", DATA_DIR / "files", DATA_DIR / "screenshots"
+
+
 def ensure_dirs():
     for d in (DATA_DIR, FILES_DIR, SHOTS_DIR):
         d.mkdir(parents=True, exist_ok=True)
