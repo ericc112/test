@@ -117,6 +117,9 @@ SOFT_BLOCK = re.compile(
     r"surveyor|instructor|counselor|guard|solar|architect|design|research|lab|technology)\b",
     re.I,
 )
+# Science and field work: business only when the title names a business function ("Agronomy Sales
+# Intern" is sales; "Agronomy Operations Intern" is crop work at a farm-supply store).
+FIELD_SCIENCE = re.compile(r"\b(agronom\w*|crop|agricultur\w*|horticultur\w*|forestry|geolog\w*|environmental science)\b", re.I)
 VAGUE_ROLE = re.compile(
     r"\b(analyst|associate|coordinator|specialist|manager|lead|strategist|planner|representative|executive|"
     r"administrator|advisor|officer|partner|generalist|trainee|intern|internship)\b",
@@ -281,6 +284,8 @@ def classify(job, search):
     matched = [k for k, rx in _TITLE.items() if rx.search(title)]
     if not matched and GENERIC_BUSINESS.search(title):
         matched = ["consulting"]
+    if FIELD_SCIENCE.search(title) and set(matched) <= {"operations", "management"}:
+        return False, "Not a business role"
     cats = _labels(job)
     if not matched:
         if SOFT_BLOCK.search(title) or not VAGUE_ROLE.search(title):

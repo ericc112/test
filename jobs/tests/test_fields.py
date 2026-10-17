@@ -5,6 +5,7 @@ from jobbot import fields
 ALL = {"field": "business"}
 
 BUSINESS = {
+    "Agronomy Sales Intern": "Sales & Business Development",
     "Financial Analyst": "Finance & Accounting",
     "Staff Accountant": "Finance & Accounting",
     "Investment Banking Summer Analyst": "Finance & Accounting",
@@ -28,6 +29,7 @@ BUSINESS = {
     "Personal Banker - Universal Branch": "Finance & Accounting",
 }
 NOT_BUSINESS = [
+    "Agronomy Operations Intern", "Crop Scout Intern",
     "Senior Software Engineer", "Sales Engineer", "Solutions Architect", "Data Scientist", "Analytics Engineer",
     "Technical Program Manager", "UX Designer", "Registered Nurse", "Barista - Temporary", "Store Manager",
     "Shift Lead", "Solar Appointment Setter", "Legal Counsel", "Clinical Research Associate", "Security Analyst",
