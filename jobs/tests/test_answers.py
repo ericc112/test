@@ -198,6 +198,20 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(ans(q("Please select the answer that best describes your current student classification.", "select", mmc),
                              profile=me).option, "Graduating Senior/4th year")
 
+    def test_authorized_without_sponsorship_is_an_authorization_question(self):
+        me = dict(PROFILE, work_authorized=True, needs_sponsorship=False)
+        label = ("Do you have legal authorization to work in the U.S. on a permanent basis without the need for sponsorship "
+                 "now or in the future?")
+        self.assertEqual(ans(q(label, "select", ["Yes", "No"]), profile=me).option, "Yes")
+
+    def test_degree_never_lands_on_another_named_degree(self):
+        me = dict(PROFILE, degree="Bachelor's", degree_type="BBA")
+        mmc = ["Associate of Arts", "Bachelor of Applied Linguistics", "Bachelor of Arts", "Bachelor's Degree", "Master of Arts"]
+        self.assertEqual(ans(q("Degree", "select", mmc), profile=me).option, "Bachelor's Degree")
+        self.assertIsNone(ans(q("Degree", "select", ["Bachelor of Arts", "Bachelor of Science"]), profile=me).option)
+        self.assertEqual(ans(q("Degree", "select", ["BA", "BS", "BBA"]), profile=me).option, "BBA")
+        self.assertEqual(ans(q("Degree", "select", ["Bachelors", "Masters", "MBA"]), profile=me).option, "Bachelors")
+
     def test_school_falls_back_to_other(self):
         a = ans(q("Which university did you attend?", "select", ["MIT", "Stanford", "Other (School Not Listed)"]))
         self.assertEqual(a.option, "Other (School Not Listed)")

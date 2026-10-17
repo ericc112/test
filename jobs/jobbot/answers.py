@@ -352,11 +352,17 @@ DEGREE_NAMES = {
 
 
 def _degree(q, c):
-    """Your degree: its exact name first ("Bachelor of Business Administration", "BBA"), then its level ("Bachelor's"),
-    so a list of BA / BS / BBA doesn't get the first bachelor's it finds."""
+    """Your degree: its exact name ("Bachelor of Business Administration", "BBA"), else a plain bachelor's option
+    ("Bachelors", "Bachelor's Degree"), never another named degree ("Bachelor of Applied Linguistics", "BA")."""
     level = c.profile.get("degree") or None
     names = DEGREE_NAMES.get(norm(c.profile.get("degree_type") or "").replace(".", ""), [])
-    return (names + [level] if level else names) or None
+    if not q.options or not names:
+        return (names + [level] if level else names) or None
+    named = [o for n in names for o in q.options if re.search(rf"(^|\W){re.escape(norm(n))}($|\W)", norm(o))]
+    plain = [o for o in q.options if re.match(r"bachelor'?s?\b(?! (of|in)\b)", norm(o))]
+    if named or plain:
+        return Answer((named or plain)[0], "profile")
+    return Answer(None, "", note="None of the options is your degree")
 
 
 def _veteran(q, c):
@@ -379,6 +385,9 @@ TEMPORARY_STATUS = re.compile(r"temporary|i (hold|have) an? .{0,30}visa|on an? .
 def _sponsorship(q, c):
     """No sponsorship needed is a plain "No": never "No – I hold a temporary visa status that provides work
     authorization", which some forms list first among several kinds of No."""
+    if re.search(r"without (the )?(need (for|of) )?(any |employer |visa )*sponsor", q.label or "", re.I):
+        # "Are you authorized to work ... without the need for sponsorship?" asks about authorization.
+        return yn(bool(c.profile.get("work_authorized")) and not c.profile.get("needs_sponsorship"))
     if c.profile.get("needs_sponsorship"):
         return "Yes"
     nos = [o for o in q.options or [] if re.match(r"\s*no\b", o, re.I)]
