@@ -216,6 +216,8 @@ class RuleTests(unittest.TestCase):
         self.assertIsNone(ans(q("Degree", "select", ["Bachelor of Arts", "Bachelor of Science"]), profile=me).option)
         self.assertEqual(ans(q("Degree", "select", ["BA", "BS", "BBA"]), profile=me).option, "BBA")
         self.assertEqual(ans(q("Degree", "select", ["Bachelors", "Masters", "MBA"]), profile=me).option, "Bachelors")
+        jj = ["MBA (Master of Business Administration)", "University/Bachelors Degree or Equivalent", "Bachelor of Science in Nursing"]
+        self.assertEqual(ans(q("Degree", "select", jj), profile=me).option, jj[1])
 
     def test_level_of_degree_is_the_degree(self):
         me = dict(PROFILE, degree="Bachelor's", degree_type="BBA")

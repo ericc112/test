@@ -359,7 +359,7 @@ def _degree(q, c):
     if not q.options or not names:
         return (names + [level] if level else names) or None
     named = [o for n in names for o in q.options if re.search(rf"(^|\W){re.escape(norm(n))}($|\W)", norm(o))]
-    plain = [o for o in q.options if re.match(r"bachelor'?s?\b(?! (of|in)\b)", norm(o))]
+    plain = [o for o in q.options if re.search(r"(^|\W)bachelor'?s?\b(?! (of|in)\b)", norm(o))]  # "University/Bachelors Degree"
     if named or plain:
         return Answer((named or plain)[0], "profile")
     return Answer(None, "", note="None of the options is your degree")
