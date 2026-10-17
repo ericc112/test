@@ -155,9 +155,10 @@ def _bucket(options, have):
         nums = [float(n) for n in re.findall(r"\d+(?:\.\d+)?", o)]
         if len(nums) == 2 and nums[0] <= have <= nums[1]:
             return o
-        if len(nums) == 1 and ("+" in o or "more" in o.lower()) and have >= nums[0]:
+        if len(nums) == 1 and re.search(r"\+|more|above|higher|at least|>", o, re.I) and have >= nums[0]:
             return o
-        if len(nums) == 1 and re.search(r"less|under|below|<", o, re.I) and have < nums[0]:
+        if len(nums) == 1 and re.search(r"less|under|below|lower|<", o, re.I) and \
+                (have <= nums[0] if re.search(r"or (below|less|lower)", o, re.I) else have < nums[0]):
             return o
     return None
 
@@ -474,7 +475,8 @@ RULES = [
     (r"currently (enrolled|pursuing|attending|a student|studying)|are you (a |currently a |currently )?(current |full[- ]time )?"
      r"(student|enrolled)|enrolled (in|at) (a|an|your)|pursuing (a|an|your) .{0,30}degree", CHOICE | {"text"}, _enrolled),
     (r"(year|level|standing) (in|of) (school|study|college|university|program)|class standing|"
-     r"current (academic )?(year|standing|level)|what year are you|academic (year|standing|level)|year of study|grade level",
+     r"current (academic )?(year|standing|level)|what year are you|academic (year|standing|level)|year of study|grade level|"
+     r"student classification|classification as a student",
      ANY, _school_year),
     (r"which (term|season|session)|internship (term|season|period|session|dates|start)|what (term|season)|"
      r"(summer|fall|spring|winter) (internship|program)|available (for|during) (the )?(summer|fall|spring|winter)|start term",

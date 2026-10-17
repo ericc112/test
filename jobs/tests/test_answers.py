@@ -190,6 +190,14 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(ans(q("Please check one of the boxes below:", "checkboxes", opts), profile=me).option, [opts[1]])
         self.assertEqual(ans(q("Date", input_type="wd_date")).value, date.today().isoformat())
 
+    def test_gpa_ranges_and_student_classification(self):
+        me = dict(PROFILE, gpa="3.8", school_year="Senior")
+        self.assertEqual(ans(q("Please select the answer that best describes your GPA", "select",
+                               ["3.0 or above", "2.7-2.99", "2.69 or below"]), profile=me).option, "3.0 or above")
+        mmc = ["Freshman/1st year", "Sophomore/2nd year", "Junior/3rd year", "Graduating Senior/4th year", "Not a current student"]
+        self.assertEqual(ans(q("Please select the answer that best describes your current student classification.", "select", mmc),
+                             profile=me).option, "Graduating Senior/4th year")
+
     def test_school_falls_back_to_other(self):
         a = ans(q("Which university did you attend?", "select", ["MIT", "Stanford", "Other (School Not Listed)"]))
         self.assertEqual(a.option, "Other (School Not Listed)")
