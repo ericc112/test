@@ -1,9 +1,10 @@
 # JobBot cloud worker
 
 This runbook is for the scheduled cloud session that does the applying behind the JobBot page
-(https://claude.ai/artifact/VgAScmZAL2HXzL9FwQG8fj). The page's owner taps **Apply for me**
-or **Submit** on their phone; that writes a request into the page's database. Each run of this
-worker fills in (or submits) those applications with JobBot and writes the results back.
+(https://claude.ai/artifact/VgAScmZAL2HXzL9FwQG8fj). The page's owner taps **Apply** on their
+phone; that writes an `approved` request into the page's database. Each run of this worker fills
+in and sends those applications with JobBot and writes the results back. (Older `requested`
+documents are filled in only, for the owner to review.)
 
 ## Rules
 

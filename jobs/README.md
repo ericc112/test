@@ -82,10 +82,10 @@ The JobBot page on claude.ai (see `CLOUD_WORKER.md`) lists the internships and c
 
 1. Open **Your profile** on the page, fill in your details and upload your resume (PDF). Only you can see it.
 2. For Workday sites, set `JOBBOT_WORKDAY_PASSWORD` in your Claude cloud environment's settings (the environment menu → **Edit** → environment variables). Never paste it into a chat or the page.
-3. Tap **Apply for me** on an internship. A scheduled Claude cloud session runs JobBot every 3 hours (or right away when you tap **Start now**), fills in the application and brings back every answer and a screenshot.
-4. Check it under **Applying** and tap **Submit application**. Questions it couldn't answer show up there with the employer's own choices; answer them and tap **Fill in again**.
+3. Tap **Apply** on an internship. That's it: a scheduled Claude cloud session runs JobBot every 3 hours (or right away when you tap **Start now**), fills in the application and sends it. The result, every answer and a screenshot show up under **Applying**.
+4. If the form asks something your profile doesn't answer, nothing is guessed or sent: the question shows up under **Applying** with the employer's own choices. Answer it and tap **Apply with these answers**.
 
-The cloud session only submits applications you tapped Submit on, and stops at CAPTCHAs, bot checks and email confirmations.
+The page lists only internships JobBot can send by itself (Workday, Greenhouse, Lever and Ashby sites); tick **Show ones you apply to on their site** for the rest. The cloud session only sends applications you tapped Apply on, and stops if a site shows a CAPTCHA, a bot check or an email confirmation.
 
 ## How applying works
 
