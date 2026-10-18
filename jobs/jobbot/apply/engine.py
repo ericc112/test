@@ -162,7 +162,8 @@ class Engine:
             what = "a CAPTCHA" if outcome == "captcha" else "an email security code"
             if not self.headless:
                 return self._assist(page, job, fields, [], f"The site asked for {what}. Complete it in the browser window.")
-            return Result("blocked", f"The site asked for {what}. Turn off headless mode in Settings and submit again to finish it yourself.",
+            return Result("blocked", f"Not sent: the site asked for {what} to confirm a person is applying. Apply on their site "
+                                     "to finish (on a computer, you can also turn off headless mode in Settings and submit again).",
                           fields, [], shot, page.url)
         if outcome == "errors":
             errs = self._extract(page)["page"]["errors"]
@@ -258,8 +259,9 @@ class Engine:
                 return "success"
             if d["captcha"]:
                 return "captcha"
-            body = page.inner_text("body")[:5000].lower()
-            if "security code" in body or "verification code" in body:
+            # The whole page: Greenhouse puts its "enter the code we emailed you" box below long forms.
+            body = page.inner_text("body").lower()
+            if re.search(r"security code|verification code|confirm you(?:'|’)re a human", body):
                 return "code"
             if (d["errors"] or d["invalid"]) and page.url == url0 and time.time() > deadline - seconds + 5:
                 return "errors"

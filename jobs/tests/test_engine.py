@@ -1,5 +1,7 @@
 """Drive the real browser against local fixture forms. Nothing touches the network."""
+import os
 import unittest
+from unittest import mock
 
 from jobbot.answers import Context
 from jobbot.apply.engine import Engine
@@ -72,6 +74,11 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(res.result, "blocked")
         self.assertIn("CAPTCHA", res.message)
 
+    def test_emailed_code_at_the_bottom_of_a_long_form_is_blocked(self):
+        res = self.run_form("email_code.html", mode="submit")
+        self.assertEqual(res.result, "blocked", res.message)
+        self.assertIn("email security code", res.message)
+
     def test_validation_errors_are_reported(self):
         res = self.run_form("errors.html", mode="submit")
         self.assertEqual(res.result, "needs_input")
@@ -107,7 +114,10 @@ class WorkdayFlowTests(unittest.TestCase):
                "url": (FIXTURES / "workday_like.html").as_uri() + query}
         ctx = Context(profile=dict(PROFILE, workday_password=password, state="New York"), bank=DEFAULT_ANSWERS, job=job,
                       overrides={norm(k): v for k, v in (overrides or {}).items()}, files={"resume": str(FIXTURES / "resume.txt")})
-        return WorkdayEngine(headless=True).run(job, ctx, mode)
+        # The machine's own Workday password (if one is set) must not stand in for the test's.
+        env = {k: v for k, v in os.environ.items() if k != "JOBBOT_WORKDAY_PASSWORD"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            return WorkdayEngine(headless=True).run(job, ctx, mode)
 
     def answer(self, res, label_part):
         return next(f["answer"] for f in res.fields if label_part.lower() in f["label"].lower())

@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Apply</title></head>
+<body>
+<!-- Like Greenhouse's newer forms: after Submit, a long page asks at the very bottom for a code sent by email. -->
+<div id="about"></div>
+<form id="f"><label for="n">Full name *</label><input id="n" required><label for="e">Email *</label><input id="e" type="email" required>
+<div id="code"></div>
+<button type="submit" id="go">Submit application</button></form>
+<script>
+  document.getElementById("about").textContent = "About the role. ".repeat(600);  // pushes the notice past the first 5,000 characters
+  document.getElementById("f").addEventListener("submit", (e) => {
+    e.preventDefault();
+    document.getElementById("code").innerHTML =
+      "<p>A verification code was sent to test@example.com. To submit your application, enter the 8-character code to confirm you're a human.</p>" +
+      "<label>Security code</label>" + "<input maxlength='1' aria-label='code'>".repeat(8);
+    document.getElementById("go").disabled = true;
+  });
+</script>
+</body></html>
