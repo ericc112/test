@@ -87,6 +87,17 @@ The JobBot page on claude.ai (see `CLOUD_WORKER.md`) lists the internships and c
 
 The page lists the internships JobBot can send by itself; tick **Show ones you apply to on their site** for the rest. A scheduled cloud session rebuilds the list twice a day (`jobs/LIST_REFRESH.md`, which runs `python3 -m jobbot page-feed --search`), so it is never more than a day old, and leaves out postings 30 or more days old. **Add a link** takes a posting from any site, LinkedIn and Indeed included (see *Where it can apply*). The cloud session only sends applications you tapped Apply on, and stops if a site shows a CAPTCHA, a bot check or an email confirmation.
 
+### Jobs from screenshots (Runway or any job board)
+
+The page's **Upload** tab takes screenshots, a short screen recording of you scrolling a job board, a PDF, or listings you copied there. The cloud worker reads them itself, without AI: OCR for pictures (one still a second from a recording, skipping repeats), then it splits the text into listings (title, company, location, when posted, and the board's own match score). It keeps the business roles the board scored at or above your minimum (90 unless you change it), looks each one up on the employer's own careers site, and lists it with **Apply**. Nothing is sent until you tap Apply. Pictures carry no links, so a job the employer's site doesn't list by that title comes back "not found" with a search link. JobBot never signs in to the board: you take the screenshots.
+
+The same runs on the command line (`pip install -r requirements-ocr.txt` first for pictures and recordings):
+
+```bash
+python3 -m jobbot read-listings shot1.png shot2.png scroll.mp4 --min-score 90 --out found.json
+python3 -m jobbot read-listings --text copied.txt --no-find      # just read, don't look anything up
+```
+
 ## How applying works
 
 | Step | What happens | Sends anything? |
@@ -181,6 +192,7 @@ python3 -m jobbot list [--status new,ready]            # what's stored
 python3 -m jobbot prepare JOB_ID                       # fill one application (no submit)
 python3 -m jobbot submit JOB_ID                        # fill and submit one application
 python3 -m jobbot apply-batch requests.json --profile profile.json [--resume cv.pdf] --out results.json  # the cloud worker's runner
+python3 -m jobbot read-listings FILES... [--text copied.txt] [--min-score 90] --out found.json  # jobs from screenshots or recordings
 python3 -m jobbot settings search '{"keywords": ["data engineer"], ...}'
 ```
 

@@ -5,6 +5,7 @@ import os
 import sys
 import threading
 import webbrowser
+from pathlib import Path
 
 from . import config, db, pipeline
 
@@ -164,6 +165,29 @@ def cmd_page_feed(args):
           f"{meta['min_score']} left out. Written to {args.out}")
 
 
+def cmd_read_listings(args):
+    from . import listings
+    text = Path(args.text).read_text(encoding="utf-8") if args.text else None
+    links = json.loads(Path(args.links).read_text()) if args.links else None
+    result = listings.run(args.files, text, links, args.min_score, db.get_setting("search") or None, find=not args.no_find)
+    page = lambda l: {"t": l["title"], "c": l["company"], "l": l["location"], "p": l["posted"], "s": l["score"],  # noqa: E731
+                      "u": l.get("url") or "", "a": l.get("area") or "", "why": l.get("why") or ""}
+    out = {"read": result["read"], "kept": [page(l) for l in result["kept"]],
+           "dropped": [page(l) for l in result["dropped"]], "errors": result["errors"]}
+    for l in out["kept"]:
+        where = l["u"] or l["why"]
+        print(f"keep {str(l['s'] if l['s'] is not None else '-'):>3}  {l['t'][:44]:<44} {l['c'][:22]:<22} {where[:70]}")
+    for l in out["dropped"]:
+        print(f"drop {str(l['s'] if l['s'] is not None else '-'):>3}  {l['t'][:44]:<44} {l['c'][:22]:<22} {l['why']}")
+    for e in out["errors"]:
+        print(f"error {e['file']}: {e['why']}")
+    print(f"{out['read']} listings read, {len(out['kept'])} kept"
+          + (f", {sum(1 for l in out['kept'] if l['u'])} found on the employer's site" if not args.no_find else ""))
+    if args.out:
+        with open(args.out, "w") as f:
+            json.dump(out, f, indent=1)
+
+
 def cmd_settings(args):
     if args.value is None:
         print(json.dumps(db.get_setting(args.key), indent=2))
@@ -212,6 +236,14 @@ def main(argv=None):
     s.add_argument("--profile", help="your profile as JSON (scores use your skills and terms)")
     s.add_argument("--min-score", type=int, default=0, help="leave out listings scoring under this (0-100)")
     s.set_defaults(fn=cmd_page_feed)
+    s = sub.add_parser("read-listings", help="read job listings from screenshots, a screen recording, a PDF or text")
+    s.add_argument("files", nargs="*", help="screenshots (PNG, JPG), recordings (MP4, MOV), PDFs, saved pages or text files")
+    s.add_argument("--text", help="a text file of listings copied from a job board")
+    s.add_argument("--links", help='JSON list of {"t": link text, "u": url} copied with the text')
+    s.add_argument("--min-score", type=int, default=90, help="leave out listings the board scored under this (default 90)")
+    s.add_argument("--no-find", action="store_true", help="don't look for each job on the employer's site")
+    s.add_argument("--out", help="write the listings as JSON here")
+    s.set_defaults(fn=cmd_read_listings)
     s = sub.add_parser("settings", help="show or set a settings block as JSON")
     s.add_argument("key", choices=["profile", "answers", "search", "automation", "llm"])
     s.add_argument("value", nargs="?")
