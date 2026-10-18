@@ -147,9 +147,10 @@ def _write_json(path, data):
 
 def cmd_page_feed(args):
     from . import pagefeed
-    meta = pagefeed.run(args.out, args.previous, args.search, args.profile)
+    meta = pagefeed.run(args.out, args.previous, args.search, args.profile, args.min_score)
     print(f"{meta['total']} internships ({meta['in_reach']} in the US or remote) in {meta['pages']} pages; "
-          f"{meta['dropped_old']} older than {meta['max_age_days']} days left out. Written to {args.out}")
+          f"{meta['dropped_old']} older than {meta['max_age_days']} days and {meta['below_min_score']} scoring under "
+          f"{meta['min_score']} left out. Written to {args.out}")
 
 
 def cmd_settings(args):
@@ -195,6 +196,7 @@ def main(argv=None):
     s.add_argument("--previous", help="folder holding the page's current jobs documents (keeps first-seen times)")
     s.add_argument("--search", action="store_true", help="search every watched feed first")
     s.add_argument("--profile", help="your profile as JSON (scores use your skills and terms)")
+    s.add_argument("--min-score", type=int, default=0, help="leave out listings scoring under this (0-100)")
     s.set_defaults(fn=cmd_page_feed)
     s = sub.add_parser("settings", help="show or set a settings block as JSON")
     s.add_argument("key", choices=["profile", "answers", "search", "automation", "llm"])

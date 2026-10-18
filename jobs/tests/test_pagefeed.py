@@ -27,6 +27,12 @@ class PageFeedTests(unittest.TestCase):
         self.assertEqual([i["k"] for p in pages for i in p["items"]], ["workday:acme:R1"])
         self.assertEqual((meta["total"], meta["dropped_old"]), (1, 2))
 
+    def test_listings_under_the_minimum_score_are_left_out(self):
+        jobs = [job(1, score=85), job(2, score=80), job(3, score=79), job(4, score=90, status="skipped")]
+        pages, meta = pagefeed.build(jobs, config.DEFAULT_SEARCH, now=NOW, min_score=80)
+        self.assertEqual([i["k"] for i in pages[0]["items"]], ["workday:acme:R1", "workday:acme:R2"])
+        self.assertEqual((meta["min_score"], meta["below_min_score"]), (80, 1))
+
     def test_a_listing_without_a_date_ages_from_when_it_first_appeared(self):
         old = (NOW - timedelta(days=31)).isoformat()
         recent = (NOW - timedelta(days=3)).isoformat()

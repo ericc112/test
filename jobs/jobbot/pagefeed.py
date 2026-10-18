@@ -83,15 +83,19 @@ def watched(search):
     return feeds, len(employers)
 
 
-def build(jobs, search, first_seen=None, now=None):
-    """(pages, meta) for the page from stored jobs: duplicates and listings MAX_AGE_DAYS or more days old left out."""
+def build(jobs, search, first_seen=None, now=None, min_score=0):
+    """(pages, meta) for the page from stored jobs: duplicates, listings MAX_AGE_DAYS or more days old and listings
+    scoring under min_score left out."""
     now = now or datetime.now(timezone.utc)
     stamp = now.isoformat(timespec="seconds")
     first_seen = first_seen or {}
     cutoff = now - timedelta(days=MAX_AGE_DAYS)
-    items, dropped = [], 0
+    items, dropped, low = [], 0, 0
     for job in jobs:
-        if job.get("status") == "duplicate":
+        if job.get("status") in ("duplicate", "skipped"):
+            continue
+        if (job.get("score") or 0) < min_score:
+            low += 1
             continue
         seen = first_seen.get(job["id"]) or stamp
         posted = _when(job.get("posted_at")) or _when(seen)
@@ -105,7 +109,7 @@ def build(jobs, search, first_seen=None, now=None):
     meta = {"updated_at": stamp, "total": len(items), "in_reach": sum(not i["x"] for i in items),
             "with_pay": sum("pay" in i for i in items), "pages": len(pages), "paid_only": bool(search.get("paid_only", True)),
             "by_source": dict(Counter(i["src"] for i in items)), "feeds_watched": feeds, "employers_watched": employers,
-            "dropped_old": dropped, "max_age_days": MAX_AGE_DAYS}
+            "dropped_old": dropped, "max_age_days": MAX_AGE_DAYS, "min_score": min_score, "below_min_score": low}
     return pages, meta
 
 
@@ -120,7 +124,7 @@ def write(out_dir, pages, meta):
         json.dump(meta, f, indent=1)
 
 
-def run(out_dir, previous=None, search_first=False, profile_file=None):
+def run(out_dir, previous=None, search_first=False, profile_file=None, min_score=0):
     """The page-feed command: optionally search, then build and write the list. Returns the meta document."""
     from . import pipeline
     if profile_file:
@@ -133,6 +137,9 @@ def run(out_dir, previous=None, search_first=False, profile_file=None):
         summary = pipeline.run_search(force=True)
         print(f"searched {len(summary.get('fetched', []))} feeds: {summary.get('kept', 0)} matching, "
               f"{len(summary.get('errors', []))} errors", flush=True)
-    pages, meta = build(db.all_jobs_for_rescore(), db.get_setting("search"), previous_first_seen(previous) if previous else None)
+    elif profile_file:
+        pipeline.rescore()  # scores use your skills and terms
+    pages, meta = build(db.all_jobs_for_rescore(), db.get_setting("search"), previous_first_seen(previous) if previous else None,
+                        min_score=min_score)
     write(out_dir, pages, meta)
     return meta
