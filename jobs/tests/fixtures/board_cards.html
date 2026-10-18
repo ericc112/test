@@ -1,0 +1,9 @@
+<html><body style="font-family:-apple-system,Helvetica,Arial,sans-serif;background:#fff;color:#111;margin:0;padding:16px;width:390px">
+<div id=c></div><script>
+const rows=[["Amazon","Supply Chain Intern","Seattle, WA · Internship · $28/hr","97% match"],["Toyota","Production Control Intern","Plano, TX · Internship","94% match"],
+["Goldman Sachs","Summer Analyst - Operations","New York, NY · $50/hr","90% match"],["Google","Software Engineering Intern","Mountain View, CA","96% match"],
+["Kroger","Category Management Intern","Cincinnati, OH","85% match"],["Ford","Purchasing Intern","Dearborn, MI · Internship","92% match"],
+["Walmart","Merchandising Intern","Bentonville, AR","91% match"],["PepsiCo","Sales Intern","Purchase, NY · Hybrid","93% match"],
+["Nike","Sourcing Intern","Beaverton, OR","95% match"],["Target","Inventory Analyst Intern","Minneapolis, MN","89% match"]];
+document.getElementById("c").innerHTML=rows.map(r=>`<div style="border:1px solid #ddd;border-radius:12px;padding:14px;margin-bottom:18px"><div style="color:#555;font-size:14px">${r[0]}</div><div style="font-weight:700;font-size:17px;margin:4px 0">${r[1]}</div><div style="color:#666;font-size:13px">${r[2]}</div><div style="margin-top:8px;font-size:13px;color:#0a6">${r[3]}</div></div>`).join("");
+</script></body></html>

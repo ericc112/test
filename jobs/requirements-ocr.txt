@@ -1,0 +1,1 @@
+rapidocr-onnxruntime>=1.2  # reads screenshots and screen recordings of job boards (read-listings)

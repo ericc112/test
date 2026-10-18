@@ -1,0 +1,7 @@
+<html><body style="font-family:Inter,Arial,sans-serif;background:#0f1115;color:#e8e8e8;margin:0;padding:20px">
+<div style="display:flex;gap:40px;color:#888;font-size:12px;margin-bottom:10px"><span style="width:520px">ROLE</span><span>DATE</span><span>MATCH SCORE</span><span>SAVE</span></div>
+<div id=rows></div>
+<script>
+const rows=[["Supply Chain Analyst Intern - Summer 2027","PepsiCo","Plano, TX","2h ago",96],["Operations Management Intern","Tesla","Austin, TX","5h ago",93],["Software Engineering Intern","Stripe","Remote","1d ago",95],["Procurement Intern, Summer 2027","Caterpillar","Irving, TX","1d ago",91],["Marketing Analytics Intern","Dell Technologies","Round Rock, TX","2d ago",88],["Logistics Coordinator Intern","H-E-B","San Antonio, TX","3d ago",92]];
+document.getElementById("rows").innerHTML=rows.map(r=>`<div style="display:flex;gap:40px;align-items:center;padding:14px 0;border-bottom:1px solid #222"><div style="width:520px"><div style="font-weight:600;font-size:16px">${r[0]}</div><div style="color:#aaa;font-size:13px">${r[1]} · ${r[2]}</div></div><span style="font-size:13px">${r[3]}</span><span style="background:#163;padding:4px 10px;border-radius:12px;font-weight:700">${r[4]}%</span><span>☆</span></div>`).join("");
+</script></body></html>
