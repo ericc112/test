@@ -53,6 +53,12 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(self.field(res, "gender")["answer"], "Decline To Self Identify")
         self.assertTrue((self.tmp.dir / "screenshots" / res.screenshot).exists())
 
+    def test_a_select_all_that_apply_picker_is_opened_ticked_and_saved(self):
+        label = "Please select which locations you are interested in being considered for:"
+        res = self.run_form("picker_form.html", mode="submit", overrides={norm(label): "Houston, TX"})
+        self.assertEqual(res.result, "applied", res.message)
+        self.assertEqual(self.field(res, "which locations")["answer"], ["Houston, TX"])
+
     def test_greenhouse_like_submit_is_confirmed(self):
         res = self.run_form("greenhouse_like.html", mode="submit")
         self.assertEqual(res.result, "applied", res.message)

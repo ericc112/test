@@ -86,7 +86,7 @@ def cmd_apply_batch(args):
 
     Used by the cloud runner behind the JobBot page: requests come from the page's Apply
     button, and the results go back to it. Results are saved after each request. Each request:
-    {"k", "mode": "prepare"|"submit", "title", "company", "url", "source", "answers": {question: answer}}.
+    {"k", "mode": "prepare"|"submit", "title", "company", "url", "source", "location", "answers": {question: answer}}.
     """
     import shutil
     import time
@@ -126,7 +126,7 @@ def cmd_apply_batch(args):
             continue
         src = (r.get("source") or "page").strip().lower()
         job = {"id": r["k"], "source": SOURCE_NAMES.get(src, src.replace(" ", "")), "title": r.get("title") or "",
-               "company": r.get("company") or "", "url": r.get("url"), "apply_url": r.get("url"),
+               "company": r.get("company") or "", "url": r.get("url"), "apply_url": r.get("url"), "location": r.get("location") or "",
                "dedupe_key": r["k"], "posted_at": None}
         db.upsert_job(job)
         db.update_job(r["k"], answers=r.get("answers") or {}, status="new")
