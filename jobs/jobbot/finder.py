@@ -19,7 +19,7 @@ from .textutil import norm, similarity
 LINKEDIN_ID = re.compile(r"linkedin\.com/jobs/view/(?:[^/?#]*-)?(\d{6,})|linkedin\.com/.*[?&]currentJobId=(\d{6,})", re.I)
 # Job boards that copy employers' postings: never where the employer's own posting is.
 BOARDS = re.compile(r"(^|\.)(linkedin|indeed|glassdoor|ziprecruiter|monster|dice|simplyhired|wellfound|angel|joinhandshake|"
-                    r"careerbuilder|google|facebook|twitter|x|instagram|youtube)\.", re.I)
+                    r"careerbuilder|joinrunway|google|facebook|twitter|x|instagram|youtube)\.", re.I)
 MATCH = 0.86  # how alike two titles must be to count as the same job (exact matches win outright)
 BUDGET = 60  # seconds one search may take
 

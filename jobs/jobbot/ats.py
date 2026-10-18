@@ -21,7 +21,7 @@ ACCOUNT_SITES = re.compile(
 # job on the employer's own site instead (finder.py).
 JOB_BOARDS = re.compile(
     r"linkedin\.com|indeed\.com|glassdoor\.|ziprecruiter\.com|monster\.com|dice\.com|simplyhired\.com|"
-    r"wellfound\.com|angel\.co|joinhandshake\.com|careerbuilder\.com",
+    r"wellfound\.com|angel\.co|joinhandshake\.com|careerbuilder\.com|joinrunway\.io",
     re.I,
 )
 

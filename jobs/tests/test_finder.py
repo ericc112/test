@@ -39,6 +39,15 @@ class FinderTests(unittest.TestCase):
             info = finder.details("https://www.ziprecruiter.com/c/Acme/Job/Buyer-Intern/-in-Austin,TX?jid=1")
         self.assertEqual(info, {"title": "Buyer Intern", "company": "Acme", "location": "Austin, TX", "website": "https://www.acme.com"})
 
+    def test_reads_a_runway_posting(self):
+        page = """<script type="application/ld+json">{"@context": "https://schema.org", "@type": "JobPosting",
+          "title": "Procurement Intern", "datePosted": "2026-10-18T01:13:52.653Z", "directApply": true,
+          "hiringOrganization": {"@type": "Organization", "name": "Acme"},
+          "jobLocation": {"@type": "Place", "address": {"@type": "PostalAddress", "addressLocality": "Houston", "addressRegion": "TX"}}}</script>"""
+        with self.fake_html({"https://app.joinrunway.io/explore/job/": page}):
+            info = finder.details("https://app.joinrunway.io/explore/job/cmvd8pa2v000cet0jbpb4ypi3")
+        self.assertEqual(info, {"title": "Procurement Intern", "company": "Acme", "location": "Houston, TX", "website": ""})
+
     def test_finds_the_job_through_the_careers_site_and_taleo_feed(self):
         pages = {"https://www.olin.com": HOME, "https://phe.tbe.taleo.net/phe02/ats/careers/v2/jobSearch": "<p>Search</p>",
                  "https://phe.tbe.taleo.net/phe02/ats/servlet/Rss?org=OLIN&cws=47": RSS}

@@ -161,6 +161,7 @@ class AtsTests(unittest.TestCase):
         self.assertEqual((out["ats"], out["apply_url"], out["title"], out["company"]), ("account", wd, "Supply Chain Intern", "Acme"))
         with mock.patch.object(finder, "details", return_value=info), mock.patch.object(finder, "find", return_value=None):
             out = ats.resolve({"url": "https://www.indeed.com/viewjob?jk=abc", "title": "Supply Chain Intern"})
+        self.assertTrue(ats.JOB_BOARDS.search("https://app.joinrunway.io/explore/job/cmvd8pa2v000cet0jbpb4ypi3"))
         self.assertEqual(out["ats"], "manual")
         self.assertNotIn("title", out)  # a job that already has its name keeps it
 
