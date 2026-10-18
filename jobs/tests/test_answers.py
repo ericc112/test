@@ -202,6 +202,23 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(ans(q("Are you currently enrolled in a supply chain degree program?", "radio", ["Yes", "No"]), profile=me).option, "Yes")
         self.assertEqual(ans(q("Are you currently enrolled in a degree program?", "radio", ["Yes", "No"]), profile=me).option, "Yes")
 
+    def test_baker_hughes_education_questions(self):
+        me = dict(PROFILE, degree="Bachelor's", degree_type="BBA", discipline="Supply Chain Management", gpa="3.8",
+                  currently_enrolled=True, current_title="Supply Chain Analyst Intern")
+        level = ["Diploma, Associate's degree or Equivalent", "Bachelor's degree", "Master's degree", "Phd or above"]
+        self.assertEqual(ans(q("Please select your highest level of education, including any degree you are currently pursuing",
+                               "select", level), profile=me).option, "Bachelor's degree")
+        subjects = ["Applied Sciences or Mathematics", "Business Administration, Economics or Finance", "Engineering : Any"]
+        self.assertEqual(ans(q("In which of the following subjects is your most relevant degree?", "select", subjects),
+                             profile=me).option, "Business Administration, Economics or Finance")
+        bands = ["1st class, Higher Distinction, 3.7+/4 GPA, 8+/10 GPA", "2.1 upper second division, Distinction, 3.5+/4 GPA",
+                 "2.2 lower second division, Credit, 3.0+/4 GPA", "3rd class, Pass, 2.5+/4 GPA"]
+        self.assertEqual(ans(q("What is your current GPA / Grade?", "select", bands), profile=me).option, bands[0])
+        self.assertEqual(ans(q("What is your current GPA / Grade?", "select", bands), profile=dict(me, gpa="3.2")).option, bands[2])
+        work = ["Yes - within Baker Hughes", "Yes - with another company", "No - I do not have relevant work experience"]
+        label = "Have you completed an internship or work experience within a field relevant to the role you are applying?"
+        self.assertEqual(ans(q(label, "select", work), profile=me).option, work[1])
+
     def test_no_sponsorship_never_claims_a_temporary_visa(self):
         me = dict(PROFILE, needs_sponsorship=False)
         merck = ["Yes", "No – I hold a temporary visa status that provides work authorization through OPT or CPT",
