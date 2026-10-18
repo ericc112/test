@@ -98,6 +98,11 @@ def cmd_apply_batch(args):
     if args.profile:
         mine = json.load(open(args.profile))
         profile.update({k: v for k, v in mine.items() if k in config.DEFAULT_PROFILE and v not in (None, "")})
+        # Your answer bank, kept with your profile on the page: it goes first, so it wins over JobBot's defaults.
+        bank = [b for b in mine.get("answer_bank") or [] if isinstance(b, dict) and b.get("q") and "a" in b]
+        if bank:
+            ours = {b["q"] for b in bank}
+            db.set_setting("answers", bank + [b for b in db.get_setting("answers") if b["q"] not in ours])
     if args.resume:
         src = Path(args.resume)
         config.ensure_dirs()
