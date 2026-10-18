@@ -12,7 +12,7 @@ import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
-from . import config, db, fields, pay, places, sources
+from . import config, db, fields, pay, places, scoring, sources
 
 MAX_AGE_DAYS = 30
 PAGE_ITEMS = 60  # listings per document: about 45 KB
@@ -42,7 +42,9 @@ def item(job, search, first_seen):
     out = {
         "k": job["id"], "t": job.get("title") or "", "c": job.get("company") or "", "u": job.get("url") or job.get("apply_url") or "",
         "src": SOURCE_LABELS.get(job.get("source"), job.get("source") or ""), "emp": job.get("source") in sources.EMPLOYER,
-        "l": job.get("location") or "", "loc": where["text"], "st": where["states"], "rm": where["remote"], "x": not where["us"],
+        "l": job.get("location") or "", "loc": where["text"], "st": where["states"], "rm": where["remote"],
+        # Outside the US: "USA - New Jersey - Rahway" counts as US too, and a listing without a location isn't called away.
+        "x": bool(job.get("location")) and not (where["us"] or scoring.looks_us(job.get("location"))),
         "a": area if in_field else "", "se": f"{season[0]} {season[1]}" if season else "",
         "s": job.get("score") or 0, "r": [r for r in job.get("score_reasons") or [] if not HIDDEN_REASON.search(r)],
         "p": job.get("posted_at") or first_seen, "f": first_seen,

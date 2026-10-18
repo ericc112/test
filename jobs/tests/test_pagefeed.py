@@ -42,7 +42,9 @@ class PageFeedTests(unittest.TestCase):
                          {"src": "Workday", "emp": True, "loc": "Houston, TX", "st": ["TX"], "x": False, "rm": False,
                           "a": "Operations & Supply Chain", "se": "Summer 2027", "pay": "$25/hr", "hr": 25, "est": False,
                           "paid": "listed", "f": NOW.isoformat(timespec="seconds")})
-        self.assertEqual(it["r"], ["In United States", "Posted 1d ago"])  # area, pay and "Internship" show on the card itself
+        self.assertEqual(it["r"], ["In United States", "Posted 1d ago"])
+        for where, away in (("USA - New Jersey - Rahway", False), ("Auburn Hills - Michigan - USA", False), ("London, United Kingdom", True)):
+            self.assertEqual(pagefeed.build([job(1, location=where)], config.DEFAULT_SEARCH, now=NOW)[0][0]["items"][0]["x"], away, where)  # area, pay and "Internship" show on the card itself
         self.assertEqual(meta["updated_at"], "2026-10-18T12:00:00+00:00")
 
     def test_pages_and_counts(self):
