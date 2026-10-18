@@ -291,6 +291,15 @@ def _graduation(q, c):
     if re.search(r"\bmonth\b", label) and "year" not in label:  # "End date month"
         name = MONTHS[month - 1].capitalize()
         return Answer(name, "profile", alternatives=[name[:3], f"{month:02d}", str(month)])
+    # Ranges: "January 2027 - June 2027", "July 2027 - December 2027": the one your graduation falls in.
+    for o in q.options:
+        m = re.match(r"\s*([a-z]+)\.?\s+(\d{4})\s*[-–—to]+\s*([a-z]+)\.?\s+(\d{4})\s*$", o, re.I)
+        names = [n[:3] for n in MONTHS]
+        if m and m.group(1)[:3].lower() in names and m.group(3)[:3].lower() in names:
+            start = (int(m.group(2)), names.index(m.group(1)[:3].lower()) + 1)
+            end = (int(m.group(4)), names.index(m.group(3)[:3].lower()) + 1)
+            if year and start <= (int(year), month) <= end:
+                return Answer(o, "profile")
     season = "Spring" if month <= 5 else "Summer" if month <= 8 else "Fall"
     first = exp or year
     # Most specific first: a bare year would match "Fall 2028" as happily as "Spring 2028".
@@ -593,7 +602,7 @@ RULES = [
     (r"\bgpa\b|grade point", ANY, _gpa),
     # "Please select your highest level of education, including any degree you are currently pursuing": your degree,
     # not whether you're enrolled; "In which of the following subjects is your most relevant degree?": your major.
-    (r"highest (level of )?(education|degree)|level of education", ANY, _degree),
+    (r"^(?!.*graduat).*(highest (level of )?(education|degree)|level of education)", ANY, _degree),  # not "when will you graduate…"
     (r"\b(subjects?|fields?|areas?|disciplines?)\b.{0,40}\bdegree\b|\bdegree\b.{0,30}\b(subject|field of study|discipline)", ANY,
      _discipline),
     (r"(completed|have|had) (an |any )?(internship|work experience).{0,60}\b(relevant|field)|relevant (internship|work experience)",

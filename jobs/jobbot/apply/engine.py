@@ -21,9 +21,9 @@ EXTRACT_JS = (Path(__file__).with_name("extract.js")).read_text()
 
 SUBMIT_RE = re.compile(r"^(submit|submit application|submit (my|your) application|apply|apply now|send application|send|"
                        r"finish|complete application)$", re.I)
-APPLY_LINK_RE = re.compile(r"^(apply|apply now|apply (for|to) this (job|position|role)( online)?|apply online|apply here|"
+APPLY_LINK_RE = re.compile(r"^\W*(apply|apply now|apply (for|to) this (job|position|role)( online)?|apply online|apply here|"
                            r"apply (on|at) (the )?(company|employer)('s)? (site|website)|i'?m interested|start (my |your )?application|"
-                           r"begin (my |your )?application|start applying)$", re.I)
+                           r"begin (my |your )?application|start applying)\W*$", re.I)  # "Apply now »"
 COOKIE_REJECT_RE = re.compile(r"^(reject|reject all|decline|deny|necessary only|only necessary)", re.I)
 COOKIE_ACCEPT_RE = re.compile(r"^(accept|accept all|allow all|agree|got it|ok|i understand)", re.I)
 # Boxes on a careers page that aren't the application: job search, and job-alert settings

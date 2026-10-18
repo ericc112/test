@@ -215,6 +215,9 @@ class RuleTests(unittest.TestCase):
                  "2.2 lower second division, Credit, 3.0+/4 GPA", "3rd class, Pass, 2.5+/4 GPA"]
         self.assertEqual(ans(q("What is your current GPA / Grade?", "select", bands), profile=me).option, bands[0])
         self.assertEqual(ans(q("What is your current GPA / Grade?", "select", bands), profile=dict(me, gpa="3.2")).option, bands[2])
+        ranges = ["January 2027 - June 2027", "July 2027 - December 2027", "January 2028 - June 2028"]
+        self.assertEqual(ans(q("When did you, or when will you, graduate from your most recent or highest degree?", "select", ranges),
+                             profile=dict(me, expected_graduation="May 2027", graduation_year="")).option, ranges[0])
         work = ["Yes - within Baker Hughes", "Yes - with another company", "No - I do not have relevant work experience"]
         label = "Have you completed an internship or work experience within a field relevant to the role you are applying?"
         self.assertEqual(ans(q(label, "select", work), profile=me).option, work[1])
