@@ -363,13 +363,16 @@ def pick(listings, min_score=90, search=None):
 def _locate(l):
     if l.get("url") and not ats.JOB_BOARDS.search(l["url"]):
         return {**l, "found": True}  # already the employer's own link
+    refused = []
     try:  # a board's copy, or no link at all: the same job where the employer posts it
-        url = finder.find(l["title"], l["company"], l["location"], budget=LOOKUP_BUDGET)
+        url = finder.find(l["title"], l["company"], l["location"], budget=LOOKUP_BUDGET, refused=refused)
     except Exception:  # noqa: BLE001 - one job's lookup failing must not lose the others
         url = None
     if url:
         return {**l, "url": url, "found": True}
-    return {**l, "url": "", "found": False, "why": "Not found on the employer's site"}
+    why = (f"{l['company']}'s careers site ({refused[0].title()}) is turning JobBot away for now (too many requests), so it "
+           "couldn't check. Tap Read again later" if refused else "Not found on the employer's site")
+    return {**l, "url": "", "found": False, "why": why}
 
 
 def locate(listings, workers=4):

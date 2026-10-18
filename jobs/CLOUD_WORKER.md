@@ -65,8 +65,10 @@ recordings and copied text the owner adds in the page's **Upload** tab and lists
       least `min_score`, and looks each one up on the employer's own careers site.
 
    c. `update` the upload, pinned with its version from the claim:
-      `{"status": "read", "read_at": <now>, "read": out.read, "kept": out.kept, "dropped_n": <len(out.dropped)>,
-      "errors": out.errors}`. If `out.read` is 0 and `out.errors` isn't empty, write `"status": "error"` with
+      `{"status": "read", "read_at": <now>, "read": out.read, "kept": out.kept, "dropped": out.dropped,
+      "dropped_n": <len(out.dropped)>, "errors": out.errors}` (pass it as a `file_path` JSON file). The page then
+      shows what was left out and why, and queues the kept jobs itself when the owner chose "Apply to every
+      business job it finds". If `out.read` is 0 and `out.errors` isn't empty, write `"status": "error"` with
       `"note": out.errors[0].why` instead. If the command failed or was cut off with no `.out.json`, write
       `{"status": "error", "note": "JobBot couldn't finish reading this one. Tap Read again, or upload a shorter recording."}`.
 

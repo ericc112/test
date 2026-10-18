@@ -74,6 +74,7 @@ ATS_LINK = re.compile(
     r"https?://(?:[\w-]+\.wd\d+\.myworkdayjobs\.com/[^\"'\s<>\\]+|(?:job-boards|boards)(?:\.eu)?\.greenhouse\.io/[\w-]+|"
     r"jobs(?:\.eu)?\.lever\.co/[\w.-]+|jobs\.ashbyhq\.com/[^/\"'\s<>\\]+|apply\.workable\.com/[\w-]+|[\w-]+\.workable\.com|"
     r"(?:jobs|careers)\.smartrecruiters\.com/[\w-]+|[\w-]+\.tbe\.taleo\.net/[^\"'\s<>\\]+|[\w-]+\.icims\.com[^\"'\s<>\\]*|"
+    r"[\w.-]+\.oraclecloud\.com/hcmUI/CandidateExperience/[^\"'\s<>\\]+|"
     r"[\w.-]+\.(?:paylocity|ultipro|ukg|adp|jobvite|bamboohr|applytojob|breezy|dayforcehcm|recruitee|jazzhr|rippling)"
     r"\.(?:com|net|hr|io)[^\"'\s<>\\]*)", re.I)
 CAREERS_LINK = re.compile(r"\bcareers?\b|\bjobs\b|join (us|our team)|work (with|for|at) us|opportunities", re.I)
@@ -93,7 +94,7 @@ def boards(company, website=""):
         return False
 
     for name, kind, slug in config.SUGGESTED_COMPANIES:
-        if company_key(name) == key and kind in ("workday", "greenhouse", "lever", "ashby") and fresh((kind, slug.split("#")[0])):
+        if company_key(name) == key and kind in ("workday", "greenhouse", "lever", "ashby", "oracle") and fresh((kind, slug.split("#")[0])):
             yield kind, slug.split("#")[0]
     for slug in _slugs(company)[:2]:
         for kind in ("greenhouse", "lever", "ashby"):  # not Workable: it turns away guessed names (HTTP 429)
@@ -146,6 +147,9 @@ def _board(link, registry):
         return ("taleo", f"{m.group(1)}|{q['org'][0]}|{q.get('cws', ['1'])[0]}") if q.get("org") else None
     if host.endswith(".icims.com"):
         return ("icims", f"https://{host}")
+    if host.endswith(".oraclecloud.com"):
+        k = registry["oracle"].key_from_url(link)
+        return ("oracle", k) if k else None
     return ("page", link)
 
 
@@ -169,9 +173,13 @@ def _careers_pages(company, website=""):
 
 
 def _slugs(company):
-    words = re.findall(r"[a-z0-9]+", norm(re.sub(r"\b(inc|llc|ltd|corp|corporation|co|company|group|holdings)\b\.?", "",
-                                                 (company or "").lower())))
-    return list(dict.fromkeys(s for s in ("".join(words), "-".join(words), words[0] if words else "") if s))
+    """Names the company's boards and website likely go by: "BDO USA" → bdo, bdousa, bdo-usa."""
+    name = re.sub(r"\b(inc|llc|ltd|corp|corporation|co|company|group|holdings)\b\.?", "", (company or "").lower())
+    out = []
+    for n in (re.sub(r"\s+(usa|us|america|north america)\s*$", "", name.strip()), name):  # the country is rarely in the domain
+        words = re.findall(r"[a-z0-9]+", norm(n))
+        out += ["".join(words), "-".join(words), words[0] if words else ""]
+    return list(dict.fromkeys(s for s in out if s))
 
 
 # ---------------------------------------------------------------- searching each kind of board
@@ -213,6 +221,12 @@ def _search(kind, ref, title, retries=1):
             if name and rid:
                 out.append((name, f"{root}/ats/careers/v2/viewRequisition?org={org}&cws={cws}&rid={rid.group(1)}", ""))
         return out
+    if kind == "oracle":
+        from .sources import oracle
+        host, site = ref.split("|")
+        _, reqs = oracle._search(host, site, keyword=title)
+        return [(r.get("Title") or "", f"https://{host}/hcmUI/CandidateExperience/en/sites/{site}/job/{r.get('Id')}",
+                 r.get("PrimaryLocation") or "") for r in reqs if r.get("Id")]
     if kind == "icims":
         return _links(f"{ref}/jobs/search?" + urllib.parse.urlencode({"ss": 1, "searchKeyword": title, "in_iframe": 1}),
                       r"/jobs/\d+/")
@@ -251,8 +265,9 @@ def _best(hits, title, location=""):
     return scored[0][1] if scored and scored[0][0] >= MATCH else None
 
 
-def find(title, company, location="", website="", budget=BUDGET):
-    """The employer's own posting of this job, or None. Gives up after `budget` seconds."""
+def find(title, company, location="", website="", budget=BUDGET, refused=None):
+    """The employer's own posting of this job, or None. Gives up after `budget` seconds. Boards that turned
+    JobBot away (HTTP 429: too many requests) are added to `refused`, so "not found" can say it couldn't look."""
     if not title or not company:
         return None
     start = time.time()
@@ -262,7 +277,11 @@ def find(title, company, location="", website="", budget=BUDGET):
             break
         try:
             hit = _best(_search(kind, ref, title, retries=0 if (kind, ref) in guessed else 1), title, location)
-        except (http.FetchError, ValueError, KeyError, TypeError, AttributeError):
+        except http.FetchError as e:
+            if refused is not None and "429" in str(e) and (kind, ref) not in guessed:
+                refused.append(kind)
+            continue
+        except (ValueError, KeyError, TypeError, AttributeError):
             continue
         if hit:
             return hit
