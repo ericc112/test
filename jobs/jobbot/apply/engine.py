@@ -26,7 +26,10 @@ APPLY_LINK_RE = re.compile(r"^(apply|apply now|apply (for|to) this (job|position
                            r"begin (my |your )?application|start applying)$", re.I)
 COOKIE_REJECT_RE = re.compile(r"^(reject|reject all|decline|deny|necessary only|only necessary)", re.I)
 COOKIE_ACCEPT_RE = re.compile(r"^(accept|accept all|allow all|agree|got it|ok|i understand)", re.I)
-JOB_SEARCH_BOX = re.compile(r"^search\b|\bsearch (by|for|jobs)\b|^keywords?$|job title or keyword|^(city|location),? (state|zip)", re.I)
+# Boxes on a careers page that aren't the application: job search, and job-alert settings
+# ("Select how often (in days) to receive an alert:" on SuccessFactors sites).
+JOB_SEARCH_BOX = re.compile(r"^search\b|\bsearch (by|for|jobs)\b|^keywords?$|job title or keyword|^(city|location),? (state|zip)|"
+                            r"receive an alert|job alerts?\b|alert (frequency|me)", re.I)
 NOTICE_ACCEPT_RE = re.compile(r"^(i )?(accept|agree)( and (continue|apply))?$|^(continue|proceed)( to (apply|the application))?$|^ok$",
                               re.I)
 # Multi-page forms: the button that moves to the next page.
