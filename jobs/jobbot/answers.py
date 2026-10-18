@@ -9,7 +9,7 @@ Anything still unanswered and required is reported as missing, never guessed.
 """
 import re
 from collections import defaultdict
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, timedelta
 
 from .textutil import contains_phrase, norm, pick_option, split_list, words
@@ -155,9 +155,10 @@ def _bucket(options, have):
         nums = [float(n) for n in re.findall(r"\d+(?:\.\d+)?", o)]
         if len(nums) == 2 and nums[0] <= have <= nums[1]:
             return o
-        if len(nums) == 1 and ("+" in o or "more" in o.lower()) and have >= nums[0]:
+        if len(nums) == 1 and re.search(r"\+|more|above|higher|at least|>", o, re.I) and have >= nums[0]:
             return o
-        if len(nums) == 1 and re.search(r"less|under|below|<", o, re.I) and have < nums[0]:
+        if len(nums) == 1 and re.search(r"less|under|below|lower|<", o, re.I) and \
+                (have <= nums[0] if re.search(r"or (below|less|lower)", o, re.I) else have < nums[0]):
             return o
     return None
 
@@ -206,8 +207,13 @@ def _how_heard(q, c):
     if (c.job or {}).get("source") in EMPLOYER_SITES and first == "Job board":
         name = re.split(r",| (inc|llc|ltd|corp)\b", (c.job or {}).get("company") or "", flags=re.I)[0].strip()
         own = [f"{name} website", f"{name} careers", f"{name} careers page"] if name else []
-        return own + ["Company website", "Company careers page", "Careers page", "Website"] + rest
-    return [first] + rest
+        return own + ["Company website", "Company careers page", "Careers page", "Website"] + rest + _any_option(q)
+    return [first] + rest + _any_option(q)
+
+
+def _any_option(q):
+    """Any answer will do for how you heard: when none of the usual ones is offered, the first choice there is."""
+    return [o for o in q.options or [] if norm(o) not in ("", "select one")][:1]
 
 
 MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
@@ -223,6 +229,9 @@ def _gpa(q, c):
             have = float(re.findall(r"\d+(?:\.\d+)?", gpa)[0])
         except IndexError:
             return None
+        threshold = re.search(r"(\d(?:\.\d+)?)\s*(or (greater|higher|above|better|more)|\+)", q.label or "", re.I)
+        if threshold and any(norm(o) in ("yes", "no") for o in q.options):  # "Is your cumulative GPA a 3.0 or greater?"
+            return yn(have >= float(threshold.group(1)))
         bucket = _bucket(q.options, have)  # "3.5 - 4.0", "3.75+", "Below 3.0"
         return Answer(gpa, "profile", alternatives=[bucket] if bucket else [])
     return gpa
@@ -236,7 +245,7 @@ def _graduation(q, c):
     if not exp and not year:
         return None
     month = next((i + 1 for i, m in enumerate(MONTHS) if m[:3] in exp.lower()), 5)
-    if q.input_type == "date":
+    if q.input_type in ("date", "wd_date"):
         return f"{year}-{month:02d}-01"
     if q.input_type == "month":
         return f"{year}-{month:02d}"
@@ -286,7 +295,7 @@ def _terms(q, c):
 
 def _today(q, c):
     d = date.today()
-    return d.isoformat() if q.input_type == "date" else d.strftime("%m/%d/%Y")
+    return d.isoformat() if q.input_type in ("date", "wd_date") else d.strftime("%m/%d/%Y")
 
 
 def _school(q, c):
@@ -324,6 +333,152 @@ def _skip(q, c):
     return Answer(None, "skip")
 
 
+COMMON_SKILLS = ["Microsoft Excel", "Excel", "PowerPoint", "Microsoft Word", "Microsoft Office", "Data Analysis",
+                 "Supply Chain Management", "Supply Chain", "Inventory Management", "Inventory", "Logistics", "Procurement",
+                 "Purchasing", "Forecasting", "Demand Planning", "SAP", "ERP", "SQL", "Python", "Tableau", "Power BI",
+                 "Project Management", "Operations", "Marketing", "Sales", "Customer Service", "Negotiation",
+                 "Communication", "Leadership", "Teamwork", "Problem Solving", "Time Management"]
+
+
+def _has(skill, text):
+    return bool(re.search(rf"\b{re.escape(norm(skill))}\b", text))
+
+
+def _skills(q, c):
+    """Skills from your profile, else every common one your resume names: the ones the posting asks for first.
+    Only skills your resume shows, never ones it doesn't."""
+    if c.profile.get("skills"):
+        return split_list(c.profile["skills"])
+    resume, posting = norm(c.profile.get("resume_text") or ""), norm((c.job or {}).get("description") or "")
+    found = [s for s in COMMON_SKILLS if _has(s, resume)]
+    found.sort(key=lambda s: not _has(s, posting))
+    return found or None
+
+
+def _role_type(q, c):
+    """"Which type of role are you applying for?": an internship when the posting is one."""
+    if re.search(r"\bintern(ship)?\b|co-?op", (c.job or {}).get("title") or "", re.I):
+        return ["Internship", "Intern", "Co-op", "Student"]
+    return ["Full Time", "Full-time", "Regular"]
+
+
+DEGREE_NAMES = {
+    "bba": ["Bachelor of Business Administration", "BBA", "B.B.A."],
+    "bs": ["Bachelor of Science", "BS", "B.S."],
+    "ba": ["Bachelor of Arts", "BA", "B.A."],
+}
+
+
+def _degree(q, c):
+    """Your degree: its exact name ("Bachelor of Business Administration", "BBA"), else a plain bachelor's option
+    ("Bachelors", "Bachelor's Degree"), never another named degree ("Bachelor of Applied Linguistics", "BA")."""
+    level = c.profile.get("degree") or None
+    names = DEGREE_NAMES.get(norm(c.profile.get("degree_type") or "").replace(".", ""), [])
+    if not q.options or not names:
+        return (names + [level] if level else names) or None
+    named = [o for n in names for o in q.options if re.search(rf"(^|\W){re.escape(norm(n))}($|\W)", norm(o))]
+    plain = [o for o in q.options if re.search(r"(^|\W)bachelor'?s?\b(?! (of|in)\b)", norm(o))]  # "University/Bachelors Degree"
+    if named or plain:
+        return Answer((named or plain)[0], "profile")
+    return Answer(None, "", note="None of the options is your degree")
+
+
+def _veteran(q, c):
+    """Not a veteran never lands on "I am a veteran, but I am not a protected veteran", which merely contains
+    the words "I am not a protected veteran"."""
+    v = c.profile.get("eeo_veteran") or "decline"
+    if q.kind in ("text", "textarea") and v == "decline":
+        return Answer(None, "skip")
+    if re.search(r"\bnot\b", v, re.I) and q.options:
+        says_veteran = re.compile(r"\bi am a veteran\b|\bidentify as\b|\bam a protected\b", re.I)
+        never = [o for o in q.options if re.search(r"not a veteran|never served", o, re.I) and not says_veteran.search(o)]
+        not_protected = [o for o in q.options if re.search(r"not a protected veteran", o, re.I) and not says_veteran.search(o)]
+        return Answer((never + not_protected or ["decline"])[0], "profile")
+    return _eeo("eeo_veteran")(q, c)
+
+
+TEMPORARY_STATUS = re.compile(r"temporary|i (hold|have) an? .{0,30}visa|on an? .{0,20}visa|\bopt\b|\bcpt\b|\bstem\b|h-?1b|\bead\b|\bf-?1\b", re.I)
+HOLDS_TEMPORARY = re.compile(r"\bi (hold|have|am on) (an? )?(temporary|[\w-]+ visa)|temporary (visa|status|work)", re.I)
+CITIZEN = re.compile(r"citizen|national\b|permanent resident|green card|u\.?s\.? worker|lawful permanent", re.I)
+
+
+def _sponsorship(q, c):
+    """No sponsorship needed is a plain "No": never "No – I hold a temporary visa status that provides work
+    authorization", which some forms list first among several kinds of No. A U.S. citizen gets the citizen's No;
+    when no No fits, the question is left for you."""
+    if re.search(r"without (the )?(need (for|of) )?(any |employer |visa )*sponsor", q.label or "", re.I):
+        # "Are you authorized to work ... without the need for sponsorship?" asks about authorization.
+        return yn(bool(c.profile.get("work_authorized")) and not c.profile.get("needs_sponsorship"))
+    if c.profile.get("needs_sponsorship"):
+        return "Yes"
+    nos = [o for o in q.options or [] if re.match(r"\s*no\b", o, re.I)]
+    if not nos:  # "I do NOT need sponsorship to work in the US"
+        nos = [o for o in q.options or [] if re.search(r"\b(do not|don't|will not|won't) (need|require)|\bnot need\b|without sponsorship", o, re.I)]
+    if len(nos) <= 1:
+        return nos[0] if nos and not HOLDS_TEMPORARY.search(nos[0]) else ("No" if not nos else None)
+    citizen = re.search(r"citizen", c.profile.get("citizenship") or "", re.I)
+    fits = [o for o in nos if citizen and CITIZEN.search(o) and not HOLDS_TEMPORARY.search(o)] + \
+           [o for o in nos if not TEMPORARY_STATUS.search(o)]
+    return Answer(fits[0], "profile") if fits else Answer(None, "", note="Which kind of No fits you?")
+
+
+def _disability(q, c):
+    """The voluntary disability form: "No, I don't have a disability" is its "No, I do not have a disability and
+    have not had one in the past"."""
+    v = c.profile.get("eeo_disability") or "decline"
+    if q.kind in ("text", "textarea") and v == "decline":
+        return Answer(None, "skip")
+    lead = re.match(r"\s*(yes|no)\b", v, re.I)
+    if lead and q.options:
+        same = [o for o in q.options if re.match(rf"\s*{lead.group(1)}\b", o, re.I)]
+        if len(same) == 1:
+            return Answer(same[0], "profile")
+    return _eeo("eeo_disability")(q, c)
+
+
+def _check_one(q, c):
+    """"Please check one of the boxes below": the form says what it's about only in its options."""
+    opts = " ".join(q.options or [])
+    if re.search(r"disabilit", opts, re.I):
+        return _disability(q, c)
+    if re.search(r"veteran", opts, re.I):
+        return _veteran(q, c)
+    return None
+
+
+US_STATES = {"alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA", "colorado": "CO",
+             "connecticut": "CT", "delaware": "DE", "district of columbia": "DC", "florida": "FL", "georgia": "GA", "hawaii": "HI",
+             "idaho": "ID", "illinois": "IL", "indiana": "IN", "iowa": "IA", "kansas": "KS", "kentucky": "KY", "louisiana": "LA",
+             "maine": "ME", "maryland": "MD", "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
+             "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV", "new hampshire": "NH", "new jersey": "NJ",
+             "new mexico": "NM", "new york": "NY", "north carolina": "NC", "north dakota": "ND", "ohio": "OH", "oklahoma": "OK",
+             "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI", "south carolina": "SC", "south dakota": "SD",
+             "tennessee": "TN", "texas": "TX", "utah": "UT", "vermont": "VT", "virginia": "VA", "washington": "WA",
+             "west virginia": "WV", "wisconsin": "WI", "wyoming": "WY"}
+
+
+def _state(q, c):
+    """Your state, also as its code: Taleo lists "US-TX", others "TX"."""
+    state = (c.profile.get("state") or "").strip()
+    if not state:
+        return None
+    code = US_STATES.get(norm(state)) or (state.upper() if len(state) == 2 else "")
+    return [state] + ([code, f"US-{code}", f"{code} - {state}"] if code else [])
+
+
+def _authorized(q, c):
+    """Authorized to work: "Yes", or the sentence some forms use instead ("I am authorized to work in this country
+    for any employer")."""
+    if c.profile.get("work_authorized"):
+        return ["Yes", "I am authorized to work in this country for any employer",
+                "authorized to work in the united states for any employer", "authorized to work for any employer"]
+    return ["No", "I require sponsorship to work in this country"]
+
+
+def _blank(q, c):
+    return Answer("", "blank")  # should be empty: clear anything already in it
+
+
 def _eeo(field_name):
     def f(q, c):
         v = c.profile.get(field_name) or "decline"
@@ -339,16 +494,22 @@ RULES = [
     (r"\bgender\b|\bsex\b", ANY, _eeo("eeo_gender")),
     (r"hispanic|latin[oax]", ANY, _eeo("eeo_hispanic")),
     (r"\brace\b|ethnicit", ANY, _eeo("eeo_race")),
-    (r"veteran", ANY, _eeo("eeo_veteran")),
-    (r"disabilit", ANY, _eeo("eeo_disability")),
+    (r"veteran", ANY, _veteran),
+    (r"disabilit", ANY, _disability),
+    (r"check one of the boxes|select one of the (boxes|options) below", CHOICE, _check_one),
     # Messages and consent
     (r"text messages?|\bsms\b|whatsapp|newsletter|marketing|promotional|job alerts|talent (community|network|pool)|"
      r"(receive|get) (future )?(updates|communications|news|emails)", CHOICE, lambda q, c: yn(c.profile.get("marketing_opt_in"))),
-    # Work authorisation and visas
+    # Work authorisation and visas. Sponsorship first: "require sponsorship for work authorization" isn't
+    # asking whether you're authorized.
+    # Before sponsorship: "Do you currently have legal authorization to work … (e.g. US Citizen, Employer Sponsored…)"
+    (r"(do|does) you (currently )?(have|possess) (the )?(legal )?(authori[sz]ation|right) to work", ANY, _authorized),
+    (r"sponsor|\bstem opt\b|optional practical training|curricular practical training|\bcpt\b", ANY, _sponsorship),
     (r"(do|does) you (currently )?(have|hold|possess).{0,40}(work permit|visa|authori[sz]ation|right to work)",
-     ANY, lambda q, c: yn(c.profile.get("work_authorized"))),
-    (r"authori[sz]ed to work|eligible to work|right to work|work authori[sz]ation|legally (able|permitted|allowed|eligible)",
-     ANY, lambda q, c: yn(c.profile.get("work_authorized"))),
+     ANY, _authorized),
+    (r"authori[sz]ed (to work|for employment)|legally authori[sz]ed|eligible to work|right to work|work authori[sz]ation|"
+     r"legally (able|permitted|allowed|eligible)",
+     ANY, _authorized),
     (r"sponsor|\bvisa\b|h-?1b|work permit|immigration", ANY, lambda q, c: yn(c.profile.get("needs_sponsorship"))),
     # Where and how you'll work
     (r"relocat", CHOICE | {"text"}, _relocate),
@@ -368,24 +529,31 @@ RULES = [
     # Agreements
     (r"privacy|i (have read|agree|acknowledge|consent|certify|confirm|understand|accept)|acknowledg|"
      r"terms (and|&) conditions|terms of (use|service)|data (processing|protection|retention)|gdpr|"
-     r"consent to|by (checking|submitting|clicking)|certify that|attest|true and (complete|accurate)",
+     r"consent to|by (checking|submitting|clicking)|certify that|attest|true and (complete|accurate)|must agree|agree to proceed",
      CHOICE, _consent),
     # Students and internships
     (r"\bgpa\b|grade point", ANY, _gpa),
     (r"have you graduated|already graduated", CHOICE, lambda q, c: yn(not c.profile.get("currently_enrolled"))),
     (r"return(ing)? to (school|university|college|campus)|continue (your|with) (studies|education|degree)",
      CHOICE, _enrolled),
+    # Before "currently pursuing" and "degree": "Please select the degree type you are currently pursuing",
+    # "Expected Graduation / Graduation Date? If you are continuing ... your current degree program".
+    (r"\bgraduation\b.{0,25}\bdate\b|expected graduation|anticipated graduation", ANY, _graduation),
+    (r"degree type|type of degree|which degree|what degree|level of degree", ANY, _degree),
     (r"currently (enrolled|pursuing|attending|a student|studying)|are you (a |currently a |currently )?(current |full[- ]time )?"
      r"(student|enrolled)|enrolled (in|at) (a|an|your)|pursuing (a|an|your) .{0,30}degree", CHOICE | {"text"}, _enrolled),
     (r"(year|level|standing) (in|of) (school|study|college|university|program)|class standing|"
-     r"current (academic )?(year|standing|level)|what year are you|academic (year|standing|level)|year of study|grade level",
+     r"current (academic )?(year|standing|level)|what year are you|academic (year|standing|level)|year of study|grade level|"
+     r"student classification|classification as a student",
      ANY, _school_year),
     (r"which (term|season|session)|internship (term|season|period|session|dates|start)|what (term|season)|"
      r"(summer|fall|spring|winter) (internship|program)|available (for|during) (the )?(summer|fall|spring|winter)|start term",
      ANY, _terms),
     (r"\bminor\b", TEXT | {"select"}, _p("minor")),
+    (r"^(type to )?add (your )?skills|^(your )?skills$", ANY, _skills),
+    (r"(type|kind) of (role|position|job|employment) (are )?you|^(role|position|employment|job) type$", CHOICE, _role_type),
     # Education
-    (r"\bdegree\b|level of education|highest education|education level|highest level", ANY, _p("degree")),
+    (r"\bdegree\b|level of education|highest education|education level|highest level", ANY, _degree),
     (r"discipline|\bmajor\b|field of study|area of study|concentration", ANY, _discipline),
     (r"graduat|year of completion|class of|class year", ANY, _graduation),
     (r"\b(school|university|college|institution)\b", TEXT | {"select"}, _school),
@@ -395,7 +563,7 @@ RULES = [
     (r"resume|\bcv\b|curriculum", {"textarea", "text"}, _skip),
     (r"additional information|anything else|comments|message to (the )?hiring", {"text", "textarea"}, _skip),
     # Signature blocks (e.g. the voluntary disability form)
-    (r"^(today'?s )?date$|^signature date$|^date signed$", {"text"}, _today),
+    (r"^(today'?s )?date$|signature date$|^date signed$|^date of signature$", {"text"}, _today),  # "Candidate eSignature Date"
     (r"signature|^sign here", {"text"}, _full_name),
     # Who you are
     (r"pronunciation", TEXT, _skip),
@@ -407,6 +575,8 @@ RULES = [
      TEXT, _full_name),
     (r"pronoun", ANY, _p("pronouns")),
     (r"e-?mail", TEXT, _p("email")),
+    (r"phone (device )?type|type of phone", CHOICE, lambda q, c: ["Mobile", "Cell", "Cell Phone", "Mobile Phone", "Personal Cell"]),
+    (r"\bextension\b|^ext\.?$", TEXT, _blank),  # "Phone Extension": your number doesn't have one
     (r"phone|mobile|\bcell\b|telephone", TEXT, _p("phone")),
     (r"linkedin", TEXT, _p("linkedin")),
     (r"github", TEXT, _p("github")),
@@ -421,8 +591,10 @@ RULES = [
     (r"\bcity\b|where .{0,30}(live|located|based|reside)|where .{0,40}work(ing)? from|current location|"
      r"^location\b|\breside\b",
      ANY, _location),
-    (r"\bstate\b|province", TEXT | {"select"}, _p("state")),
+    (r"\bstate\b|province", TEXT | {"select"}, _state),
     (r"\bzip\b|postal", TEXT, _p("postal_code")),
+    (r"address line 2|^address 2$|\bline 2\b|apartment|\bapt\b|\bsuite\b", TEXT,
+     lambda q, c: c.profile.get("address_line2") or _blank(q, c)),
     (r"street|address line|mailing address|^address$|home address", TEXT, _p("address")),
 ]
 _COMPILED = [(re.compile(rx, re.I), kinds, fn) for rx, kinds, fn in RULES]
@@ -472,6 +644,24 @@ HISTORY_DATE = re.compile(r"\b(start|end|from|to)\b.{0,12}\b(date|month|year)\b|
 
 def _section_answer(q, ctx, label):
     """Fields in a repeated education/employment block. None = not handled here."""
+    if q.section == "education" and re.match(r"(from|start)\b", label):  # Workday: "From"
+        start = (ctx.profile.get("education_start") or "").strip()
+        return _coerce(_graduation(q, replace(ctx, profile={**ctx.profile, "expected_graduation": start, "graduation_year": ""}))) \
+            if start else Answer(None, "profile")
+    if q.section == "education" and re.match(r"(to|end)\b|.*actual or expected", label):  # "To (Actual or Expected)"
+        return _coerce(_graduation(q, ctx)) or Answer(None, "profile")
+    if q.section == "employment":  # your current job, when your profile has it
+        p = ctx.profile
+        start = (p.get("current_job_start") or "").strip()
+        if re.search(r"currently work here|current(ly)? (employed|work) (here|there)", label):
+            return Answer(True if start else None, "profile")
+        if re.match(r"(from|start)\b", label):
+            return _coerce(_graduation(q, replace(ctx, profile={**p, "expected_graduation": start, "graduation_year": ""}))) \
+                if start else Answer(None, "profile")
+        if re.search(r"description|responsibilit|duties", label):
+            return Answer(p.get("current_job_description") or None, "profile")
+        if re.match(r"location\b", label):
+            return Answer(p.get("current_job_location") or None, "profile")
     if HISTORY_DATE.search(label):
         # The end of your degree is your graduation. A past job's dates, or when a degree
         # started, only you know: leave them for you rather than guess.
@@ -543,7 +733,9 @@ def answer(q, ctx):
         label = norm(q.label)
         if "autofill" in label:
             return Answer(None, "skip")
-        if re.search(r"resume|\bcv\b|curriculum", label) or (not label and q.required):
+        # Workday's resume box is just "Upload a file (5MB max)": a bare upload field is for your resume.
+        if re.search(r"resume|\bcv\b|curriculum", label) or re.match(r"(upload|attach|select|drop)( a| your)? files?\b", label) \
+                or (not label and q.required):
             path = ctx.files.get("resume")
             return Answer(path, "file") if path else Answer(None, "", note="Upload your resume in Profile")
         if "cover letter" in label:

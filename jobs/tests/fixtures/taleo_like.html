@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Acme Careers (Taleo Business Edition-like)</title>
+<style>
+  body { font: 14px sans-serif; margin: 20px; }
+  .oracletaleocwsv2-step { display: none; } .oracletaleocwsv2-step.oracletaleocwsv2-active { display: block; }
+  label { display: block; margin: 8px 0; } .error { color: #b00; }
+</style></head>
+<body>
+<!-- A small stand-in for a Taleo Business Edition application: one form, three steps, Register first. -->
+<p><span class="oracletaleocwsv2-current-step">1</span> of <span class="oracletaleocwsv2-total-steps">3</span></p>
+<form id="TBE_theForm">
+  <div class="oracletaleocwsv2-step oracletaleocwsv2-active" id="step-01">
+    <h2>1. Register</h2>
+    <label>Email * <input type="email" name="email" id="email" required></label>
+    <label>Password * <input type="password" name="cwsPassword" id="cwsPassword" required></label>
+    <label>Re-type new password: * <input type="password" name="cwsPassword_2" id="cwsPassword_2" required></label>
+  </div>
+  <div class="oracletaleocwsv2-step" id="step-02">
+    <h2>2. Your details</h2>
+    <label>First Name * <input name="firstName" id="firstName" required></label>
+    <label>Last Name * <input name="lastName" id="lastName" required></label>
+    <label>Phone # * <input name="phone" id="phone" required></label>
+    <label>Work Authorization *
+      <select name="workAuth" id="workAuth" required><option value="">Select</option><option>Yes</option><option>No</option></select></label>
+  </div>
+  <div class="oracletaleocwsv2-step" id="step-03">
+    <h2>3. Resume</h2>
+    <label>Attach Resume <input type="file" name="resume" id="resume"></label>
+    <button type="button" id="submit">Submit</button>
+  </div>
+  <div id="errors" class="error" role="alert"></div>
+</form>
+<a href="#" aria-label="previous" class="oracletaleocwsv2-btn-arrow-nav">&larr;</a>
+<a href="#" aria-label="next" class="oracletaleocwsv2-btn-arrow-nav" id="next">&rarr;</a>
+<div id="voluntary" hidden>
+  <h2>Voluntary Equal Opportunity Questionnaire</h2>
+  <label>Gender <select name="gender" id="gender"><option value="">Please select</option><option>Male</option><option>Female</option><option>I choose not to disclose</option></select></label>
+  <button type="button" id="submit2">Submit</button>
+</div>
+<div id="done" hidden><h2>Thank you for applying</h2><p>Your application has been submitted.</p></div>
+<script>
+let step = 1;
+const show = () => {
+  document.querySelectorAll(".oracletaleocwsv2-step").forEach((d, i) => d.classList.toggle("oracletaleocwsv2-active", i + 1 === step));
+  document.querySelector(".oracletaleocwsv2-current-step").textContent = step;
+  document.getElementById("next").hidden = step === 3;
+};
+const v = (id) => document.getElementById(id).value.trim();
+document.getElementById("next").addEventListener("click", (e) => {
+  e.preventDefault();
+  const errs = document.getElementById("errors"); errs.textContent = "";
+  if (step === 1) {
+    const pw = v("cwsPassword");
+    if (!v("email") || pw.length < 12 || !/[a-z]/i.test(pw) || !/\d/.test(pw) || !/[^a-z0-9]/i.test(pw) || pw !== v("cwsPassword_2")) {
+      errs.textContent = "Error: Passwords must be at least twelve (12) characters long with a letter, a number and a special character."; return;
+    }
+  }
+  if (step === 2 && (!v("firstName") || !v("lastName") || !v("phone") || !v("workAuth"))) {
+    errs.textContent = "Error: Please complete all required fields."; return;
+  }
+  step += 1; show();
+});
+// ?eeo=1: like Olin's site, Submit leads to a voluntary questions page with a Submit of its own.
+const eeo = new URLSearchParams(location.search).has("eeo");
+document.getElementById("submit").addEventListener("click", () => {
+  document.getElementById("TBE_theForm").hidden = true;
+  document.getElementById(eeo ? "voluntary" : "done").hidden = false;
+});
+document.getElementById("submit2").addEventListener("click", () => {
+  document.getElementById("voluntary").hidden = true; document.getElementById("done").hidden = false;
+});
+show();
+</script>
+</body></html>

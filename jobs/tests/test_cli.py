@@ -38,6 +38,17 @@ class ApplyBatchTests(unittest.TestCase):
         results = json.loads(self.out.read_text())
         self.assertEqual([(r["k"], r["mode"], r["status"]) for r in results], [("greenhouse:acme:1", "submit", "applied")])
 
+    def test_the_answer_bank_in_your_profile_is_used(self):
+        profile = self.tmp.dir / "profile.json"
+        profile.write_text(json.dumps({"first_name": "Test", "answer_bank": [
+            {"q": "valid driver's license", "a": "Yes"}, {"q": "debar", "a": "No", "regex": True}, {"bad": 1}]}))
+        args = SimpleNamespace(requests=str(self.requests), profile=str(profile), resume=None, out=str(self.out))
+        with mock.patch.object(Worker, "process", lambda self_, job_id, mode: None):
+            cli.cmd_apply_batch(args)
+        bank = db.get_setting("answers")
+        self.assertEqual(bank[:2], [{"q": "valid driver's license", "a": "Yes"}, {"q": "debar", "a": "No", "regex": True}])
+        self.assertEqual(sum(b["q"] == "debar" for b in bank), 1)  # yours replaces a default with the same question
+
 
     def test_time_limit_leaves_the_rest_for_the_next_run(self):
         done = []

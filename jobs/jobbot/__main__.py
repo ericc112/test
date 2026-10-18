@@ -5,6 +5,7 @@ import os
 import sys
 import threading
 import webbrowser
+from pathlib import Path
 
 from . import config, db, pipeline
 
@@ -102,6 +103,11 @@ def cmd_apply_batch(args):
     if args.profile:
         mine = json.load(open(args.profile))
         profile.update({k: v for k, v in mine.items() if k in config.DEFAULT_PROFILE and v not in (None, "")})
+        # Your answer bank, kept with your profile on the page: it goes first, so it wins over JobBot's defaults.
+        bank = [b for b in mine.get("answer_bank") or [] if isinstance(b, dict) and b.get("q") and "a" in b]
+        if bank:
+            ours = {b["q"] for b in bank}
+            db.set_setting("answers", bank + [b for b in db.get_setting("answers") if b["q"] not in ours])
     if args.resume:
         src = Path(args.resume)
         config.ensure_dirs()
@@ -133,6 +139,7 @@ def cmd_apply_batch(args):
         shot = att and att.get("screenshot")
         results.append({
             "k": r["k"], "mode": mode, "status": done["status"], "note": done.get("status_note") or "",
+            "title": done.get("title") or "", "company": done.get("company") or "", "apply_url": done.get("apply_url") or "",
             "fields": [{k: f.get(k) for k in ("label", "answer", "source", "note", "required")} for f in (att or {}).get("fields", [])],
             "missing": [{k: m.get(k) for k in ("label", "kind", "options", "note")} for m in (att or {}).get("missing", [])],
             "screenshot": str(config.SHOTS_DIR / shot) if shot else None,
@@ -148,6 +155,37 @@ def _write_json(path, data):
     with open(tmp, "w") as f:
         json.dump(data, f, indent=1)
     os.replace(tmp, path)
+
+
+def cmd_page_feed(args):
+    from . import pagefeed
+    meta = pagefeed.run(args.out, args.previous, args.search, args.profile, args.min_score)
+    print(f"{meta['total']} internships ({meta['in_reach']} in the US or remote) in {meta['pages']} pages; "
+          f"{meta['dropped_old']} older than {meta['max_age_days']} days and {meta['below_min_score']} scoring under "
+          f"{meta['min_score']} left out. Written to {args.out}")
+
+
+def cmd_read_listings(args):
+    from . import listings
+    text = Path(args.text).read_text(encoding="utf-8") if args.text else None
+    links = json.loads(Path(args.links).read_text()) if args.links else None
+    result = listings.run(args.files, text, links, args.min_score, db.get_setting("search") or None, find=not args.no_find)
+    page = lambda l: {"t": l["title"], "c": l["company"], "l": l["location"], "p": l["posted"], "s": l["score"],  # noqa: E731
+                      "u": l.get("url") or "", "a": l.get("area") or "", "why": l.get("why") or ""}
+    out = {"read": result["read"], "kept": [page(l) for l in result["kept"]],
+           "dropped": [page(l) for l in result["dropped"]], "errors": result["errors"]}
+    for l in out["kept"]:
+        where = l["u"] or l["why"]
+        print(f"keep {str(l['s'] if l['s'] is not None else '-'):>3}  {l['t'][:44]:<44} {l['c'][:22]:<22} {where[:70]}")
+    for l in out["dropped"]:
+        print(f"drop {str(l['s'] if l['s'] is not None else '-'):>3}  {l['t'][:44]:<44} {l['c'][:22]:<22} {l['why']}")
+    for e in out["errors"]:
+        print(f"error {e['file']}: {e['why']}")
+    print(f"{out['read']} listings read, {len(out['kept'])} kept"
+          + (f", {sum(1 for l in out['kept'] if l['u'])} found on the employer's site" if not args.no_find else ""))
+    if args.out:
+        with open(args.out, "w") as f:
+            json.dump(out, f, indent=1)
 
 
 def cmd_settings(args):
@@ -191,6 +229,21 @@ def main(argv=None):
     s.add_argument("--time-limit", type=float, default=0,
                    help="seconds; don't start another application after this (the rest come back not_started)")
     s.set_defaults(fn=cmd_apply_batch)
+    s = sub.add_parser("page-feed", help="build the JobBot page's internship list (meta.json and pages/p*.json)")
+    s.add_argument("--out", required=True, help="folder for meta.json and pages/")
+    s.add_argument("--previous", help="folder holding the page's current jobs documents (keeps first-seen times)")
+    s.add_argument("--search", action="store_true", help="search every watched feed first")
+    s.add_argument("--profile", help="your profile as JSON (scores use your skills and terms)")
+    s.add_argument("--min-score", type=int, default=0, help="leave out listings scoring under this (0-100)")
+    s.set_defaults(fn=cmd_page_feed)
+    s = sub.add_parser("read-listings", help="read job listings from screenshots, a screen recording, a PDF or text")
+    s.add_argument("files", nargs="*", help="screenshots (PNG, JPG), recordings (MP4, MOV), PDFs, saved pages or text files")
+    s.add_argument("--text", help="a text file of listings copied from a job board")
+    s.add_argument("--links", help='JSON list of {"t": link text, "u": url} copied with the text')
+    s.add_argument("--min-score", type=int, default=90, help="leave out listings the board scored under this (default 90)")
+    s.add_argument("--no-find", action="store_true", help="don't look for each job on the employer's site")
+    s.add_argument("--out", help="write the listings as JSON here")
+    s.set_defaults(fn=cmd_read_listings)
     s = sub.add_parser("settings", help="show or set a settings block as JSON")
     s.add_argument("key", choices=["profile", "answers", "search", "automation", "llm"])
     s.add_argument("value", nargs="?")

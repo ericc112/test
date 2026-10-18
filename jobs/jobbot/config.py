@@ -36,15 +36,21 @@ DEFAULT_PROFILE = {
     "twitter": "",
     "current_company": "",
     "current_title": "",
+    "current_job_start": "",  # e.g. "August 2024": your current job, for work-experience blocks
+    "current_job_location": "",  # e.g. "Houston, TX"
+    "current_job_description": "",
     "years_experience": "",
     "school": "",
     "degree": "",
+    "degree_type": "",  # e.g. "BBA", "BS" or "BA": forms that list them separately
+    "citizenship": "",  # e.g. "U.S. citizen": picks the right kind of "No" on sponsorship questions
     "discipline": "",
     "graduation_year": "",
     # Students
     "currently_enrolled": True,
     "school_year": "",  # Freshman | Sophomore | Junior | Senior | Graduate student
     "expected_graduation": "",  # e.g. "May 2028"
+    "education_start": "",  # e.g. "August 2024": when you started at your school
     "gpa": "",
     "minor": "",
     "internship_terms": "",  # e.g. "Summer 2027"
