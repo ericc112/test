@@ -88,11 +88,15 @@ def cmd_apply_batch(args):
     {"k", "mode": "prepare"|"submit", "title", "company", "url", "source", "answers": {question: answer}}.
     """
     import shutil
+    import time
     from pathlib import Path
 
     from .server import extract_text
     from .worker import Worker
 
+    started = time.monotonic()
+    if getattr(args, "data", None):
+        config.use_data_dir(args.data)
     requests = json.load(open(args.requests))
     profile = db.get_setting("profile")
     if args.profile:
@@ -110,8 +114,15 @@ def cmd_apply_batch(args):
         profile["resume_file"], profile["resume_text"] = src.name, extract_text(config.FILES_DIR / src.name)
     db.set_setting("profile", profile)
     worker, results = Worker(), []
+    limit = getattr(args, "time_limit", 0) or 0
     for r in requests:
         mode = "submit" if r.get("mode") == "submit" else "prepare"
+        if limit and results and time.monotonic() - started > limit:
+            # Out of time: leave it for the next run rather than get cut off halfway through a form.
+            results.append({"k": r["k"], "mode": mode, "status": "not_started", "note": "", "fields": [], "missing": [],
+                            "screenshot": None})
+            _write_json(args.out, results)
+            continue
         src = (r.get("source") or "page").strip().lower()
         job = {"id": r["k"], "source": SOURCE_NAMES.get(src, src.replace(" ", "")), "title": r.get("title") or "",
                "company": r.get("company") or "", "url": r.get("url"), "apply_url": r.get("url"),
@@ -190,6 +201,9 @@ def main(argv=None):
     s.add_argument("--profile", help="your profile as JSON (JobBot profile fields)")
     s.add_argument("--resume", help="your resume file")
     s.add_argument("--out", default="results.json")
+    s.add_argument("--data", help="data folder for this run (instead of JOBBOT_DATA)")
+    s.add_argument("--time-limit", type=float, default=0,
+                   help="seconds; don't start another application after this (the rest come back not_started)")
     s.set_defaults(fn=cmd_apply_batch)
     s = sub.add_parser("page-feed", help="build the JobBot page's internship list (meta.json and pages/p*.json)")
     s.add_argument("--out", required=True, help="folder for meta.json and pages/")

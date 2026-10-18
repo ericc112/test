@@ -1,4 +1,5 @@
 import json
+import time
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -47,6 +48,35 @@ class ApplyBatchTests(unittest.TestCase):
         bank = db.get_setting("answers")
         self.assertEqual(bank[:2], [{"q": "valid driver's license", "a": "Yes"}, {"q": "debar", "a": "No", "regex": True}])
         self.assertEqual(sum(b["q"] == "debar" for b in bank), 1)  # yours replaces a default with the same question
+
+
+    def test_time_limit_leaves_the_rest_for_the_next_run(self):
+        done = []
+        args = SimpleNamespace(requests=str(self.requests), profile=None, resume=None, out=str(self.out),
+                               data=None, time_limit=0.001)
+
+        def process(self_, job_id, mode):
+            done.append(job_id)
+            time.sleep(0.01)
+            db.update_job(job_id, status="applied")
+
+        with mock.patch.object(Worker, "process", process):
+            cli.cmd_apply_batch(args)
+        results = json.loads(self.out.read_text())
+        self.assertEqual(done, ["greenhouse:acme:1"])
+        self.assertEqual([r["status"] for r in results], ["applied", "not_started"])
+
+    def test_data_option_picks_the_data_folder(self):
+        from jobbot import config
+        other = self.tmp.dir / "other"
+        args = SimpleNamespace(requests=str(self.requests), profile=None, resume=None, out=str(self.out),
+                               data=str(other), time_limit=0)
+        try:
+            with mock.patch.object(Worker, "process", lambda self_, job_id, mode: db.update_job(job_id, status="ready")):
+                cli.cmd_apply_batch(args)
+            self.assertTrue((other / "jobbot.db").exists())
+        finally:
+            config.use_data_dir(self.tmp.dir)
 
 
 if __name__ == "__main__":
