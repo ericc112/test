@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Acme Careers: Marketing Intern</title>
+<style>body { font: 14px sans-serif; margin: 20px; } [role=dialog] { border: 1px solid #999; padding: 16px; }</style></head>
+<body>
+<!-- A careers page whose Apply shows a privacy notice first; accepting it opens the application form. -->
+<h1>Marketing Intern</h1>
+<p>Join our marketing team for the summer.</p>
+<button type="button" id="apply">Apply</button>
+<div role="dialog" aria-modal="true" id="notice" hidden>
+  <h2>Before you apply</h2>
+  <p>We process your data as described in our privacy notice.</p>
+  <button type="button" id="decline">Decline</button>
+  <button type="button" id="accept">Accept</button>
+</div>
+<script>
+document.getElementById("apply").onclick = () => { document.getElementById("notice").hidden = false; };
+document.getElementById("decline").onclick = () => { document.getElementById("notice").hidden = true; };
+document.getElementById("accept").onclick = () => { location.href = "greenhouse_like.html"; };
+</script>
+</body></html>

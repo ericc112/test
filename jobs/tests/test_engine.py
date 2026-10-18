@@ -92,6 +92,11 @@ class EngineTests(unittest.TestCase):
         res = self.run_form("botwall.html")
         self.assertEqual(res.result, "manual")
 
+    def test_a_notice_shown_after_apply_is_accepted(self):
+        res = self.run_form("consent_job.html")
+        self.assertEqual(res.result, "ready", res.missing)
+        self.assertTrue(res.url.endswith("greenhouse_like.html"))
+
     def test_apply_link_in_new_tab_is_followed(self):
         res = self.run_form("jobpage.html")
         self.assertEqual(res.result, "ready", res.missing)

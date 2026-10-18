@@ -164,6 +164,13 @@ class AtsTests(unittest.TestCase):
         self.assertEqual(out["ats"], "manual")
         self.assertNotIn("title", out)  # a job that already has its name keeps it
 
+    def test_resolve_finds_the_icims_posting_behind_a_careers_page(self):
+        page = '<button>Apply</button><script>var u = "https://careers-acme.icims.com/jobs/login?loginOnly=1";' \
+               'var a = "https://careers-acme.icims.com/jobs/54808/login";</script>'
+        with mock.patch.object(http, "get_html", return_value=("https://jobs.acme.com/external/jobs/54808", page)):
+            out = ats.resolve({"url": "https://jobs.acme.com/external/jobs/54808"})
+        self.assertEqual(out, {"ats": "account", "apply_url": "https://careers-acme.icims.com/jobs/54808/login"})
+
     def test_resolve_sign_in_sites(self):
         for url in ("https://careers-acme.icims.com/jobs/1234/intern/job", "https://career4.successfactors.com/career?company=acme",
                     "https://acme.wd5.myworkdayjobs.com/External/job/X_R1"):

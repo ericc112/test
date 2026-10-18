@@ -33,7 +33,8 @@ _ATS_IN_HTML = re.compile(
     r"https?://jobs(?:\.eu)?\.lever\.co/[^\"'\s<>\\]+|"
     r"https?://jobs\.ashbyhq\.com/[^\"'\s<>\\]+|"
     r"https?://[\w-]+\.wd\d+\.myworkdayjobs\.com/[^\"'\s<>\\]*/job/[^\"'\s<>\\]+|"
-    r"https?://[\w-]+\.tbe\.taleo\.net/[^\"'\s<>\\]*viewRequisition[^\"'\s<>\\]+",
+    r"https?://[\w-]+\.tbe\.taleo\.net/[^\"'\s<>\\]*viewRequisition[^\"'\s<>\\]+|"
+    r"https?://[\w-]+\.icims\.com/jobs/\d+/[^\"'\s<>\\]*",
     re.I,
 )
 
@@ -150,7 +151,7 @@ def resolve(job):
         return hit
     for m in _ATS_IN_HTML.findall(body):
         hit = _classify(html.unescape(m).rstrip(".,);"))
-        if hit and hit["ats"] in SUPPORTED + ("account",):  # a Workday or Taleo posting has an engine of its own
+        if hit and hit["ats"] in SUPPORTED + ("account",):  # a Workday, Taleo or iCIMS posting behind a careers page
             return hit
     parser = _Links()
     try:

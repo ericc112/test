@@ -26,6 +26,8 @@ APPLY_LINK_RE = re.compile(r"^(apply|apply now|apply (for|to) this (job|position
                            r"begin (my |your )?application|start applying)$", re.I)
 COOKIE_REJECT_RE = re.compile(r"^(reject|reject all|decline|deny|necessary only|only necessary)", re.I)
 COOKIE_ACCEPT_RE = re.compile(r"^(accept|accept all|allow all|agree|got it|ok|i understand)", re.I)
+NOTICE_ACCEPT_RE = re.compile(r"^(i )?(accept|agree)( and (continue|apply))?$|^(continue|proceed)( to (apply|the application))?$|^ok$",
+                              re.I)
 # Multi-page forms: the button that moves to the next page.
 NEXT_RE = re.compile(r"^(next|continue|save (and|&) continue|save (and|&) next|next (step|page)|proceed|review|"
                      r"review (my |your )?application|continue to (the )?(next step|review|application))$", re.I)
@@ -514,7 +516,28 @@ class Engine:
                 pass  # navigated (or revealed the form) in place
             self._settle(page)
             page.wait_for_timeout(1000)
+            return self._accept_notice(page)
+        return page
+
+    def _accept_notice(self, page):
+        """Accept a notice shown after Apply (a privacy or data-consent dialog), which may open the form in a new tab."""
+        dialog = page.locator("[role=dialog], [aria-modal=true], .modal").filter(visible=True)
+        if not dialog.count():
             return page
+        button = dialog.first.get_by_role("button", name=NOTICE_ACCEPT_RE)
+        if not button.count():
+            button = dialog.first.get_by_role("link", name=NOTICE_ACCEPT_RE)
+        if not button.count():
+            return page
+        self.log("Accepting the notice shown before the application")
+        try:
+            with page.context.expect_page(timeout=4000) as new_tab:
+                button.first.click(timeout=5000)
+            page = new_tab.value
+        except Exception:
+            pass
+        self._settle(page)
+        page.wait_for_timeout(1000)
         return page
 
     def _goto_ats_form(self, page):
@@ -576,7 +599,7 @@ class Engine:
             if any(d["captcha"] for _, d in seen):
                 return "captcha"
             try:
-                body = " ".join(doc.inner_text("body")[:5000] for doc, _ in seen).lower()
+                body = " ".join(doc.inner_text("body") for doc, _ in seen).lower()  # the code box can be at the very end
             except Exception:
                 body = ""
             if "security code" in body or "verification code" in body:
