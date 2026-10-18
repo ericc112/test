@@ -85,7 +85,7 @@ The JobBot page on claude.ai (see `CLOUD_WORKER.md`) lists the internships and c
 3. Tap **Apply** on an internship. That's it: a scheduled Claude cloud session runs JobBot every 3 hours (or right away when you tap **Start now**), fills in the application and sends it. The result, every answer and a screenshot show up under **Applying**.
 4. If the form asks something your profile doesn't answer, nothing is guessed or sent: the question shows up under **Applying** with the employer's own choices. Answer it and tap **Apply with these answers**.
 
-The page lists the internships JobBot can send by itself; tick **Show ones you apply to on their site** for the rest. **Add a link** takes a posting from any site, LinkedIn and Indeed included (see *Where it can apply*). The cloud session only sends applications you tapped Apply on, and stops if a site shows a CAPTCHA, a bot check or an email confirmation.
+The page lists the internships JobBot can send by itself; tick **Show ones you apply to on their site** for the rest. A scheduled cloud session rebuilds the list twice a day (`jobs/LIST_REFRESH.md`, which runs `python3 -m jobbot page-feed --search`), so it is never more than a day old, and leaves out postings 30 or more days old. **Add a link** takes a posting from any site, LinkedIn and Indeed included (see *Where it can apply*). The cloud session only sends applications you tapped Apply on, and stops if a site shows a CAPTCHA, a bot check or an email confirmation.
 
 ## How applying works
 
