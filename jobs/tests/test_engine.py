@@ -83,6 +83,11 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(res.result, "blocked")
         self.assertIn("CAPTCHA", res.message)
 
+    def test_emailed_code_at_the_bottom_of_a_long_form_is_blocked(self):
+        res = self.run_form("email_code.html", mode="submit")
+        self.assertEqual(res.result, "blocked", res.message)
+        self.assertIn("email security code", res.message)
+
     def test_validation_errors_are_reported(self):
         res = self.run_form("errors.html", mode="submit")
         self.assertEqual(res.result, "needs_input")

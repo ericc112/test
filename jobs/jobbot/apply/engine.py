@@ -232,7 +232,8 @@ class Engine:
             what = "a CAPTCHA" if outcome == "captcha" else "an email security code"
             if not self.headless:
                 return self._assist(page, job, fields, [], f"The site asked for {what}. Complete it in the browser window.")
-            return Result("blocked", f"The site asked for {what}. Turn off headless mode in Settings and submit again to finish it yourself.",
+            return Result("blocked", f"Not sent: the site asked for {what} to confirm a person is applying. Apply on their site "
+                                     "to finish (on a computer, you can also turn off headless mode in Settings and submit again).",
                           fields, [], shot, page.url)
         if outcome == "errors":
             errs = self._extract(form)["page"]["errors"]
@@ -608,7 +609,7 @@ class Engine:
                 body = " ".join(doc.inner_text("body") for doc, _ in seen).lower()  # the code box can be at the very end
             except Exception:
                 body = ""
-            if "security code" in body or "verification code" in body:
+            if re.search(r"security code|verification code|confirm you(?:'|’)re a human", body):
                 return "code"
             d = seen[0][1]
             if (d["errors"] or d["invalid"]) and page.url == url0 and time.time() > deadline - seconds + 5:
