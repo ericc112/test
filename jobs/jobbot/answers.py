@@ -263,6 +263,11 @@ def _gpa(q, c):
         threshold = re.search(r"(\d(?:\.\d+)?)\s*(or (greater|higher|above|better|more)|\+)", q.label or "", re.I)
         if threshold and any(norm(o) in ("yes", "no") for o in q.options):  # "Is your cumulative GPA a 3.0 or greater?"
             return yn(have >= float(threshold.group(1)))
+        # Bands that list several scales: "1st class, Higher Distinction, 3.7+/4 GPA, 8+/10 GPA, …": the highest one you meet.
+        bands = [(float(m.group(1)), o) for o in q.options for m in [re.search(r"(\d\.\d+)\s*\+?\s*/\s*4\b", o)] if m]
+        if len(bands) >= 2:
+            met = [b for b in bands if b[0] <= have]
+            return Answer(max(met)[1], "profile") if met else None
         bucket = _bucket(q.options, have)  # "3.5 - 4.0", "3.75+", "Below 3.0"
         return Answer(gpa, "profile", alternatives=[bucket] if bucket else [])
     return gpa
@@ -361,6 +366,16 @@ def _discipline(q, c):
     # Short major lists ("Business", "Business Administration"...) often lack the exact major.
     # A business major then falls back to the broad business option, never to an unrelated one.
     return [major] + (["Business Administration", "Business", "Business Management"] if BUSINESS_MAJOR.search(major) else [])
+
+
+def _relevant_experience(q, c):
+    """"Have you completed an internship or work experience in a field relevant to the role?": yes when your profile
+    has a job, done somewhere else ("Yes - with another company", not "Yes - within Baker Hughes")."""
+    if not (c.profile.get("current_title") or c.profile.get("current_company")):
+        return None
+    yes = [o for o in q.options if norm(o).startswith("yes")]
+    other = next((o for o in yes if re.search(r"\b(another|other) (company|employer|organi[sz]ation)", o, re.I)), None)
+    return Answer(other, "profile", option=other) if other else ("Yes" if not yes or len(yes) == 1 else None)
 
 
 def _consent(q, c):
@@ -576,6 +591,13 @@ RULES = [
      CHOICE, _consent),
     # Students and internships
     (r"\bgpa\b|grade point", ANY, _gpa),
+    # "Please select your highest level of education, including any degree you are currently pursuing": your degree,
+    # not whether you're enrolled; "In which of the following subjects is your most relevant degree?": your major.
+    (r"highest (level of )?(education|degree)|level of education", ANY, _degree),
+    (r"\b(subjects?|fields?|areas?|disciplines?)\b.{0,40}\bdegree\b|\bdegree\b.{0,30}\b(subject|field of study|discipline)", ANY,
+     _discipline),
+    (r"(completed|have|had) (an |any )?(internship|work experience).{0,60}\b(relevant|field)|relevant (internship|work experience)",
+     CHOICE, _relevant_experience),
     (r"have you graduated|already graduated", CHOICE, lambda q, c: yn(not c.profile.get("currently_enrolled"))),
     (r"return(ing)? to (school|university|college|campus)|continue (your|with) (studies|education|degree)",
      CHOICE, _enrolled),
