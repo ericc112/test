@@ -15,7 +15,7 @@ FAMILIES = {
     "finance": {
         "label": "Finance & Accounting",
         "title": r"accountant|accounting|accounts (payable|receivable)|bookkeep\w*|financ\w*|fp&a|treasury|\btax\b|"
-                 r"audit\w*|payroll|billing|credit|underwrit\w*|investment|banking|banker|equity research|private equity|"
+                 r"audit\w*|(?<!quality )assurance|payroll|billing|credit|underwrit\w*|investment|banking|banker|equity research|private equity|"
                  r"venture capital|portfolio|wealth|valuation|corporate development|m&a|controller|\bcpa\b|risk|compliance|"
                  r"summer (analyst|associate)",
         "dept": r"financ|accounting|treasury|\btax\b|fp&a|audit|risk|compliance|investment|banking|capital markets",
@@ -271,12 +271,14 @@ def _labels(job):
 
 
 # "... - United States, PhD Student Recruiting": the recruiting program, not an HR role.
+# "... - Engineering and Business Majors": who may apply, not what the job is.
+MAJORS_SUFFIX = re.compile(r"\s*[-,|–—(]\s*(open to |for )?[\w&,' ]{0,60}\bmajors?\b.*$", re.I)
 PROGRAM_SUFFIX = re.compile(r"[-,|–—]\s*[\w' ]{0,40}?\b(student|university|campus|graduate|early careers?)\b[\w' ]{0,25}?\brecruiting\b.*$", re.I)
 
 
 def classify(job, search):
     """Return (True, area label) for a business-major role, else (False, reason)."""
-    title = norm(PROGRAM_SUFFIX.sub("", job.get("title") or ""))
+    title = norm(MAJORS_SUFFIX.sub("", PROGRAM_SUFFIX.sub("", job.get("title") or "")))
     if not title:
         return False, "No title"
     if HARD_BLOCK.search(title):

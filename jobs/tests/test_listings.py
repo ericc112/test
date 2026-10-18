@@ -48,6 +48,26 @@ def cards_screen():
     return lines
 
 
+def phone_board_screen():
+    """A phone job-board app (LinkedIn's look): the search text, filter chips, then cards with the company's logo left
+    of the text, titles that wrap onto two lines, company, city, perks and how long ago, and the app's tab bar."""
+    rows = [("intern posted in the past 24 hours", 298, 226, 36), ("Jobs", 166, 349, 49), ("Past 24 hours", 438, 352, 42),
+            ("Easy Apply", 898, 346, 54),
+            ("Supply Chain Intern - Engineering", 214, 495, 54), ("ACME", 40, 548, 30), ("and Business Majors", 216, 548, 30),
+            ("Acme Foods", 215, 622, 40), ("Fresno, TX", 215, 680, 40), ("401(k) benefit", 218, 743, 36),
+            ("15 hours ago : Be an early applicant", 215, 895, 38),
+            ("2027 Summer Internship -", 215, 989, 52), ("Purchasing", 215, 1050, 53), ("Perry Homes", 217, 1118, 37),
+            ("Houston, TX (Hybrid)", 215, 1175, 39), ("Actively reviewing applicants", 299, 1256, 37),
+            ("18 hours ago : Be an early applicant :", 215, 1336, 32), ("in", 874, 1336, 32),
+            ("HOUSTON - Land Development,", 215, 1276 + 300, 47), ("BGE", 41, 1310 + 300, 61), ("Internship", 215, 1314 + 300, 53),
+            ("BGE, Inc.", 216, 1403 + 300, 40), ("Houston, TX (On-site)", 214, 1461 + 300, 39),
+            ("Assurance Intern - Winter 2028", 218, 2165, 39), ("IBDO", 50, 2198, 50), ("(Houston) ①", 218, 2194, 57),
+            ("BDO USA", 217, 2287, 37), ("Houston, TX (Hybrid)", 214, 2343, 43),
+            ("This job search alert is on", 53, 2483, 39), ("On", 906, 2481, 45),
+            ("Home", 66, 2675, 34), ("Video", 307, 2675, 40), ("My Network", 499, 2677, 36), ("Jobs", 1041, 2677, 36)]
+    return [Line(listings._clean(t), x, y, h) for t, x, y, h in rows]
+
+
 class SplitTests(unittest.TestCase):
     def test_reads_each_row_of_a_table(self):
         got = listings.split(table_screen())
@@ -82,6 +102,23 @@ Posted 3 days ago
             ("Supply Chain Intern", "Lockheed Martin", "Fort Worth, TX (On-site)", "", None),
             ("Financial Analyst Intern - Summer 2027", "Charles Schwab", "Westlake, TX (Hybrid)", "Posted 3 days ago", 92)])
 
+    def test_reads_a_phone_board_with_logos_and_wrapped_titles(self):
+        got = listings.split(phone_board_screen())
+        self.assertEqual([(l["title"], l["company"], l["location"], l["posted"]) for l in got], [
+            ("Supply Chain Intern - Engineering and Business Majors", "Acme Foods", "Fresno, TX", "15 hours ago"),
+            ("2027 Summer Internship - Purchasing", "Perry Homes", "Houston, TX (Hybrid)", "18 hours ago"),
+            ("HOUSTON - Land Development, Internship", "BGE, Inc.", "Houston, TX (On-site)", ""),
+            ("Assurance Intern - Winter 2028 (Houston)", "BDO USA", "Houston, TX (Hybrid)", "")])
+
+    def test_wrapped_titles(self):
+        self.assertTrue(listings._continues("2027 Summer Internship -", "Purchasing"))
+        self.assertTrue(listings._continues("Supply Chain Intern - Engineering", "and Business Majors"))
+        self.assertTrue(listings._continues("HOUSTON - Land Development,", "Internship"))
+        self.assertFalse(listings._continues("Learning and Development Intern (", "Olin"))  # cut off, not wrapped
+        self.assertFalse(listings._continues("Buyer Intern", "Acme"))
+        self.assertFalse(listings._continues("Buyer Intern -", "Houston, TX"))
+        self.assertEqual(listings._clean_title("Energy & Utilities Analyst, 1898 &"), "Energy & Utilities Analyst, 1898")
+
     def test_a_location_line_isnt_a_title(self):
         self.assertEqual(listings.split(listings.text_lines("Plano, TX · Internship\nInternship · Remote")), [])
 
@@ -115,15 +152,17 @@ class PickTests(unittest.TestCase):
         self.assertEqual(dropped[0]["why"], "Company not read")
 
     def test_a_vague_title_counts_when_the_board_scored_it(self):
-        kept, _ = listings.pick([{"title": "Production Control Intern", "company": "Toyota", "location": "", "posted": "",
-                                  "score": 94}])
+        job = {"title": "Production Control Intern", "company": "Toyota", "location": "", "posted": "", "score": 94}
+        kept, _ = listings.pick([job])
         self.assertEqual(kept[0]["area"], "Business (the title doesn't say which area)")
+        kept, dropped = listings.pick([{**job, "score": None}])  # a board with no score doesn't vouch for it
+        self.assertEqual((kept, dropped[0]["why"]), ([], "Not clearly a business role"))
 
 
 class LocateTests(unittest.TestCase):
     def test_finds_each_job_on_the_employers_site(self):
         hits = {"Supply Chain Intern": "https://amazon.jobs/en/jobs/1"}
-        with mock.patch.object(listings.finder, "find", side_effect=lambda t, c, l: hits.get(t)):
+        with mock.patch.object(listings.finder, "find", side_effect=lambda t, c, l, budget: hits.get(t)):
             got = listings.locate([{"title": "Supply Chain Intern", "company": "Amazon", "location": "Seattle, WA"},
                                    {"title": "Buyer Intern", "company": "Acme", "location": ""}])
         self.assertEqual([(l["url"], l["found"]) for l in got], [("https://amazon.jobs/en/jobs/1", True), ("", False)])
@@ -138,7 +177,7 @@ class LocateTests(unittest.TestCase):
         self.assertEqual(got[0]["url"], "https://boards.greenhouse.io/acme/jobs/1")
 
     def test_a_lookup_that_fails_keeps_the_others(self):
-        def find(title, company, location):
+        def find(title, company, location, budget):
             if title == "Bad":
                 raise RuntimeError("site down")
             return "https://example.com/job"

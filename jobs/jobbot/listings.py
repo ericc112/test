@@ -13,6 +13,7 @@ import shutil
 import statistics
 import subprocess
 import tempfile
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
@@ -25,6 +26,7 @@ TEXTS = (".txt", ".csv", ".tsv", ".md")
 PAGES = (".html", ".htm")
 MAX_FRAMES = 240  # four minutes of recording at one still a second
 MIN_CONFIDENCE = 0.5
+LOOKUP_BUDGET = 25  # seconds to look one job up on its employer's site (a listing JobBot misread can't be found anyway)
 
 TITLE_WORD = re.compile(
     r"\b(intern(ship)?s?|co-?op|analyst|associate|coordinator|assistant|specialist|trainee|apprentice(ship)?|"
@@ -42,7 +44,10 @@ POSTED = re.compile(
     re.I)
 NOISE = re.compile(r"^(save|saved|apply|apply now|easy apply|quick apply|applied|promoted|new|viewed|actively recruiting|"
                    r"be an early applicant|see more|show more|full[- ]time|part[- ]time|internship|contract|temporary|"
-                   r"entry[- ]level|\W*)$|\$\s?\d|/\s?(hr|hour|yr|year)\b", re.I)
+                   r"entry[- ]level|\W*)$|\$\s?\d|/\s?(hr|hour|yr|year)\b|alumni work|connections? works? here|"
+                   r"early applicant|reviewing applicants|job search alert|posted in the past|past 24 hours|\bbenefits?\b|"
+                   r"401\(k\)|\b(medical|dental|vision)\b|^(on|off|in)$", re.I)  # "in": the LinkedIn logo
+CONTINUES = re.compile(r"(?:[-–—&,/]|\b(?:and|of|for|to|in|the|with|&))\s*$", re.I)  # a title wrapped onto a second line
 LOCATION = re.compile(
     r"^(?i:remote|hybrid|on-?site|in-?office|united states|usa)\b|"
     r"^[A-Z][A-Za-z.'\- ]*,\s?(?:(?:" + "|".join(sorted(places.STATE_CODES)) + r")\b|(?i:" + places._STATE_NAMES + r")\b|"
@@ -86,12 +91,17 @@ def ocr(image):
     result, _ = _engine()(image)
     lines = []
     for box, text, conf in result or []:
-        text = " ".join(str(text).split())
+        text = _clean(str(text))
         if not text or float(conf) < MIN_CONFIDENCE:
             continue
         xs, ys = [p[0] for p in box], [p[1] for p in box]
         lines.append(Line(text, min(xs), min(ys), max(ys) - min(ys)))
     return lines
+
+
+def _clean(text):
+    """Text without icons OCR reads as characters (a verified badge comes out as "①")."""
+    return " ".join("".join(ch for ch in text if unicodedata.category(ch) not in ("So", "No", "Co", "Cn")).split())
 
 
 def text_lines(text):
@@ -169,14 +179,53 @@ def rows(lines):
 def _is_title(line, typical_h):
     t = line.text.strip()
     lead = SEP.split(t)[0]  # "Plano, TX · Internship" is a location line, not an internship called that
-    return (6 <= len(t) <= 110 and TITLE_WORD.search(t) and not NOISE.search(lead) and not LOCATION.search(lead)
+    return (6 <= len(t) <= 110 and (t[0].isupper() or t[0].isdigit()) and TITLE_WORD.search(t)
+            and not NOISE.search(lead) and not LOCATION.search(lead)
             and not HEADER.match(t) and not POSTED.match(t) and not SCORE.match(t) and not SENTENCE.search(t)
             and len(t.split()) <= 14 and line.h >= 0.85 * typical_h)
 
 
 def _clean_title(t):
     t = re.sub(r"^[\W_]+", "", t)
-    return re.sub(r"\s+(new|promoted|easy apply|actively recruiting)$", "", t, flags=re.I).strip()
+    t = re.sub(r"\s+(new|promoted|easy apply|actively recruiting)$", "", t, flags=re.I).strip()
+    return re.sub(r"[\s(\-–—&,/]+$", "", t)  # a title cut off at the card's edge: "Analyst, 1898 &"
+
+
+def _continues(title, nxt):
+    """Whether the next line is the rest of a title the app wrapped onto two lines."""
+    t = nxt.strip()
+    if not t or POSTED.match(t) or SCORE.match(t) or LOCATION.search(SEP.split(t)[0]):
+        return False
+    if NOISE.search(t) and not re.fullmatch(r"intern(ship)?|co-?op", t, re.I):  # "Land Development," / "Internship"
+        return False
+    if title.rstrip().endswith("("):
+        return ")" in t
+    return t[0].islower() or t[0] == "(" or bool(CONTINUES.search(title))
+
+
+def _main_column(lines):
+    """Where the listings' text starts: the most common left edge of longer lines. Logos sit to its left."""
+    xs = [round(l.x / 20) for l in lines if len(l.text) > 12]
+    return statistics.mode(xs) * 20 if xs else None
+
+
+def _join_titles(rws, typical_h):
+    """Rows with each two-line title joined into one."""
+    out, skip = [], False
+    for i, r in enumerate(rws):
+        if skip:
+            skip = False
+            continue
+        first = r["parts"][0]
+        nxt = rws[i + 1] if i + 1 < len(rws) else None
+        if (nxt and nxt["mid"] - r["mid"] <= 1.8 * typical_h and len(nxt["parts"]) == 1
+                and _continues(first.text, nxt["parts"][0].text)):
+            joined = Line(f"{first.text} {nxt['parts'][0].text}", first.x, first.y, first.h)
+            if _is_title(joined, typical_h):  # the first line alone may lack the job word: "Land Development," / "Internship"
+                r = {**r, "parts": [joined] + r["parts"][1:]}
+                skip = True
+        out.append(r)
+    return out
 
 
 def _piece(t):
@@ -187,7 +236,7 @@ def _piece(t):
         return ("score", n) if n <= 100 else ("other", t)
     if POSTED.match(t):
         return "posted", t
-    if NOISE.search(t) or SENTENCE.search(t) or len(t.split()) > 8:  # tags, pay, a line of the description
+    if NOISE.search(t) or (SENTENCE.search(t) and len(t.split()) > 4) or len(t.split()) > 8:  # tags, pay, description
         return "noise", t
     if LOCATION.search(t):
         return "location", re.sub(r",(?=\S)", ", ", t)
@@ -247,8 +296,13 @@ def split(lines):
     """Listings on one screen. Cards (the usual look) are read whole, so a company shown above its title counts too."""
     if not lines:
         return []
+    col = _main_column(lines)
+    if col is not None:
+        lines = [l for l in lines if l.x >= col - 40 or len(l.text) > 14]  # company logos left of the text
+    if not lines:
+        return []
     typical_h = statistics.median(l.h for l in lines)
-    rws = rows(lines)
+    rws = _join_titles(rows(lines), typical_h)
     out = []
     for card in _cards(rws) or [rws]:
         titles = [i for i, r in enumerate(card) if _is_title(r["parts"][0], typical_h)]
@@ -293,11 +347,11 @@ def pick(listings, min_score=90, search=None):
     kept, dropped = [], []
     for l in listings:
         ok, why = fields.classify({"title": l["title"]}, search)
-        if not ok and why == "Not clearly a business role":  # a screenshot shows no department; the board's score vouches
-            ok, why = True, "Business (the title doesn't say which area)"
+        if not ok and why == "Not clearly a business role" and l["score"] is not None:
+            ok, why = True, "Business (the title doesn't say which area)"  # a screenshot shows no department; the board's score vouches
         if not ok:
             dropped.append({**l, "why": why})
-        elif not l["company"]:
+        elif len(l["company"]) < 2:
             dropped.append({**l, "why": "Company not read"})
         elif l["score"] is not None and l["score"] < min_score:
             dropped.append({**l, "why": f"Board score {l['score']}, under {min_score}"})
@@ -310,7 +364,7 @@ def _locate(l):
     if l.get("url") and not ats.JOB_BOARDS.search(l["url"]):
         return {**l, "found": True}  # already the employer's own link
     try:  # a board's copy, or no link at all: the same job where the employer posts it
-        url = finder.find(l["title"], l["company"], l["location"])
+        url = finder.find(l["title"], l["company"], l["location"], budget=LOOKUP_BUDGET)
     except Exception:  # noqa: BLE001 - one job's lookup failing must not lose the others
         url = None
     if url:

@@ -27,6 +27,8 @@ BUSINESS = {
     "Data Analyst": "Business Analytics",
     "Business Manager": "Project & Product Management",
     "Personal Banker - Universal Branch": "Finance & Accounting",
+    "Assurance Intern - Winter 2028": "Finance & Accounting",
+    "Supply Chain Intern - Engineering and Business Majors": "Operations & Supply Chain",
 }
 NOT_BUSINESS = [
     "Agronomy Operations Intern", "Crop Scout Intern",
@@ -36,7 +38,7 @@ NOT_BUSINESS = [
     "IT Support Specialist", "TIG Welder (Starship Components)", "Warehouse Associate", "Customer Service Representative",
     "Data Partner - Finance - Remote", "Personalized Internet Ads Assessor", "Project Manager - Construction",
     "Customer Technology Advisor for Mainframe", "Retail Sales - Stylist - Women's Core", "Beauty Advisor",
-    "Retail Sales Associate",
+    "Retail Sales Associate", "Quality Assurance Intern", "Software Engineering Intern - Business and CS Majors",
 ]
 
 

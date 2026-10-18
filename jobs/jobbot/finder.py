@@ -251,14 +251,14 @@ def _best(hits, title, location=""):
     return scored[0][1] if scored and scored[0][0] >= MATCH else None
 
 
-def find(title, company, location="", website=""):
-    """The employer's own posting of this job, or None."""
+def find(title, company, location="", website="", budget=BUDGET):
+    """The employer's own posting of this job, or None. Gives up after `budget` seconds."""
     if not title or not company:
         return None
     start = time.time()
     guessed = {(kind, slug) for slug in _slugs(company)[:2] for kind in ("greenhouse", "lever", "ashby")}
     for kind, ref in boards(company, website):
-        if time.time() - start > BUDGET:
+        if time.time() - start > budget:
             break
         try:
             hit = _best(_search(kind, ref, title, retries=0 if (kind, ref) in guessed else 1), title, location)
