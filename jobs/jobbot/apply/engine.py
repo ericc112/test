@@ -721,10 +721,27 @@ class Engine:
         group.locator(".input-group-btn button, button.oracletaleocwsv2-multiselect-trigger").first.click()
         popup = group.locator(".oracletaleocwsv2-multiselect-popup").first
         popup.wait_for(state="visible", timeout=5000)
-        ok = all(self._check(page, self._option_el(page, q, o)) for o in a.option)
+        ok = all(self._tick(self._option_el(page, q, o)) for o in a.option)
         popup.locator("a.oracletaleocwsv2-close-popup-trigger:not(.oracletaleocwsv2-revert-data)").first.click()
         page.wait_for_timeout(400)
         return ok and bool(box.input_value())
+
+    def _tick(self, el):
+        """Tick a checkbox the site may hide behind its own styled label: the box, else its label, else its row."""
+        if el.is_checked():
+            return True
+        for target in (el, el.locator("xpath=following-sibling::label[1]"), el.locator("xpath=..")):
+            try:
+                if target is el:
+                    el.check(timeout=1500)
+                else:
+                    target.click(timeout=1500)
+            except Exception:
+                continue
+            if el.is_checked():
+                return True
+        el.evaluate("e => { e.checked = true; e.dispatchEvent(new Event('change', {bubbles: true})); }")
+        return el.is_checked()
 
     def _fill_checkbox(self, page, q, a):
         el = self._loc(page, q.key)
