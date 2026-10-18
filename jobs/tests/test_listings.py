@@ -162,7 +162,7 @@ class PickTests(unittest.TestCase):
 class LocateTests(unittest.TestCase):
     def test_finds_each_job_on_the_employers_site(self):
         hits = {"Supply Chain Intern": "https://amazon.jobs/en/jobs/1"}
-        with mock.patch.object(listings.finder, "find", side_effect=lambda t, c, l, budget: hits.get(t)):
+        with mock.patch.object(listings.finder, "find", side_effect=lambda t, c, l, budget, refused: hits.get(t)):
             got = listings.locate([{"title": "Supply Chain Intern", "company": "Amazon", "location": "Seattle, WA"},
                                    {"title": "Buyer Intern", "company": "Acme", "location": ""}])
         self.assertEqual([(l["url"], l["found"]) for l in got], [("https://amazon.jobs/en/jobs/1", True), ("", False)])
@@ -177,7 +177,7 @@ class LocateTests(unittest.TestCase):
         self.assertEqual(got[0]["url"], "https://boards.greenhouse.io/acme/jobs/1")
 
     def test_a_lookup_that_fails_keeps_the_others(self):
-        def find(title, company, location, budget):
+        def find(title, company, location, budget, refused):
             if title == "Bad":
                 raise RuntimeError("site down")
             return "https://example.com/job"
