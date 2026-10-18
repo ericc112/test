@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Apply</title>
+<style>.oracletaleocwsv2-popup { display: none; border: 1px solid #ccc; padding: 8px; } .open { display: block; }</style></head>
+<body>
+<!-- Taleo Business Edition's "Select All That Apply…" picker: a read-only box, its choices are checkboxes in a popup. -->
+<form id="application-form" novalidate>
+  <label for="first">First Name</label><input id="first" name="first" required>
+  <label for="email">Email</label><input id="email" name="email" type="email" required>
+  <div class="form-group oracletaleocwsv2-form-group-full">
+    <label for="field_5">Please select which locations you are interested in being considered for:</label>
+    <div class="oracletaleocwsv2-popup oracletaleocwsv2-multiselect-popup">
+      <h3>Answers</h3>
+      <div class="oracletaleocwsv2-multiselect-content" data-name="answer_2107">
+        <div class="checkbox"><input type="checkbox" value="Freeport, TX" name="answer_2107"><label> Freeport, TX </label></div>
+        <div class="checkbox"><input type="checkbox" value="Houston, TX" name="answer_2107"><label> Houston, TX </label></div>
+        <div class="checkbox"><input type="checkbox" value="Clayton, MO" name="answer_2107"><label> Clayton, MO </label></div>
+      </div>
+      <a href="#" class="btn btn-primary oracletaleocwsv2-close-popup-trigger">Save</a>
+      <button type="button" class="btn btn-link oracletaleocwsv2-close-popup-trigger oracletaleocwsv2-revert-data">Cancel</button>
+    </div>
+    <div class="input-group oracletaleocwsv2-popup-trigger oracletaleocwsv2-multiselect-trigger">
+      <input type="text" id="field_5" name="field_5_total" class="form-control oracletaleocwsv2-multiselect-input"
+             placeholder="Select All That Apply..." required readonly>
+      <span class="input-group-btn"><button aria-label="Please select which locations you are interested in being considered for:"
+        class="btn btn-default oracletaleocwsv2-popup-trigger oracletaleocwsv2-multiselect-trigger" type="button">≡</button></span>
+    </div>
+  </div>
+  <button type="submit">Submit application</button>
+</form>
+<script>
+  const group = document.querySelector(".form-group"), popup = group.querySelector(".oracletaleocwsv2-popup");
+  group.querySelector(".input-group-btn button").addEventListener("click", () => popup.classList.add("open"));
+  popup.querySelector("a.oracletaleocwsv2-close-popup-trigger").addEventListener("click", (e) => {
+    e.preventDefault();  // Save: the box shows what's ticked
+    document.getElementById("field_5").value = [...popup.querySelectorAll("input:checked")].map((b) => b.value).join(", ");
+    popup.classList.remove("open");
+  });
+  document.getElementById("application-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!document.getElementById("field_5").value || !document.getElementById("first").value) return;
+    document.body.innerHTML = "<h1>Thank you for applying to Acme!</h1>";
+  });
+</script>
+</body></html>

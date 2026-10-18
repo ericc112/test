@@ -171,6 +171,27 @@ def _relocate(q, c):
     return yn(p.get("willing_to_relocate"))
 
 
+# "Do you have housing within 50 miles of the position's location?": depends on where the job is, so it never comes
+# from the answer bank (a No saved for a job in another city would be wrong here).
+DISTANCE = re.compile(r"within \d+ miles|\b(housing|live|reside|located|commut\w*)\b.{0,40}\b(near|distance|local)\b|"
+                      r"local to (the|this) (position|job|role|location)", re.I)
+METROS = [  # suburbs count as the city: someone in Katy lives within 50 miles of a Houston job
+    {"houston", "katy", "sugar land", "cypress", "spring", "the woodlands", "pearland", "pasadena", "baytown", "conroe",
+     "missouri city", "richmond", "tomball", "humble", "kingwood", "league city", "friendswood", "bellaire", "stafford", "fulshear"},
+    {"dallas", "fort worth", "arlington", "plano", "irving", "frisco", "garland", "mckinney", "richardson", "grand prairie",
+     "carrollton", "denton", "lewisville", "addison", "las colinas"},
+    {"austin", "round rock", "cedar park", "georgetown", "pflugerville", "san marcos", "leander", "kyle"},
+    {"san antonio", "new braunfels", "schertz", "boerne", "converse", "live oak"},
+]
+
+
+def _near(q, c):
+    where, home = norm((c.job or {}).get("location") or ""), norm(c.profile.get("city") or "")
+    if not where or not home:
+        return None  # yours to answer: JobBot doesn't know where this job is
+    return yn(home in where or any(home in m and any(city in where for city in m) for m in METROS))
+
+
 def _start(q, c):
     if re.search(r"\b(month|year)\b", norm(q.label)):
         return None  # "Start date month/year" is a past job's or degree's start, not when you can begin
@@ -272,7 +293,18 @@ def _school_year(q, c):
     return Answer(y, "profile", alternatives=alts.get(y.lower(), []))
 
 
+ENROLLED_IN = re.compile(r"\b(enrolled|pursuing|studying)\b.{0,60}?\b(in|toward)\b(.{3,160}?)\b(degree program|program|major)\b")
+NOT_A_FIELD = {"undergraduate", "graduate", "related", "degree", "program", "discipline", "disciplines", "pending", "enrollment",
+               "master", "masters", "bachelor", "bachelors", "currently", "accredited", "university", "college", "school", "full"}
+
+
 def _enrolled(q, c):
+    m = ENROLLED_IN.search(norm(q.label))
+    if m:  # "enrolled in a Human Resources Development-related degree program": only yes if that's your field
+        field_words = [w for w in words(m.group(3)) if len(w) > 3 and w not in NOT_A_FIELD]
+        mine = norm(" ".join(str(c.profile.get(k) or "") for k in ("discipline", "minor", "degree", "degree_type")))
+        if field_words and not any(w in mine for w in field_words):
+            return None
     return yn(c.profile.get("currently_enrolled"))
 
 
@@ -513,6 +545,7 @@ RULES = [
     (r"sponsor|\bvisa\b|h-?1b|work permit|immigration", ANY, lambda q, c: yn(c.profile.get("needs_sponsorship"))),
     # Where and how you'll work
     (r"relocat", CHOICE | {"text"}, _relocate),
+    (DISTANCE.pattern, CHOICE, _near),
     (r"work (remotely|from home|from a remote)|plan to work remote|intend to work remote|remote work",
      CHOICE, lambda q, c: yn(c.profile.get("remote_preference") in ("remote", "any"))),
     (r"in[- ]office|on[- ]?site|hybrid|commut|days (a|per) week|(come|coming) (in|into) (the|our) office",
@@ -553,6 +586,8 @@ RULES = [
     (r"^(type to )?add (your )?skills|^(your )?skills$", ANY, _skills),
     (r"(type|kind) of (role|position|job|employment) (are )?you|^(role|position|employment|job) type$", CHOICE, _role_type),
     # Education
+    # "Select the month and year you are expecting to graduate with your bachelor's degree": a date, not a degree.
+    (r"(month|year|date|when)\b.{0,40}graduat|expect\w* to graduate|graduat\w* (month|year|date)", ANY, _graduation),
     (r"\bdegree\b|level of education|highest education|education level|highest level", ANY, _degree),
     (r"discipline|\bmajor\b|field of study|area of study|concentration", ANY, _discipline),
     (r"graduat|year of completion|class of|class year", ANY, _graduation),
@@ -754,7 +789,7 @@ def answer(q, ctx):
     if key in ctx.planned and ctx.planned[key][0] not in (None, ""):
         a = Answer(ctx.planned[key][0], ctx.planned[key][1])
     else:
-        banked = _bank_lookup(q.label or "", ctx.bank)
+        banked = None if DISTANCE.search(q.label or "") else _bank_lookup(q.label or "", ctx.bank)
         a = Answer(banked, "bank") if banked is not None else rule_answer(q, ctx)
     if a is None:
         return Answer(None, "")

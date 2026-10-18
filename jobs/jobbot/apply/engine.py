@@ -710,7 +710,21 @@ class Engine:
         return self._check(page, self._option_el(page, q, a.option))
 
     def _fill_checkboxes(self, page, q, a):
+        if q.input_type == "popup":
+            return self._fill_picker(page, q, a)
         return all(self._check(page, self._option_el(page, q, o)) for o in a.option)
+
+    def _fill_picker(self, page, q, a):
+        """A "Select All That Apply…" box (Taleo): open its list, tick the choices, press the list's Save."""
+        box = self._loc(page, q.key)
+        group = box.locator("xpath=ancestor::div[contains(concat(' ', @class, ' '), ' form-group ')][1]")
+        group.locator(".input-group-btn button, button.oracletaleocwsv2-multiselect-trigger").first.click()
+        popup = group.locator(".oracletaleocwsv2-multiselect-popup").first
+        popup.wait_for(state="visible", timeout=5000)
+        ok = all(self._check(page, self._option_el(page, q, o)) for o in a.option)
+        popup.locator("a.oracletaleocwsv2-close-popup-trigger:not(.oracletaleocwsv2-revert-data)").first.click()
+        page.wait_for_timeout(400)
+        return ok and bool(box.input_value())
 
     def _fill_checkbox(self, page, q, a):
         el = self._loc(page, q.key)

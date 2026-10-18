@@ -174,6 +174,28 @@ class RuleTests(unittest.TestCase):
         merck = ["Bachelors", "Masters", "MBA", "Ph.D./Doctorate", "I am not currently pursing a degree"]
         self.assertEqual(ans(q("Please select the degree type you are currently pursuing", "select", merck), profile=me).option,
                          "Bachelors")
+        ecolab = ["Select One", "December 2026", "May/June\u00a02027", "December 2027", "Other"]
+        label = "Select the month and year you are expecting to graduate with your bachelor's degree."
+        self.assertEqual(ans(q(label, "select", ecolab), profile=me).option, "May/June\u00a02027")
+        self.assertEqual(ans(q("Have you graduated with a bachelor's degree?", "select", ["Yes", "No"]), profile=me).option, "No")
+
+    def test_living_near_the_job_depends_on_where_the_job_is(self):
+        me = dict(PROFILE, city="Katy", state="TX")
+        label = "Do you have housing within 50 miles of the position's location?"
+        opts = ["Yes, I am local to the position's location.", "No, I am not local to the position's location."]
+        bank = [{"q": r"within \d+ miles of", "a": "No"}]  # saved for a job somewhere else: never reused
+        near = lambda where: answer(q(label, "select", opts), Context(profile=me, bank=bank, job={"location": where})).option
+        self.assertEqual(near("US-TX-Houston"), opts[0])
+        self.assertEqual(near("Clayton, MO"), opts[1])
+        self.assertIsNone(near(""))  # where the job is isn't known: yours to answer
+
+    def test_enrolled_in_a_named_field_only_when_it_is_yours(self):
+        me = dict(PROFILE, currently_enrolled=True, discipline="Supply Chain Management")
+        hrd = ("Are you currently enrolled in an undergraduate or graduate Human Resources Development or HR Instructional "
+               "Design-related degree program (or pending enrollment in a Master's program in one of these disciplines)")
+        self.assertIsNone(ans(q(hrd, "select", ["Yes, I am currently enrolled in an undergraduate degree.", "No"]), profile=me).option)
+        self.assertEqual(ans(q("Are you currently enrolled in a supply chain degree program?", "radio", ["Yes", "No"]), profile=me).option, "Yes")
+        self.assertEqual(ans(q("Are you currently enrolled in a degree program?", "radio", ["Yes", "No"]), profile=me).option, "Yes")
 
     def test_no_sponsorship_never_claims_a_temporary_visa(self):
         me = dict(PROFILE, needs_sponsorship=False)

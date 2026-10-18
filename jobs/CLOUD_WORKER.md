@@ -91,7 +91,7 @@ recordings and copied text the owner adds in the page's **Upload** tab and lists
 
    a. Write `/tmp/jobbot-run/requests.json`, one entry per request:
       `{"k": <doc id>, "mode": "submit" if it was approved else "prepare", "title": job.t,
-      "company": job.c, "url": job.u, "source": job.src, "answers": <doc "answers" or {}>}`.
+      "company": job.c, "url": job.u, "source": job.src, "location": job.loc or job.l, "answers": <doc "answers" or {}>}`.
 
    b. From `jobs/`, with the Bash tool's `timeout` set to 600000:
 

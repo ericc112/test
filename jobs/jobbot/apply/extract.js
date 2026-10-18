@@ -151,7 +151,8 @@
         value: el.files && el.files.length ? el.files[0].name : null });
       continue;
     }
-    if (!visible(el) || el.disabled || el.readOnly) continue;
+    const picker = el.classList && el.classList.contains("oracletaleocwsv2-multiselect-input");  // read-only, filled from its list
+    if (!visible(el) || el.disabled || (el.readOnly && !picker)) continue;
     if (el.getAttribute("aria-hidden") === "true") continue;
     if (el.closest("[aria-hidden=true]")) continue;
     // Greenhouse renders tiny unlabeled "required" proxy inputs next to selects.
@@ -201,6 +202,19 @@
       questions.push({ key, kind: "select", label: clean(label), required: requiredOf([el], label), options: opts,
         input_type: "select", name: el.name || el.id || "", multi: el.multiple,
         value: sel && sel.value !== "" ? clean(sel.text) : null });
+      continue;
+    }
+    // Taleo's "Select All That Apply…" picker: a read-only box whose choices are checkboxes in a popup next to it.
+    const pickerBoxes = el.classList && el.classList.contains("oracletaleocwsv2-multiselect-input") && el.closest(".form-group")
+      ? [...el.closest(".form-group").querySelectorAll(".oracletaleocwsv2-multiselect-popup input[type=checkbox]")] : [];
+    if (pickerBoxes.length) {
+      const btn = el.closest(".form-group").querySelector("button[aria-label]");
+      const plabel = (btn && btn.getAttribute("aria-label")) || label;
+      pickerBoxes.forEach((b, i) => b.setAttribute("data-jobbot", `${key}:${i}`));
+      const picked = pickerBoxes.filter((b) => b.checked).map((b) => clean(b.value || optionLabel(b)));
+      questions.push({ key, kind: "checkboxes", label: clean(plabel), required: el.required || requiredOf([el], plabel),
+        options: pickerBoxes.map((b) => clean(b.value || optionLabel(b))), input_type: "popup", name: el.name || el.id || "",
+        multi: true, value: picked.length ? picked : null });
       continue;
     }
     if (el.getAttribute("role") === "combobox") {
