@@ -26,6 +26,7 @@ APPLY_LINK_RE = re.compile(r"^(apply|apply now|apply (for|to) this (job|position
                            r"begin (my |your )?application|start applying)$", re.I)
 COOKIE_REJECT_RE = re.compile(r"^(reject|reject all|decline|deny|necessary only|only necessary)", re.I)
 COOKIE_ACCEPT_RE = re.compile(r"^(accept|accept all|allow all|agree|got it|ok|i understand)", re.I)
+JOB_SEARCH_BOX = re.compile(r"^search\b|\bsearch (by|for|jobs)\b|^keywords?$|job title or keyword|^(city|location),? (state|zip)", re.I)
 NOTICE_ACCEPT_RE = re.compile(r"^(i )?(accept|agree)( and (continue|apply))?$|^(continue|proceed)( to (apply|the application))?$|^ok$",
                               re.I)
 # Multi-page forms: the button that moves to the next page.
@@ -132,7 +133,7 @@ class Engine:
         if data["page"]["botwall"]:
             return Result("manual", "This site shows a bot check, so JobBot stops here. Open the listing and apply yourself.",
                           screenshot=self._shot(page, job, "botcheck"), url=page.url)
-        if len([q for q in data["questions"] if q["kind"] != "file"]) < 2 and not self._account_state(form):
+        if len(self._form_fields(data)) < 2 and not self._account_state(form):
             page, form, data = self._open_form(page)
             if data["page"]["botwall"]:
                 return Result("manual", "The application site shows a bot check, so JobBot stops here. Apply there yourself.",
@@ -238,6 +239,11 @@ class Engine:
             return Result("needs_input", "The form reported problems: " + "; ".join(errs[:4]), fields, miss_list, shot, page.url)
         return Result("unconfirmed", "Submit was clicked but no confirmation appeared. Check your email before retrying.",
                       fields, [], shot, page.url)
+
+    @staticmethod
+    def _form_fields(data):
+        """Fields that could be an application's: not file boxes, and not a job page's search boxes."""
+        return [q for q in data["questions"] if q["kind"] != "file" and not JOB_SEARCH_BOX.search(q.get("label") or "")]
 
     def _fill_page(self, form, data, ctx, questions, answers, notes):
         """Answer and fill one page of the form. Fields that appear as others are answered get up to two more passes."""
