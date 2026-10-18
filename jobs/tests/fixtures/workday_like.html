@@ -14,22 +14,31 @@
 // A small stand-in for a Workday career site: posting → Apply → account → 5 steps → Review → Submit.
 const params = new URLSearchParams(location.search);
 let account = params.get("account") === "1";
+// slow=1 acts like a real Workday site: the first press of Apply is lost (it came before the page's scripts
+// loaded), the progress bar shows a few seconds before the sign-in form, a new account loads for a while,
+// and lists take a moment to load their options (showing "Select One" meanwhile).
+const slow = params.get("slow") === "1";
+let applyPresses = 0;
 let signedIn = false, view = "job", step = 0;
 const STEPS = ["Create Account/Sign In", "My Information", "My Experience", "Application Questions", "Voluntary Disclosures", "Review"];
-const values = {};
+if (params.get("assess") === "1") STEPS.splice(5, 0, "Take Assessment");  // an employer's assessment test
+const values = { ext: params.get("ext") || "" };  // ext=...: a draft with a bad Phone Extension
 const app = document.getElementById("app");
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 function progress() {
   return `<ol data-automation-id="progressBar">${STEPS.map((s, i) => i === step
-    ? `<li data-automation-id="progressBarActiveStep">current step ${i + 1} of 6 ${s}</li>`
-    : `<li data-automation-id="progressBarInactiveStep">step ${i + 1} of 6 ${s}</li>`).join("")}</ol>`;
+    ? `<li data-automation-id="progressBarActiveStep">current step ${i + 1} of ${STEPS.length} ${s}</li>`
+    : `<li data-automation-id="progressBarInactiveStep">step ${i + 1} of ${STEPS.length} ${s}</li>`).join("")}</ol>`;
 }
 const button = (id, text) => `<span class="btnwrap"><button data-automation-id="${id}">${text}</button><div data-automation-id="click_filter"></div></span>`;
 const text = (id, label, req) => `<div class="ff" data-automation-id="formField-${id}"><label for="${id}">${label}${req ? "*" : ""}</label>
   <input type="text" id="${id}" value="${esc(values[id] || "")}" ${req ? 'aria-required="true"' : ""}></div>`;
 const listbox = (id, label, req, opts) => `<div class="ff" data-automation-id="formField-${id}"><label>${label}${req ? "*" : ""}</label>
   <button type="button" aria-haspopup="listbox" data-lb="${id}" data-opts="${esc(JSON.stringify(opts))}">${esc(values[id] || "Select One")}</button></div>`;
+// A chosen item, marked up like Workday's: it reuses the option markup inside a "selectedItemList" listbox.
+const pill = (v) => `<ul role="listbox" data-automation-id="selectedItemList"><li data-automation-id="menuItem">
+  <div role="option" data-automation-id="selectedItem"><p data-automation-id="promptOption">${esc(v)}</p></div></li></ul>`;
 const radio = (id, label, opts) => `<div class="ff" data-automation-id="formField-${id}"><fieldset><legend>${label}*</legend>
   ${opts.map((o, i) => `<input type="radio" name="${id}" id="${id}${i}" value="${o}" ${values[id] === o ? "checked" : ""}><label for="${id}${i}">${o}</label>`).join("")}</fieldset></div>`;
 
@@ -37,7 +46,7 @@ function render(errors = []) {
   let h = "";
   if (view === "job") {
     h = `<h2 data-automation-id="jobPostingHeader">Finance Intern, Summer 2027</h2><a href="#" data-automation-id="adventureButton">Apply</a>
-      <div id="popup" hidden><a href="#" data-automation-id="applyManually">Apply Manually</a></div>`;
+      <div id="popup"></div>`;
   } else if (view === "create" || view === "signin") {
     const create = view === "create";
     h = progress() + `<h2>${create ? "Create Account" : "Sign In"}</h2>
@@ -52,10 +61,12 @@ function render(errors = []) {
     const body = {
       1: `<div class="ff" data-automation-id="formField-source"><label>How Did You Hear About Us?*</label>
             <div data-automation-id="multiselectInputContainer"><input type="text" id="srcq"></div>
-            ${values.source ? `<div data-automation-id="selectedItem">${esc(values.source)}</div>` : ""}<div id="srcopts"></div></div>`
+            ${values.source ? pill(values.source) : ""}<div id="srcopts" data-automation-id="activeListContainer"></div></div>`
+         + `<div class="ff" data-automation-id="formField-countryPhoneCode"><label>Country Phone Code*</label>
+            <div data-automation-id="multiselectInputContainer"><input type="text"></div>${pill("United States of America (+1)")}</div>`
          + text("firstName", "First Name", true) + text("lastName", "Last Name", true)
          + listbox("state", "State", true, ["Alabama", "California", "New York", "Texas"])
-         + text("phone", "Phone Number", true) + radio("previousWorker", "Have you previously worked for Acme?", ["Yes", "No"]),
+         + text("phone", "Phone Number", true) + text("ext", "Phone Extension", false) + radio("previousWorker", "Have you previously worked for Acme?", ["Yes", "No"]),
       2: `<div class="ff" data-automation-id="formField-resume"><label>Resume/CV*</label><input type="file" id="resume">
             ${values.resume ? `<div data-automation-id="file-upload-successful">${esc(values.resume)}</div>` : ""}</div>`
          + text("linkedin", "LinkedIn", false),
@@ -92,8 +103,17 @@ document.addEventListener("click", (e) => {
   const t = e.target;
   const id = t.getAttribute("data-automation-id") === "click_filter" ? t.previousElementSibling.getAttribute("data-automation-id")
                                                                      : t.getAttribute("data-automation-id");
-  if (id === "adventureButton") { e.preventDefault(); document.getElementById("popup").hidden = false; return; }
-  if (id === "applyManually") { e.preventDefault(); view = "create"; render(); return; }
+  if (id === "adventureButton") {
+    e.preventDefault();
+    if (!slow || applyPresses++ > 0)  // like Workday, the popup is only in the page once it opens
+      document.getElementById("popup").innerHTML = `<a href="#" data-automation-id="applyManually">Apply Manually</a>`;
+    return;
+  }
+  if (id === "applyManually") {
+    e.preventDefault(); view = "create";
+    if (slow) { app.innerHTML = progress(); setTimeout(render, 3000); } else render();
+    return;
+  }
   if (id === "signInLink") { view = "signin"; render(); return; }
   if (id === "createAccountLink") { view = "create"; render(); return; }
   const v = (a) => (document.querySelector(`[data-automation-id="${a}"]`) || {}).value || "";
@@ -105,12 +125,15 @@ document.addEventListener("click", (e) => {
     if (v("beecatcher")) return render(["Something went wrong."]);  // the bot trap was filled
     if (!v("email") || v("password").length < 8 || v("password") !== v("verifyPassword")
         || !document.querySelector('[data-automation-id="createAccountCheckbox"]').checked) return render(["Please complete all fields."]);
-    account = signedIn = true; view = "steps"; step = 1; return render();
+    account = signedIn = true; view = "steps"; step = 1;
+    if (slow) { app.innerHTML = `<div class="spinner">Loading</div>`; setTimeout(render, 8000); return; }
+    return render();
   }
   if (id === "bottom-navigation-next-button") {
     collect();
     if (step === 5) { view = "done"; return render(); }
     const miss = (REQUIRED[step] || []).filter((k) => !values[k]);
+    if (step === 1 && values.ext.length > 6) return render(["Error: The field Phone Extension is too long."]);
     if (miss.length) return render(miss.map((k) => `Error: The field ${LABELS[k]} is required and must have a value.`));
     step += 1; return render();
   }
@@ -119,7 +142,8 @@ document.addEventListener("click", (e) => {
     collect();
     const opts = JSON.parse(lb.getAttribute("data-opts"));
     const ul = document.createElement("ul"); ul.setAttribute("role", "listbox");
-    ul.innerHTML = opts.map((o) => `<li role="option">${esc(o)}</li>`).join("");
+    const fill = () => (ul.innerHTML = opts.map((o) => `<li role="option">${esc(o)}</li>`).join(""));
+    if (slow) { ul.innerHTML = `<li role="option">Select One</li>`; setTimeout(fill, 1000); } else fill();
     ul.addEventListener("click", (ev) => { values[lb.getAttribute("data-lb")] = ev.target.textContent; render(); });
     lb.after(ul); return;
   }
@@ -134,10 +158,14 @@ document.addEventListener("click", (e) => {
   }
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") document.querySelectorAll("[role=listbox]").forEach((u) => u.remove());
+  if (e.key === "Escape") {
+    document.querySelectorAll("[role=listbox]:not([data-automation-id=selectedItemList])").forEach((u) => u.remove());
+    const src = document.getElementById("srcopts"); if (src) src.innerHTML = "";
+  }
   if (e.key === "Enter" && e.target.id === "srcq") {
-    document.getElementById("srcopts").innerHTML = ["Job Board", "Social Media", "Company Website"]
-      .map((o) => `<div data-automation-id="promptOption">${o}</div>`).join("");
+    const show = () => (document.getElementById("srcopts").innerHTML = ["Job Board", "Social Media", "Company Website"]
+      .map((o) => `<div data-automation-id="promptOption">${o}</div>`).join(""));
+    slow ? setTimeout(show, 1000) : show();
   }
 });
 document.addEventListener("change", (e) => {

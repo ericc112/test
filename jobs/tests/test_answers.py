@@ -1,4 +1,5 @@
 import unittest
+from datetime import date
 
 from jobbot.answers import Answer, Context, Question, answer, answer_all, missing
 from jobbot.config import DEFAULT_ANSWERS
@@ -83,6 +84,165 @@ class RuleTests(unittest.TestCase):
         a = ans(q("Please tell us how you heard about this opportunity.", "select", ["LinkedIn", "Job Board (Indeed, Monster, etc.)", "Other"]))
         self.assertEqual(a.option, "Job Board (Indeed, Monster, etc.)")
 
+    def test_how_heard_takes_any_choice_when_none_of_the_usual_ones_is_there(self):
+        # Target's Workday list: no website, job board or "Other" choice.
+        opts = ["Select One", "Events", "Personal Connection", "Radio/Newspaper", "Signage"]
+        self.assertEqual(ans(q("How Did You Hear About Us?", "select", opts)).option, "Events")
+
+    def test_phone_extension_and_address_line_2_are_left_blank(self):
+        me = dict(PROFILE, address="1 Main St")
+        self.assertEqual(ans(q("Phone Extension", required=False), profile=me).source, "blank")
+        self.assertEqual(ans(q("Address Line 2", required=False), profile=me).source, "blank")
+        self.assertEqual(ans(q("Address Line 2", required=False), profile=dict(me, address_line2="Apt 4")).value, "Apt 4")
+        self.assertEqual(ans(q("Address Line 1"), profile=me).value, "1 Main St")
+
+    def test_a_bare_upload_field_gets_the_resume(self):
+        ctx = Context(profile=PROFILE, bank=DEFAULT_ANSWERS, job={}, files={"resume": "/r.pdf"})
+        self.assertEqual(answer(q("Upload a file (5MB max)", "file"), ctx).value, "/r.pdf")
+        self.assertEqual(answer(q("Upload a transcript", "file", required=False), ctx).source, "skip")
+
+    def test_skills_come_from_the_profile_or_the_resume(self):
+        self.assertEqual(ans(q("Type to Add Skills"), profile=dict(PROFILE, skills="SQL, Tableau")).value, "SQL")
+        a = ans(q("Type to Add Skills"), profile=dict(PROFILE, skills="", resume_text="Built Excel models and SQL reports"))
+        self.assertEqual([a.value] + a.alternatives, ["Excel", "SQL"])
+        self.assertIsNone(ans(q("Describe your leadership skills", "textarea"), profile=dict(PROFILE, resume_text="Excel")).value)
+        # The posting's skills first, and only skills the resume shows.
+        ctx = Context(profile=dict(PROFILE, skills="", resume_text="Excel, SQL and Tableau dashboards"), bank=DEFAULT_ANSWERS,
+                      job={"description": "You will build Tableau reports. Python a plus."})
+        a = answer(q("Type to Add Skills"), ctx)
+        self.assertEqual([a.value] + a.alternatives, ["Tableau", "Excel", "SQL"])
+
+    def test_sponsorship_isnt_mistaken_for_work_authorization(self):
+        me, yn = dict(PROFILE, work_authorized=True, needs_sponsorship=False), ["Select One", "Yes", "No"]
+        for label in ("Will you now or in the future require employer sponsorship for work authorization (e.g., H-1B)?",
+                      "Is your current work authorization through STEM OPT or will you need employer sponsorship in the future?"):
+            self.assertEqual(ans(q(label, "select", yn), profile=me).option, "No", label)
+        self.assertEqual(ans(q("Are you legally authorized to work in the United States?", "select", yn), profile=me).option, "Yes")
+        target = ["Select One", "Yes, I am legally authorized for employment in the United States.",
+                  "No, I am not legally authorized for employment in the United States."]
+        self.assertEqual(ans(q("Are you legally authorized for employment in the United States?", "select", target), profile=me).option,
+                         target[1])
+
+    def test_role_type_and_education_dates(self):
+        ctx = Context(profile=dict(PROFILE, expected_graduation="May 2027", graduation_year="", education_start="August 2023"), bank=DEFAULT_ANSWERS,
+                      job={"title": "Inventory Analyst Intern"})
+        self.assertEqual(answer(q("Which type of role are you applying for?", "select", ["Internship", "Full Time"]), ctx).option,
+                         "Internship")
+        self.assertEqual(answer(q("From", input_type="month", section="education"), ctx).value, "2023-08")
+        self.assertEqual(answer(q("To (Actual or Expected)", input_type="month", section="education"), ctx).value, "2027-05")
+
+    def test_phone_device_type_and_a_full_graduation_date(self):
+        self.assertEqual(ans(q("Phone Device Type", "select", ["Landline", "Mobile"])).option, "Mobile")
+        me = dict(PROFILE, expected_graduation="May 2027", graduation_year="")
+        self.assertEqual(ans(q("Please input your anticipated graduation date", input_type="wd_date"), profile=me).value, "2027-05-01")
+
+    def test_a_required_agreement_is_accepted(self):
+        self.assertEqual(ans(q("You must AGREE to proceed.", "checkbox")).option, True)
+
+    def test_current_job_fills_a_work_experience_block(self):
+        me = dict(PROFILE, current_company="Best Cheer Stone", current_title="Supply Chain Analyst Intern",
+                  current_job_start="August 2024", current_job_location="Houston, TX", current_job_description="Sourcing.")
+        job = lambda label, **kw: ans(q(label, section="employment", **kw), profile=me)
+        self.assertEqual(job("Job Title").value, "Supply Chain Analyst Intern")
+        self.assertEqual(job("Company").value, "Best Cheer Stone")
+        self.assertEqual(job("Location").value, "Houston, TX")
+        self.assertEqual(job("I currently work here", kind="checkbox", required=False).option, True)
+        self.assertEqual(job("From", input_type="month").value, "2024-08")
+        self.assertEqual(job("Role Description", kind="textarea").value, "Sourcing.")
+
+    def test_not_a_veteran_never_says_veteran(self):
+        me = dict(PROFILE, eeo_veteran="I am not a protected veteran")
+        travelers = ["I identify as one or more of the classifications of protected veteran",
+                     "I am a veteran, but I am not a protected veteran", "I am not a veteran", "I don't wish to answer"]
+        self.assertEqual(ans(q("Veteran Status:", "select", travelers), profile=me).option, "I am not a veteran")
+        pnc = ["I am not a protected veteran", "I identify as one or more of the classifications of protected veteran"]
+        self.assertEqual(ans(q("Please confirm your veteran status:", "select", pnc), profile=me).option, pnc[0])
+
+    def test_the_exact_degree_comes_before_the_first_bachelors(self):
+        me = dict(PROFILE, degree="Bachelor's", degree_type="BBA")
+        self.assertEqual(ans(q("Degree", "select", ["BA", "BS", "BBA", "MBA"]), profile=me).option, "BBA")
+        self.assertEqual(ans(q("Degree type", "select", ["Bachelor of Arts", "Bachelor of Business Administration"]), profile=me).option,
+                         "Bachelor of Business Administration")
+        self.assertEqual(ans(q("Highest level of education", "select", ["Master's Degree", "Bachelor's Degree"]), profile=me).option,
+                         "Bachelor's Degree")
+
+    def test_graduation_date_and_degree_type_come_before_degree_and_enrollment(self):
+        me = dict(PROFILE, degree="Bachelor's", degree_type="BBA", expected_graduation="May 2027", graduation_year="")
+        tyson = ("Expected Graduation / Graduation Date? If you are continuing education further than your current degree "
+                 "program, enter your expected graduation date for that future program")
+        self.assertEqual(ans(q(tyson, input_type="wd_date"), profile=me).value, "2027-05-01")
+        merck = ["Bachelors", "Masters", "MBA", "Ph.D./Doctorate", "I am not currently pursing a degree"]
+        self.assertEqual(ans(q("Please select the degree type you are currently pursuing", "select", merck), profile=me).option,
+                         "Bachelors")
+
+    def test_no_sponsorship_never_claims_a_temporary_visa(self):
+        me = dict(PROFILE, needs_sponsorship=False)
+        merck = ["Yes", "No – I hold a temporary visa status that provides work authorization through OPT or CPT",
+                 "No – I am a U.S. citizen, national, permanent resident, refugee or asylee"]
+        label = "Will you require our Company to provide immigration sponsorship now or in the future?"
+        self.assertEqual(ans(q(label, "select", merck), profile=me).option, merck[2])
+        self.assertEqual(ans(q(label, "select", ["Yes", "No"]), profile=me).option, "No")
+        # A citizen's No even when it mentions an EAD; never the temporary visa one; none that fits: left for you.
+        merck2 = ["Yes", "No – I hold a temporary visa status that provides work authorization",
+                  "No – I am a U.S. citizen, permanent resident, refugee, asylee or hold an EAD"]
+        self.assertEqual(ans(q(label, "select", merck2), profile=dict(me, citizenship="U.S. citizen")).option, merck2[2])
+        self.assertIsNone(ans(q(label, "select", merck2[:2] + ["No – I hold an H-1B visa"]), profile=me).option)
+
+    def test_the_disability_form(self):
+        me = dict(PROFILE, eeo_disability="No, I don't have a disability")
+        opts = ["Yes, I have a disability, or have had one in the past",
+                "No, I do not have a disability and have not had one in the past", "I do not want to answer"]
+        self.assertEqual(ans(q("Please check one of the boxes below:", "checkboxes", opts), profile=me).option, [opts[1]])
+        self.assertEqual(ans(q("Date", input_type="wd_date")).value, date.today().isoformat())
+
+    def test_gpa_ranges_and_student_classification(self):
+        me = dict(PROFILE, gpa="3.8", school_year="Senior")
+        self.assertEqual(ans(q("Please select the answer that best describes your GPA", "select",
+                               ["3.0 or above", "2.7-2.99", "2.69 or below"]), profile=me).option, "3.0 or above")
+        mmc = ["Freshman/1st year", "Sophomore/2nd year", "Junior/3rd year", "Graduating Senior/4th year", "Not a current student"]
+        self.assertEqual(ans(q("Please select the answer that best describes your current student classification.", "select", mmc),
+                             profile=me).option, "Graduating Senior/4th year")
+
+    def test_authorized_without_sponsorship_is_an_authorization_question(self):
+        me = dict(PROFILE, work_authorized=True, needs_sponsorship=False)
+        label = ("Do you have legal authorization to work in the U.S. on a permanent basis without the need for sponsorship "
+                 "now or in the future?")
+        self.assertEqual(ans(q(label, "select", ["Yes", "No"]), profile=me).option, "Yes")
+
+    def test_degree_never_lands_on_another_named_degree(self):
+        me = dict(PROFILE, degree="Bachelor's", degree_type="BBA")
+        mmc = ["Associate of Arts", "Bachelor of Applied Linguistics", "Bachelor of Arts", "Bachelor's Degree", "Master of Arts"]
+        self.assertEqual(ans(q("Degree", "select", mmc), profile=me).option, "Bachelor's Degree")
+        self.assertIsNone(ans(q("Degree", "select", ["Bachelor of Arts", "Bachelor of Science"]), profile=me).option)
+        self.assertEqual(ans(q("Degree", "select", ["BA", "BS", "BBA"]), profile=me).option, "BBA")
+        self.assertEqual(ans(q("Degree", "select", ["Bachelors", "Masters", "MBA"]), profile=me).option, "Bachelors")
+        jj = ["MBA (Master of Business Administration)", "University/Bachelors Degree or Equivalent", "Bachelor of Science in Nursing"]
+        self.assertEqual(ans(q("Degree", "select", jj), profile=me).option, jj[1])
+
+    def test_level_of_degree_is_the_degree(self):
+        me = dict(PROFILE, degree="Bachelor's", degree_type="BBA")
+        opts = ["Associates", "Bachelors", "Masters non-MBA", "Doctorate", "MBA"]
+        self.assertEqual(ans(q("What level of degree are you currently attending?", "checkboxes", opts), profile=me).option, ["Bachelors"])
+
+    def test_authorization_examples_that_mention_sponsorship(self):
+        label = ("Do you currently have legal authorization to work for any employer in the United States? (For example but not "
+                 "limited to: US Citizen, Green Card Holder, Employer Sponsored Visa)")
+        me = dict(PROFILE, work_authorized=True, needs_sponsorship=False)
+        self.assertEqual(ans(q(label, "select", ["Select One", "Yes", "No"]), profile=me).option, "Yes")
+        self.assertEqual(ans(q("Will you now or in the future require sponsorship?", "select", ["Yes", "No"]), profile=me).option, "No")
+
+    def test_taleo_wording(self):
+        me = dict(PROFILE, state="Texas", work_authorized=True, needs_sponsorship=False, gpa="3.8")
+        states = ["US-AK", "US-TN", "US-TX", "US-UT"]
+        self.assertEqual(ans(q("State/Territory", "select", states), profile=me).option, "US-TX")
+        auth = ["I am authorized to work in this country for any employer", "I am authorized to work in this country for my present employer only",
+                "I require sponsorship to work in this country"]
+        self.assertEqual(ans(q("Work Authorization", "select", auth), profile=me).option, auth[0])
+        sponsor = ["I NEED sponsorship to work in the US", "I do NOT need sponsorship to work in the US"]
+        self.assertEqual(ans(q("Sponsorship", "select", sponsor), profile=me).option, sponsor[1])
+        self.assertEqual(ans(q("Is your cumulative GPA a 3.0 or greater?", "select", ["Yes", "No"]), profile=me).option, "Yes")
+        self.assertEqual(ans(q("Is your cumulative GPA a 3.0 or greater?", "select", ["Yes", "No"]), profile=dict(me, gpa="2.7")).option, "No")
+
     def test_school_falls_back_to_other(self):
         a = ans(q("Which university did you attend?", "select", ["MIT", "Stanford", "Other (School Not Listed)"]))
         self.assertEqual(a.option, "Other (School Not Listed)")
@@ -97,6 +257,8 @@ class RuleTests(unittest.TestCase):
 
     def test_signature_date(self):
         self.assertRegex(ans(q("Date")).value, r"^\d{2}/\d{2}/\d{4}$")
+        self.assertRegex(ans(q("Candidate eSignature Date")).value, r"^\d{2}/\d{2}/\d{4}$")  # not your name
+        self.assertEqual(ans(q("Candidate eSignature")).value, "Test Applicant")
 
     def test_resume_file(self):
         a = ans(q("Resume/CV", "file"), files={"resume": "/tmp/r.pdf"})

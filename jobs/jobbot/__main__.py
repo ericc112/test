@@ -102,6 +102,11 @@ def cmd_apply_batch(args):
     if args.profile:
         mine = json.load(open(args.profile))
         profile.update({k: v for k, v in mine.items() if k in config.DEFAULT_PROFILE and v not in (None, "")})
+        # Your answer bank, kept with your profile on the page: it goes first, so it wins over JobBot's defaults.
+        bank = [b for b in mine.get("answer_bank") or [] if isinstance(b, dict) and b.get("q") and "a" in b]
+        if bank:
+            ours = {b["q"] for b in bank}
+            db.set_setting("answers", bank + [b for b in db.get_setting("answers") if b["q"] not in ours])
     if args.resume:
         src = Path(args.resume)
         config.ensure_dirs()
@@ -133,6 +138,7 @@ def cmd_apply_batch(args):
         shot = att and att.get("screenshot")
         results.append({
             "k": r["k"], "mode": mode, "status": done["status"], "note": done.get("status_note") or "",
+            "title": done.get("title") or "", "company": done.get("company") or "", "apply_url": done.get("apply_url") or "",
             "fields": [{k: f.get(k) for k in ("label", "answer", "source", "note", "required")} for f in (att or {}).get("fields", [])],
             "missing": [{k: m.get(k) for k in ("label", "kind", "options", "note")} for m in (att or {}).get("missing", [])],
             "screenshot": str(config.SHOTS_DIR / shot) if shot else None,
@@ -148,6 +154,14 @@ def _write_json(path, data):
     with open(tmp, "w") as f:
         json.dump(data, f, indent=1)
     os.replace(tmp, path)
+
+
+def cmd_page_feed(args):
+    from . import pagefeed
+    meta = pagefeed.run(args.out, args.previous, args.search, args.profile, args.min_score)
+    print(f"{meta['total']} internships ({meta['in_reach']} in the US or remote) in {meta['pages']} pages; "
+          f"{meta['dropped_old']} older than {meta['max_age_days']} days and {meta['below_min_score']} scoring under "
+          f"{meta['min_score']} left out. Written to {args.out}")
 
 
 def cmd_settings(args):
@@ -191,6 +205,13 @@ def main(argv=None):
     s.add_argument("--time-limit", type=float, default=0,
                    help="seconds; don't start another application after this (the rest come back not_started)")
     s.set_defaults(fn=cmd_apply_batch)
+    s = sub.add_parser("page-feed", help="build the JobBot page's internship list (meta.json and pages/p*.json)")
+    s.add_argument("--out", required=True, help="folder for meta.json and pages/")
+    s.add_argument("--previous", help="folder holding the page's current jobs documents (keeps first-seen times)")
+    s.add_argument("--search", action="store_true", help="search every watched feed first")
+    s.add_argument("--profile", help="your profile as JSON (scores use your skills and terms)")
+    s.add_argument("--min-score", type=int, default=0, help="leave out listings scoring under this (0-100)")
+    s.set_defaults(fn=cmd_page_feed)
     s = sub.add_parser("settings", help="show or set a settings block as JSON")
     s.add_argument("key", choices=["profile", "answers", "search", "automation", "llm"])
     s.add_argument("value", nargs="?")
