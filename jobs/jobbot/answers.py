@@ -297,6 +297,21 @@ def _school(q, c):
     return [school, "Other"] if q.kind in ("select", "combobox") else school
 
 
+BUSINESS_MAJOR = re.compile(r"supply chain|logistic|operation|financ|accounting|marketing|management|economic|business|"
+                            r"entrepreneur|human resources|analytics|information systems|real estate|insurance", re.I)
+
+
+def _discipline(q, c):
+    major = (c.profile.get("discipline") or "").strip()
+    if not major:
+        return None
+    if q.kind not in ("select", "combobox"):
+        return major
+    # Short major lists ("Business", "Business Administration"...) often lack the exact major.
+    # A business major then falls back to the broad business option, never to an unrelated one.
+    return [major] + (["Business Administration", "Business", "Business Management"] if BUSINESS_MAJOR.search(major) else [])
+
+
 def _consent(q, c):
     if not q.required:
         return Answer(None, "skip")  # optional acknowledgements are your call
@@ -371,7 +386,7 @@ RULES = [
     (r"\bminor\b", TEXT | {"select"}, _p("minor")),
     # Education
     (r"\bdegree\b|level of education|highest education|education level|highest level", ANY, _p("degree")),
-    (r"discipline|\bmajor\b|field of study|area of study|concentration", ANY, _p("discipline")),
+    (r"discipline|\bmajor\b|field of study|area of study|concentration", ANY, _discipline),
     (r"graduat|year of completion|class of|class year", ANY, _graduation),
     (r"\b(school|university|college|institution)\b", TEXT | {"select"}, _school),
     (r"language", ANY, _languages),

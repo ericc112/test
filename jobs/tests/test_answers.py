@@ -87,6 +87,14 @@ class RuleTests(unittest.TestCase):
         a = ans(q("Which university did you attend?", "select", ["MIT", "Stanford", "Other (School Not Listed)"]))
         self.assertEqual(a.option, "Other (School Not Listed)")
 
+    def test_business_major_falls_back_to_the_broad_business_option(self):
+        options = ["Accounting", "Business", "Business Administration", "Business Analytics", "Computer Science"]
+        supply_chain = dict(PROFILE, discipline="Supply chain management ")
+        self.assertEqual(ans(q("Discipline", "combobox", options), profile=supply_chain).option, "Business Administration")
+        self.assertEqual(ans(q("Discipline", "combobox", options), profile=dict(PROFILE, discipline="Accounting")).option, "Accounting")
+        # Not a business major: no business fallback
+        self.assertIsNone(ans(q("Discipline", "combobox", options), profile=dict(PROFILE, discipline="Biology")).option)
+
     def test_signature_date(self):
         self.assertRegex(ans(q("Date")).value, r"^\d{2}/\d{2}/\d{4}$")
 
