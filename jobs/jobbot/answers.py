@@ -487,6 +487,8 @@ RULES = [
      r"(receive|get) (future )?(updates|communications|news|emails)", CHOICE, lambda q, c: yn(c.profile.get("marketing_opt_in"))),
     # Work authorisation and visas. Sponsorship first: "require sponsorship for work authorization" isn't
     # asking whether you're authorized.
+    # Before sponsorship: "Do you currently have legal authorization to work … (e.g. US Citizen, Employer Sponsored…)"
+    (r"(do|does) you (currently )?(have|possess) (the )?(legal )?(authori[sz]ation|right) to work", ANY, _authorized),
     (r"sponsor|\bstem opt\b|optional practical training|curricular practical training|\bcpt\b", ANY, _sponsorship),
     (r"(do|does) you (currently )?(have|hold|possess).{0,40}(work permit|visa|authori[sz]ation|right to work)",
      ANY, _authorized),

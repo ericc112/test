@@ -224,6 +224,13 @@ class RuleTests(unittest.TestCase):
         opts = ["Associates", "Bachelors", "Masters non-MBA", "Doctorate", "MBA"]
         self.assertEqual(ans(q("What level of degree are you currently attending?", "checkboxes", opts), profile=me).option, ["Bachelors"])
 
+    def test_authorization_examples_that_mention_sponsorship(self):
+        label = ("Do you currently have legal authorization to work for any employer in the United States? (For example but not "
+                 "limited to: US Citizen, Green Card Holder, Employer Sponsored Visa)")
+        me = dict(PROFILE, work_authorized=True, needs_sponsorship=False)
+        self.assertEqual(ans(q(label, "select", ["Select One", "Yes", "No"]), profile=me).option, "Yes")
+        self.assertEqual(ans(q("Will you now or in the future require sponsorship?", "select", ["Yes", "No"]), profile=me).option, "No")
+
     def test_taleo_wording(self):
         me = dict(PROFILE, state="Texas", work_authorized=True, needs_sponsorship=False, gpa="3.8")
         states = ["US-AK", "US-TN", "US-TX", "US-UT"]
