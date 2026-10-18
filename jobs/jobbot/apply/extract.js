@@ -211,9 +211,11 @@
       const btn = el.closest(".form-group").querySelector("button[aria-label]");
       const plabel = (btn && btn.getAttribute("aria-label")) || label;
       pickerBoxes.forEach((b, i) => b.setAttribute("data-jobbot", `${key}:${i}`));
-      const picked = pickerBoxes.filter((b) => b.checked).map((b) => clean(b.value || optionLabel(b)));
+      // A choice's text is the label beside its box; its value can be an id ("1370" for "No").
+      const choice = (b) => clean(text(b.closest(".checkbox") ? b.closest(".checkbox").querySelector("label") || b : b)) || clean(b.value);
+      const picked = pickerBoxes.filter((b) => b.checked).map(choice);
       questions.push({ key, kind: "checkboxes", label: clean(plabel), required: el.required || requiredOf([el], plabel),
-        options: pickerBoxes.map((b) => clean(b.value || optionLabel(b))), input_type: "popup", name: el.name || el.id || "",
+        options: pickerBoxes.map(choice), input_type: "popup", name: el.name || el.id || "",
         multi: true, value: picked.length ? picked : null });
       continue;
     }

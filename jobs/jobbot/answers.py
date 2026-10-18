@@ -189,7 +189,17 @@ def _near(q, c):
     where, home = norm((c.job or {}).get("location") or ""), norm(c.profile.get("city") or "")
     if not where or not home:
         return None  # yours to answer: JobBot doesn't know where this job is
-    return yn(home in where or any(home in m and any(city in where for city in m) for m in METROS))
+    metro = next((m for m in METROS if home in m), {home})
+    if not (home in where or any(city in where for city in metro)):
+        return "No"
+    # "Yes, I am local to Houston (Katy), TX." among one Yes per site: the one naming this job's city or yours.
+    places = [city for city in metro | {home} if city in where] + [home]
+    for place in places:
+        hit = next((o for o in q.options if norm(o).startswith("yes") and place in norm(o)), None)
+        if hit:
+            return Answer(hit, "profile")
+    named = [o for o in q.options if norm(o).startswith("yes") and re.search(r"[A-Za-z)]\s*,\s*[A-Z]{2}\b", o)]
+    return None if named else "Yes"  # Yes options for other places only: yours to answer
 
 
 def _start(q, c):

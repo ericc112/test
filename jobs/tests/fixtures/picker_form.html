@@ -1,6 +1,8 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>Apply</title>
-<style>.oracletaleocwsv2-popup { display: none; border: 1px solid #ccc; padding: 8px; } .open { display: block; }</style></head>
+<style>.oracletaleocwsv2-popup { display: none; border: 1px solid #ccc; padding: 8px; } .open { display: block; }
+  .checkbox input { display: none; }  /* like Taleo: the box is hidden, its row is what you click */
+  .checkbox { cursor: pointer; padding: 4px; }</style></head>
 <body>
 <!-- Taleo Business Edition's "Select All That Apply…" picker: a read-only box, its choices are checkboxes in a popup. -->
 <form id="application-form" novalidate>
@@ -30,6 +32,9 @@
 <script>
   const group = document.querySelector(".form-group"), popup = group.querySelector(".oracletaleocwsv2-popup");
   group.querySelector(".input-group-btn button").addEventListener("click", () => popup.classList.add("open"));
+  popup.querySelectorAll(".checkbox").forEach((row) => row.addEventListener("click", () => {
+    const box = row.querySelector("input"); box.checked = !box.checked;
+  }));
   popup.querySelector("a.oracletaleocwsv2-close-popup-trigger").addEventListener("click", (e) => {
     e.preventDefault();  // Save: the box shows what's ticked
     document.getElementById("field_5").value = [...popup.querySelectorAll("input:checked")].map((b) => b.value).join(", ");

@@ -188,6 +188,11 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(near("US-TX-Houston"), opts[0])
         self.assertEqual(near("Clayton, MO"), opts[1])
         self.assertIsNone(near(""))  # where the job is isn't known: yours to answer
+        olin = ["Yes, I am local to Clayton, MO.", "Yes, I am local to Houston (Katy), TX.", "Yes, I am local to Freeport, TX.",
+                "No, I am not local to the position's location."]  # one Yes per site: the one for this job's city
+        pick = lambda where: answer(q(label, "select", olin), Context(profile=me, job={"location": where})).option
+        self.assertEqual(pick("US-TX-Houston"), olin[1])
+        self.assertEqual(pick("Clayton, MO"), olin[3])
 
     def test_enrolled_in_a_named_field_only_when_it_is_yours(self):
         me = dict(PROFILE, currently_enrolled=True, discipline="Supply Chain Management")
