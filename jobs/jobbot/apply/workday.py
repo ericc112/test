@@ -59,7 +59,7 @@ class WorkdayEngine(Engine):
         desc = page.locator('[data-automation-id="jobPostingDescription"]')
         if desc.count() and isinstance(ctx.job, dict):  # read before applying: skills are matched to it
             ctx.job["description"] = desc.first.inner_text()[:20000]
-        if not self._open_application(page):
+        if not self._open_application(page, job.get("url")):
             return Result("error", "Couldn't find the Apply button on this Workday posting.",
                           screenshot=self._shot(page, job, "noapply"), url=page.url)
         self._where = {}
@@ -209,7 +209,7 @@ class WorkdayEngine(Engine):
             loc.evaluate("b => { const f = b.parentElement && b.parentElement.querySelector('[data-automation-id=click_filter]'); (f || b).click(); }")
         return True
 
-    def _open_application(self, page):
+    def _open_application(self, page, posting_url=None):
         apply, app = '[data-automation-id="adventureButton"]', '[data-automation-id="progressBar"], [data-automation-id="email"]'
         start = '[data-automation-id="continueButton"], [data-automation-id="applyManually"]'
         try:
@@ -233,7 +233,17 @@ class WorkdayEngine(Engine):
         try:
             page.wait_for_selector(app, timeout=30000)
         except Exception:
-            return False
+            # Workday's own Apply link breaks for some locations ("St.-Petersburg%2FTampa%2C-FL" in it): the form never
+            # loads and its error bar shows. The posting's own link with /apply/applyManually works.
+            if not posting_url or "/apply" not in page.url or not page.locator('[data-automation-id="errorWidgetBarCanvas"]').count():
+                return False
+            fixed = posting_url.split("?")[0].rstrip("/") + "/apply/applyManually"
+            self.log(f"Workday's application link failed; opening {fixed}")
+            page.goto(fixed, wait_until="domcontentloaded", timeout=45000)
+            try:
+                page.wait_for_selector(app, timeout=30000)
+            except Exception:
+                return False
         self._wait_step(page)  # the progress bar shows a few seconds before the sign-in form or the step itself
         choice = page.get_by_role("button", name=re.compile(EMAIL_CHOICE, re.I))
         if choice.count():  # "Sign in with email" rather than Apple, Google or LinkedIn
