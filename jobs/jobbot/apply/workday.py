@@ -82,52 +82,11 @@ class WorkdayEngine(Engine):
             if "review" in info["step"].lower() or info["next"].lower() == "submit":
                 break
             step = info["step"]
-            qs = []
-            for raw in info["questions"]:
-                q = Question(key=f"{step_no}:{raw['key']}", kind=raw["kind"], label=raw["label"] or raw["auto"], required=raw["required"],
-                             options=raw["options"], input_type=raw.get("input_type") or "", value=raw.get("value"),
-                             section=raw.get("section") or "")
-                self._where[q.key] = (raw["auto"], raw["nth"], raw["key"])
-                if q.input_type == "wd_listbox":
-                    q.options = self._listbox_options(page, q)
-                elif q.input_type == "wd_prompt" and q.value in (None, ""):
-                    q.options = self._prompt_options(page, q)
-                qs.append(q)
-            # "From" and "To (Actual or Expected)" next to your school are your education's dates, even where
-            # Workday doesn't mark the block as education.
-            dates = [q for q in qs if not q.section and re.match(r"(from|to)\b", norm(q.label))]
-            if any(re.search(r"school|university|degree", q.label, re.I) for q in qs) and len(dates) <= 2 \
-                    and not any(q.section == "employment" for q in qs):  # a single From/To pair: no doubt whose it is
-                for q in dates:
-                    q.section = "education"
-            new = answer_all(qs, ctx)
-            for q in qs:  # a search box (schools, skills) lists nothing until you type: the answer is what to search for
-                a = new[q.key]
-                if q.input_type == "wd_prompt" and a.value not in (None, "", []) and a.option in (None, ""):
-                    a.option, a.note = a.value, ""  # not in the first list (or the list is longer than we read): search
+            qs = self._read_step(info, step_no)
             for q in qs:
-                a = new[q.key]
-                if q.kind == "file":
-                    if a.value and self._attached(page, q, a.value):
-                        a.note = "Already attached to your draft"
-                    elif a.value and self._upload(page, q, a.value):
-                        a.note = "Uploaded to your draft (not sent until you submit)"
-                    continue
-                if a.source == "blank":
-                    if q.value not in (None, "") and not self._clear(page, q):  # e.g. a phone number left in "Phone Extension"
-                        a.failed, a.note = True, "Couldn't clear this field"
-                    continue
-                have = q.value[0] if isinstance(q.value, list) and len(q.value) == 1 else q.value
-                # Your answer beats what's there (a wrong pick saved in the draft by an earlier run, a misread resume).
-                fix = q.kind in ("select", "radio", "buttons", "combobox", "text", "textarea") and a.resolved(q) \
-                    and a.source in ("profile", "bank", "user") and norm(str(have)) != norm(str(a.option or a.value)) \
-                    and not SKILLS.search(norm(q.label))  # skills already there stay: pressing one again removes it
-                if q.value not in (None, "", False, []) and norm(q.label) not in ctx.overrides and not fix:
-                    a.value, a.option, a.source, a.note = q.value, q.value, a.source or "site", "Already filled in"
-                    continue  # Workday kept it from your account or resume
-                if a.resolved(q) and not self._wd_fill(page, q, a):
-                    a.failed = True
-                    a.note = a.note or "Couldn't enter this answer automatically"
+                self._load_options(page, q)
+            new = self._fill_step(page, qs, ctx)
+            qs, new = self._refill(page, step, step_no, qs, new, ctx)
             for q in qs:
                 uid = (step, norm(q.label))
                 if uid not in seen:
@@ -178,6 +137,97 @@ class WorkdayEngine(Engine):
 
     # ------------------------------------------------------------ steps
     _where = None
+
+    def _read_step(self, info, tag):
+        """The step's questions as Workday shows them now (lists' options are read by _load_options)."""
+        qs = []
+        for raw in info["questions"]:
+            q = Question(key=f"{tag}:{raw['key']}", kind=raw["kind"], label=raw["label"] or raw["auto"], required=raw["required"],
+                         options=raw["options"], input_type=raw.get("input_type") or "", value=raw.get("value"),
+                         section=raw.get("section") or "")
+            self._where[q.key] = (raw["auto"], raw["nth"], raw["key"])
+            qs.append(q)
+        # "From" and "To (Actual or Expected)" next to your school are your education's dates, even where
+        # Workday doesn't mark the block as education.
+        dates = [q for q in qs if not q.section and re.match(r"(from|to)\b", norm(q.label))]
+        if any(re.search(r"school|university|degree", q.label, re.I) for q in qs) and len(dates) <= 2 \
+                and not any(q.section == "employment" for q in qs):  # a single From/To pair: no doubt whose it is
+            for q in dates:
+                q.section = "education"
+        return qs
+
+    def _load_options(self, page, q):
+        if q.input_type == "wd_listbox":
+            q.options = self._listbox_options(page, q)
+        elif q.input_type == "wd_prompt" and q.value in (None, ""):
+            q.options = self._prompt_options(page, q)
+
+    def _fill_step(self, page, qs, ctx):
+        """Answer the questions and fill them in; returns the answers."""
+        new = answer_all(qs, ctx)
+        for q in qs:  # a search box (schools, skills) lists nothing until you type: the answer is what to search for
+            a = new[q.key]
+            if q.input_type == "wd_prompt" and a.value not in (None, "", []) and a.option in (None, ""):
+                a.option, a.note = a.value, ""  # not in the first list (or the list is longer than we read): search
+        for q in qs:
+            a = new[q.key]
+            if q.kind == "file":
+                if a.value and self._attached(page, q, a.value):
+                    a.note = "Already attached to your draft"
+                elif a.value and self._upload(page, q, a.value):
+                    a.note = "Uploaded to your draft (not sent until you submit)"
+                continue
+            if a.source == "blank":
+                if q.value not in (None, "") and not self._clear(page, q):  # e.g. a phone number left in "Phone Extension"
+                    a.failed, a.note = True, "Couldn't clear this field"
+                continue
+            have = q.value[0] if isinstance(q.value, list) and len(q.value) == 1 else q.value
+            # Your answer beats what's there (a wrong pick saved in the draft by an earlier run, a misread resume).
+            fix = q.kind in ("select", "radio", "buttons", "combobox", "text", "textarea") and a.resolved(q) \
+                and a.source in ("profile", "bank", "user") and norm(str(have)) != norm(str(a.option or a.value)) \
+                and not SKILLS.search(norm(q.label))  # skills already there stay: pressing one again removes it
+            if q.value not in (None, "", False, []) and norm(q.label) not in ctx.overrides and not fix:
+                a.value, a.option, a.source, a.note = q.value, q.value, a.source or "site", "Already filled in"
+                continue  # Workday kept it from your account or resume
+            if a.resolved(q) and not self._wd_fill(page, q, a):
+                a.failed = True
+                a.note = a.note or "Couldn't enter this answer automatically"
+        return new
+
+    REFILL = ("select", "radio", "text", "textarea")
+
+    def _refill(self, page, step, step_no, qs, new, ctx):
+        """Questions that appear once another is answered (Vertex asks about sponsorship only after "authorized to
+        work"), and picks Workday drops while it redraws the step for them: read the step again and fill what's new
+        or came back empty. Returns the step's questions and answers as they stand now. Workday renumbers its blocks
+        when one appears, so the questions are always the ones just read."""
+        for again in range(1, 3):
+            info = self._info(page)
+            if info["step"] != step or not info["questions"]:
+                break
+            qs2, carried, redo, olds, seen = self._read_step(info, f"{step_no}.{again}"), {}, [], {}, {}
+            for q in qs:
+                olds.setdefault(norm(q.label), []).append(q)
+            for q in qs2:  # the nth "Job Title" now is the nth one before
+                n = seen[norm(q.label)] = seen.get(norm(q.label), -1) + 1
+                same = olds.get(norm(q.label), [])
+                old = same[n] if n < len(same) else None
+                a = new[old.key] if old else None
+                if old is None or (q.kind in self.REFILL and q.value in (None, "", []) and a.resolved(old)
+                                   and not a.failed and a.source != "blank"):
+                    redo.append(q)
+                else:
+                    q.options = old.options or q.options  # already read: opening every list again costs time
+                    carried[q.key] = a
+            if redo:
+                self.log(f"{len(redo)} question(s) on “{step}” are new or lost their answer: filling them")
+                for q in redo:
+                    self._load_options(page, q)
+                carried.update(self._fill_step(page, redo, ctx))
+            qs, new = qs2, carried
+            if not redo:
+                break
+        return qs, new
 
     def _box(self, page, q):
         """A question's block: by the marker set when the step was read, else by Workday's own name and its place
