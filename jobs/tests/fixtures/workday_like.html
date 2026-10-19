@@ -19,6 +19,10 @@ let account = params.get("account") === "1";
 // and lists take a moment to load their options (showing "Select One" meanwhile).
 const slow = params.get("slow") === "1";
 let applyPresses = 0;
+// cond=1 acts like Vertex: the sponsorship question shows only once "authorized to work" is answered, and the
+// redraw for it loses the next pick.
+const cond = params.get("cond") === "1";
+let dropNext = false;
 let signedIn = false, view = "job", step = 0;
 const STEPS = ["Create Account/Sign In", "My Information", "My Experience", "Application Questions", "Voluntary Disclosures", "Review"];
 if (params.get("assess") === "1") STEPS.splice(5, 0, "Take Assessment");  // an employer's assessment test
@@ -71,7 +75,8 @@ function render(errors = []) {
             ${values.resume ? `<div data-automation-id="file-upload-successful">${esc(values.resume)}</div>` : ""}</div>`
          + text("linkedin", "LinkedIn", false),
       3: listbox("auth", "Are you legally authorized to work in the United States?", true, ["Yes", "No"])
-         + listbox("sponsor", "Will you now or in the future require sponsorship for employment visa status?", true, ["Yes", "No"])
+         + (!cond || values.auth ? listbox("sponsor", "Will you now or in the future require sponsorship for employment visa status?", true, ["Yes", "No"]) : "")
+         + (cond ? listbox("adult", "Are you at least 18 years of age?", true, ["Yes", "No"]) : "")
          + listbox("office", "Which Acme office would you prefer?", true, ["Minneapolis", "New York"]),
       4: listbox("gender", "Gender", false, ["Male", "Female", "I do not wish to answer"])
          + `<div class="ff" data-automation-id="formField-agreement"><input type="checkbox" id="agree" ${values.agree ? "checked" : ""}>
@@ -87,12 +92,12 @@ function render(errors = []) {
 }
 
 const REQUIRED = { 1: ["source", "firstName", "lastName", "state", "phone", "previousWorker"], 2: ["resume"],
-                   3: ["auth", "sponsor", "office"], 4: ["agree"] };
+                   3: ["auth", "sponsor", "office"].concat(cond ? ["adult"] : []), 4: ["agree"] };
 const LABELS = { source: "How Did You Hear About Us?", firstName: "First Name", lastName: "Last Name", state: "State",
                  phone: "Phone Number", previousWorker: "Have you previously worked for Acme?", resume: "Resume/CV",
                  auth: "Are you legally authorized to work in the United States?",
                  sponsor: "Will you now or in the future require sponsorship for employment visa status?",
-                 office: "Which Acme office would you prefer?", agree: "I have read and consent to the terms and conditions" };
+                 office: "Which Acme office would you prefer?", adult: "Are you at least 18 years of age?", agree: "I have read and consent to the terms and conditions" };
 function collect() {
   document.querySelectorAll("input[type=text][id]").forEach((i) => { if (i.id !== "srcq") values[i.id] = i.value; });
   document.querySelectorAll("input[type=radio]:checked").forEach((r) => (values[r.name] = r.value));
@@ -144,7 +149,12 @@ document.addEventListener("click", (e) => {
     const ul = document.createElement("ul"); ul.setAttribute("role", "listbox");
     const fill = () => (ul.innerHTML = opts.map((o) => `<li role="option">${esc(o)}</li>`).join(""));
     if (slow) { ul.innerHTML = `<li role="option">Select One</li>`; setTimeout(fill, 1000); } else fill();
-    ul.addEventListener("click", (ev) => { values[lb.getAttribute("data-lb")] = ev.target.textContent; render(); });
+    ul.addEventListener("click", (ev) => {
+      const k = lb.getAttribute("data-lb");
+      if (dropNext) dropNext = false; else values[k] = ev.target.textContent;
+      if (cond && k === "auth") dropNext = true;
+      render();
+    });
     lb.after(ul); return;
   }
   if (t.getAttribute("data-automation-id") === "promptOption") {

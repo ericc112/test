@@ -40,6 +40,9 @@ MANUAL_ENTRY_RE = re.compile(r"^(apply|continue) as (a )?guest$|^guest$|^apply m
                              r"(in |out )?manually$|^start from scratch$|^skip( this step)?$", re.I)
 
 RATE_LIMITED = re.compile(r"too many requests|rate limit(ed)?|try again (later|in a few)", re.I)
+CLOSED = re.compile(r"(position|job|posting|opening|requisition|vacancy)( you('re| are) looking for)? (is|has) (been )?"
+                    r"(no longer (posted|available|open|active|accepting)|(expired|closed|filled|removed))|"
+                    r"no longer accepting (applications|applicants)|(job|posting|position) (has )?expired", re.I)
 OWN_ENGINE = re.compile(r"myworkdayjobs\.com/|\.tbe\.taleo\.net/", re.I)
 # Careers sites that make you sign in. JobBot signs in, or creates the account, with your email and its one password.
 ACCOUNT_JS = """() => {
@@ -137,6 +140,9 @@ class Engine:
             return Result("manual", "This site shows a bot check, so JobBot stops here. Open the listing and apply yourself.",
                           screenshot=self._shot(page, job, "botcheck"), url=page.url)
         if len(self._form_fields(data)) < 2 and not self._account_state(form):
+            if CLOSED.search(form.inner_text("body")[:5000]):
+                return Result("manual", "This posting is no longer up (the employer closed it), so nothing was sent.",
+                              screenshot=self._shot(page, job, "closed"), url=page.url)
             page, form, data = self._open_form(page)
             if data["page"]["botwall"]:
                 return Result("manual", "The application site shows a bot check, so JobBot stops here. Apply there yourself.",
@@ -155,7 +161,8 @@ class Engine:
                 page.goto(url, wait_until="domcontentloaded", timeout=45000)
                 self._settle(page)
                 page, form, data = self._open_form(page)
-        if not data["questions"] and self._next_button(form) is None:
+        if not [q for q in data["questions"] if not JOB_SEARCH_BOX.search(q.get("label") or "")] \
+                and self._next_button(form) is None:  # a job page's search box isn't a form
             if RATE_LIMITED.search(form.inner_text("body")[:3000]):
                 return Result("error", "The site is turning away requests for now (too many requests). Try again later.",
                               screenshot=self._shot(page, job, "busy"), url=page.url)

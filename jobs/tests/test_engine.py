@@ -108,6 +108,11 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(res.result, "ready", res.missing)
         self.assertTrue(res.url.endswith("greenhouse_like.html"))
 
+    def test_a_closed_posting_is_reported_as_closed(self):
+        res = self.run_form("closed_job.html")
+        self.assertEqual(res.result, "manual", res.message)
+        self.assertIn("no longer up", res.message)
+
     def test_apply_link_in_new_tab_is_followed(self):
         res = self.run_form("jobpage.html")
         self.assertEqual(res.result, "ready", res.missing)
@@ -205,6 +210,13 @@ class WorkdayFlowTests(unittest.TestCase):
         self.assertEqual(res.missing[0]["label"], "Which Acme office would you prefer?")
         self.assertEqual(res.missing[0]["options"], ["Minneapolis", "New York"])
         self.assertIn("saved in your draft", res.message)
+
+    def test_a_question_that_appears_later_and_a_dropped_pick_are_filled(self):
+        # Like Vertex: "sponsorship" shows only once "authorized to work" is answered, and that redraw loses a pick.
+        res = self.run_wd(query="?cond=1", overrides={"Which Acme office would you prefer?": "New York"})
+        self.assertEqual(res.result, "ready", res.message)
+        self.assertEqual(self.answer(res, "sponsorship"), "No")
+        self.assertEqual(self.answer(res, "18 years"), "Yes")
 
     def test_waits_for_a_slow_site(self):
         # Apply pressed before the page is ready, and a progress bar that comes before the sign-in form.
