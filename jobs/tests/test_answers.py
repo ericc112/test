@@ -222,6 +222,20 @@ class RuleTests(unittest.TestCase):
         label = "Have you completed an internship or work experience within a field relevant to the role you are applying?"
         self.assertEqual(ans(q(label, "select", work), profile=me).option, work[1])
 
+    def test_export_control_questions(self):
+        me = dict(PROFILE, citizenship="U.S. citizen", needs_sponsorship=False)
+        us = ("The following questions are for the sole purpose of ensuring compliance with U.S. rules concerning the export of "
+              "controlled technologies. ARE YOU ONE OF THE FOLLOWING: Citizen or National of the United States. U.S. Lawful "
+              "Permanent Resident. Person granted Refugee status in the United States. A Special Agricultural Worker under "
+              "section 210 of the Immigration and Nationality Act.")
+        self.assertEqual(ans(q(us, "select", ["Yes", "No"]), profile=me).option, "Yes")  # not the sponsorship rule's No
+        self.assertEqual(ans(q("Are you a citizen of any of the following countries? Cuba, Iran, North Korea, Syria", "select",
+                               ["Yes", "No"]), profile=me).option, "No")
+        countries = ["Argentina", "Canada", "China", "Country not listed", "Not Applicable"]
+        label = "Please select all countries in which you currently hold citizenship or have an active permanent resident status:"
+        self.assertEqual(ans(q(label, "checkboxes", countries, multi=True), profile=me).option, ["Not Applicable"])
+        self.assertIsNone(ans(q(us, "select", ["Yes", "No"]), profile=dict(me, citizenship="")).option)
+
     def test_no_sponsorship_never_claims_a_temporary_visa(self):
         me = dict(PROFILE, needs_sponsorship=False)
         merck = ["Yes", "No – I hold a temporary visa status that provides work authorization through OPT or CPT",

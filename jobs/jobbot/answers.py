@@ -532,6 +532,27 @@ def _state(q, c):
     return [state] + ([code, f"US-{code}", f"{code} - {state}"] if code else [])
 
 
+def _us_person(c):
+    cit = norm(c.profile.get("citizenship") or "")
+    return bool(re.search(r"\bu\.? ?s\.?(?![a-z])|united states|american|permanent resident|green card", cit))
+
+
+def _export_control(q, c):
+    """Export-control questions (U.S. persons): "Are you one of the following: Citizen or National of the United
+    States, U.S. Lawful Permanent Resident…" (Yes for you); "Are you a citizen of any of the following countries?
+    Cuba, Iran…" (No); "Select all countries in which you hold citizenship" when the U.S. isn't listed ("Not Applicable")."""
+    if not _us_person(c):
+        return None  # yours to answer
+    label = norm(q.label)
+    if re.search(r"select all countries|countries in which you (currently )?hold", label):
+        us = next((o for o in q.options if re.search(r"united states|^usa?$", norm(o))), None)
+        na = next((o for o in q.options if norm(o) in ("not applicable", "n a", "none")), None)
+        return us or na
+    if re.search(r"citizen of any of the following countries|cuba|iran|north korea|syria", label):
+        return "No"
+    return "Yes"
+
+
 def _authorized(q, c):
     """Authorized to work: "Yes", or the sentence some forms use instead ("I am authorized to work in this country
     for any employer")."""
@@ -566,6 +587,9 @@ RULES = [
     # Messages and consent
     (r"text messages?|\bsms\b|whatsapp|newsletter|marketing|promotional|job alerts|talent (community|network|pool)|"
      r"(receive|get) (future )?(updates|communications|news|emails)", CHOICE, lambda q, c: yn(c.profile.get("marketing_opt_in"))),
+    # Export control, before sponsorship: these quote the "Immigration and Nationality Act".
+    (r"citizen or national of the united states|\bu\.? ?s\.? lawful permanent resident|\bu\.? ?s\.? person\b|"
+     r"citizen of any of the following countries|countries in which you (currently )?hold citizenship", ANY, _export_control),
     # Work authorisation and visas. Sponsorship first: "require sponsorship for work authorization" isn't
     # asking whether you're authorized.
     # Before sponsorship: "Do you currently have legal authorization to work … (e.g. US Citizen, Employer Sponsored…)"
