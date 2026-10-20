@@ -162,7 +162,9 @@ def cmd_page_feed(args):
     meta = pagefeed.run(args.out, args.previous, args.search, args.profile, args.min_score)
     print(f"{meta['total']} internships ({meta['in_reach']} in the US or remote) in {meta['pages']} pages; "
           f"{meta['dropped_old']} older than {meta['max_age_days']} days and {meta['below_min_score']} scoring under "
-          f"{meta['min_score']} left out. Written to {args.out}")
+          f"{meta['min_score']} left out; {meta['grouped']} same-title postings grouped into other cards, "
+          f"{meta['new_this_run']} new, {len(meta['non_f500'])} companies outside the Fortune 500"
+          + (f"; {meta['feeds_failed']} feeds failed" if meta.get("feeds_failed") else "") + f". Written to {args.out}")
 
 
 def cmd_read_listings(args):

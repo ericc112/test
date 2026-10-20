@@ -21,6 +21,87 @@ SOURCE_LABELS = {
     "oracle": "Oracle", "phenom": "Phenom", "jibe": "Jibe", "amazon": "Amazon", "themuse": "The Muse", "himalayas": "Himalayas",
     "jobicy": "Jobicy", "remotive": "Remotive", "remoteok": "Remote OK", "arbeitnow": "Arbeitnow",
 }
+TOP_CAP_ZONE = 60  # the first page: no more than TOP_PER_COMPANY cards from one company there
+TOP_PER_COMPANY = 3
+RECENCY_BOOST = ((1, 8), (3, 5), (7, 2))  # (posted within N days, points added for ordering only)
+_F500 = None
+
+
+def fortune500():
+    """{company key: Fortune 500 entry} from fortune500.json."""
+    global _F500
+    if _F500 is None:
+        with open(os.path.join(os.path.dirname(__file__), "fortune500.json")) as f:
+            _F500 = {sources.company_key(c["name"]): c for c in json.load(f)}
+    return _F500
+
+
+def domain_of(url):
+    m = re.match(r"^(?:https?://)?(?:www\.)?([^/:?#]+)", url or "")
+    return m.group(1).lower() if m else ""
+
+
+def initials(name):
+    words = [w for w in re.split(r"[^A-Za-z0-9&]+", name or "") if w and w.lower() not in ("the", "of", "and", "inc", "co")]
+    return "".join(w[0] for w in words[:2]).upper() or "?"
+
+
+def company_info(name):
+    """Logo and profile fields for a card, only from data JobBot already has (fortune500.json)."""
+    entry = fortune500().get(sources.company_key(name))
+    out = {"ini": initials(name), "f500": bool(entry)}
+    if entry:
+        dom = domain_of(entry.get("website"))
+        out.update(rank=entry["rank"], web=entry.get("website") or "", car=entry.get("careers") or "")
+        if dom:
+            out.update(dom=dom, logo=f"https://www.google.com/s2/favicons?domain={dom}&sz=64")
+    return out
+
+
+def group_key(it):
+    return f"{sources.company_key(it['c'])}|{sources.norm(it['t'])}"
+
+
+def group(items):
+    """One card per company + title: the best-scoring posting leads, the others become its extra locations."""
+    groups = {}
+    for it in items:  # already in best-first order
+        lead = groups.get(group_key(it))
+        if lead is None:
+            groups[group_key(it)] = it
+            it["n"] = 1
+            continue
+        lead["n"] += 1
+        lead.setdefault("more", []).append({"k": it["k"], "u": it["u"], "loc": it["loc"], "st": it["st"]})
+        lead["st"] = sorted(set(lead["st"]) | set(it["st"]))
+        lead["rm"] = lead["rm"] or it["rm"]
+        lead["x"] = lead["x"] and it["x"]
+        if it["f"] > lead["f"]:
+            lead["f"] = it["f"]  # a new location counts as new
+    return list(groups.values())
+
+
+def _boost(it, now):
+    posted = _when(it["p"])
+    if not posted:
+        return 0
+    age = (now - posted).total_seconds() / 86400
+    return next((pts for days, pts in RECENCY_BOOST if age < days), 0)
+
+
+def spread(items, zone=TOP_CAP_ZONE, cap=TOP_PER_COMPANY):
+    """Near the top no company gets more than `cap` cards; the rest move down, still in order."""
+    top, later, per = [], [], Counter()
+    for it in items:
+        key = sources.company_key(it["c"])
+        if len(top) < zone and per[key] < cap:
+            top.append(it)
+            per[key] += 1
+        else:
+            later.append(it)
+    return top + later
+
+
 # Shown elsewhere on the card (area, pay, Apply), or true of every listing.
 HIDDEN_REASON = re.compile(r"^(Internship|Pay: |JobBot can apply directly)|\brole$")
 
@@ -50,6 +131,7 @@ def item(job, search, first_seen):
         "p": job.get("posted_at") or first_seen, "f": first_seen,
         "paid": "listed" if hourly else "stated" if pay.status(job) == "paid" else "employer",
     }
+    out.update(company_info(out["c"]))
     if hourly:
         out.update(pay=hourly["text"], hr=round(hourly["lo"]), est=hourly["basis"] != "hour")
     return out
@@ -104,12 +186,22 @@ def build(jobs, search, first_seen=None, now=None, min_score=0):
             continue
         items.append(item(job, search, seen))
     items.sort(key=lambda i: (-i["s"], -(_when(i["p"]) or now).timestamp(), i["k"]))
+    postings = len(items)
+    items = group(items)
+    for it in items:
+        it["new"] = it["f"] == stamp  # first appeared in this run; the page can also compare "f" with your last visit
+        it["b"] = it["s"] + _boost(it, now)  # "Best match" order: score plus a recency boost
+    items.sort(key=lambda i: (-i["b"], -(_when(i["p"]) or now).timestamp(), i["k"]))
+    items = spread(items)
     pages = [{"n": n, "items": items[i:i + PAGE_ITEMS]} for n, i in enumerate(range(0, len(items), PAGE_ITEMS))]
     feeds, employers = watched(search)
     meta = {"updated_at": stamp, "total": len(items), "in_reach": sum(not i["x"] for i in items),
             "with_pay": sum("pay" in i for i in items), "pages": len(pages), "paid_only": bool(search.get("paid_only", True)),
             "by_source": dict(Counter(i["src"] for i in items)), "feeds_watched": feeds, "employers_watched": employers,
-            "dropped_old": dropped, "max_age_days": MAX_AGE_DAYS, "min_score": min_score, "below_min_score": low}
+            "dropped_old": dropped, "max_age_days": MAX_AGE_DAYS, "min_score": min_score, "below_min_score": low,
+            "postings": postings, "grouped": postings - len(items), "new_this_run": sum(i["new"] for i in items),
+            "posted_last_day": sum(_boost(i, now) == RECENCY_BOOST[0][1] for i in items),
+            "non_f500": sorted({i["c"] for i in items if not i["f500"]})}
     return pages, meta
 
 
@@ -125,6 +217,7 @@ def write(out_dir, pages, meta):
 
 
 def run(out_dir, previous=None, search_first=False, profile_file=None, min_score=0):
+    summary = None
     """The page-feed command: optionally search, then build and write the list. Returns the meta document."""
     from . import pipeline
     if profile_file:
@@ -141,5 +234,8 @@ def run(out_dir, previous=None, search_first=False, profile_file=None, min_score
         pipeline.rescore()  # scores use your skills and terms
     pages, meta = build(db.all_jobs_for_rescore(), db.get_setting("search"), previous_first_seen(previous) if previous else None,
                         min_score=min_score)
+    if summary is not None:
+        meta["feed_errors"] = summary.get("errors", [])[:100]  # which feeds failed this run
+        meta["feeds_failed"] = len(summary.get("errors", []))
     write(out_dir, pages, meta)
     return meta
