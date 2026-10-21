@@ -49,6 +49,19 @@ class ServerTests(unittest.TestCase):
         p = self.client.get("/api/settings/profile").json()
         self.assertEqual((p["first_name"], p["resume_file"]), ("Ada", "my resume.txt"))
 
+    def test_workday_password_round_trip(self):
+        p = self.client.get("/api/settings/profile").json()
+        p["workday_password"] = "hunter2-example"
+        self.assertEqual(self.client.put("/api/settings/profile", json=p).status_code, 200)
+        p = self.client.get("/api/settings/profile").json()
+        self.assertEqual(p["workday_password"], "hunter2-example")
+        # A later save that never mentions the password must not wipe it.
+        p.pop("workday_password")
+        p["first_name"] = "Ada"
+        self.assertEqual(self.client.put("/api/settings/profile", json=p).status_code, 200)
+        p = self.client.get("/api/settings/profile").json()
+        self.assertEqual((p["first_name"], p["workday_password"]), ("Ada", "hunter2-example"))
+
     def test_upload_rejects_other_types(self):
         r = self.client.post("/api/upload/resume", files={"file": ("x.exe", b"MZ", "application/octet-stream")})
         self.assertEqual(r.status_code, 400)
