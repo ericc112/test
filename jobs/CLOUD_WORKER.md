@@ -116,6 +116,7 @@ recordings and copied text the owner adds in the page's **Upload** tab and lists
       | `needs_input` | `needs_input` |
       | `blocked` | `needs_you` |
       | `manual` | `manual` |
+      | `closed` | `closed` (the employer took the posting down: the page shows it as closed, with no Try again) |
       | `applied` | `submitted` |
       | `unconfirmed` | `unconfirmed` |
       | anything else | `error` |
