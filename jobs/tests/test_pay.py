@@ -61,6 +61,60 @@ class PayTests(unittest.TestCase):
         self.assertIn("Pay: $25/hr", reasons)
 
 
+class StoredPayTests(unittest.TestCase):
+    """pay.extract / pay.for_job: the stored pay fields (the export's payText/payMin/payMax).
+
+    Only pay stated per hour gets hourly numbers; any other period is stored as the
+    written text with hourly fields None — never converted, never guessed from the web.
+    """
+
+    def test_hourly_formats(self):
+        self.assertEqual(pay.extract("The typical base salary range for this position is $28.00 - $33.00 per hour."),
+                         ("$28.00 - $33.00 per hour", 28.0, 33.0))
+        self.assertEqual(pay.extract("Pay: $28–$33/hr"), ("$28–$33/hr", 28.0, 33.0))
+        self.assertEqual(pay.extract("This role pays $25/hr."), ("$25/hr", 25.0, 25.0))
+        self.assertEqual(pay.extract("Compensation: $23.50-$29.25/hour"), ("$23.50-$29.25/hour", 23.5, 29.25))
+        self.assertEqual(pay.extract("Pay range: USD $28 - $33 per hour"), ("USD $28 - $33 per hour", 28.0, 33.0))
+        self.assertEqual(pay.extract("The hourly rate is $22.50."), ("$22.50", 22.5, 22.5))
+        self.assertEqual(pay.extract("Pay range is $29 - $33 depending on location"), ("$29 - $33", 29.0, 33.0))
+
+    def test_up_to_gives_a_max_and_no_min(self):
+        self.assertEqual(pay.extract("Earn up to $30 per hour"), ("up to $30 per hour", None, 30.0))
+
+    def test_other_periods_stay_as_written_text(self):
+        self.assertEqual(pay.extract("Salary: $40,000 - $55,000 a year."), ("$40,000 - $55,000 a year", None, None))
+        self.assertEqual(pay.extract("Pay is $1,798 - $2,914 bi-weekly."), ("$1,798 - $2,914 bi-weekly", None, None))
+
+    def test_stipend_is_not_pay_and_not_the_max(self):
+        # The stipend figure must not become pay_max, and must not hide the wage next to it.
+        self.assertEqual(pay.extract("The pay is $32.50/hr + a $2,500 housing stipend."),
+                         ("$32.50/hr", 32.5, 32.5))
+        self.assertIsNone(pay.extract("Interns receive a $2,500 housing stipend."))
+        self.assertIsNone(pay.extract("Monthly scholarship of $500"))
+
+    def test_figures_that_are_not_pay(self):
+        for text in ["We provide $6 billion in annual community benefits.",
+                     "We manage $60 billion in assets under management.",
+                     "The company raised $4.1M in seed funding.",
+                     "Join our team! Great culture, mentorship and free snacks.",
+                     ""]:
+            self.assertIsNone(pay.extract(text), text)
+
+    def test_a_pay_labeled_figure_wins(self):
+        self.assertEqual(pay.extract("$18 per hour. The salary range for this role is $24 - $28 per hour."),
+                         ("$24 - $28 per hour", 24.0, 28.0))
+
+    def test_for_job_uses_the_boards_salary_fields(self):
+        self.assertEqual(pay.for_job({"salary_text": "USD 21-21 hourly"}), ("USD 21-21 hourly", 21.0, 21.0))
+        # Annual fields stay as written text (hourly() converts them for display; storage does not).
+        annual = {"salary_text": "USD 37752-56650", "salary_min": 37752, "salary_max": 56650}
+        self.assertEqual(pay.for_job(annual), ("USD 37752-56650", None, None))
+        # A rate stated in the description wins over the fields.
+        self.assertEqual(pay.for_job(dict(annual, description="Pay: $25.00 per hour")),
+                         ("$25.00 per hour", 25.0, 25.0))
+        self.assertIsNone(pay.for_job({"title": "Finance Intern", "description": "Great team, learn a lot."}))
+
+
 class PaidOnlyTests(unittest.TestCase):
     INTERNS = {"field": "business", "job_types": ["internship"]}
 

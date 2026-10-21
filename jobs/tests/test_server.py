@@ -26,6 +26,18 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(st["counts"], {"new": 1})
         self.assertFalse(st["setup"]["resume"])
 
+    def test_state_reports_source_health(self):
+        db.record_source_run("greenhouse", "acme", True, 3)
+        db.record_source_run("lever", "acme", False, 0, "HTTP 503 from api.lever.co")
+        st = self.client.get("/api/state").json()
+        health = st["source_health"]
+        self.assertFalse(health["greenhouse"]["failing"])
+        self.assertIsNotNone(health["greenhouse"]["last_success"])
+        self.assertTrue(health["lever"]["failing"])
+        self.assertIn("503", health["lever"]["last_error"])
+        self.assertEqual(st["failing_sources"], ["lever"])
+        self.assertIn("unconfirmed_24h", st)
+
     def test_profile_round_trip_keeps_resume(self):
         r = self.client.post("/api/upload/resume", files={"file": ("my resume.txt", (FIXTURES / "resume.txt").read_bytes(), "text/plain")})
         self.assertEqual(r.status_code, 200)

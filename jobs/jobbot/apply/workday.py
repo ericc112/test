@@ -187,7 +187,14 @@ class WorkdayEngine(Engine):
                 and a.source in ("profile", "bank", "user") and norm(str(have)) != norm(str(a.option or a.value)) \
                 and not SKILLS.search(norm(q.label))  # skills already there stay: pressing one again removes it
             if q.value not in (None, "", False, []) and norm(q.label) not in ctx.overrides and not fix:
-                a.value, a.option, a.source, a.note = q.value, q.value, a.source or "site", "Already filled in"
+                # Keeping what's there. When JobBot had no answer of its own, that value is the
+                # site's (from your account or a resume it misread), not yours: flag it so the
+                # review screen shows which answers Eric never actually gave.
+                site_only = not a.source
+                a.value, a.option, a.source = q.value, q.value, a.source or "site"
+                a.site_value = site_only
+                a.note = ("Filled in by Workday from your account or resume — not an answer from "
+                          "your profile. Check it before you submit") if site_only else "Already filled in"
                 continue  # Workday kept it from your account or resume
             if a.resolved(q) and not self._wd_fill(page, q, a):
                 a.failed = True

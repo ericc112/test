@@ -42,6 +42,21 @@ Workday, Taleo and other careers sites ask applicants to create an account with 
 
 It runs on your own computer: it needs a real browser, your resume, and your personal details, and none of that should live on someone else's server.
 
+## Opening JobBot
+
+The easy way: double-click **Start-JobBot.bat** in this folder. The first time you run it, it installs what JobBot needs (the Python packages and its browser) and then opens JobBot for you; after that, a double-click just opens it. Leave its window open while you use JobBot — closing it turns JobBot off.
+
+Prefer to type it yourself? The commands are:
+
+```bash
+cd jobs
+python -m pip install -r requirements.txt
+python -m playwright install chromium
+python -m jobbot
+```
+
+Either way, JobBot opens in your browser at **http://localhost:8765**. That page only exists while JobBot is running — it lives on your own computer, not on the internet, so if the page won't load, JobBot isn't running: double-click Start-JobBot.bat again.
+
 ## Quick start
 
 Needs Python 3.10+.

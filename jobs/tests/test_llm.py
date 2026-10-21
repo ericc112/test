@@ -42,6 +42,19 @@ class ClaudeTests(unittest.TestCase):
         self.assertIn("8 years of Python.", kw["system"][1]["text"])
         self.assertIn("Describe your API experience", kw["messages"][0]["content"])
 
+    def test_profile_secrets_never_reach_the_api(self):
+        profile = dict(self.ctx.profile, workday_password="<redacted>", api_key="<redacted>",
+                       client_secret="<redacted>", auth_token="<redacted>")
+        ctx = Context(profile=profile, job=self.ctx.job)
+        self.create.return_value = response(json.dumps({"answers": []}))
+        self.claude.answer_questions([Question("q1", "text", "Why us?", True)], ctx)
+        sent = self.create.call_args.kwargs["system"][1]["text"]
+        for secret in ("hunter2-wd", "sk-secret-123", "shh-value", "tok-abc"):
+            self.assertNotIn(secret, sent)
+        for key in ("workday_password", "api_key", "client_secret", "auth_token"):
+            self.assertNotIn(key, sent)
+        self.assertIn("Test", sent)  # ordinary profile fields still go
+
     def test_refusal_returns_nothing(self):
         self.create.return_value = response("", stop="refusal")
         self.assertEqual(self.claude.answer_questions([Question("q1", "text", "Why us?", True)], self.ctx), {})

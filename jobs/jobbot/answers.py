@@ -62,6 +62,7 @@ class Answer:
     option: object = None  # chosen option text (or list for checkboxes)
     search: str = ""  # what to type into an autocomplete box
     failed: bool = False  # the browser couldn't enter it
+    site_value: bool = False  # the value is the site's own pre-fill, kept because you had no answer
 
     def resolved(self, q):
         if q.kind == "file":
@@ -910,5 +911,6 @@ def as_dict(q, a):
         "source": a.source,
         "note": a.note,
         "resolved": a.resolved(q) and not a.failed,
+        "site_value": a.site_value,
     })
     return d

@@ -105,5 +105,37 @@ class CoverageTests(unittest.TestCase):
         self.assertIn(watched["name"], buf.getvalue())
 
 
+class PayCommandTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = TempData()
+
+    def tearDown(self):
+        self.tmp.close()
+
+    def test_backfill_fills_stored_pay_and_leaves_filled_jobs_alone(self):
+        import io
+        from contextlib import redirect_stdout
+        db.upsert_job({"id": "greenhouse:acme:1", "source": "greenhouse", "title": "Finance Intern",
+                       "company": "Acme", "description": "Bachelor's degree in finance. Pay: $25.00 per hour"})
+        db.upsert_job({"id": "greenhouse:acme:2", "source": "greenhouse", "title": "Marketing Intern",
+                       "company": "Acme", "description": "Salary: $40,000 - $55,000 a year."})
+        db.upsert_job({"id": "greenhouse:acme:3", "source": "greenhouse", "title": "Operations Intern",
+                       "company": "Acme", "description": "Great team, learn a lot."})
+        db.upsert_job({"id": "greenhouse:acme:4", "source": "greenhouse", "title": "Data Intern",
+                       "company": "Acme", "description": "Pay: $99 per hour",
+                       "pay_text": "$20/hr", "pay_min": 20.0, "pay_max": 20.0})
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cli.cmd_pay(SimpleNamespace())
+        self.assertIn("2 jobs got pay (1 already had it, 1 still list none)", buf.getvalue())
+        one = db.get_job("greenhouse:acme:1")
+        self.assertEqual((one["pay_text"], one["pay_min"], one["pay_max"]), ("$25.00 per hour", 25.0, 25.0))
+        two = db.get_job("greenhouse:acme:2")
+        self.assertEqual((two["pay_text"], two["pay_min"], two["pay_max"]), ("$40,000 - $55,000 a year", None, None))
+        self.assertIsNone(db.get_job("greenhouse:acme:3")["pay_text"])
+        four = db.get_job("greenhouse:acme:4")
+        self.assertEqual((four["pay_text"], four["pay_min"], four["pay_max"]), ("$20/hr", 20.0, 20.0))
+
+
 if __name__ == "__main__":
     unittest.main()

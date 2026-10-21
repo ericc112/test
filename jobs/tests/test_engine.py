@@ -63,6 +63,11 @@ class EngineTests(unittest.TestCase):
         res = self.run_form("greenhouse_like.html", mode="submit")
         self.assertEqual(res.result, "applied", res.message)
 
+    def test_submit_without_any_confirmation_is_unconfirmed(self):
+        res = self.run_form("no_confirmation.html", mode="submit")
+        self.assertEqual(res.result, "unconfirmed", res.message)
+        self.assertIn("no confirmation", res.message)
+
     def test_missing_resume_blocks_submit(self):
         res = self.run_form("greenhouse_like.html", mode="submit", resume=False)
         self.assertEqual(res.result, "needs_input")
@@ -309,3 +314,37 @@ class AnySiteTests(unittest.TestCase):
     def test_a_form_inside_a_frame(self):
         res = self.run_site("embedded_form.html", "submit")
         self.assertEqual(res.result, "applied", res.message)
+
+
+
+class WorkdaySiteValueTests(unittest.TestCase):
+    """No browser: _fill_step's keep-the-site's-value branch never touches the page."""
+
+    def setUp(self):
+        self.tmp = TempData()
+
+    def tearDown(self):
+        self.tmp.close()
+
+    def fill(self, questions):
+        from jobbot.answers import Context
+        from jobbot.apply.workday import WorkdayEngine
+        ctx = Context(profile=dict(PROFILE), bank=[], job={})
+        return WorkdayEngine(headless=True)._fill_step(object(), questions, ctx)
+
+    def test_a_value_only_the_site_had_is_flagged_as_the_sites(self):
+        from jobbot.answers import Question, as_dict
+        q = Question(key="q1", kind="text", label="Favorite color", value="Blue")
+        a = self.fill([q])["q1"]
+        self.assertEqual(a.source, "site")
+        self.assertEqual(a.value, "Blue")
+        self.assertTrue(a.site_value)
+        self.assertTrue(as_dict(q, a)["site_value"])
+        self.assertIn("not an answer from your profile", a.note)
+
+    def test_your_own_value_already_there_is_not_flagged(self):
+        from jobbot.answers import Question
+        q = Question(key="q2", kind="text", label="First name", value="Test")
+        a = self.fill([q])["q2"]
+        self.assertEqual(a.source, "profile")
+        self.assertFalse(a.site_value)

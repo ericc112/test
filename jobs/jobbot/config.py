@@ -190,7 +190,25 @@ for _co in FORTUNE500:
         if (_kind, _slug) not in _known:
             SUGGESTED_COMPANIES.append((_co["name"], _kind, _slug))
             _known.add((_kind, _slug))
-WATCHLIST_VERSION = 3  # raise when the default watch list changes, so saved searches pick up the new employers
+
+
+def _extra_companies():
+    """Employers beyond the Fortune 500 whose job feeds were verified one by one against the
+    live boards (extracompanies.json) — mostly supply-chain and logistics employers the
+    Fortune 500 list misses (Zipline, Uber Freight, Uline…). Only verified feeds are watched."""
+    try:
+        return json.loads(Path(__file__).with_name("extracompanies.json").read_text())
+    except (OSError, ValueError):
+        return []
+
+
+EXTRA_COMPANIES = _extra_companies()
+for _co in EXTRA_COMPANIES:
+    _kind, _slug = _co.get("ats"), _co.get("feedId")
+    if _co.get("feedVerified") and _kind and _slug and (_kind, _slug) not in _known:
+        SUGGESTED_COMPANIES.append((_co["company"], _kind, _slug))
+        _known.add((_kind, _slug))
+WATCHLIST_VERSION = 4  # raise when the default watch list changes, so saved searches pick up the new employers
 # Feeds that were on the default list but belong to other companies (e.g. "ms" is Morgan Stanley's
 # Workday site, not Macy's or Moody's). Saved searches drop them when they upgrade.
 RETIRED_FEEDS = {

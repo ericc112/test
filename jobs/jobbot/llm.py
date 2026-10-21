@@ -6,6 +6,7 @@ in the review screen, and auto-submit skips AI-answered forms unless you allow i
 """
 import json
 import os
+import re
 
 from .textutil import norm
 
@@ -17,6 +18,10 @@ Rules:
 - For multiple-choice questions, answer with one option copied exactly from the list.
 - Keep free-text answers specific and concise (2-5 sentences unless the question asks for more). Plain text, no markdown, no placeholders.
 - Never answer questions that ask the applicant to prove they are human or to solve a puzzle meant for people."""
+
+# Credentials never leave this machine: the profile is serialised into an API call, so
+# anything that looks like a password, secret, token or API key is dropped first.
+_SECRET_KEY = re.compile(r"password|secret|token|api_key", re.I)
 
 ANSWERS_SCHEMA = {
     "type": "object",
@@ -77,7 +82,7 @@ class Claude:
 
     def _system(self, ctx):
         p = ctx.profile
-        profile = {k: v for k, v in p.items() if k not in ("resume_text", "cover_letter", "resume_file", "cover_letter_file") and v not in ("", None)}
+        profile = {k: v for k, v in p.items() if k not in ("resume_text", "cover_letter", "resume_file", "cover_letter_file") and not _SECRET_KEY.search(k) and v not in ("", None)}
         resume = p.get("resume_text") or "(no resume text available)"
         return [
             {"type": "text", "text": SYSTEM},

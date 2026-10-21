@@ -84,6 +84,16 @@ class RoutingTests(unittest.TestCase):
             Worker().process(jid, "prepare")
         self.assertEqual(db.get_job(jid)["status"], "closed")
 
+    def test_a_submit_without_confirmation_is_recorded_unconfirmed(self):
+        jid = self.job("https://careers-acme.icims.com/jobs/1234/intern/job")
+        with self.engine(Engine, Result("unconfirmed", "Submit was clicked but no confirmation appeared. Check your email before retrying.")):
+            Worker().process(jid, "submit")
+        job = db.get_job(jid)
+        self.assertEqual(job["status"], "unconfirmed")
+        self.assertIsNotNone(job["applied_at"])
+        att = db.latest_attempt(jid, "submit")
+        self.assertEqual(att["result"], "unconfirmed")
+
     def test_a_job_skipped_while_queued_is_never_processed(self):
         jid = self.job("https://careers-acme.icims.com/jobs/1234/intern/job")
         db.update_job(jid, status="skipped", status_note="Skipped by you")
