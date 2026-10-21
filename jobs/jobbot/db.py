@@ -12,7 +12,7 @@ JSON_FIELDS = ("tags", "categories", "score_reasons", "answers")
 JOB_FIELDS = (
     "id", "source", "title", "company", "location", "remote", "url", "apply_url",
     "ats", "ats_board", "ats_job_id", "description", "salary_min", "salary_max",
-    "salary_text", "tags", "categories", "posted_at", "first_seen", "last_seen", "score",
+    "salary_text", "pay_text", "pay_min", "pay_max", "tags", "categories", "posted_at", "first_seen", "last_seen", "score",
     "score_reasons", "status", "status_note", "answers", "updated_at", "applied_at",
     "dedupe_key", "fresh",
 )
@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
     source TEXT, title TEXT, company TEXT, location TEXT, remote INTEGER,
     url TEXT, apply_url TEXT, ats TEXT, ats_board TEXT, ats_job_id TEXT,
-    description TEXT, salary_min REAL, salary_max REAL, salary_text TEXT, tags TEXT, categories TEXT,
+    description TEXT, salary_min REAL, salary_max REAL, salary_text TEXT,
+    pay_text TEXT, pay_min REAL, pay_max REAL, tags TEXT, categories TEXT,
     posted_at TEXT, first_seen TEXT, last_seen TEXT,
     score REAL DEFAULT 0, score_reasons TEXT, status TEXT DEFAULT 'new', status_note TEXT,
     answers TEXT, updated_at TEXT, applied_at TEXT, dedupe_key TEXT, fresh INTEGER DEFAULT 0
@@ -53,7 +54,8 @@ CREATE TABLE IF NOT EXISTS source_runs (
 """
 
 # Columns added after the first release, added to older databases on startup.
-MIGRATIONS = {"categories": "TEXT", "fresh": "INTEGER DEFAULT 0"}
+MIGRATIONS = {"categories": "TEXT", "fresh": "INTEGER DEFAULT 0",
+              "pay_text": "TEXT", "pay_min": "REAL", "pay_max": "REAL"}
 
 _init_lock = threading.Lock()
 _initialized = set()
@@ -209,9 +211,12 @@ SORTS = {
     "newest": "COALESCE(posted_at, first_seen) DESC",
     "updated": "updated_at DESC",
     "company": "company COLLATE NOCASE, title COLLATE NOCASE",
-    # Highest pay first, jobs with no pay listed last. The search/filter clauses are in the same
+    # Highest pay first, jobs with no pay listed last. Pay counts whichever field holds it:
+    # the board's own salary (salary_*) wins, then the pay extracted from the posting (pay_*),
+    # which is all Greenhouse/Workday jobs ever get. The search/filter clauses are in the same
     # query's WHERE, so this always orders the filtered list, never the whole table.
-    "pay": "COALESCE(salary_max, salary_min) IS NULL, COALESCE(salary_max, salary_min) DESC, score DESC",
+    "pay": "COALESCE(salary_max, salary_min, pay_max, pay_min) IS NULL, "
+           "COALESCE(salary_max, salary_min, pay_max, pay_min) DESC, score DESC",
 }
 
 
@@ -309,10 +314,22 @@ def status_counts():
 
 
 def applied_since(hours):
+    """Applications the employer confirmed in the window. Submissions without a confirmation
+    are counted separately (unconfirmed_since) — this figure used to include them."""
     since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat(timespec="seconds")
     with connect() as c:
         return c.execute(
-            "SELECT COUNT(*) FROM jobs WHERE status IN ('applied','unconfirmed') AND applied_at >= ?",
+            "SELECT COUNT(*) FROM jobs WHERE status = 'applied' AND applied_at >= ?",
+            (since,),
+        ).fetchone()[0]
+
+
+def unconfirmed_since(hours):
+    """Submissions in the window where the employer never showed a confirmation."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat(timespec="seconds")
+    with connect() as c:
+        return c.execute(
+            "SELECT COUNT(*) FROM jobs WHERE status = 'unconfirmed' AND applied_at >= ?",
             (since,),
         ).fetchone()[0]
 
@@ -417,3 +434,25 @@ def record_source_run(source, key, ok, count=0, error=None):
 def source_runs():
     with connect() as c:
         return [dict(r) for r in c.execute("SELECT * FROM source_runs ORDER BY ts DESC").fetchall()]
+
+
+def source_health():
+    """Per source: when it last ran, whether its newest run failed (and the error), and when
+    any of its feeds last succeeded. Feed failures otherwise surface only in logs and the
+    coverage command, so a dead feed could stall silently while the board looked normal."""
+    health = {}
+    for r in source_runs():
+        h = health.get(r["source"])
+        if h is None:  # rows come newest-first: the first row per source is its latest run
+            h = health[r["source"]] = {
+                "last_run": r["ts"], "failing": not r["ok"],
+                "last_error": r["error"] if not r["ok"] else None,
+                "last_success": None, "feeds": 0, "feeds_failing": 0,
+            }
+        h["feeds"] += 1
+        if r["ok"]:
+            if h["last_success"] is None or r["ts"] > h["last_success"]:
+                h["last_success"] = r["ts"]
+        else:
+            h["feeds_failing"] += 1
+    return health

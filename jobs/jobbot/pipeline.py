@@ -5,7 +5,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
-from . import ats, db, scoring, sources
+from . import ats, db, pay, scoring, sources
 from .sources import http
 
 _search_lock = threading.Lock()
@@ -115,6 +115,9 @@ def poll_feed(name, key, search, profile):
                 _filtered_out.add(job.get("id"))
                 continue
             job["score"], job["score_reasons"] = s, reasons
+            found_pay = pay.for_job(job)  # pay stated in the posting, stored mechanically (no AI)
+            if found_pay:
+                job["pay_text"], job["pay_min"], job["pay_max"] = found_pay
             job["fresh"] = 0 if first_look or not getattr(mod, "EMPLOYER", False) else 1
             if db.upsert_job(job):
                 result["new"] += 1
@@ -182,11 +185,18 @@ def _announce(fresh):
 
 
 def rescore():
-    """Recompute scores after you change your search or skills."""
+    """Recompute scores after you change your search or skills. The scheduler also runs this
+    on every automatic run, so postings that vanish from a feed age out through the same
+    exclusion rules instead of lingering as "new" forever. Nothing is deleted: a job only
+    moves new -> skipped (and back to new if it qualifies again)."""
     search = db.get_setting("search")
     profile = db.get_setting("profile")
+    incremental = {n for n, m in sources.REGISTRY.items() if getattr(m, "INCREMENTAL", False)}
     changed = 0
     for job in db.all_jobs_for_rescore():
+        # Feeds that only report new postings can't say whether an old one is still up, so
+        # the not-seen-for-weeks rule in scoring.exclusion doesn't apply to their jobs.
+        job["feed_incremental"] = job.get("source") in incremental
         s, reasons, excluded = scoring.score(job, search, profile)
         fields = {"score": s, "score_reasons": reasons}
         note = job.get("status_note") or ""
@@ -212,7 +222,7 @@ def can_auto_submit(job, attempt, automation):
     fields = (attempt or {}).get("fields") or []
     if any(f.get("source") == "ai" for f in fields) and not automation.get("auto_submit_ai_answers"):
         return False, "contains AI-written answers for you to review"
-    if db.applied_since(24) >= automation.get("daily_limit", 15):
+    if db.applied_since(24) + db.unconfirmed_since(24) >= automation.get("daily_limit", 15):
         return False, "daily limit reached"
     if db.applied_to_company_since(job.get("company"), 30) >= automation.get("company_limit_30d", 3):
         return False, f"already applied to {job.get('company')} recently"
@@ -258,6 +268,7 @@ class Scheduler(threading.Thread):
                     try:
                         run_search(skip=skip)
                         auto_queue(self.enqueue)
+                        rescore()  # periodic: postings that vanished age out instead of lingering as new
                     except Exception as e:
                         db.log(f"Automatic run failed: {e}", "error")
                     age = 0

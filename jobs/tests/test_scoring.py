@@ -33,6 +33,22 @@ class ScoringTests(unittest.TestCase):
         self.assertIsNone(scoring.exclusion(job(salary_max=150000), SEARCH))
         self.assertEqual(scoring.exclusion(job(remote=False, location="NYC"), dict(SEARCH, remote="remote_only")), "Not remote")
 
+    def test_min_salary_check_uses_extracted_pay(self):
+        # Greenhouse/Workday jobs carry pay_* (extracted from the posting), never salary_*.
+        search = dict(SEARCH, min_salary=30)
+        self.assertIn("below", scoring.exclusion(job(pay_min=20.0, pay_max=25.0, pay_text="$20-25/hr"), search))
+        self.assertIsNone(scoring.exclusion(job(pay_min=20.0, pay_max=35.0), search))
+        # When both are present, the board's own salary wins.
+        self.assertIsNone(scoring.exclusion(job(salary_max=150000, pay_max=10.0), SEARCH))
+
+    def test_a_job_that_vanished_from_its_board_ages_out(self):
+        old = (datetime.now(timezone.utc) - timedelta(days=20)).isoformat()
+        self.assertIn("No longer listed", scoring.exclusion(job(last_seen=old), SEARCH))
+        # Feeds that only report new postings can't say an old job is gone: exempt.
+        self.assertIsNone(scoring.exclusion(job(last_seen=old, feed_incremental=True), SEARCH))
+        recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+        self.assertIsNone(scoring.exclusion(job(last_seen=recent), SEARCH))
+
     def test_good_remote_match_scores_high(self):
         s, reasons, excluded = scoring.score(job(), SEARCH, PROFILE)
         self.assertIsNone(excluded)

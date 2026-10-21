@@ -83,6 +83,32 @@ def age_days(job):
     return max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 86400)
 
 
+def days_since(ts):
+    """Days since an ISO timestamp, or None when there isn't one."""
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(ts)
+    except (TypeError, ValueError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 86400)
+
+
+def pay_top(job):
+    """The highest pay figure known for a job, whichever field holds it: the board's own
+    salary (salary_*, set by Lever/Ashby/aggregators) wins, then the pay extracted from
+    the posting text (pay_*), which is all Greenhouse/Workday jobs ever get."""
+    return job.get("salary_max") or job.get("salary_min") or job.get("pay_max") or job.get("pay_min")
+
+
+# A listing a full-board feed hasn't returned for this long is gone, however recent its
+# posting date claims to be. Feeds that only ever report *new* postings (Workday, Greenhouse…)
+# can't say whether an old one is still up, so their jobs are exempt (see pipeline.rescore).
+VANISHED_DAYS = 14
+
+
 def _loc_names(loc):
     n = norm(loc)
     for canon, names in ALIASES.items():
@@ -149,8 +175,11 @@ def exclusion(job, search):
     days = age_days(job)
     if max_age and days is not None and days > max_age:
         return f"Posted {int(days)} days ago"
+    seen = days_since(job.get("last_seen"))
+    if seen is not None and seen > VANISHED_DAYS and not job.get("feed_incremental"):
+        return f"No longer listed — the board hasn't shown it for {int(seen)} days"
     min_salary = search.get("min_salary") or 0
-    top = job.get("salary_max") or job.get("salary_min")
+    top = pay_top(job)
     if min_salary and top and top < min_salary:
         return f"Pays up to {int(top):,}, below your minimum"
     return None
@@ -214,7 +243,7 @@ def score(job, search, profile):
     elif job.get("salary_text"):
         reasons.append(f"Pay: {job['salary_text']}")
     min_salary = search.get("min_salary") or 0
-    top = job.get("salary_max") or job.get("salary_min")
+    top = pay_top(job)
     if min_salary and top and top < min_salary:
         total -= 25
     excluded = exclusion(job, search) or fields.level_mismatch(job, profile)

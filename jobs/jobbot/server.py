@@ -103,11 +103,16 @@ def create_app(start_background=True, extra_hosts=(), phone_access=False):
         for r in fresh:
             r["company_info"] = companies.for_company(r.get("company"))
         lags = db.detection_lags(days=7)
+        health = db.source_health()
         return {
             "version": __version__,
             "counts": db.status_counts(),
             "applied_24h": db.applied_since(24),
             "applied_7d": db.applied_since(24 * 7),
+            "unconfirmed_24h": db.unconfirmed_since(24),
+            "unconfirmed_7d": db.unconfirmed_since(24 * 7),
+            "source_health": health,
+            "failing_sources": sorted(n for n, h in health.items() if h["failing"]),
             "daily_limit": automation.get("daily_limit"),
             "automation": automation,
             "next_run_sec": State.scheduler.next_run if State.scheduler else None,

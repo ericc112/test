@@ -49,6 +49,7 @@ const STATUS = {
 const SOURCE_KIND = {
   profile: ["Profile", ""], bank: ["Answer bank", "accent"], user: ["You", "good"], ai: ["AI", "ai"],
   file: ["File", ""], human: ["Needs you", "warn"], skip: ["Left blank", ""], "": ["—", ""],
+  site: ["The site's", "warn"],
 };
 
 const statusChip = (s) => { const [t, c] = STATUS[s] || [s, ""]; return `<span class="chip ${c}">${esc(t)}</span>`; };
@@ -258,6 +259,7 @@ async function viewDashboard(el) {
       <div class="job-list" id="fresh">${fresh.latest.length ? fresh.latest.map((j) => jobRow(j)).join("")
         : `<div class="empty">Nothing new yet. JobBot checks your employers' own job sites and lists new business internships and roles here the moment they're published, before Indeed or LinkedIn have them.</div>`}</div>
     </div>
+    ${(s.failing_sources || []).length ? `<div class="notice warn" style="margin-bottom:16px">⚠ ${s.failing_sources.length} job source${s.failing_sources.length > 1 ? "s are" : " is"} failing — latest error: ${esc(((s.source_health || {})[s.failing_sources[0]] || {}).last_error || "unknown")}. New postings from ${s.failing_sources.length > 1 ? "those sources" : "that source"} may be missing.</div>` : ""}
     <div class="tiles">
       ${tile(c.new || 0, "New matches", "#/jobs")}
       ${tile(c.ready || 0, "Ready to submit", "#/review")}
@@ -563,7 +565,7 @@ async function openJob(id) {
         ${withFields.fields.map((f, i) => `<tr><td>${esc(f.label || "(unlabeled)")}${f.required ? ' <span class="muted">*</span>' : ""}</td>
           <td class="answer" data-i="${i}">${f.answer == null || (Array.isArray(f.answer) && !f.answer.length) ? '<span class="muted">—</span>' : esc(Array.isArray(f.answer) ? f.answer.join(", ") : f.answer)}
             ${f.note ? `<div class="small muted">${esc(f.note)}</div>` : ""}</td>
-          <td>${sourceChip(f.source)}${f.required && !f.resolved ? ' <span class="chip warn">missing</span>' : ""}</td></tr>`).join("")}
+          <td>${sourceChip(f.source)}${f.site_value ? ' <span class="chip warn">site value — check it</span>' : ""}${f.required && !f.resolved ? ' <span class="chip warn">missing</span>' : ""}</td></tr>`).join("")}
         </tbody></table>
         <div class="btn-row" id="edit-save" hidden style="margin-top:12px"><button class="btn primary" type="submit">Save &amp; fill again</button>
           <label class="check small"><input type="checkbox" name="remember"> Also save to answer bank</label></div></form>

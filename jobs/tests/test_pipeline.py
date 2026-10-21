@@ -52,6 +52,20 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual({gh["status"], rm["status"]}, {"new", "duplicate"})
         self.assertEqual(gh["status"], "new")
 
+    def test_search_stores_pay_stated_in_the_posting(self):
+        def gh_fetch(key, search, known=None):
+            return [make_job("greenhouse", "acme:9", "Financial Analyst", "Acme", "https://acme.com/9",
+                             ats="greenhouse", ats_board="acme", ats_job_id="9", remote=True, location="Remote",
+                             description="Bachelor's degree in finance. The pay range for this role is "
+                                         "$28.00 - $33.00 per hour.",
+                             categories=["Finance"])]
+        with mock.patch.object(sources.REGISTRY["greenhouse"], "fetch", gh_fetch), \
+             mock.patch.object(sources.REGISTRY["remotive"], "fetch", lambda key, search, known=None: []):
+            pipeline.run_search()
+        job = db.get_job("greenhouse:acme:9")
+        self.assertEqual((job["pay_text"], job["pay_min"], job["pay_max"]),
+                         ("$28.00 - $33.00 per hour", 28.0, 33.0))
+
     def test_same_title_on_one_board_is_not_a_duplicate(self):
         for n in (1, 2):
             job = make_job("lever", f"acme:{n}", "Account Executive", "Acme", "u")
@@ -115,6 +129,32 @@ class PipelineTests(unittest.TestCase):
         j = db.get_job("lever:x:1")
         self.assertEqual((j["status"], j["status_note"]), ("skipped", "auto: Not a business role"))
 
+    def test_rescore_ages_out_a_job_that_vanished_from_its_feed(self):
+        from datetime import datetime, timedelta, timezone
+        db.upsert_job(make_job("remotive", "gone:1", "Financial Analyst", "Acme", "u", remote=True,
+                               location="Remote", description="excel"))
+        old = (datetime.now(timezone.utc) - timedelta(days=20)).isoformat(timespec="seconds")
+        db.update_job("remotive:gone:1", last_seen=old)  # the feed stopped returning it weeks ago
+        pipeline.rescore()
+        j = db.get_job("remotive:gone:1")
+        self.assertEqual(j["status"], "skipped")
+        self.assertIn("No longer listed", j["status_note"])
+
+    def test_highest_pay_sort_counts_extracted_pay(self):
+        # Greenhouse/Workday jobs only ever get pay_* (extracted); the sort used to ignore it.
+        db.upsert_job(make_job("lever", "p:1", "Analyst", "A Co", "u1", salary_min=10.0, salary_max=10.0))
+        db.upsert_job(make_job("greenhouse", "p:2", "Analyst", "B Co", "u2",
+                               pay_min=20.0, pay_max=25.0, pay_text="$20-25/hr"))
+        db.upsert_job(make_job("greenhouse", "p:3", "Analyst", "C Co", "u3"))
+        jobs, _ = db.list_jobs(sort="pay")
+        self.assertEqual([j["id"] for j in jobs], ["greenhouse:p:2", "lever:p:1", "greenhouse:p:3"])
+
+    def test_applied_counts_split_confirmed_from_unconfirmed(self):
+        db.upsert_job(make_job("lever", "a:1", "Analyst", "A Co", "u", status="applied", applied_at=db.now()))
+        db.upsert_job(make_job("lever", "a:2", "Analyst", "B Co", "u", status="unconfirmed", applied_at=db.now()))
+        self.assertEqual(db.applied_since(24), 1)  # confirmed only: unconfirmed no longer inflates it
+        self.assertEqual(db.unconfirmed_since(24), 1)
+
     def test_switching_to_internships_hides_full_time_and_back(self):
         self.run_search()
         s = db.get_setting("search")
@@ -168,3 +208,22 @@ class WatchListUpgradeTests(unittest.TestCase):
             self.assertNotIn("cc|wd3|ChanelCareers", s["companies"]["workday"])
             self.assertIn("mine|wd3|X", s["companies"]["workday"])
             self.assertEqual(s["watchlist_version"], 3)
+
+
+class ExtraCompaniesTests(unittest.TestCase):
+    def test_verified_extra_employers_are_watched_by_default(self):
+        from jobbot import config
+        suggested = {(kind, slug) for _, kind, slug in config.SUGGESTED_COMPANIES}
+        self.assertIn(("greenhouse", "flyzipline"), suggested)  # Zipline
+        self.assertIn(("greenhouse", "uberfreight"), suggested)  # Uber Freight
+        self.assertIn(("workday", "uline|wd1|Uline_Careers"), suggested)  # Uline
+        companies = config.DEFAULT_SEARCH["companies"]
+        self.assertIn("flyzipline", companies["greenhouse"])
+        self.assertIn("uberfreight", companies["greenhouse"])
+
+    def test_every_verified_extra_feed_is_wired_in(self):
+        from jobbot import config
+        suggested = {(kind, slug) for _, kind, slug in config.SUGGESTED_COMPANIES}
+        missing = [(c["company"], c["ats"], c["feedId"]) for c in config.EXTRA_COMPANIES
+                   if c.get("feedVerified") and (c["ats"], c["feedId"]) not in suggested]
+        self.assertEqual(missing, [])
