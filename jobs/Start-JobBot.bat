@@ -24,6 +24,11 @@ if not exist ".jobbot-setup-done" (
   echo.
   py -m pip install -r requirements.txt
   py -m playwright install chromium
+  if exist "..\full-board-export.json" (
+    echo.
+    echo Bringing in your job board - please wait...
+    py -m jobbot import-board "..\full-board-export.json"
+  )
   echo done> ".jobbot-setup-done"
   echo.
   echo Setup finished.
