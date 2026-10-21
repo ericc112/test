@@ -366,7 +366,7 @@ def create_app(start_background=True, extra_hosts=(), phone_access=False):
             body.pop("clear_key", None)
         if key == "profile":
             old = db.get_setting("profile")
-            for f in ("resume_file", "resume_text", "cover_letter_file"):
+            for f in ("resume_file", "resume_text", "cover_letter_file", "workday_password"):
                 body.setdefault(f, old.get(f, ""))
         db.set_setting(key, body)
         if key in ("search", "profile"):

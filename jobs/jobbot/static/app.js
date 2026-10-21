@@ -667,6 +667,9 @@ const PROFILE_SECTIONS = [
   ["Consents", [
     ["accept_privacy_terms", "Tick required privacy-notice and acknowledgement boxes", "bool"],
     ["marketing_opt_in", "Opt in to recruiting texts, WhatsApp and newsletters", "bool"]]],
+  ["Employer accounts", [
+    ["workday_password", "Workday password", "password", "One password for every employer's Workday site: JobBot signs in with it, or creates your account with it, then fills the form. Leave blank to keep the password already saved."]],
+    "Without this, Workday jobs can only be opened by hand — the bot can't sign in. Stored only in JobBot's data folder on this computer."],
 ];
 
 function fieldHtml([key, label, type = "text", hint = "", cls = "", options], value) {
@@ -694,7 +697,7 @@ async function viewProfile(el) {
     </div>
     ${PROFILE_SECTIONS.map(([title, fields, note]) => `<div class="card"><h2 class="section-title">${esc(title)}</h2>
       ${note ? `<p class="muted small" style="margin-top:-6px">${esc(note)}</p>` : ""}
-      <div class="form-grid">${fields.map((f) => fieldHtml(f, p[f[0]] ?? "")).join("")}</div></div>`).join("")}
+      <div class="form-grid">${fields.map((f) => fieldHtml(f, f[0] === "workday_password" ? "" : p[f[0]] ?? "")).join("")}</div></div>`).join("")}
     <div class="card"><h2 class="section-title">Cover letter template</h2>
       <p class="muted small" style="margin-top:-6px">Typed into cover-letter text boxes. Placeholders: <code>{company}</code> <code>{title}</code> <code>{name}</code> <code>{summary}</code>. With AI turned on, a tailored letter is written instead.</p>
       <textarea name="cover_letter" style="min-height:180px">${esc(p.cover_letter)}</textarea></div>
@@ -711,6 +714,7 @@ async function viewProfile(el) {
         out[key] = type === "bool" ? input.checked : input.value.trim();
       }
       out.cover_letter = form.elements.cover_letter.value;
+      if (!out.workday_password) delete out.workday_password;
       await api("/api/settings/profile", { method: "PUT", body: out });
       toast("Profile saved");
       refreshState();
