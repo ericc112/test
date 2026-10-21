@@ -85,7 +85,7 @@ def account_email(profile):
 
 @dataclass
 class Result:
-    result: str  # ready | needs_input | blocked | manual | applied | unconfirmed | error | moved (to another engine's site)
+    result: str  # ready | needs_input | blocked | manual | closed | applied | unconfirmed | error | moved (to another engine's site)
     message: str = ""
     fields: list = field(default_factory=list)
     missing: list = field(default_factory=list)
@@ -141,7 +141,8 @@ class Engine:
                           screenshot=self._shot(page, job, "botcheck"), url=page.url)
         if len(self._form_fields(data)) < 2 and not self._account_state(form):
             if CLOSED.search(form.inner_text("body")[:5000]):
-                return Result("manual", "This posting is no longer up (the employer closed it), so nothing was sent.",
+                # Its own status, not "manual": a closed posting is finished, so nothing offers to fill it again.
+                return Result("closed", "This posting is no longer up (the employer closed it), so nothing was sent.",
                               screenshot=self._shot(page, job, "closed"), url=page.url)
             page, form, data = self._open_form(page)
             if data["page"]["botwall"]:
@@ -164,7 +165,8 @@ class Engine:
         if not [q for q in data["questions"] if not JOB_SEARCH_BOX.search(q.get("label") or "")] \
                 and self._next_button(form) is None:  # a job page's search box isn't a form
             if RATE_LIMITED.search(form.inner_text("body")[:3000]):
-                return Result("error", "The site is turning away requests for now (too many requests). Try again later.",
+                return Result("blocked", "The site is turning away requests for now (too many requests). "
+                                         "Wait a while, then try again — nothing is wrong with the application.",
                               screenshot=self._shot(page, job, "busy"), url=page.url)
             return Result("manual", "Couldn't find an application form on this page.",
                           screenshot=self._shot(page, job, "noform"), url=page.url)
