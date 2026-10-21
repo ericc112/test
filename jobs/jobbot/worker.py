@@ -78,6 +78,18 @@ class Worker(threading.Thread):
                 db.update_job(job_id, status="new")
         return len(dropped)
 
+    def remove(self, job_id):
+        """Take one job out of the queue (it was skipped or removed while waiting). The entry stays in
+        the thread's queue, where the run loop ignores anything no longer pending; a job the worker is
+        already filling isn't interrupted. Returns how many queued actions were dropped."""
+        with self.lock:
+            dropped = [item for item in self.pending if item[0] == job_id]
+            self.pending = [item for item in self.pending if item[0] != job_id]
+        job = db.get_job(job_id)
+        if dropped and job and job["status"] == "queued":
+            db.update_job(job_id, status="new", status_note=None)
+        return len(dropped)
+
     def stop(self):
         self.stop_event.set()
         self.q.put(None)
@@ -113,6 +125,10 @@ class Worker(threading.Thread):
         if not job:
             return
         if job["status"] in ("applied",) and action == "submit":
+            return
+        if job["status"] == "skipped":
+            # Removed while it sat in the queue: removing a queued application cancels it.
+            db.log(f"Not applying: {job['title']} at {job['company']} was skipped while queued", job_id=job_id)
             return
         automation = db.get_setting("automation")
         label = f"{job['title']} at {job['company']}"

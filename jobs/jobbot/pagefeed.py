@@ -12,10 +12,13 @@ import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
-from . import config, db, fields, pay, places, scoring, sources
+from . import companies, config, db, fields, pay, places, scoring, sources
+from .textutil import norm
 
 MAX_AGE_DAYS = 30
 PAGE_ITEMS = 60  # listings per document: about 45 KB
+SPREAD_CAP = 3    # at most this many of one company's cards in any SPREAD_WINDOW of the Best-match list
+SPREAD_WINDOW = 10
 SOURCE_LABELS = {
     "workday": "Workday", "greenhouse": "Greenhouse", "lever": "Lever", "ashby": "Ashby", "successfactors": "SuccessFactors",
     "oracle": "Oracle", "phenom": "Phenom", "jibe": "Jibe", "amazon": "Amazon", "themuse": "The Muse", "himalayas": "Himalayas",
@@ -52,7 +55,40 @@ def item(job, search, first_seen):
     }
     if hourly:
         out.update(pay=hourly["text"], hr=round(hourly["lo"]), est=hourly["basis"] != "hour")
+    co = companies.for_company(job.get("company"))
+    if co:  # a Fortune 500 company: its rank, and the domain its logo comes from
+        out.update(rk=co["rank"], dom=co["domain"])
     return out
+
+
+def _group(items):
+    """One card per company + role. The same posting in five cities was five near-identical cards;
+    now it's the best-scored one, with "locs" naming every place and "n" how many postings it folds in."""
+    out, by_key = [], {}
+    for it in items:
+        rep = by_key.get((sources.company_key(it["c"]), norm(it["t"])))
+        if rep is None:
+            by_key[(sources.company_key(it["c"]), norm(it["t"]))] = it
+            out.append(it)
+            continue
+        locs = rep.setdefault("locs", [rep["loc"]])
+        if it["loc"] not in locs:
+            locs.append(it["loc"])
+        rep["n"] = rep.get("n", 1) + 1
+    return out, sum(i.get("n", 1) - 1 for i in out)
+
+
+def _spread(items):
+    """Best match, but not one company wall to wall: a card is held back while its company already
+    has SPREAD_CAP cards in the last SPREAD_WINDOW. Held-back cards keep their order, after the rest."""
+    out, held = [], []
+    for it in items:
+        key = sources.company_key(it["c"])
+        if sum(sources.company_key(i["c"]) == key for i in out[-(SPREAD_WINDOW - 1):]) >= SPREAD_CAP:
+            held.append(it)
+        else:
+            out.append(it)
+    return out + held
 
 
 def previous_first_seen(folder):
@@ -102,14 +138,20 @@ def build(jobs, search, first_seen=None, now=None, min_score=0):
         if posted and posted <= cutoff:
             dropped += 1
             continue
-        items.append(item(job, search, seen))
+        it = item(job, search, seen)
+        if first_seen and job["id"] not in first_seen:
+            it["nw"] = True  # not in the previous list: new since the page last refreshed
+        items.append(it)
     items.sort(key=lambda i: (-i["s"], -(_when(i["p"]) or now).timestamp(), i["k"]))
+    items, folded = _group(items)
+    items = _spread(items)
     pages = [{"n": n, "items": items[i:i + PAGE_ITEMS]} for n, i in enumerate(range(0, len(items), PAGE_ITEMS))]
     feeds, employers = watched(search)
     meta = {"updated_at": stamp, "total": len(items), "in_reach": sum(not i["x"] for i in items),
             "with_pay": sum("pay" in i for i in items), "pages": len(pages), "paid_only": bool(search.get("paid_only", True)),
             "by_source": dict(Counter(i["src"] for i in items)), "feeds_watched": feeds, "employers_watched": employers,
-            "dropped_old": dropped, "max_age_days": MAX_AGE_DAYS, "min_score": min_score, "below_min_score": low}
+            "dropped_old": dropped, "max_age_days": MAX_AGE_DAYS, "min_score": min_score, "below_min_score": low,
+            "grouped": folded, "new_count": sum(1 for i in items if i.get("nw"))}
     return pages, meta
 
 

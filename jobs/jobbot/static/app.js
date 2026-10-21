@@ -43,7 +43,7 @@ const DIRECT = new Set(["greenhouse", "lever", "ashby"]);
 const STATUS = {
   new: ["New", ""], queued: ["Queued", "accent"], preparing: ["Filling…", "accent"],
   ready: ["Ready to submit", "good"], needs_input: ["Needs you", "warn"], blocked: ["Blocked", "warn"],
-  manual: ["Apply on site", ""], submitting: ["Submitting…", "accent"], applied: ["Applied", "good"],
+  manual: ["Apply on site", ""], closed: ["Closed", ""], submitting: ["Submitting…", "accent"], applied: ["Applied", "good"],
   unconfirmed: ["Unconfirmed", "warn"], error: ["Error", "bad"], skipped: ["Skipped", ""], duplicate: ["Duplicate", ""],
 };
 const SOURCE_KIND = {
@@ -153,6 +153,13 @@ function postedText(j) {
   return days <= 0 ? "Posted today" : days === 1 ? "Posted yesterday" : `Posted ${days}d ago`;
 }
 
+function logoImg(j, cls = "co-logo") {
+  const co = j.company_info;
+  if (!co || !co.logo) return "";
+  return `<img class="${cls}" src="${esc(co.logo)}" alt="" loading="lazy"
+    onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${esc(co.favicon || "")}'}else{this.remove()}">`;
+}
+
 function jobRow(j, { select = false } = {}) {
   const direct = DIRECT.has(j.ats);
   const area = areaOf(j);
@@ -165,7 +172,7 @@ function jobRow(j, { select = false } = {}) {
     <div class="main">
       <div class="title">${esc(j.title)}</div>
       <div class="meta">
-        <strong>${esc(j.company)}</strong>
+        <strong>${logoImg(j)}${esc(j.company)}</strong>
         ${isIntern(j) ? `<span class="chip accent">Internship${seasonOf(j.title) ? " · " + esc(seasonOf(j.title)) : ""}</span>` : ""}
         ${area ? `<span class="chip">${esc(area)}</span>` : ""}
         ${j.location ? `<span>${esc(j.location.slice(0, 60))}</span>` : ""}
@@ -204,6 +211,7 @@ function bindJobList(container, reload) {
 const ACTION_MSG = {
   prepare: "Queued: filling the application (nothing is sent)", submit: "Queued: submitting the application",
   skip: "Skipped", restore: "Moved back to New", mark_applied: "Marked as applied", manual: "Marked to apply on the company site",
+  dequeue: "Removed from the queue",
 };
 
 async function doAction(id, action) {
@@ -318,7 +326,7 @@ async function viewJobs(el) {
         <option value="new">New</option><option value="queued,preparing,submitting">In progress</option>
         <option value="ready">Ready to submit</option><option value="needs_input,blocked,error">Needs you</option>
         <option value="applied,unconfirmed">Applied</option><option value="manual">Apply on site</option>
-        <option value="skipped,duplicate">Skipped</option><option value="">All</option>
+        <option value="skipped,duplicate,closed">Skipped &amp; closed</option><option value="">All</option>
       </select>
       <select id="f-source" aria-label="Source"><option value="">All sources</option>
         ${sources.map((s) => `<option value="${esc(s.name)}">${esc(s.label)}</option>`).join("")}</select>
@@ -326,7 +334,7 @@ async function viewJobs(el) {
         <option value="60">60+</option><option value="70">70+</option><option value="80">80+</option></select>
       <select id="f-posted" aria-label="Posted"><option value="">Any time</option><option value="24">Posted in 24 hours</option>
         <option value="72">Posted in 3 days</option><option value="168">Posted this week</option></select>
-      <select id="f-sort" aria-label="Sort"><option value="score">Best match</option><option value="found">Newest found</option><option value="newest">Newest posted</option><option value="company">Company</option></select>
+      <select id="f-sort" aria-label="Sort"><option value="score">Best match</option><option value="pay">Highest pay</option><option value="found">Newest found</option><option value="newest">Newest posted</option><option value="company">Company</option></select>
       <label class="check"><input type="checkbox" id="f-direct"> Direct apply only</label>
     </div>
     <div class="btn-row" style="margin-bottom:10px">
@@ -339,9 +347,11 @@ async function viewJobs(el) {
     <div style="text-align:center;margin-top:12px"><button class="btn" id="more" hidden>Load more</button></div>`;
   if (params.get("status") !== null) $("#f-status").value = params.get("status");
   let offset = 0;
+  let loadSeq = 0;  // a slow earlier load must never overwrite a newer one (the list briefly disagreed with the search box)
   const list = $("#list", el);
   async function load(reset = true) {
     if (reset) offset = 0;
+    const mine = ++loadSeq;
     const qs = new URLSearchParams({
       status: $("#f-status").value, q: $("#f-q").value, source: $("#f-source").value,
       sort: $("#f-sort").value, limit: 50, offset,
@@ -350,6 +360,7 @@ async function viewJobs(el) {
     if ($("#f-direct").checked) qs.set("ats_filter", "any");
     if ($("#f-posted").value) qs.set("posted_hours", $("#f-posted").value);
     const r = await api(`/api/jobs?${qs}`);
+    if (mine !== loadSeq) return;  // a newer load started while this one was in flight: its results win
     const html = r.jobs.map((j) => jobRow(j, { select: true })).join("");
     if (reset) list.innerHTML = html || `<div class="empty">No jobs here. Try another filter, or press <b>Search now</b>.</div>`;
     else list.insertAdjacentHTML("beforeend", html);
@@ -393,22 +404,31 @@ async function viewReview(el) {
   el.innerHTML = `<div class="tabs" role="tablist">${tabs.map(([k, t]) => `<button role="tab" data-tab="${k}">${esc(t)} <span class="count" data-count="${k}"></span></button>`).join("")}</div>
     <p class="muted small" id="tab-help"></p>
     <div class="btn-row" style="margin-bottom:10px" id="tab-actions"></div>
-    <div class="job-list" id="list"></div>`;
+    <div class="job-list" id="list"></div>
+    <div style="text-align:center;margin-top:12px"><button class="btn" id="more" hidden>Load more</button></div>`;
   const list = $("#list", el);
-  async function load() {
+  let offset = 0;
+  async function load(reset = true) {
+    if (reset) offset = 0;
     $$(".tabs button", el).forEach((b) => b.classList.toggle("active", b.dataset.tab === active));
     $("#tab-help").textContent = tabs.find((t) => t[0] === active)[2];
-    const r = await api(`/api/jobs?status=${enc(active)}&sort=updated&limit=200`);
-    list.innerHTML = r.jobs.map((j) => jobRow(j)).join("") || `<div class="empty">Nothing here right now.</div>`;
-    $("#tab-actions").innerHTML = active === "ready" && r.jobs.length
-      ? `<button class="btn primary" id="submit-all">Submit all ${r.jobs.length}</button>` : "";
+    const r = await api(`/api/jobs?status=${enc(active)}&sort=updated&limit=100&offset=${offset}`);
+    const html = r.jobs.map((j) => jobRow(j)).join("");
+    if (reset) list.innerHTML = html || `<div class="empty">Nothing here right now.</div>`;
+    else list.insertAdjacentHTML("beforeend", html);
+    offset += r.jobs.length;
+    $("#more").hidden = offset >= r.total;
+    $("#tab-actions").innerHTML = active === "ready" && r.total
+      ? `<button class="btn primary" id="submit-all">Submit all ${r.total}</button>` : "";
     const sa = $("#submit-all");
     if (sa) sa.onclick = () => guard(async () => {
-      if (!confirm(`Submit ${r.jobs.length} applications now? Each one is filled again and submitted on the employer's site.`)) return;
-      await api("/api/bulk", { method: "POST", body: { ids: r.jobs.map((j) => j.id), action: "submit" } });
-      toast(`Queued ${r.jobs.length} to submit`); load();
+      const all = await api(`/api/jobs?status=ready&sort=updated&limit=500`);
+      if (!confirm(`Submit ${all.total} applications now? Each one is filled again and submitted on the employer's site.`)) return;
+      await api("/api/bulk", { method: "POST", body: { ids: all.jobs.map((j) => j.id), action: "submit" } });
+      toast(`Queued ${all.total} to submit`); load();
     });
   }
+  $("#more").onclick = () => load(false);
   $$(".tabs button", el).forEach((b) => (b.onclick = () => { active = b.dataset.tab; load(); }));
   bindJobList(list, load);
   let last = "";
@@ -490,13 +510,14 @@ async function openJob(id) {
   const missingQs = latest && ["needs_input", "blocked"].includes(j.status) ? latest.missing || [] : [];
   const busy = ["queued", "preparing", "submitting"].includes(j.status) || j.in_queue;
   const direct = DIRECT.has(j.ats);
-  const canFill = !busy && !["applied"].includes(j.status) && j.ats !== "manual";
+  const canFill = !busy && !["applied", "closed"].includes(j.status) && j.ats !== "manual";
+  const co = j.company_info;
   const d = $("#drawer");
   d.innerHTML = `
     <div class="drawer-head">
       <button class="btn sm close" id="d-close" aria-label="Close">✕</button>
       <h2 style="padding-right:40px">${esc(j.title)}</h2>
-      <div class="muted">${esc(j.company)}${j.location ? " · " + esc(j.location) : ""}${payOf(j) ? " · " + esc(payOf(j)) : ""}</div>
+      <div class="muted">${logoImg(j)}${esc(j.company)}${j.location ? " · " + esc(j.location) : ""}${payOf(j) ? " · " + esc(payOf(j)) : ""}</div>
       ${j.posted_at ? `<div class="small" style="margin-top:2px">${postedText(j)} on ${esc(SOURCE_LABELS[j.source] || j.source)}${j.fresh && !DATE_ONLY.includes(j.source)
         ? ` · JobBot found it ${fmtLag(Math.max(0, (new Date(j.first_seen) - new Date(j.posted_at)) / 60000))} later` : ""}</div>` : ""}
       <div class="btn-row" style="margin-top:8px">
@@ -516,9 +537,17 @@ async function openJob(id) {
         ${j.status === "error" && latest ? `<button class="btn" data-act="submit">Retry submit</button>` : ""}
         ${j.status !== "applied" ? `<button class="btn" data-act="mark_applied">I applied myself</button>` : ""}
         ${["new", "ready", "needs_input", "blocked", "error", "manual"].includes(j.status) ? `<button class="btn danger" data-act="skip">Skip</button>` : ""}
-        ${["skipped", "duplicate", "manual"].includes(j.status) ? `<button class="btn" data-act="restore">Move back to New</button>` : ""}
-        ${busy ? `<span class="muted small">Working on it…</span>` : ""}
+        ${["skipped", "duplicate", "manual", "closed"].includes(j.status) ? `<button class="btn" data-act="restore">Move back to New</button>` : ""}
+        ${j.in_queue ? `<button class="btn" data-act="dequeue">Remove from queue</button>` : ""}
+        ${busy && !j.in_queue ? `<span class="muted small">Working on it…</span>` : ""}
       </div>
+      ${co ? `<div class="card"><h3 class="section-title">${logoImg(j)}About ${esc(co.name)}</h3>
+        <div class="small stack" style="gap:4px">
+          <div>Fortune 500 rank <b>#${esc(co.rank)}</b></div>
+          ${co.website ? `<div><a href="${esc(safeUrl(co.website))}" target="_blank" rel="noopener">${esc(co.domain || co.website)} ↗</a></div>` : ""}
+          ${co.careers ? `<div><a href="${esc(safeUrl(co.careers))}" target="_blank" rel="noopener">Careers page ↗</a></div>` : ""}
+          ${(co.systems || []).length ? `<div class="muted">Job system: ${esc(co.systems.join(", "))}</div>` : ""}
+        </div></div>` : ""}
       ${missingQs.length ? `<form class="card" id="missing-form">
         <div class="card-head"><h3>${missingQs.length} question${missingQs.length > 1 ? "s" : ""} need${missingQs.length > 1 ? "" : "s"} you</h3></div>
         <div class="stack">${missingQs.map((m, i) => `<label class="field">${esc(m.label)}

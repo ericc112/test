@@ -79,5 +79,31 @@ class ApplyBatchTests(unittest.TestCase):
             config.use_data_dir(self.tmp.dir)
 
 
+class CoverageTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = TempData()
+
+    def tearDown(self):
+        self.tmp.close()
+
+    def test_coverage_reports_the_wall_and_names_failing_feeds(self):
+        import io
+        from contextlib import redirect_stdout
+        from jobbot import config
+        watched = next(r for r in config.FORTUNE500 if r.get("status") == "watched" and r.get("feeds"))
+        kind, slug = watched["feeds"][0]
+        db.record_source_run(kind, slug, ok=False, count=0, error="HTTP 404")
+        out = self.tmp.dir / "coverage.json"
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cli.cmd_coverage(SimpleNamespace(out=str(out)))
+        report = json.loads(out.read_text())
+        self.assertEqual(report["companies"], len(config.FORTUNE500))
+        self.assertEqual(report["watched"] + report["unsupported"] + report["no_public_feed"], report["companies"])
+        self.assertEqual(report["feeds_failing"], [{"company": watched["name"], "feed": f"{kind}:{slug}",
+                                                    "error": "HTTP 404", "when": report["feeds_failing"][0]["when"]}])
+        self.assertIn(watched["name"], buf.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

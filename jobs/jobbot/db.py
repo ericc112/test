@@ -20,7 +20,7 @@ JOB_FIELDS = (
 # Statuses a job moves through. "Active" ones are owned by the apply worker.
 STATUSES = (
     "new", "skipped", "duplicate", "queued", "preparing", "ready", "needs_input",
-    "blocked", "manual", "submitting", "applied", "unconfirmed", "error",
+    "blocked", "manual", "closed", "submitting", "applied", "unconfirmed", "error",
 )
 
 SCHEMA = """
@@ -209,6 +209,9 @@ SORTS = {
     "newest": "COALESCE(posted_at, first_seen) DESC",
     "updated": "updated_at DESC",
     "company": "company COLLATE NOCASE, title COLLATE NOCASE",
+    # Highest pay first, jobs with no pay listed last. The search/filter clauses are in the same
+    # query's WHERE, so this always orders the filtered list, never the whole table.
+    "pay": "COALESCE(salary_max, salary_min) IS NULL, COALESCE(salary_max, salary_min) DESC, score DESC",
 }
 
 

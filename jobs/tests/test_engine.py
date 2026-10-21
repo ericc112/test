@@ -110,7 +110,7 @@ class EngineTests(unittest.TestCase):
 
     def test_a_closed_posting_is_reported_as_closed(self):
         res = self.run_form("closed_job.html")
-        self.assertEqual(res.result, "manual", res.message)
+        self.assertEqual(res.result, "closed", res.message)
         self.assertIn("no longer up", res.message)
 
     def test_apply_link_in_new_tab_is_followed(self):
@@ -232,6 +232,13 @@ class WorkdayFlowTests(unittest.TestCase):
     def test_submit_signs_in_and_is_confirmed(self):
         res = self.run_wd("submit", "?account=1", overrides={"Which Acme office would you prefer?": "New York"})
         self.assertEqual(res.result, "applied", res.message)
+
+    def test_a_country_code_the_site_filled_in_wrong_is_corrected(self):
+        # A draft (or a resume Workday misread) had Germany as the phone country code: your profile's
+        # United States wins, rather than the site's value going out under your name.
+        res = self.run_wd(query="?account=1&cc=Germany%20(%2B49)", overrides={"Which Acme office would you prefer?": "New York"})
+        self.assertEqual(res.result, "ready", res.message)
+        self.assertEqual(self.answer(res, "country phone code"), "United States")
 
     def test_needs_a_strong_password(self):
         self.assertIn("password", self.run_wd(password="").message.lower())

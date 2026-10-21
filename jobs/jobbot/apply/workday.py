@@ -191,7 +191,10 @@ class WorkdayEngine(Engine):
                 continue  # Workday kept it from your account or resume
             if a.resolved(q) and not self._wd_fill(page, q, a):
                 a.failed = True
-                a.note = a.note or "Couldn't enter this answer automatically"
+                # A failed correction is the dangerous one: the site's own value (a misread resume once put
+                # "Germany" in a country field) would go out under your name, so say what it holds.
+                a.note = a.note or (f"Couldn't change this — the site has “{have}” here. Fix it before you submit"
+                                    if fix else "Couldn't enter this answer automatically")
         return new
 
     REFILL = ("select", "radio", "text", "textarea")

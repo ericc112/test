@@ -165,6 +165,33 @@ def cmd_page_feed(args):
           f"{meta['min_score']} left out. Written to {args.out}")
 
 
+def cmd_coverage(args):
+    """The Fortune 500, honestly: how many companies JobBot reads, why the rest aren't read, and
+    which watched feeds failed on their last run (per company, from the recorded source runs)."""
+    from collections import Counter
+    rows = config.FORTUNE500
+    runs = {(r["source"], r["key"]): r for r in db.source_runs()}
+    watched = [r for r in rows if r.get("status") == "watched"]
+    unsupported = [r for r in rows if r.get("status") == "unsupported"]
+    missing = [r for r in rows if r.get("status") not in ("watched", "unsupported")]
+    failed = [{"company": r["name"], "feed": f"{kind}:{slug}", "error": (runs[(kind, slug)]["error"] or "")[:200],
+               "when": runs[(kind, slug)]["ts"]}
+              for r in watched for kind, slug in r.get("feeds", []) if (kind, slug) in runs and not runs[(kind, slug)]["ok"]]
+    report = {"companies": len(rows), "watched": len(watched), "unsupported": len(unsupported),
+              "unsupported_systems": dict(Counter(s for r in unsupported for s in r.get("systems", []) if s)),
+              "no_public_feed": len(missing), "feeds_failing": failed}
+    print(f"{report['companies']} Fortune 500 companies: {report['watched']} watched, "
+          f"{report['unsupported']} on job systems JobBot can't read yet "
+          f"({', '.join(f'{k} {v}' for k, v in sorted(report['unsupported_systems'].items()))}), "
+          f"{report['no_public_feed']} with no public feed found")
+    for f in failed:
+        print(f"  failing feed: {f['company']} ({f['feed']}) — {f['error']}")
+    if not failed:
+        print("  no failing feeds in the last recorded search")
+    if args.out:
+        _write_json(args.out, report)
+
+
 def cmd_read_listings(args):
     from . import listings
     text = Path(args.text).read_text(encoding="utf-8") if args.text else None
@@ -236,6 +263,9 @@ def main(argv=None):
     s.add_argument("--profile", help="your profile as JSON (scores use your skills and terms)")
     s.add_argument("--min-score", type=int, default=0, help="leave out listings scoring under this (0-100)")
     s.set_defaults(fn=cmd_page_feed)
+    s = sub.add_parser("coverage", help="which Fortune 500 companies JobBot can read, and which feeds are failing")
+    s.add_argument("--out", help="also write the report as JSON here")
+    s.set_defaults(fn=cmd_coverage)
     s = sub.add_parser("read-listings", help="read job listings from screenshots, a screen recording, a PDF or text")
     s.add_argument("files", nargs="*", help="screenshots (PNG, JPG), recordings (MP4, MOV), PDFs, saved pages or text files")
     s.add_argument("--text", help="a text file of listings copied from a job board")

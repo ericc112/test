@@ -28,7 +28,7 @@ class PageFeedTests(unittest.TestCase):
         self.assertEqual((meta["total"], meta["dropped_old"]), (1, 2))
 
     def test_listings_under_the_minimum_score_are_left_out(self):
-        jobs = [job(1, score=85), job(2, score=80), job(3, score=79), job(4, score=90, status="skipped")]
+        jobs = [job(1, score=85), job(2, score=80, title="Buyer Intern - Summer 2027"), job(3, score=79), job(4, score=90, status="skipped")]
         pages, meta = pagefeed.build(jobs, config.DEFAULT_SEARCH, now=NOW, min_score=80)
         self.assertEqual([i["k"] for i in pages[0]["items"]], ["workday:acme:R1", "workday:acme:R2"])
         self.assertEqual((meta["min_score"], meta["below_min_score"]), (80, 1))
@@ -54,13 +54,46 @@ class PageFeedTests(unittest.TestCase):
         self.assertEqual(meta["updated_at"], "2026-10-18T12:00:00+00:00")
 
     def test_pages_and_counts(self):
-        jobs = [job(i, 1, score=i, location="London, United Kingdom" if i % 2 else "Austin, TX") for i in range(130)]
+        jobs = [job(i, 1, score=i, title=f"Supply Chain Intern {i}", location="London, United Kingdom" if i % 2 else "Austin, TX") for i in range(130)]
         pages, meta = pagefeed.build(jobs, config.DEFAULT_SEARCH, now=NOW)
         self.assertEqual([len(p["items"]) for p in pages], [60, 60, 10])
         self.assertEqual([p["n"] for p in pages], [0, 1, 2])
         self.assertEqual(pages[0]["items"][0]["s"], 129)  # best match first
         self.assertEqual((meta["total"], meta["in_reach"], meta["with_pay"], meta["pages"]), (130, 65, 130, 3))
         self.assertEqual(meta["by_source"], {"Workday": 130})
+
+    def test_the_same_role_in_several_places_is_one_card(self):
+        jobs = [job(1, location="Houston, TX", score=90), job(2, location="Dallas, TX", score=80),
+                job(3, location="Houston, TX", score=70), job(4, title="Buyer Intern - Summer 2027", location="Austin, TX")]
+        pages, meta = pagefeed.build(jobs, config.DEFAULT_SEARCH, now=NOW)
+        items = pages[0]["items"]
+        self.assertEqual(len(items), 2)
+        card = next(i for i in items if i.get("n"))
+        self.assertEqual((card["n"], card["locs"]), (3, ["Houston, TX", "Dallas, TX"]))
+        self.assertEqual(meta["grouped"], 2)
+
+    def test_one_company_does_not_fill_the_top_of_best_match(self):
+        jobs = [job(i, title=f"Intern {i}", score=100 - i) for i in range(6)]
+        jobs += [job(10 + i, title=f"Intern {i}", company="Beta", score=50 - i) for i in range(4)]
+        pages, meta = pagefeed.build(jobs, config.DEFAULT_SEARCH, now=NOW)
+        top = [i["c"] for i in pages[0]["items"]]
+        # Acme outscores Beta everywhere, yet after SPREAD_CAP Acme cards in a row a Beta card comes in:
+        # the top of Best match is not one company wall to wall.
+        self.assertEqual(top[:pagefeed.SPREAD_CAP + 1], ["Acme"] * pagefeed.SPREAD_CAP + ["Beta"])
+        self.assertEqual(sorted(top), ["Acme"] * 6 + ["Beta"] * 4)  # nothing is lost, only spread out
+
+    def test_listings_new_since_the_previous_list_are_marked(self):
+        jobs = [job(1), job(2, title="Buyer Intern - Summer 2027")]
+        pages, meta = pagefeed.build(jobs, config.DEFAULT_SEARCH, {"workday:acme:R1": NOW.isoformat(timespec="seconds")}, now=NOW)
+        by_key = {i["k"]: i for i in pages[0]["items"]}
+        self.assertNotIn("nw", by_key["workday:acme:R1"])
+        self.assertTrue(by_key["workday:acme:R2"]["nw"])
+        self.assertEqual(meta["new_count"], 1)
+
+    def test_a_fortune_500_company_carries_its_rank_and_domain(self):
+        pages, meta = pagefeed.build([job(1, company="Amazon")], config.DEFAULT_SEARCH, now=NOW)
+        it = pages[0]["items"][0]
+        self.assertEqual((it["rk"], it["dom"]), (1, "amazon.com"))
 
     def test_first_seen_times_come_from_the_current_list(self):
         with tempfile.TemporaryDirectory() as d:
