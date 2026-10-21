@@ -233,7 +233,9 @@ EMPLOYER_SITES = ("greenhouse", "lever", "ashby", "workday")  # found on the com
 
 def _how_heard(q, c):
     first = c.profile.get("how_heard") or "Job board"
-    rest = ["Job board", "Online job board", "Job posting", "Website", "Company website", "Careers page",
+    # LinkedIn is named on purpose: it is the answer Eric wants wherever the form offers it, and
+    # before this it was only reachable when it happened to be the form's first option.
+    rest = ["LinkedIn", "Job board", "Online job board", "Job posting", "Website", "Company website", "Careers page",
             "Internet search", "Other"]
     if (c.job or {}).get("source") in EMPLOYER_SITES and first == "Job board":
         name = re.split(r",| (inc|llc|ltd|corp)\b", (c.job or {}).get("company") or "", flags=re.I)[0].strip()

@@ -9,7 +9,7 @@ from fastapi import Body, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import __version__, ats, config, db, fields, phone, pipeline, sources
+from . import __version__, ats, companies, config, db, fields, phone, pipeline, sources
 from .textutil import norm, split_list
 from .worker import Worker
 
@@ -97,9 +97,11 @@ def create_app(start_background=True, extra_hosts=(), phone_access=False):
         automation = db.get_setting("automation")
         profile = db.get_setting("profile")
         search = db.get_setting("search")
-        companies = sum(len(v) for v in search.get("companies", {}).values())
+        companies_watched = sum(len(v) for v in search.get("companies", {}).values())
         llm = db.get_setting("llm")
         fresh, fresh_total = db.fresh_jobs(hours=48, limit=8, min_score=automation.get("alert_min_score", 50))
+        for r in fresh:
+            r["company_info"] = companies.for_company(r.get("company"))
         lags = db.detection_lags(days=7)
         return {
             "version": __version__,
@@ -123,7 +125,7 @@ def create_app(start_background=True, extra_hosts=(), phone_access=False):
                 "profile": bool(profile.get("first_name") and profile.get("email")),
                 "resume": bool(profile.get("resume_file")),
                 "keywords": bool(search.get("field") or split_list(search.get("keywords"))),
-                "companies": companies > 0,
+                "companies": companies_watched > 0,
                 "automation": bool(automation.get("enabled")),
                 "ai": bool(llm.get("enabled")),
             },
@@ -170,6 +172,11 @@ def create_app(start_background=True, extra_hosts=(), phone_access=False):
             names.setdefault(kind, {})[slug] = name
         return names
 
+    @app.get("/api/companies")
+    def companies_endpoint():
+        """Fortune 500 entries (rank, website, careers page, logo) keyed by company name."""
+        return {info["name"]: info for info in companies.all_companies().values()}
+
     @app.get("/api/suggestions")
     def suggestions():
         have = db.get_setting("search").get("companies", {})
@@ -186,6 +193,8 @@ def create_app(start_background=True, extra_hosts=(), phone_access=False):
         statuses = [s for s in status.split(",") if s] or None
         rows, total = db.list_jobs(statuses, min_score, q or None, source or None, ats_filter or None,
                                    sort, min(limit, 500), offset, posted_hours=posted_hours or None)
+        for r in rows:  # Fortune 500 rank + logo for the card, when the company is on the list
+            r["company_info"] = companies.for_company(r.get("company"))
         return {"jobs": rows, "total": total}
 
     @app.get("/api/jobs/{job_id:path}/detail")
@@ -193,6 +202,7 @@ def create_app(start_background=True, extra_hosts=(), phone_access=False):
         job = db.get_job(job_id)
         if not job:
             raise HTTPException(404, "No such job")
+        job["company_info"] = companies.for_company(job.get("company"))
         job["attempts"] = db.list_attempts(job_id)[:10]
         q = State.worker.snapshot() if State.worker else {"current": None, "pending": []}
         job["in_queue"] = any(p[0] == job_id for p in q["pending"]) or (q["current"] or [None])[0] == job_id
@@ -207,12 +217,19 @@ def create_app(start_background=True, extra_hosts=(), phone_access=False):
         if action in ("prepare", "submit"):
             if job["status"] == "applied" and not body.get("force"):
                 raise HTTPException(409, "Already applied to this job")
+            if job["status"] == "closed":
+                raise HTTPException(409, "This posting has closed — there's nothing to apply to")
             if action == "submit" and job["status"] in ("submitting",):
                 raise HTTPException(409, "Already submitting")
             worker().enqueue(job_id, action)
             return {"ok": True, "queued": action}
         if action == "skip":
+            if State.worker:
+                State.worker.remove(job_id)  # skipping a queued application cancels it
             db.update_job(job_id, status="skipped", status_note="Skipped by you")
+        elif action == "dequeue":
+            if State.worker:
+                State.worker.remove(job_id)
         elif action == "restore":
             db.update_job(job_id, status="new", status_note=None)
         elif action == "mark_applied":
@@ -251,6 +268,8 @@ def create_app(start_background=True, extra_hosts=(), phone_access=False):
             if action in ("prepare", "submit"):
                 worker().enqueue(job_id, action)
             elif action == "skip":
+                if State.worker:
+                    State.worker.remove(job_id)  # skipping a queued application cancels it
                 db.update_job(job_id, status="skipped", status_note="Skipped by you")
         return {"ok": True, "count": len(ids)}
 
