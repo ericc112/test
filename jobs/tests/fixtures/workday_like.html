@@ -26,7 +26,7 @@ let dropNext = false;
 let signedIn = false, view = "job", step = 0;
 const STEPS = ["Create Account/Sign In", "My Information", "My Experience", "Application Questions", "Voluntary Disclosures", "Review"];
 if (params.get("assess") === "1") STEPS.splice(5, 0, "Take Assessment");  // an employer's assessment test
-const values = { ext: params.get("ext") || "" };  // ext=...: a draft with a bad Phone Extension
+const values = { ext: params.get("ext") || "", cc: params.get("cc") || "" };  // ext/cc: a draft with a bad value left in it
 const app = document.getElementById("app");
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -67,7 +67,8 @@ function render(errors = []) {
             <div data-automation-id="multiselectInputContainer"><input type="text" id="srcq"></div>
             ${values.source ? pill(values.source) : ""}<div id="srcopts" data-automation-id="activeListContainer"></div></div>`
          + `<div class="ff" data-automation-id="formField-countryPhoneCode"><label>Country Phone Code*</label>
-            <div data-automation-id="multiselectInputContainer"><input type="text"></div>${pill("United States of America (+1)")}</div>`
+            <div data-automation-id="multiselectInputContainer"><input type="text" id="ccq"></div>${pill(values.cc || "United States of America (+1)")}
+            <div id="ccopts" data-automation-id="activeListContainer"></div></div>`
          + text("firstName", "First Name", true) + text("lastName", "Last Name", true)
          + listbox("state", "State", true, ["Alabama", "California", "New York", "Texas"])
          + text("phone", "Phone Number", true) + text("ext", "Phone Extension", false) + radio("previousWorker", "Have you previously worked for Acme?", ["Yes", "No"]),
@@ -160,6 +161,8 @@ document.addEventListener("click", (e) => {
   if (t.getAttribute("data-automation-id") === "promptOption") {
     collect();
     const label = t.textContent;
+    if (t.closest("#ccopts")) { values.cc = label; render(); return; }
+    if (t.closest('[data-automation-id="formField-countryPhoneCode"]')) return;  // the chosen pill itself
     if (label === "Job Board") {
       document.getElementById("srcopts").innerHTML = ["LinkedIn", "Indeed", "Handshake"].map((o) => `<div data-automation-id="promptOption">${o}</div>`).join("");
       return;
@@ -176,6 +179,10 @@ document.addEventListener("keydown", (e) => {
     const show = () => (document.getElementById("srcopts").innerHTML = ["Job Board", "Social Media", "Company Website"]
       .map((o) => `<div data-automation-id="promptOption">${o}</div>`).join(""));
     slow ? setTimeout(show, 1000) : show();
+  }
+  if (e.key === "Enter" && e.target.id === "ccq") {
+    document.getElementById("ccopts").innerHTML = ["United States of America (+1)", "Germany (+49)", "United Kingdom (+44)"]
+      .map((o) => `<div data-automation-id="promptOption">${o}</div>`).join("");
   }
 });
 document.addEventListener("change", (e) => {
