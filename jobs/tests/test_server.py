@@ -58,6 +58,39 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(self.client.get(f"/api/jobs/{self.jid}/detail").json()["status"], status)
         self.assertEqual(self.client.post(f"/api/jobs/{self.jid}/action", json={"action": "submit"}).status_code, 409)
 
+    def test_companies_and_logos(self):
+        db.upsert_job(make_job("workday", "amazon:1", "Supply Chain Intern", "Amazon", "https://amazon.com/1", ats="workday"))
+        companies = self.client.get("/api/companies").json()
+        self.assertEqual(companies["Amazon"]["rank"], 1)
+        self.assertIn("amazon.com", companies["Amazon"]["logo"])
+        row = next(j for j in self.client.get("/api/jobs").json()["jobs"] if j["company"] == "Amazon")
+        self.assertEqual(row["company_info"]["rank"], 1)
+        other = next(j for j in self.client.get("/api/jobs").json()["jobs"] if j["company"] == "Acme")
+        self.assertIsNone(other["company_info"])  # not a Fortune 500 company: no logo, no rank, nothing invented
+
+    def test_a_closed_job_cannot_be_filled_and_can_be_restored(self):
+        db.update_job("greenhouse:acme:1", status="closed", status_note="This posting is no longer up")
+        r = self.client.post(f"/api/jobs/{self.jid}/action", json={"action": "prepare"})
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("closed", r.json()["detail"])
+        r = self.client.post(f"/api/jobs/{self.jid}/action", json={"action": "restore"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(db.get_job("greenhouse:acme:1")["status"], "new")
+
+    def test_skipping_a_queued_job_cancels_it(self):
+        from jobbot import server
+        from jobbot.worker import Worker
+        w = Worker()
+        server.State.worker = w
+        try:
+            self.assertTrue(w.enqueue("greenhouse:acme:1", "prepare"))
+            r = self.client.post(f"/api/jobs/{self.jid}/action", json={"action": "skip"})
+            self.assertEqual(r.status_code, 200)
+            self.assertEqual(w.snapshot()["pending"], [])
+            self.assertEqual(db.get_job("greenhouse:acme:1")["status"], "skipped")
+        finally:
+            server.State.worker = None
+
     def test_answers_saved_and_remembered(self):
         r = self.client.post(f"/api/jobs/{self.jid}/answers",
                              json={"answers": {"Why Acme?": "Great team"}, "remember": True, "refill": False})

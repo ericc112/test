@@ -78,6 +78,29 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(job["status"], "manual")
         self.assertIn("Couldn't find this job", job["status_note"])
 
+    def test_a_closed_posting_becomes_a_closed_job(self):
+        jid = self.job("https://careers-acme.icims.com/jobs/1234/intern/job")
+        with self.engine(Engine, Result("closed", "This posting is no longer up (the employer closed it), so nothing was sent.")):
+            Worker().process(jid, "prepare")
+        self.assertEqual(db.get_job(jid)["status"], "closed")
+
+    def test_a_job_skipped_while_queued_is_never_processed(self):
+        jid = self.job("https://careers-acme.icims.com/jobs/1234/intern/job")
+        db.update_job(jid, status="skipped", status_note="Skipped by you")
+        with self.engine(Engine, Result("ready", "Filled.")):
+            Worker().process(jid, "prepare")
+        self.assertEqual(self.used, [])  # removing a queued application cancels it
+        self.assertEqual(db.get_job(jid)["status"], "skipped")
+
+    def test_remove_takes_a_job_out_of_the_queue(self):
+        jid = self.job("https://careers-acme.icims.com/jobs/1234/intern/job")
+        w = Worker()
+        self.assertTrue(w.enqueue(jid, "prepare"))
+        self.assertEqual(db.get_job(jid)["status"], "queued")
+        self.assertEqual(w.remove(jid), 1)
+        self.assertEqual(w.snapshot()["pending"], [])
+        self.assertEqual(db.get_job(jid)["status"], "new")
+
 
 if __name__ == "__main__":
     unittest.main()

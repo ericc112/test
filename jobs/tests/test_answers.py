@@ -84,6 +84,19 @@ class RuleTests(unittest.TestCase):
         a = ans(q("Please tell us how you heard about this opportunity.", "select", ["LinkedIn", "Job Board (Indeed, Monster, etc.)", "Other"]))
         self.assertEqual(a.option, "Job Board (Indeed, Monster, etc.)")
 
+    def test_how_heard_picks_linkedin_when_the_form_offers_it(self):
+        # LinkedIn is a named candidate now, not just a lucky first option: it wins over the
+        # "any option will do" fallback (which takes the first choice, here Indeed).
+        a = ans(q("How did you hear about us?", "select", ["Indeed", "LinkedIn"]))
+        self.assertEqual(a.option, "LinkedIn")
+
+    def test_how_heard_in_your_profile_wins_everywhere(self):
+        me = dict(PROFILE, how_heard="LinkedIn")
+        opts = ["Company Website", "LinkedIn", "Indeed"]
+        self.assertEqual(ans(q("How did you hear about us?", "select", opts), profile=me).option, "LinkedIn")
+        on_site = Context(profile=me, bank=DEFAULT_ANSWERS, job={"source": "greenhouse", "company": "Acme", "title": "Intern"})
+        self.assertEqual(answer(q("How did you hear about us?", "select", opts), on_site).option, "LinkedIn")
+
     def test_how_heard_takes_any_choice_when_none_of_the_usual_ones_is_there(self):
         # Target's Workday list: no website, job board or "Other" choice.
         opts = ["Select One", "Events", "Personal Connection", "Radio/Newspaper", "Signage"]
