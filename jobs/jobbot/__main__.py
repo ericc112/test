@@ -140,7 +140,7 @@ def cmd_apply_batch(args):
         results.append({
             "k": r["k"], "mode": mode, "status": done["status"], "note": done.get("status_note") or "",
             "title": done.get("title") or "", "company": done.get("company") or "", "apply_url": done.get("apply_url") or "",
-            "fields": [{k: f.get(k) for k in ("label", "answer", "source", "note", "required")} for f in (att or {}).get("fields", [])],
+            "fields": [{k: f.get(k) for k in ("label", "answer", "source", "note", "required", "site_value")} for f in (att or {}).get("fields", [])],
             "missing": [{k: m.get(k) for k in ("label", "kind", "options", "note")} for m in (att or {}).get("missing", [])],
             "screenshot": str(config.SHOTS_DIR / shot) if shot else None,
         })
@@ -190,6 +190,90 @@ def cmd_coverage(args):
         print("  no failing feeds in the last recorded search")
     if args.out:
         _write_json(args.out, report)
+
+
+def _board_status(row):
+    """Map a Claude-board status onto a local JobBot status. The local app has no "removed"
+    status: its equivalent is "skipped" (dismissed by you, restorable back to new)."""
+    status = row.get("status")
+    if status == "applied":
+        return "applied"
+    if status == "removed":
+        return "skipped"
+    if status == "applying":
+        return "needs_input" if row.get("needsNote") else "queued"
+    return "new"
+
+
+def cmd_import_board(args):
+    """Import jobs from a Muse board export (the hosted page's JSON: {"jobs": [...], "profile": {...}}).
+
+    Dedupes by URL, then by company+title when a job has no URL. Nothing is fetched and
+    nothing is applied to — this only fills the local database from the board's records."""
+    from .sources import company_key, make_job
+    from .textutil import norm
+
+    data = json.loads(Path(args.file).read_text())
+    rows = data.get("jobs") or []
+    seen_urls, seen_keys = set(), set()
+    for j in db.all_jobs_for_rescore():
+        if j.get("url"):
+            seen_urls.add(j["url"])
+        seen_keys.add((company_key(j.get("company") or ""), norm(j.get("title") or "")))
+    inserted, skipped, by_status = 0, 0, {}
+    for row in rows:
+        url = row.get("url") or None
+        key = (company_key(row.get("company") or ""), norm(row.get("title") or ""))
+        if (url and url in seen_urls) or key in seen_keys:
+            skipped += 1
+            continue
+        status = _board_status(row)
+        notes = []
+        if row.get("term"):
+            notes.append(f"Term: {row['term']}")
+        if row.get("note"):
+            notes.append(str(row["note"]))
+        if row.get("needsNote"):
+            notes.append(str(row["needsNote"]))
+        if status == "applied" and row.get("appliedAt"):
+            notes.append("Imported from Claude board — verified submission")
+        if row.get("status") == "removed":
+            notes.append("Removed on the Claude board")
+        job = make_job("board", str(row.get("id")), row.get("title") or "", row.get("company") or "", url,
+                       location=", ".join(row.get("locations") or []),
+                       pay_text=row.get("payText"), pay_min=row.get("payMin"), pay_max=row.get("payMax"),
+                       posted_at=row.get("postedAt"), status=status,
+                       status_note="; ".join(notes) or None,
+                       applied_at=row.get("appliedAt") if status == "applied" else None)
+        if db.upsert_job(job):
+            inserted += 1
+            by_status[status] = by_status.get(status, 0) + 1
+            if url:
+                seen_urls.add(url)
+            seen_keys.add(key)
+        else:
+            skipped += 1
+    breakdown = ", ".join(f"{n} {s}" for s, n in sorted(by_status.items())) or "none"
+    print(f"Imported {inserted} jobs ({breakdown}); {skipped} already in JobBot, skipped")
+
+
+def cmd_pay(args):
+    """Fill the stored pay fields (pay_text/pay_min/pay_max — the export's payText/payMin/payMax)
+    for jobs that have none, extracting what the posting itself states. Code only, no AI:
+    per-hour pay gets hourly numbers, any other period stays as the written text."""
+    from . import pay
+    jobs = db.all_jobs_for_rescore()
+    have = sum(1 for j in jobs if j.get("pay_text"))
+    filled = 0
+    for job in jobs:
+        if job.get("pay_text"):
+            continue
+        found = pay.for_job(job)
+        if not found:
+            continue
+        db.update_job(job["id"], pay_text=found[0], pay_min=found[1], pay_max=found[2])
+        filled += 1
+    print(f"{filled} jobs got pay ({have} already had it, {len(jobs) - have - filled} still list none)")
 
 
 def cmd_read_listings(args):
@@ -266,6 +350,11 @@ def main(argv=None):
     s = sub.add_parser("coverage", help="which Fortune 500 companies JobBot can read, and which feeds are failing")
     s.add_argument("--out", help="also write the report as JSON here")
     s.set_defaults(fn=cmd_coverage)
+    s = sub.add_parser("pay", help="fill stored pay for jobs that list none, from what the posting states (no AI)")
+    s.set_defaults(fn=cmd_pay)
+    s = sub.add_parser("import-board", help="import jobs from a Muse board export (JSON)")
+    s.add_argument("file", help="the board export file ({\"jobs\": [...], \"profile\": {...}})")
+    s.set_defaults(fn=cmd_import_board)
     s = sub.add_parser("read-listings", help="read job listings from screenshots, a screen recording, a PDF or text")
     s.add_argument("files", nargs="*", help="screenshots (PNG, JPG), recordings (MP4, MOV), PDFs, saved pages or text files")
     s.add_argument("--text", help="a text file of listings copied from a job board")
