@@ -39,6 +39,10 @@ DEFAULT_PROFILE = {
     "current_job_start": "",  # e.g. "August 2024": your current job, for work-experience blocks
     "current_job_location": "",  # e.g. "Houston, TX"
     "current_job_description": "",
+    # Ties to employers, comma-separated company names: "Have you worked here before?" and "Does anyone in your
+    # family work here?" are Yes for these and No everywhere else.
+    "previous_employers": "",  # besides your current employer
+    "family_employers": "",
     "years_experience": "",
     "school": "",
     "degree": "",
