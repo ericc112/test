@@ -578,6 +578,80 @@ def _eeo(field_name):
     return f
 
 
+# Ties to this employer: "Have you worked here before?", "Does anyone in your family work here?" and their "If yes,
+# give the details" follow-ups. Answered from your profile's company lists (No unless this employer is on one),
+# ahead of the answer bank, whose generic "No" can't know about the companies you listed.
+THIS_EMPLOYER = re.compile(r"\b(here|us|our|this (company|organi[sz]ation|employer|firm|bank|business)|the company)\b")
+TIE_WORK = re.compile(r"\b(work(s|ed|ing)?|employ(ed|ee|ees|ment)?|intern(ed|ship)?|co-?op|team members?|associates?|staff|contractor)\b")
+TIE_WHEN = re.compile(r"\b(before|previous(ly)?|in the past|ever|former(ly)?|prior|past|current(ly)?|returning|again)\b")
+TIE_NOT_YOU = re.compile(r"\b(know|anyone|someone|referr\w*|eligib\w*|rehire)\b")  # a referral, or a question for ex-employees
+TIE_RELATIVES = re.compile(r"\b(relatives?|family|related to|spouse|domestic partner|parents?|siblings?|child(ren)?|in-?laws?|"
+                           r"household|personal relationship|relationship with)\b")
+TIE_OTHER = re.compile(r"government|federal|public official|competitor|vendor|supplier|customer|client|auditor|regulator|"
+                       r"staffing agency|recruit(er|ing) (agency|firm)|board of directors")
+FOLLOW_UP = re.compile(r"^(if (yes|so|applicable)\b|if you('ve| (answered|selected|said|checked|chose|indicated|have|had|are|were|did|do|"
+                       r"previously|ever))\b)|"
+                       r"\bif (yes|so|applicable)\W*$")
+TIE_DETAILS = re.compile(r"\b(relationship|relatives?|family|employee'?s name|name of (the |your )?(employee|relative|person)|"
+                         r"employee (id|number)|dates? of employment|employment dates|position held|"
+                         r"(previous|former) (position|title|role|manager|supervisor))\b")
+_CO_SUFFIX = re.compile(r"\b(the|inc|incorporated|llc|ltd|plc|corp|corporation|co|company|companies|group|holdings)\b")
+
+
+def _co(name):
+    return " ".join(words(_CO_SUFFIX.sub(" ", norm(name))))
+
+
+def _listed(names, company, label):
+    """This employer, or one the question names, is on a comma-separated list of companies."""
+    here, text = _co(company), f" {' '.join(words(label))} "
+    for n in filter(None, (_co(x) for x in split_list(names))):
+        if here and (n == here or n.startswith(here + " ") or here.startswith(n + " ")) or f" {n} " in text:
+            return True
+    return False
+
+
+def _tie(label, company):
+    """Which tie a question asks about: "family", "worked" or None."""
+    if TIE_OTHER.search(label) or not TIE_WORK.search(label):
+        return None
+    ours = THIS_EMPLOYER.search(label) or (_co(company) and f" {_co(company)} " in f" {' '.join(words(label))} ")
+    if TIE_RELATIVES.search(label):
+        return "family" if ours or re.search(r"\b(an?|any|current|former) (employees?|team members?|associates?|staff)\b", label) else None
+    if TIE_WHEN.search(label) and not TIE_NOT_YOU.search(label) and \
+            (ours or re.search(r"\bformer\b|\breturning (intern|employee|associate|co-?op)", label)):
+        return "worked"
+    return None
+
+
+def _employer_ties(q, c):
+    if q.section:  # "I currently work here" in a work-experience block is about that job
+        return None
+    label, company, p = norm(q.label), c.job.get("company") or "", c.profile
+    worked = lambda: _listed(", ".join(x for x in (p.get("current_company"), p.get("previous_employers")) if x), company, label)
+    family = lambda: _listed(p.get("family_employers"), company, label)
+    if FOLLOW_UP.search(label):
+        tie = _tie(label, company) or ("family" if TIE_RELATIVES.search(label) else None)
+        if not tie and not TIE_DETAILS.search(label):
+            return None
+        if tie == "family" and family() or tie == "worked" and worked() or not tie and (family() or worked()):
+            return Answer(None, "")  # the details are yours to give (not the answer bank's generic "No")
+        if q.kind in CHOICE:
+            return Answer("N/A", "profile", alternatives=["Not applicable", "None"]) if q.required else Answer(None, "skip")
+        return Answer("N/A", "profile") if q.required else Answer("", "blank")
+    tie = _tie(label, company)
+    if tie == "family":
+        if family():
+            return Answer("Yes", "profile")
+        unsure = next((o for o in q.options if re.search(r"not to my knowledge|not that i('m| am) aware", norm(o))), None)
+        return Answer(unsure or "No", "profile")
+    if tie == "worked":
+        if re.search(r"\bcurrent(ly)?\b", label) and not re.search(r"\b(former(ly)?|before|previous(ly)?|ever|past|prior)\b", label):
+            return Answer(yn(_listed(p.get("current_company"), company, label)), "profile")
+        return Answer(yn(worked()), "profile")
+    return None
+
+
 RULES = [
     # Voluntary self-identification (EEO)
     (r"sexual orientation|transgender|lgbt|first[- ]generation", CHOICE, lambda q, c: Answer("decline", "profile")),
@@ -854,6 +928,9 @@ def answer(q, ctx):
         if banked is not None:
             return resolve_options(q, Answer(banked, "bank"))
         return Answer(None, "human", note="The employer's AI-use policy: read it and agree yourself.")
+    tie = _employer_ties(q, ctx)
+    if tie is not None:
+        return tie if tie.source in ("skip", "blank") else resolve_options(q, tie)
     if key in ctx.planned and ctx.planned[key][0] not in (None, ""):
         a = Answer(ctx.planned[key][0], ctx.planned[key][1])
     else:

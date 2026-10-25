@@ -639,6 +639,8 @@ const PROFILE_SECTIONS = [
     ["address", "Street address", "text", "", "wide"]]],
   ["Links", [["linkedin", "LinkedIn URL", "url"], ["github", "GitHub URL", "url"], ["website", "Website / portfolio", "url"], ["twitter", "X / Twitter", "url"]]],
   ["Experience", [["current_company", "Current or most recent employer"], ["current_title", "Current or most recent title"],
+    ["previous_employers", "Companies you've worked or interned at before", "text", "Comma-separated, besides your current employer. “Have you worked here before?” is Yes for these, No everywhere else.", "wide"],
+    ["family_employers", "Companies where family works or worked", "text", "Comma-separated. “Does anyone in your family work here?” is Yes for these, No everywhere else.", "wide"],
     ["years_experience", "Years of experience", "number"], ["skills", "Skills", "textarea", "Comma-separated. Used to rank jobs, e.g. Excel, financial modeling, Salesforce, SQL, Tableau, PowerPoint."],
     ["summary", "Short professional summary", "textarea", "One or two sentences. Used in your cover letter template.", "wide"]]],
   ["Student", [

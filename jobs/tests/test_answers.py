@@ -340,6 +340,46 @@ class RuleTests(unittest.TestCase):
         self.assertEqual(ans(q("Autofill from resume", "file", required=False)).source, "skip")
 
 
+class EmployerTieTests(unittest.TestCase):
+    """"Have you worked here before?" and "Does anyone in your family work here?", from your profile's company lists."""
+    YN = ["Yes", "No"]
+
+    def a(self, label, kind="select", options=YN, required=True, **profile):
+        r = ans(q(label, kind, options if kind in ("select", "radio") else None, required), profile=dict(PROFILE, **profile))
+        return r.option if r.option not in (None, []) else r.value
+
+    def test_worked_here_is_no_unless_you_listed_the_company(self):
+        for label in ["Have you worked here before?", "Did you previously work for us?", "Previous employment with Acme?",
+                      "Former Acme team member?", "Have you interned with us before?", "Are you a returning intern?",
+                      "Have you ever been an employee of Acme Corporation, including as an intern or contractor?"]:
+            self.assertEqual(self.a(label), "No", label)
+            self.assertEqual(self.a(label, previous_employers="Initech, Acme Inc."), "Yes", label)
+        self.assertEqual(self.a("Do you currently work for Acme?", previous_employers="Acme"), "No")  # worked there, not now
+        self.assertEqual(self.a("Do you currently work for Acme?", current_company="Acme"), "Yes")
+
+    def test_family_is_no_unless_you_listed_the_company(self):
+        for label in ["Does anyone in your family work here or used to?", "Are you related to any current Acme employee?",
+                      "Is your spouse, parent, sibling or child employed by Acme?",
+                      "Do you have a relative or close personal relationship with anyone who works at Acme?"]:
+            self.assertEqual(self.a(label), "No", label)
+            self.assertEqual(self.a(label, family_employers="Acme"), "Yes", label)
+        # The answer you gave before, where the form offers it.
+        self.assertEqual(self.a("Are any of your relatives employed here?", options=["Yes", "No", "Not to my knowledge"]),
+                         "Not to my knowledge")
+
+    def test_if_yes_follow_ups(self):
+        self.assertEqual(self.a("If yes, please provide the name and relationship of your relative", "text"), "N/A")
+        self.assertEqual(self.a("If you have previously worked at Acme, please list dates and position", "text", required=False), "")
+        # When it does apply, the details are yours: not the answer bank's "No".
+        self.assertIsNone(self.a("If you have previously worked at Acme, please list dates and position", "text",
+                                 previous_employers="Acme"))
+
+    def test_other_questions_are_left_alone(self):
+        for label in ["Are you currently employed?", "What is your family name?", "Do you have a relative who is a government official?",
+                      "Is any member of your family employed by a competitor of Acme?", "If yes, please explain."]:
+            self.assertIsNone(self.a(label), label)
+
+
 STUDENT = dict(PROFILE, gpa="3.62", expected_graduation="May 2028", graduation_year="", school_year="Junior",
                currently_enrolled=True, internship_terms="Summer 2027", minor="Economics")
 
