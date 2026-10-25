@@ -10,6 +10,7 @@ Anything still unanswered and required is reported as missing, never guessed.
 import re
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field, replace
+import calendar
 from datetime import date, timedelta
 
 from .textutil import contains_phrase, norm, pick_option, split_list, words
@@ -21,7 +22,7 @@ ANY = TEXT | CHOICE
 # Employers who explicitly ask for a human. JobBot leaves these to you.
 HUMAN_ONLY = re.compile(
     r"not an? (ro)?bot|auto-?apply|auto-?applying|automated (tool|application|submission|software)|"
-    r"prove (that )?you(?:'re| are) (a )?human|written (by|without)|without (the )?(use of |using )?(ai|chatgpt|llm)|"
+    r"prove (that )?you(?:'re| are) (a )?human|written (by|without)|(writ\w*|answer\w*|respon\w*|complet\w*) .{0,30}without (the )?(use of |using )?(ai|chatgpt|llm)|"
     r"security code|verification code|figure out the|decode (this|the)|encoded in a|solve (this|the following) (puzzle|challenge)",
     re.I,
 )
@@ -303,6 +304,18 @@ def _graduation(q, c):
             end = (int(m.group(4)), names.index(m.group(3)[:3].lower()) + 1)
             if year and start <= (int(year), month) <= end:
                 return Answer(o, "profile")
+    # Windows: "April-June 2027", "Before April 2026", "After December 2027".
+    mon = lambda s: [n[:3] for n in MONTHS].index(s[:3]) + 1 if s[:3] in [n[:3] for n in MONTHS] else None
+    for o in q.options if year else []:
+        no, have = norm(o), (int(year), month)
+        w = re.match(r"([a-z]+)\s*(?:-|to|through)\s*([a-z]+)\s+(\d{4})$", no)
+        if w and mon(w.group(1)) and mon(w.group(2)) and (int(w.group(3)), mon(w.group(1))) <= have <= (int(w.group(3)), mon(w.group(2))):
+            return Answer(o, "profile")
+        b = re.match(r"(before|after|later than)\s+([a-z]+)\s+(\d{4})$", no)
+        if b and mon(b.group(2)):
+            edge = (int(b.group(3)), mon(b.group(2)))
+            if (have < edge) if b.group(1) == "before" else (have > edge):
+                return Answer(o, "profile")
     season = "Spring" if month <= 5 else "Summer" if month <= 8 else "Fall"
     first = exp or year
     # Most specific first: a bare year would match "Fall 2028" as happily as "Spring 2028".
@@ -311,7 +324,7 @@ def _graduation(q, c):
 
 
 def _school_year(q, c):
-    y = (c.profile.get("school_year") or "").strip()
+    y = (c.profile.get("school_year") or "").strip() or _year_from_graduation(c)
     if not y:
         return None
     alts = {"freshman": ["First year", "1st year"], "sophomore": ["Second year", "2nd year"],
@@ -320,18 +333,35 @@ def _school_year(q, c):
     return Answer(y, "profile", alternatives=alts.get(y.lower(), []))
 
 
+def _year_from_graduation(c):
+    """Year in school when your profile only says when you graduate: May 2027 in the 2026-27 school year is Senior."""
+    exp = c.profile.get("expected_graduation") or ""
+    year = re.findall(r"20\d\d", exp)
+    if not year or not c.profile.get("currently_enrolled", True) or re.search(r"master|mba|ph\.?d", norm(c.profile.get("degree") or "")):
+        return ""
+    month = next((i + 1 for i, m in enumerate(MONTHS) if m[:3] in exp.lower()), 5)
+    school_year = lambda y, m: y if m >= 8 else y - 1  # a school year starts in August
+    today = date.today()
+    left = school_year(int(year[0]), month) - school_year(today.year, today.month)
+    return ["Senior", "Junior", "Sophomore", "Freshman"][left] if 0 <= left <= 3 else ""
+
+
 ENROLLED_IN = re.compile(r"\b(enrolled|pursuing|studying)\b.{0,60}?\b(in|toward)\b(.{3,160}?)\b(degree program|program|major)\b")
-NOT_A_FIELD = {"undergraduate", "graduate", "related", "degree", "program", "discipline", "disciplines", "pending", "enrollment",
-               "master", "masters", "bachelor", "bachelors", "currently", "accredited", "university", "college", "school", "full"}
+PROGRAM_IN = re.compile(r"\b(degree|program|major)s? (in|of) (.{3,160})")
+NOT_A_FIELD = {"undergraduate", "graduate", "graduated", "related", "degree", "degreed", "program", "discipline", "disciplines", "pending",
+               "enrollment", "master", "masters", "bachelor", "bachelors", "currently", "accredited", "university", "college", "school",
+               "full", "recent", "from", "four", "year", "time", "part", "similar", "field", "fields", "other", "such"}
 
 
 def _enrolled(q, c):
-    m = ENROLLED_IN.search(norm(q.label))
-    if m:  # "enrolled in a Human Resources Development-related degree program": only yes if that's your field
-        field_words = [w for w in words(m.group(3)) if len(w) > 3 and w not in NOT_A_FIELD]
-        mine = norm(" ".join(str(c.profile.get(k) or "") for k in ("discipline", "minor", "degree", "degree_type")))
-        if field_words and not any(w in mine for w in field_words):
-            return None
+    label = norm(q.label)
+    # "enrolled in a Human Resources Development-related degree program", "a degree program in Data Science, Statistics…":
+    # yes only if that's your field.
+    named = " ".join(m.group(3) for m in (ENROLLED_IN.search(label), PROGRAM_IN.search(label)) if m)
+    field_words = [w for w in words(named) if len(w) > 3 and w not in NOT_A_FIELD]
+    mine = norm(" ".join(str(c.profile.get(k) or "") for k in ("discipline", "minor", "degree", "degree_type")))
+    if field_words and not any(w in mine for w in field_words):
+        return "No" if mine.strip() else None
     return yn(c.profile.get("currently_enrolled"))
 
 
@@ -373,7 +403,7 @@ def _discipline(q, c):
     major = (c.profile.get("discipline") or "").strip()
     if not major:
         return None
-    if q.kind not in ("select", "combobox"):
+    if q.kind not in ("select", "combobox", "radio", "checkboxes"):
         return major
     # Short major lists ("Business", "Business Administration"...) often lack the exact major.
     # A business major then falls back to the broad business option, never to an unrelated one.
@@ -386,7 +416,8 @@ def _relevant_experience(q, c):
     if not (c.profile.get("current_title") or c.profile.get("current_company")):
         return None
     yes = [o for o in q.options if norm(o).startswith("yes")]
-    other = next((o for o in yes if re.search(r"\b(another|other) (company|employer|organi[sz]ation)", o, re.I)), None)
+    other = next((o for o in yes if re.search(r"\b(another|other) (company|employer|organi[sz]ation)|\boutside\b|\bexternal", o, re.I)
+                  and not re.search(r"\bboth\b", o, re.I)), None)
     return Answer(other, "profile", option=other) if other else ("Yes" if not yes or len(yes) == 1 else None)
 
 
@@ -426,8 +457,10 @@ def _skills(q, c):
 
 def _role_type(q, c):
     """"Which type of role are you applying for?": an internship when the posting is one."""
-    if re.search(r"\bintern(ship)?\b|co-?op", (c.job or {}).get("title") or "", re.I):
-        return ["Internship", "Intern", "Co-op", "Student"]
+    title = (c.job or {}).get("title") or ""
+    if re.search(r"\bintern(ship)?\b|co-?op", title, re.I):
+        season = re.search(r"summer|fall|spring|winter", f"{title} {c.profile.get('internship_terms') or ''}", re.I)
+        return ([f"{season.group(0).capitalize()} Internship"] if season else []) + ["Internship", "Intern", "Co-op", "Student"]
     return ["Full Time", "Full-time", "Regular"]
 
 
@@ -480,6 +513,10 @@ def _sponsorship(q, c):
         return yn(bool(c.profile.get("work_authorized")) and not c.profile.get("needs_sponsorship"))
     if c.profile.get("needs_sponsorship"):
         return "Yes"
+    if _us_person(c):  # "N/A – I am a US citizen, US national, legal permanent resident…"
+        mine = [o for o in q.options or [] if CITIZEN.search(o) and not HOLDS_TEMPORARY.search(o) and not re.match(r"\s*yes\b", o, re.I)]
+        if mine:
+            return Answer(mine[0], "profile")
     nos = [o for o in q.options or [] if re.match(r"\s*no\b", o, re.I)]
     if not nos:  # "I do NOT need sponsorship to work in the US"
         nos = [o for o in q.options or [] if re.search(r"\b(do not|don't|will not|won't) (need|require)|\bnot need\b|without sponsorship", o, re.I)]
@@ -578,17 +615,202 @@ def _eeo(field_name):
     return f
 
 
+# Text messages, newsletters and other marketing: your Marketing opt-in.
+MARKETING = re.compile(r"text messages?|\bsms\b|whatsapp|newsletter|marketing|promotional|job alerts|talent (community|network|pool)|"
+                       r"(receive|get) (future )?(updates|communications|news|emails)")
+
+
+# --------------------------------------------------------------------- common screening questions
+# Places: "Houston, TX", "US-TX-HOUSTON-2001 RANKIN ROAD", "Massachusetts", and the states they're in.
+
+def _codes(text, with_codes=True):
+    """The U.S. states a place names, as codes: "Houston, TX" → {"TX"}, "Massachusetts" → {"MA"}."""
+    found = {code for name, code in US_STATES.items() if f" {name} " in f" {norm(text)} "}
+    if with_codes:  # "Houston, TX", "US-TX-HOUSTON": capital codes only, so "in" or "or" never reads as a state
+        found |= set(re.findall(r"(?:^|[\s,(-])([A-Z]{2})(?=$|[\s,)-])", text or "")) & set(US_STATES.values())
+    return found
+
+
+def _at(option, text, metro=()):
+    """An option ("Seattle, WA", "Massachusetts") is where text says: its city, or the state when it names no city."""
+    city = norm(option.split(",")[0]) if "," in option else ""
+    if city:
+        return len(city) >= 3 and (f" {city} " in f" {norm(text)} " or city in metro)
+    codes = _codes(option)
+    return bool(codes and codes & _codes(text))
+
+
+ANYWHERE = re.compile(r"no (strong )?preference|do not have a preference|don'?t have a preference|open to (all|any)|any (location|cohort|team|of)|"
+                      r"anywhere|i can join any|no specific|flexible")
+AREA_GROUPS = [{"sourcing", "procurement", "purchasing", "supply", "chain", "logistics", "operations", "planning", "inventory", "gps"},
+               {"finance", "financial", "accounting", "audit", "tax", "treasury", "fp&a", "corporate"},
+               {"marketing", "communications", "brand", "advertising", "media", "content"},
+               {"sales", "commercial", "business development", "account", "customer"},
+               {"hr", "human", "resources", "people", "talent", "learning", "development"},
+               {"analytics", "data", "intelligence", "insights", "digital", "technology"}]
+_GENERIC = {"intern", "interns", "internship", "internships", "summer", "spring", "fall", "winter", "program", "programs", "co-op",
+            "coop", "opportunities", "opportunity", "student", "students", "undergraduate", "graduate", "analyst", "associate",
+            "role", "team", "the", "and", "for", "with", "of", "&", "-", "2026", "2027", "2028", "year", "round"}
+
+
+def _area_words(text):
+    ws = {w for w in words(text) if len(w) > 2 and w not in _GENERIC}
+    return ws | {w for g in AREA_GROUPS if ws & g for w in g}
+
+
+def _preference(q, c):
+    """Choices among places, teams or programs: "What is your 1st location preference?", "Select ALL areas in which you
+    would accept an offer", "Please select your main area of interest", "Which internship cohort do you prefer?".
+    Places: this job's, then near you, then "no preference". Areas: the ones that fit this job and your major."""
+    if not q.options:
+        return None
+    label, opts = norm(q.label), [o for o in q.options if norm(o) not in ("", "select one")]
+    anywhere = [o for o in opts if ANYWHERE.search(norm(o))]
+    many = q.kind == "checkboxes"
+    nth = re.search(r"\b(2nd|second|secondary)\b|\b(location|choice|preference|option)\s*#?\s*2\b", label) and 2 or \
+        re.search(r"\b(3rd|third)\b|\b(location|choice|preference|option)\s*#?\s*3\b", label) and 3 or \
+        re.search(r"\b(4th|fourth)\b|\b(location|choice|preference|option)\s*#?\s*4\b", label) and 4 or 1
+    if nth > 1 and anywhere and not re.search(r"area|interest", label):
+        return Answer(anywhere[0], "profile")
+    styles = [o for o in opts if re.search(r"\b(on-?site|remote|hybrid|in[- ]office|virtual)\b", norm(o))]
+    if len(styles) >= 2 and len(styles) >= len(opts) - 1:
+        want = c.profile.get("remote_preference") or "any"
+        fit = styles if want == "any" else [o for o in styles if re.search({"onsite": r"on-?site|in[- ]office", "remote": r"remote|virtual",
+                                                                            "hybrid": r"hybrid"}.get(want, "$^"), norm(o))]
+        return Answer(fit if many else fit[0], "profile") if fit else None
+    places = [o for o in opts if o not in anywhere and (_codes(o) or re.search(r"[A-Za-z], [A-Z]{2}\b", o))]
+    if len(places) >= max(2, len(opts) // 2):
+        j, p = c.job or {}, c.profile
+        job = f"{j.get('location') or ''} {j.get('title') or ''}"
+        home = f"{p.get('city') or ''}, {p.get('state') or ''}"
+        metro = next((m for m in METROS if norm(p.get("city") or "") in m), set())
+        here = [o for o in places if _at(o, job)]
+        near = [o for o in places if o not in here and (_at(o, home, metro) or _codes(o, False) & _codes(home))]
+        if many:
+            pick = here + near + anywhere[:1]
+            return Answer(pick, "profile") if pick else None
+        ranked = here + near + anywhere  # your 2nd choice is the next place, never the 1st again
+        return Answer(ranked[nth - 1], "profile") if len(ranked) >= nth else None
+    # Areas, teams, brands, programs.
+    want = _area_words(f"{(c.job or {}).get('title') or ''} {c.profile.get('discipline') or ''}")
+    scored = sorted(((len(_area_words(o) & want), i, o) for i, o in enumerate(opts) if o not in anywhere), key=lambda t: (-t[0], t[1]))
+    good = [o for n, _, o in scored if n]
+    if many:
+        good = [o for n, _, o in scored if n and n == scored[0][0]]
+    if not good:
+        return Answer(anywhere[0], "profile") if anywhere else None
+    if nth > 1:
+        return Answer(good[nth - 1], "profile") if len(good) >= nth else None
+    return Answer(good if many else good[0], "profile")
+
+
+def _resident(q, c):
+    """"Are you a California resident?", "Do you reside in one of the following states?": from your state."""
+    mine = _codes(c.profile.get("state") or "")
+    if not mine:
+        return None
+    if q.options and any(_codes(o) for o in q.options):
+        hit = next((o for o in q.options if mine & _codes(o)), None)
+        return hit or next((o for o in q.options if re.match(r"none|no\b|not applicable", norm(o))), None)
+    asked = _codes(q.label, False)
+    return yn(bool(mine & asked)) if asked else None
+
+
+EMPLOYER_AI = re.compile(r"\b(we|company|employer|recruit\w*|talent acquisition|hiring team)\b.{0,40}\b(may|will|uses?|using)\b|"
+                         r"\b\w+ (may|will) use (ai|artificial|machine|automated)|use of (ai|artificial|machine learning|automated)|"
+                         r"\b(ai|automated)\b.{0,30}\b(assess|analy[sz]e|evaluate|review|screen|match|process|assist)|hiredscore|"
+                         r"consent to the (use|processing)", re.I)
+OWN_AI = re.compile(r"\b(did|have) you (use|used)\b|you used|your (own )?use of|how you use|written (by|without)|generated|"
+                    r"(writ\w*|answer\w*|respon\w*|complet\w*|prepar\w*) .{0,30}without (the )?(use|help|assistance)|i did not use|\battest", re.I)
+
+
+def _ai_screening(q):
+    """The employer's own AI screening ("We may use AI tools to assess your application", HiredScore): you agree to
+    it. Never a statement about your own use of AI, which stays yours."""
+    if not q.options or not EMPLOYER_AI.search(q.label or "") or OWN_AI.search(q.label or ""):
+        return None
+    pick = pick_option("Yes", q.options)
+    return Answer(pick, "profile", option=pick, note="You agree to employers' AI screening") if pick else None
+
+
+def _available(q, c):
+    """"What days/times are you available?", flexible shifts, working through the school year: available."""
+    anytime = next((o for o in q.options if re.search(r"\bany ?time\b|\ball (days|times|shifts)\b|fully (available|flexible)", norm(o))), None)
+    return Answer(anytime, "profile") if anytime else "Yes"
+
+
+def _travel_help(q, c):
+    """"Would you require travel assistance to interview in our McLean, VA office?": yes when it's in another state."""
+    home = _codes(c.profile.get("state") or "")
+    there = _codes(q.label) or _codes((c.job or {}).get("location") or "")
+    return yn(not (home & there)) if home and there else None
+
+
+def _english(q, c):
+    for level in (r"native", r"fluent|bilingual|full professional", r"advanced|expert"):
+        best = next((o for o in q.options if re.search(level, norm(o))), None)
+        if best:
+            return Answer(best, "profile")
+    return "Yes"
+
+
+def _other_languages(q, c):
+    """"Are you proficient in any other languages below?": the ones in your profile, else "None of the above"."""
+    langs = [l for l in split_list(c.profile.get("languages") or "English") if norm(l) != "english"]
+    if not q.options:
+        return ", ".join(langs) or None
+    hits = [o for o in q.options if any(norm(l) in norm(o) for l in langs)]
+    none = next((o for o in q.options if re.match(r"none|n/?a\b|not applicable|no\b", norm(o))), None)
+    if q.kind == "checkboxes":
+        return Answer(hits or ([none] if none else []), "profile") if hits or none else None
+    if all(norm(o) in ("yes", "no", "select one") for o in q.options):
+        return yn(bool(langs))
+    return Answer((hits or [none])[0], "profile") if hits or none else None
+
+
+def _tools(q, c):
+    """"Which of the following programs have you used?": the ones among your skills, else "None of the above"."""
+    skills = norm(" ".join(_skills(q, c) or []))
+    hits = [o for o in q.options if norm(o) not in ("", "select one") and
+            (_has(o, skills) or any(_has(s, norm(o)) for s in split_list(c.profile.get("skills")) if len(norm(s)) > 2))]
+    if not hits:
+        none = next((o for o in q.options if re.match(r"none|n/?a\b|not applicable", norm(o))), None)
+        return Answer([none] if q.kind == "checkboxes" else none, "profile") if none else None
+    return Answer(hits if q.kind == "checkboxes" else hits[0], "profile")
+
+
+_MON = r"(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?"
+PROGRAM_DATES = re.compile(rf"\b{_MON}(?:\s+(\d{{1,2}}))?(?:,?\s+(20\d\d))?\s*(?:-|–|—|to|through|until)\s*{_MON}(?:\s+(\d{{1,2}}))?,?\s+(20\d\d)", re.I)
+
+
+def _last_day(q, c):
+    """"What is your last available work date?": the end of the program the posting gives ("January – July 2027",
+    "May 17, 2027 to August 6, 2027"): you're available for all of it."""
+    m = PROGRAM_DATES.search((c.job or {}).get("description") or "")
+    if not m:
+        return None
+    month = [n[:3] for n in MONTHS].index(m.group(4)[:3].lower()) + 1
+    year = int(m.group(6))
+    day = int(m.group(5)) if m.group(5) else calendar.monthrange(year, month)[1]
+    return f"{year}-{month:02d}-{day:02d}" if q.input_type in ("date", "wd_date") or q.kind not in TEXT else f"{month:02d}/{day:02d}/{year}"
+
+
+def _military(q, c):
+    return "No" if re.search(r"\bnot\b", c.profile.get("eeo_veteran") or "", re.I) else None
+
+
 # Ties to this employer: "Have you worked here before?", "Does anyone in your family work here?" and their "If yes,
 # give the details" follow-ups. Answered from your profile's company lists (No unless this employer is on one),
 # ahead of the answer bank, whose generic "No" can't know about the companies you listed.
 THIS_EMPLOYER = re.compile(r"\b(here|us|our|this (company|organi[sz]ation|employer|firm|bank|business)|the company)\b")
 TIE_WORK = re.compile(r"\b(work(s|ed|ing)?|employ(ed|ee|ees|ment)?|intern(ed|ship)?|co-?op|team members?|associates?|staff|contractor)\b")
-TIE_WHEN = re.compile(r"\b(before|previous(ly)?|in the past|ever|former(ly)?|prior|past|current(ly)?|returning|again)\b")
+TIE_WHEN = re.compile(r"\b(before|previous(ly)?|in the past|ever|former(ly)?|prior|past|current(ly)?|returning|again|at any time)\b")
 TIE_NOT_YOU = re.compile(r"\b(know|anyone|someone|referr\w*|eligib\w*|rehire)\b")  # a referral, or a question for ex-employees
 TIE_RELATIVES = re.compile(r"\b(relatives?|family|related to|spouse|domestic partner|parents?|siblings?|child(ren)?|in-?laws?|"
                            r"household|personal relationship|relationship with)\b")
-TIE_OTHER = re.compile(r"government|federal|public official|competitor|vendor|supplier|customer|client|auditor|regulator|"
-                       r"staffing agency|recruit(er|ing) (agency|firm)|board of directors")
+# Questions about another organization: a government, a competitor, an auditor. ("Supplier for General Motors" is a way
+# of having worked for GM, so suppliers and vendors aren't on this list.)
+TIE_OTHER = re.compile(r"government|federal|public official|competitor|client|auditor|regulator|staffing agency|recruit(er|ing) (agency|firm)")
 FOLLOW_UP = re.compile(r"^(if (yes|so|applicable)\b|if you('ve| (answered|selected|said|checked|chose|indicated|have|had|are|were|did|do|"
                        r"previously|ever))\b)|"
                        r"\bif (yes|so|applicable)\W*$")
@@ -619,7 +841,7 @@ def _tie(label, company):
     if TIE_RELATIVES.search(label):
         return "family" if ours or re.search(r"\b(an?|any|current|former) (employees?|team members?|associates?|staff)\b", label) else None
     if TIE_WHEN.search(label) and not TIE_NOT_YOU.search(label) and \
-            (ours or re.search(r"\bformer\b|\breturning (intern|employee|associate|co-?op)", label)):
+            (ours or re.search(r"\bformer\b|\breturning (intern|employee|associate|co-?op)|\bprevious employee", label)):
         return "worked"
     return None
 
@@ -639,6 +861,11 @@ def _employer_ties(q, c):
         if q.kind in CHOICE:
             return Answer("N/A", "profile", alternatives=["Not applicable", "None"]) if q.required else Answer(None, "skip")
         return Answer("N/A", "profile") if q.required else Answer("", "blank")
+    kin = TIE_RELATIVES.search(label)
+    if kin and kin.start() < 150 and TIE_OTHER.search(label) and TIE_WORK.search(label) and not FOLLOW_UP.search(label):
+        # A relative in government, at a client or a competitor: none that your profile knows of.
+        unsure = next((o for o in q.options if re.search(r"not to my knowledge|not that i('m| am) aware", norm(o))), None)
+        return Answer(unsure or "No", "profile")
     tie = _tie(label, company)
     if tie == "family":
         if family():
@@ -659,11 +886,17 @@ RULES = [
     (r"hispanic|latin[oax]", ANY, _eeo("eeo_hispanic")),
     (r"\brace\b|ethnicit", ANY, _eeo("eeo_race")),
     (r"veteran", ANY, _veteran),
+    (r"military (training|certification|experience|service)|served in the (military|armed forces)|armed forces", CHOICE, _military),
     (r"disabilit", ANY, _disability),
     (r"check one of the boxes|select one of the (boxes|options) below", CHOICE, _check_one),
-    # Messages and consent
-    (r"text messages?|\bsms\b|whatsapp|newsletter|marketing|promotional|job alerts|talent (community|network|pool)|"
-     r"(receive|get) (future )?(updates|communications|news|emails)", CHOICE, lambda q, c: yn(c.profile.get("marketing_opt_in"))),
+    # Messages and consent. Being contacted about other jobs is part of looking for one; marketing isn't.
+    (r"^(?!.*\b(text messages?|sms|whatsapp)\b).*(contact you (about|regarding|for|with) .{0,40}(jobs?|careers?|employment|opportunit)|"
+     r"future (job |career |employment )?opportunit|"
+     r"consider(ed)? (you |me )?for (other|future|additional|similar) (open )?(positions|roles|opportunities|openings|jobs)|career tips)",
+     CHOICE, lambda q, c: "Yes"),
+    (r"(contact|text|reach) you (about|regarding|on) (your|this) (application|candidacy)|"
+     r"text messages? (about|regarding) (your|this|the) (application|role|position)", CHOICE, lambda q, c: "Yes"),
+    (MARKETING.pattern, CHOICE, lambda q, c: yn(c.profile.get("marketing_opt_in"))),
     # Export control, before sponsorship: these quote the "Immigration and Nationality Act".
     (r"citizen or national of the united states|\bu\.? ?s\.? lawful permanent resident|\bu\.? ?s\.? person\b|"
      r"citizen of any of the following countries|countries in which you (currently )?hold citizenship", ANY, _export_control),
@@ -678,17 +911,39 @@ RULES = [
      r"legally (able|permitted|allowed|eligible)",
      ANY, _authorized),
     (r"sponsor|\bvisa\b|h-?1b|work permit|immigration", ANY, lambda q, c: yn(c.profile.get("needs_sponsorship"))),
-    # Where and how you'll work
+    # Where and how you'll work. "What type of work are you looking for? Most positions require you to be on-site…" first.
+    (r"(type|kind) of (role|position|job|employment|work|internship|opportunity) (are )?you|^(role|position|employment|job) type$",
+     CHOICE, _role_type),
+    (r"(programs?|software|tools?|applications?|systems?|technolog\w*)\b.{0,60}\b(experience|proficien\w*|familiar|used|using|skilled|comfortable)|"
+     r"(experience|proficien\w*|familiar\w*) (with|using|in) (the following|any of the following|these)", {"checkboxes", "select", "radio"}, _tools),
     (r"relocat", CHOICE | {"text"}, _relocate),
     (DISTANCE.pattern, CHOICE, _near),
+    (r"\b(are you|currently|anticipate) .{0,30}\b(resident|residing)\b|\bresident of\b|\b(live|reside) in (one of )?(the following|any of)",
+     ANY, _resident),
+    (r"(days|times|hours|shifts?|schedule)\b.{0,40}\bavailab|availab\w* .{0,30}\b(days|times|weekends?|nights?|shifts|evenings?)\b|"
+     r"flexible (shifts?|hours|schedule)|work (weekends|nights|evenings|overtime|flexible)|work continuously|"
+     r"(throughout|during) the (school|academic) year|part[- ]time .{0,40}(classes|school|semester)", CHOICE, _available),
+    (r"travel (assistance|reimbursement|accommodation)|(require|need) (any )?(assistance|help) .{0,20}travel", CHOICE, _travel_help),
+    (r"interested in (a |our |the )?rotation", CHOICE, lambda q, c: "Yes"),
+    (r"(locations?|offices?|sites?|cit(y|ies)|areas?|regions?|markets?|cohorts?|teams?|brands?|business (groups?|units?)|"
+     r"functions?|rotations?|tracks?)\b.{0,60}\b(prefer\w*|interest\w*|consider\w*|willing|accept)\b|"
+     r"\b(prefer\w*|interest\w*)\b.{0,30}\b(locations?|offices?|cohorts?|areas?|teams?|brands?|programs?|rotations?)\b|"
+     r"(1st|2nd|3rd|first|second|third|main|primary|secondary) (location|choice|area)|which rotation|\bpreferences?\b",
+     CHOICE | {"text"}, _preference),
+    # Internships and co-ops you've done: "Yes, I have internship/co-op experience OUTSIDE of J&J".
+    (r"(previously|currently) work(ed|ing)? .{0,40}\b(intern|co-?op)\b|(internship|co-?op) (or co-?op |or internship )?experience",
+     CHOICE, _relevant_experience),
     (r"work (remotely|from home|from a remote)|plan to work remote|intend to work remote|remote work",
      CHOICE, lambda q, c: yn(c.profile.get("remote_preference") in ("remote", "any"))),
-    (r"in[- ]office|on[- ]?site|hybrid|commut|days (a|per) week|(come|coming) (in|into) (the|our) office",
+    (r"in[- ]office|in the office|on[- ]?site|hybrid|commut|days (a|per) week|(come|coming) (in|into) (the|our) office",
      CHOICE, lambda q, c: yn(c.profile.get("remote_preference") in ("hybrid", "onsite", "any"))),
-    (r"(previously|ever|already) applied", CHOICE, lambda q, c: "No"),
+    (r"(previously|ever|already) (applied|interviewed)|interviewed (with|at) .{0,30}before|(participated|been) in .{0,30}recruit(ment|ing) "
+     r"process|attended .{0,40}(recruiting|career|info(rmation)?) (events?|sessions?|fairs?)", CHOICE, lambda q, c: "No"),
     # Pay and timing
-    (r"salary|compensation|pay (range|expectation)|desired (pay|rate)|expected (pay|rate|annual)|rate expectation",
-     ANY, _p("salary_expectation")),
+    (r"salary|compensation|pay (range|expectation)|(desired|minimum|expected) (pay|rate|annual)|rate expectation",
+     ANY, lambda q, c: c.profile.get("salary_expectation") or _bank_lookup("salary expectation", c.bank)),
+    (r"last (available|possible) (work(ing)? )?(day|date)|(end|finish|last) date .{0,30}availab|available (to work )?(until|through)|"
+     r"latest (end|finish|departure) date", ANY, _last_day),
     (r"start date|when (can|could|would) you (start|begin)|earliest (start|available)|notice period|"
      r"availability|available to start", ANY, _start),
     (r"how many years|years of .*experience|years.{0,20}experience", ANY, _years),
@@ -715,18 +970,19 @@ RULES = [
     # "Expected Graduation / Graduation Date? If you are continuing ... your current degree program".
     (r"\bgraduation\b.{0,25}\bdate\b|expected graduation|anticipated graduation", ANY, _graduation),
     (r"degree type|type of degree|which degree|what degree|level of degree", ANY, _degree),
-    (r"currently (enrolled|pursuing|attending|a student|studying)|are you (a |currently a |currently )?(current |full[- ]time )?"
+    (r"are you (currently )?an? (undergraduate|graduate|college|university|degree)\b.{0,40}\bstudent|"
+     r"currently (enrolled|pursuing|attending|a student|studying)|are you (a |currently a |currently )?(current |full[- ]time )?"
      r"(student|enrolled)|enrolled (in|at) (a|an|your)|pursuing (a|an|your) .{0,30}degree", CHOICE | {"text"}, _enrolled),
     (r"(year|level|standing) (in|of) (school|study|college|university|program)|class standing|"
      r"current (academic )?(year|standing|level)|what year are you|academic (year|standing|level)|year of study|grade level|"
-     r"student classification|classification as a student",
+     r"student classification|classification as a student|class (status|level)",
      ANY, _school_year),
     (r"which (term|season|session)|internship (term|season|period|session|dates|start)|what (term|season)|"
      r"(summer|fall|spring|winter) (internship|program)|available (for|during) (the )?(summer|fall|spring|winter)|start term",
      ANY, _terms),
     (r"\bminor\b", TEXT | {"select"}, _p("minor")),
     (r"^(type to )?add (your )?skills|^(your )?skills$", ANY, _skills),
-    (r"(type|kind) of (role|position|job|employment) (are )?you|^(role|position|employment|job) type$", CHOICE, _role_type),
+
     # Education
     # "Select the month and year you are expecting to graduate with your bachelor's degree": a date, not a degree.
     (r"(month|year|date|when)\b.{0,40}graduat|expect\w* to graduate|graduat\w* (month|year|date)", ANY, _graduation),
@@ -734,6 +990,9 @@ RULES = [
     (r"discipline|\bmajor\b|field of study|area of study|concentration", ANY, _discipline),
     (r"graduat|year of completion|class of|class year", ANY, _graduation),
     (r"\b(school|university|college|institution)\b", TEXT | {"select"}, _school),
+    (r"(proficien\w*|fluen\w*|level|command) (of|in) (the )?english|english (language )?(proficien|fluen|level|skills)|speak english",
+     CHOICE, _english),
+    (r"(other|additional|any|foreign|second) languages?|languages? (other than|besides) english", ANY, _other_languages),
     (r"language", ANY, _languages),
     # Documents
     (r"cover letter", TEXT | {"file"}, _cover_letter),
@@ -775,10 +1034,11 @@ RULES = [
     (r"street|address line|mailing address|^address$|home address", TEXT, _p("address")),
 ]
 _COMPILED = [(re.compile(rx, re.I), kinds, fn) for rx, kinds, fn in RULES]
+PASS_ON = {_preference, _resident, _tools, _relevant_experience}
 
 NAME_GUARD = re.compile(r"company|school|university|manager|refer|reference|emergency|recruiter|employer|business|project|team|pronunc", re.I)
 # "Are you a first-generation college student?" mentions a college but isn't asking which one.
-SCHOOL_GUARD = re.compile(r"^\W*(are|do|did|have|has|is|were|will|would|tell|describe|why|how)\b|first[- ]generation", re.I)
+SCHOOL_GUARD = re.compile(r"^\W*(are|do|did|have|has|is|were|will|would|tell|describe|why|how)\b|first[- ]generation|countr", re.I)
 
 
 def _bank_lookup(label, bank):
@@ -870,6 +1130,8 @@ def rule_answer(q, ctx):
             if not a.source:
                 a.source = "profile"
             return a
+        if fn in PASS_ON:
+            continue  # a broad rule that didn't recognise the options: the next one may ("a preference for remote work?")
         return None  # the right rule matched but the profile has no value
     return _coerce(_by_input_type(q, ctx))
 
@@ -891,6 +1153,11 @@ def resolve_options(q, a):
             o = pick_option(v, q.options)
             if o and o not in picked:
                 picked.append(o)
+        for alt in a.alternatives if not picked else []:  # "Business Administration" for a major the list lacks
+            o = pick_option(alt, q.options)
+            if o:
+                picked = [o]
+                break
         a.option = picked or None
         return a
     if q.kind in ("select", "radio", "buttons") or (q.kind == "combobox" and q.options):
@@ -927,7 +1194,11 @@ def answer(q, ctx):
         banked = _bank_lookup(q.label or "", ctx.bank)
         if banked is not None:
             return resolve_options(q, Answer(banked, "bank"))
-        return Answer(None, "human", note="The employer's AI-use policy: read it and agree yourself.")
+        return _ai_screening(q) or Answer(None, "human", note="The employer's AI-use policy: read it and agree yourself.")
+    if q.kind in CHOICE and ACK_STATEMENT.match(key) and not MARKETING.search(key):  # "By selecting I accept, I certify…": an agreement, whatever words it quotes
+        ack = _coerce(_consent(q, ctx))
+        if ack is not None:
+            return ack if ack.source == "skip" else resolve_options(q, ack)
     tie = _employer_ties(q, ctx)
     if tie is not None:
         return tie if tie.source in ("skip", "blank") else resolve_options(q, tie)
@@ -943,6 +1214,8 @@ def answer(q, ctx):
     return resolve_options(q, a)
 
 
+ACK_STATEMENT = re.compile(r"^\W*(\d+\.\s*)?(by (selecting|checking|clicking|submitting|signing)|"
+                           r"i (hereby )?(attest|acknowledge|certify|confirm|understand|agree|have read|accept|declare|affirm))\b")
 OPEN_QUESTION = re.compile(r"\?\s*$|^(why|what|how|tell us|describe|share|explain|please (describe|explain|share|tell))\b", re.I)
 
 

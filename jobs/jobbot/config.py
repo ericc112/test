@@ -97,14 +97,33 @@ DEFAULT_ANSWERS = [
     {"q": r"background (check|screen|investigation)", "a": "Yes", "regex": True},
     {"q": r"drug (test|screen)", "a": "Yes", "regex": True},
     {"q": "security clearance", "a": "No"},
-    {"q": r"non-?compete|non-?solicit", "a": "No", "regex": True},
+    # Asked as questions ("Have you ever been terminated…?"), never matched inside an acknowledgement that only
+    # mentions the words ("…my employment may be terminated if…").
+    {"q": r"non-?compet|non-?solicit|restrictive covenant|bound by (an |any )?agreement|(are|is) you .{0,40}(subject|bound) to|"
+          r"restrictions? .{0,40}(as a result of|from|under) .{0,40}(current|prior|previous|former) employ|legal restrictions on your",
+     "a": "No", "regex": True},
+    {"q": r"essential (job )?functions", "a": "Yes", "regex": True},
+    {"q": r"\b(have|were) you (ever )?(been )?(discharged|terminated|fired|dismissed|asked to resign)|^\W*discharged", "a": "No", "regex": True},
+    {"q": r"\b(do|will) you (have|hold|plan to (keep|continue)|intend to (keep|continue)).{0,40}\b(another|second|other|outside) "
+          r"(jobs?|employment|business)|another job\W*s?\W* that you plan", "a": "No", "regex": True},
+    {"q": r"\b(are|have|were) you\b.{0,80}\b(investigation|inquiry|proceeding|sanction\w*|disciplin\w*)", "a": "No", "regex": True},
+    {"q": r"\b(are|have|were) you\b.{0,80}\b(debarred|excluded|suspended)\b|exclusion list|list of excluded", "a": "No", "regex": True},
+    {"q": r"\b(have|has) (you|your spouse|anyone)\b.{0,80}\b(donat|contribut|volunteer|fund ?rais).{0,80}"
+          r"(campaign|candidate|political|party|(federal|public|elected|state|local) office|\bpac\b)|^\W*political contributions",
+     "a": "No", "regex": True},
+    {"q": r"\b(are|were|have) you\b.{0,80}\b(government (employee|official)|employed by .{0,40}government|worked for .{0,20}government)|"
+          r"\b(are|were|have) you\b.{0,40}\bpublic official", "a": "No", "regex": True},
+    {"q": r"\b(do|will|would) you\b.{0,40}\b(need|require|request|like)\b.{0,30}\baccommodation", "a": "No", "regex": True},
+    {"q": r"\b(current|former) employee of .{0,80}(auditor|pricewaterhouse|\bpwc\b)|outside auditor", "a": "No", "regex": True},
+    {"q": r"are you a (licensed )?physician|licensed to practice (medicine|in the)|open payments", "a": "No", "regex": True},
     {
-        "q": r"(ever|previously|formerly|currently) (been )?(employed|work(ed|ing)) (by|for|at)|former employee",
+        "q": r"(ever|previously|formerly|currently) (been )?(employed|work(ed|ing)) (by|for|at)",
         "a": "No",
         "regex": True,
     },
     {"q": r"(were|are) you referred|referred by|employee referral", "a": "No", "regex": True},
-    {"q": r"available .{0,25}(full[- ]time|40 hours)|commit to (the )?(full|entire)|(10|11|12|ten|eleven|twelve)[- ]week",
+    {"q": r"available .{0,25}(full[- ]time|40 hours)|commit to (the )?(full|entire)|(10|11|12|ten|eleven|twelve)[- ]week|"
+          r"(able|willing) (and (able|willing) )?to work full[- ]time|(full|entire) (duration|length) of",
      "a": "Yes", "regex": True},
 ]
 
