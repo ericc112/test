@@ -98,7 +98,7 @@ The JobBot page on claude.ai (see `CLOUD_WORKER.md`) lists the internships and c
 1. Open **Your profile** on the page, fill in your details and upload your resume (PDF). Only you can see it.
 2. Set `JOBBOT_WORKDAY_PASSWORD` in your Claude cloud environment's settings (the environment menu → **Edit** → environment variables): the one password JobBot uses for your accounts on employers' careers sites (Workday, Taleo, iCIMS, SuccessFactors and the rest). Never paste it into a chat or the page.
 3. Tap **Apply** on an internship. That's it: a scheduled Claude cloud session runs JobBot every 3 hours (or right away when you tap **Start now**), fills in the application and sends it. The result, every answer and a screenshot show up under **Applying**.
-4. If the form asks something your profile doesn't answer, nothing is guessed or sent: the question shows up under **Applying** with the employer's own choices. Answer it and tap **Apply with these answers**.
+4. If the form asks something your profile and saved answers don't cover, the cloud session answers it the way JobBot's AI does (the best answer your information supports; see [AI answers](#ai-answers-optional)) and sends the application, with those answers labelled **AI**. Only a question whose honest answer needs a fact JobBot doesn't have shows up under **Applying** with the employer's own choices: answer it and tap **Apply with these answers**.
 
 The page lists the internships JobBot can send by itself; tick **Show ones you apply to on their site** for the rest. A scheduled cloud session rebuilds the list twice a day (`jobs/LIST_REFRESH.md`, which runs `python3 -m jobbot page-feed --search`), so it is never more than a day old, and leaves out postings 30 or more days old. **Add a link** takes a posting from any site, LinkedIn and Indeed included (see *Where it can apply*). The cloud session only sends applications you tapped Apply on, and stops if a site shows a CAPTCHA, a bot check or an email confirmation.
 
@@ -126,17 +126,17 @@ Each answer comes from the first of these that applies:
 1. what you typed for this job in the review screen
 2. your **answer bank**: "question contains X → answer Y", saved once and reused everywhere (answers you give in the review screen can be saved here with one tick)
 3. rules that read your profile: name, contact details, links, location, work authorisation and sponsorship, education and student questions, salary, start date, "how did you hear about us" (for jobs found on the employer's own site: their website or careers page), EEO questions (default: decline to answer)
-4. Claude, if you turn on AI, for required questions nothing else covered
+4. Claude, if you turn on AI, for required questions nothing else covered: the best answer your information supports (see [AI answers](#ai-answers-optional))
 
-A required question with no answer is **never guessed**. The job goes to *Review → Needs you* with the question ready to answer.
+Without AI, a required question with no answer is never guessed: the job goes to *Review → Needs you* with the question ready to answer. With AI on, that only happens when the honest answer needs a fact JobBot doesn't have (a reference's phone number, a license number).
 
 ### Where it can apply
 
 | Form | Fill | Submit |
 |---|---|---|
 | Greenhouse, Lever, Ashby (company boards you add, plus aggregator jobs whose Apply link leads there) | ✅ | ✅ (and auto-submit) |
-| Workday career sites (Target, Capital One, P&G and the other Workday employers JobBot watches), once you set the password | ✅ signs in, or creates your account with that employer | Only when you press Submit |
-| Taleo Business Edition sites (`…tbe.taleo.net`, e.g. Olin) | ✅ signs in, or creates your account | Only when you press Submit |
+| Workday career sites (Target, Capital One, P&G and the other Workday employers JobBot watches), once you set the password | ✅ signs in, or creates your account with that employer | ✅ (and auto-submit) |
+| Taleo Business Edition sites (`…tbe.taleo.net`, e.g. Olin) | ✅ signs in, or creates your account | ✅ (and auto-submit) |
 | Any other careers site: iCIMS, SuccessFactors, Workable, SmartRecruiters, Jobvite, Paylocity, employers' own forms… | ✅ best effort: follows Apply, signs in or creates your account if asked, fills each page and presses Next until Submit, including forms inside a frame | Only when you press Submit |
 | LinkedIn, Indeed, Glassdoor, ZipRecruiter and other job boards | ✅ on the employer's own site, when JobBot finds the same job there | Only when you press Submit |
 | LinkedIn Easy Apply, Indeed Apply, Oracle and Amazon careers sites | ❌ (marked *Apply on site*, with a link) | ❌ |
@@ -153,7 +153,7 @@ Filling in can save a draft in your account with that employer (Workday stops at
 
 - **Solve CAPTCHAs or get past bot checks.** If a site shows one, the job is marked *Blocked* or *Apply on site*. Turn off *headless* in settings and JobBot waits in a visible browser window while you finish it yourself.
 - **Answer questions meant for you.** Questions like "prove you're not a bot" or puzzles are left for you, as are employers' **AI-use attestations**. When a form contains an AI-use policy, AI answers are switched off for that application.
-- **Submit anything you didn't approve.** Auto-submit is off by default. When on, it only submits Greenhouse, Lever or Ashby forms where every required question was answered and the match score clears your threshold. It skips forms with AI-written answers unless you allow them, and it stops at your daily limit (default 15) and your per-company limit (default 3 per 30 days).
+- **Submit anything you didn't approve.** Auto-submit is off by default. When on, it only submits Greenhouse, Lever, Ashby, Workday or Taleo forms where every required question was answered and the match score clears your threshold. It skips forms with AI-written answers unless you allow them, and it stops at your daily limit (default 15) and your per-company limit (default 3 per 30 days).
 - **Retry an unconfirmed submit.** If Submit was pressed but no confirmation appeared, the job is marked *Unconfirmed*. Check your email instead of applying twice.
 
 ## Job sources
@@ -192,11 +192,19 @@ Jobs are ranked 0-100. The score combines title match, your skills found in the 
 
 In **Automation & AI**, turn on *Use Claude* and paste an Anthropic API key (or set `ANTHROPIC_API_KEY`). Claude then:
 
-- answers required free-text questions your profile and answer bank don't cover, all in one request per application;
+- answers the required questions your profile and answer bank don't cover (free text and multiple choice), in one request per page of the form;
 - writes a tailored cover letter when a form has a cover-letter box (optional);
 - optionally drafts answers to optional "Why do you want to work here?" questions.
 
-It only sees your profile, your resume text and the job posting. It's told to use only facts from them and to leave a question for you rather than guess. AI answers are labelled **AI** in the review screen. The default model is `claude-opus-5-5`.
+It sees your profile, your answer bank, your resume text and the job posting, and gives the answer you would give, so applications don't stop for you:
+
+- **facts** come from your profile and resume, and from what follows from them (living in Texas means you're not a California resident; a U.S. citizen needs no sponsorship);
+- **choices** like cohort, start and end dates, office or shift go to whatever fits you and the posting (the program's dates, the location nearest you);
+- **"Why us?" and experience questions** get a specific answer built from your real experience;
+- **acknowledgements and consents** are agreed to, and conflict questions it has no sign of (relatives there, a non-compete) are answered "no";
+- **sensitive questions** (criminal history, disability, demographics) get "decline to answer" when the form offers it.
+
+It never invents employers, dates, grades, certifications or results, or a legal status your profile doesn't give; a question that would need one is left for you. AI answers are labelled **AI** in the review screen. To let applications with AI answers go out on their own, also tick *Auto-submit even when some answers were written by AI*. The default model is `claude-opus-5-5`; with prompt caching, answering a page's leftover questions usually costs a few cents.
 
 ## Command line
 

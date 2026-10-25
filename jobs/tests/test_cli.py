@@ -50,6 +50,27 @@ class ApplyBatchTests(unittest.TestCase):
         self.assertEqual(sum(b["q"] == "debar" for b in bank), 1)  # yours replaces a default with the same question
 
 
+    def test_answers_claude_wrote_are_used_and_labelled_ai(self):
+        reqs = json.loads(self.requests.read_text())[:1]
+        reqs[0]["answers"] = {"Which office?": "Dallas"}
+        reqs[0]["ai_answers"] = {"Why Acme?": "Your supply chain work.", "Which office?": "Houston"}
+        self.requests.write_text(json.dumps(reqs))
+        seen = {}
+
+        def process(self_, job_id, mode):
+            seen.update(db.get_job(job_id)["answers"])
+            att = db.start_attempt(job_id, mode, "u")
+            db.finish_attempt(att, "applied", [{"label": "Why Acme?", "answer": "Your supply chain work.", "source": "user"},
+                                               {"label": "Which office?", "answer": "Dallas", "source": "user"}], [], None, "")
+            db.update_job(job_id, status="applied")
+
+        args = SimpleNamespace(requests=str(self.requests), profile=None, resume=None, out=str(self.out))
+        with mock.patch.object(Worker, "process", process):
+            cli.cmd_apply_batch(args)
+        self.assertEqual(seen, {"Why Acme?": "Your supply chain work.", "Which office?": "Dallas"})  # yours win
+        fields = json.loads(self.out.read_text())[0]["fields"]
+        self.assertEqual([f["source"] for f in fields], ["ai", "user"])
+
     def test_time_limit_leaves_the_rest_for_the_next_run(self):
         done = []
         args = SimpleNamespace(requests=str(self.requests), profile=None, resume=None, out=str(self.out),

@@ -55,6 +55,13 @@ class ClaudeTests(unittest.TestCase):
             self.assertNotIn(key, sent)
         self.assertIn("Test", sent)  # ordinary profile fields still go
 
+    def test_your_saved_answers_reach_claude(self):
+        ctx = Context(profile=self.ctx.profile, job=self.ctx.job, bank=[{"q": "non-?compete", "a": "No", "regex": True}])
+        self.create.return_value = response(json.dumps({"answers": []}))
+        self.claude.answer_questions([Question("q1", "select", "Any restrictive covenants?", True, options=["Yes", "No"])], ctx)
+        sent = self.create.call_args.kwargs["system"][1]["text"]
+        self.assertIn("- non-?compete: No", sent)
+
     def test_refusal_returns_nothing(self):
         self.create.return_value = response("", stop="refusal")
         self.assertEqual(self.claude.answer_questions([Question("q1", "text", "Why us?", True)], self.ctx), {})

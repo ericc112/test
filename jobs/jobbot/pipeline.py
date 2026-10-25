@@ -215,8 +215,9 @@ def can_auto_submit(job, attempt, automation):
     """Return (ok, reason). Auto-submit is deliberately conservative."""
     if not automation.get("auto_submit"):
         return False, "auto-submit is off"
-    if job.get("ats") not in ats.SUPPORTED:
-        return False, "only Greenhouse, Lever and Ashby forms are auto-submitted"
+    link = " ".join(job.get(k) or "" for k in ("apply_url", "url"))
+    if job.get("ats") not in ats.SUPPORTED and job.get("source") != "workday" and not ats.OWN_ENGINE_SITES.search(link):
+        return False, "only Greenhouse, Lever, Ashby, Workday and Taleo forms are auto-submitted"
     if (job.get("score") or 0) < automation.get("submit_min_score", 75):
         return False, "score below auto-submit threshold"
     fields = (attempt or {}).get("fields") or []

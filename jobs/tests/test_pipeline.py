@@ -110,6 +110,9 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("AI", why)
         ok, why = pipeline.can_auto_submit(dict(job, ats="generic"), {"fields": []}, auto)
         self.assertFalse(ok)
+        # Workday and Taleo have engines of their own that confirm what they send.
+        wd = dict(job, ats="account", apply_url="https://acme.wd5.myworkdayjobs.com/Careers/job/Dallas/Intern_R1")
+        self.assertEqual(pipeline.can_auto_submit(wd, {"fields": []}, auto), (True, ""))
         db.update_job("remotive:77", status="applied", applied_at=db.now())
         ok, why = pipeline.can_auto_submit(job, {"fields": []}, auto)
         self.assertEqual((ok, why), (False, "daily limit reached"))

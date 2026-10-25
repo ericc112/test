@@ -924,7 +924,7 @@ async function viewSettings(el) {
           <span>Fill applications for strong matches<span class="hint">New postings from watched employers are filled right away. Fills the form and takes a screenshot; nothing is sent.</span></span></label>
         <label class="field">…when the score is at least<input type="number" min="0" max="100" name="prepare_min_score" value="${esc(a.prepare_min_score)}"></label>
         <label class="check"><input type="checkbox" name="auto_submit" ${a.auto_submit ? "checked" : ""}>
-          <span>Submit automatically<span class="hint">Only for Greenhouse, Lever and Ashby forms where every required question was answered.</span></span></label>
+          <span>Submit automatically<span class="hint">Greenhouse, Lever, Ashby, Workday and Taleo forms where every required question was answered. Other careers sites wait for you to press Submit.</span></span></label>
         <label class="field">…when the score is at least<input type="number" min="0" max="100" name="submit_min_score" value="${esc(a.submit_min_score)}"></label>
         <label class="check wide"><input type="checkbox" name="auto_submit_ai_answers" ${a.auto_submit_ai_answers ? "checked" : ""}>
           <span>Auto-submit even when some answers were written by AI<span class="hint">Off: applications with AI answers wait for you to read them.</span></span></label>
@@ -938,8 +938,8 @@ async function viewSettings(el) {
         <label class="field">Wait for you this long (minutes)<input type="number" min="1" name="assist_timeout_min" value="${esc(a.assist_timeout_min)}"></label>
       </div></div>
     <div class="card"><h2 class="section-title">AI answers (optional)</h2>
-      <p class="muted small" style="margin-top:-6px">Uses Claude to answer required questions your profile can't cover, and to tailor cover letters.
-        It only uses facts from your profile and resume and leaves a question for you rather than guess. AI answers are labelled in the review screen.</p>
+      <p class="muted small" style="margin-top:-6px">Uses Claude to answer the questions your profile and saved answers don't cover, with the best answer your information supports, so applications don't stop for you. It also tailors cover letters.
+        It never invents experience, grades or legal status. AI answers are labelled in the review screen.</p>
       <div class="form-grid">
         <label class="check wide"><input type="checkbox" name="llm_enabled" ${llm.enabled ? "checked" : ""}> Use Claude for open questions</label>
         <label class="field">Anthropic API key <span class="hint">${llm.has_key ? "A key is saved. Leave blank to keep it." : llm.env_key ? "Using ANTHROPIC_API_KEY from the environment." : "Get one at console.anthropic.com. Stored only in your local database."}</span>

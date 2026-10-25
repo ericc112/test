@@ -104,6 +104,20 @@ recordings and copied text the owner adds in the page's **Upload** tab and lists
       (Leave out `--resume` if there is none.) `results.json` is saved after each application,
       so read it even if the command was cut off.
 
+   b2. **Questions JobBot couldn't answer.** The owner wants applications to go without being asked.
+      For each **approved** request that came back `needs_input` with a non-empty `missing`, answer
+      those questions yourself, the way JobBot's AI does: follow `SYSTEM` in `jobs/jobbot/llm.py`,
+      using the owner's profile and `answer_bank` (`/tmp/jobbot-run/profile.json`; it holds personal
+      details, so never print it), their resume text, and the posting (`job.u`) when the answer depends
+      on it (program dates, locations, cohorts). Copy a choice question's answer exactly from its
+      `options`; write a date as `YYYY-MM-DD`. The rules leave a question for the owner only when the
+      honest answer needs a fact you don't have. If every missing question has an answer, run that
+      request again by itself, the same way as step b (`mode: "submit"`), with your answers in
+      `"ai_answers": {question label: answer}` next to its `"answers"`, and use that result instead of
+      the first. Do this once per request: if it comes back `needs_input` again, keep that result.
+      Never use this for a CAPTCHA, an email code or a sign-in, or for a question whose `note` says the
+      employer asks the owner to answer it personally or to agree to its AI-use policy: those stay with the owner.
+
    c. **Screenshots.** Upload every `screenshot` path in the results in one `Artifact` call
       (`url` above, `asset: true`, `file_paths: [...]`) and note each one's asset `id`.
 

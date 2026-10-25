@@ -1,8 +1,9 @@
-"""Optional Claude integration: answer leftover questions and write cover letters.
+"""Optional Claude integration: answer the questions JobBot's rules can't, and write cover letters.
 
-Claude only sees your profile, resume text and the job posting, and is told to
-say "not answerable" rather than invent anything. Every AI answer is labelled
-in the review screen, and auto-submit skips AI-answered forms unless you allow it.
+Claude sees your profile, saved answers, resume text and the job posting, and gives the answer you
+would give: the best one your information supports, so the application can go without asking you.
+It never invents experience, grades, numbers or legal status. Every AI answer is labelled in the
+review screen, and auto-submit holds AI-answered forms for you unless you allow it.
 """
 import json
 import os
@@ -10,14 +11,20 @@ import re
 
 from .textutil import norm
 
-SYSTEM = """You help a job seeker fill in job applications. You write on their behalf, in the first person.
+SYSTEM = """You fill in job applications for the candidate whose profile, saved answers and resume follow, writing as them, in the first person. JobBot sends the application without asking them first, so give the answer they would give: the best one their information supports.
 
-Rules:
-- Use only facts found in the candidate profile and resume below. Never invent employers, titles, dates, degrees, certifications, numbers, skills, legal or visa status, or personal details.
-- If a question cannot be answered truthfully from that material, mark it not answerable. Leaving a question for the candidate is always better than guessing.
-- For multiple-choice questions, answer with one option copied exactly from the list.
-- Keep free-text answers specific and concise (2-5 sentences unless the question asks for more). Plain text, no markdown, no placeholders.
-- Never answer questions that ask the applicant to prove they are human or to solve a puzzle meant for people."""
+How to answer:
+- Facts about the candidate (contact details, education, dates, work history, skills, location, citizenship and work authorization): take them from the profile and resume, together with what follows directly from them. Someone living in Texas is not a California resident; a U.S. citizen needs no visa sponsorship; years of experience add up from the resume's dates; a school is in the country where it is located.
+- Saved answers are ones the candidate gave for other applications. Follow them for questions that ask the same thing in other words.
+- Preferences and availability (start and end dates, cohort, term, office, location, team, shift, hours, travel, relocation): choose what fits both the candidate and this posting and keeps them eligible for it. Follow the posting's program dates and location, and pick the option nearest the candidate when several would work.
+- Motivation and experience questions ("Why this company?", "Describe a project you led"): write a specific answer that connects the candidate's real experience and coursework to this job, usually 3-5 sentences, drawing only on what the resume says.
+- Acknowledgements, consents and certifications (read and agree, consent to be contacted, certify that the information is accurate): agree.
+- Conflicts of interest the material doesn't mention (relatives at the company, a non-compete, earlier employment there, government service): answer that none apply.
+- Sensitive questions the material doesn't settle (criminal history, disability, veteran status, race, gender, sexual orientation): choose the option that declines to answer when there is one.
+
+Mark a question not answerable only when the honest answer needs a fact that is not in the material and no option avoids stating it (a reference's contact details, a license number, a past salary). Never invent employers, titles, dates, degrees, grades, certifications, numbers or results, and never claim a legal or visa status the profile doesn't give. Never answer a question meant to prove the applicant is a human.
+
+For a multiple-choice question, copy exactly one option from its list (or several, separated by " | ", where the question allows more than one). Write plain text: no markdown, no placeholders."""
 
 # Credentials never leave this machine: the profile is serialised into an API call, so
 # anything that looks like a password, secret, token or API key is dropped first.
@@ -84,11 +91,14 @@ class Claude:
         p = ctx.profile
         profile = {k: v for k, v in p.items() if k not in ("resume_text", "cover_letter", "resume_file", "cover_letter_file") and not _SECRET_KEY.search(k) and v not in ("", None)}
         resume = p.get("resume_text") or "(no resume text available)"
+        saved = "\n".join(f"- {e['q']}: {e['a']}" for e in ctx.bank or [] if e.get("q") and e.get("a") not in (None, ""))
         return [
             {"type": "text", "text": SYSTEM},
             {
                 "type": "text",
-                "text": f"<candidate_profile>\n{json.dumps(profile, indent=1)}\n</candidate_profile>\n\n<resume>\n{resume}\n</resume>",
+                "text": f"<candidate_profile>\n{json.dumps(profile, indent=1)}\n</candidate_profile>\n\n"
+                        f"<saved_answers>\nEach line: words or a pattern from a question, then the candidate's answer.\n"
+                        f"{saved or '(none)'}\n</saved_answers>\n\n<resume>\n{resume}\n</resume>",
                 "cache_control": {"type": "ephemeral"},
             },
         ]
