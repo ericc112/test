@@ -86,13 +86,16 @@ def cmd_apply_batch(args):
 
     Used by the cloud runner behind the JobBot page: requests come from the page's Apply
     button, and the results go back to it. Results are saved after each request. Each request:
-    {"k", "mode": "prepare"|"submit", "title", "company", "url", "source", "location", "answers": {question: answer}}.
+    {"k", "mode": "prepare"|"submit", "title", "company", "url", "source", "location", "answers": {question: answer},
+     "ai_answers": {question: answer}}. "ai_answers" are ones Claude wrote (the cloud runner answers what JobBot
+    couldn't, as llm.SYSTEM says); they're used like "answers", which win over them, and are labelled AI.
     """
     import shutil
     import time
     from pathlib import Path
 
     from .server import extract_text
+    from .textutil import norm
     from .worker import Worker
 
     started = time.monotonic()
@@ -129,7 +132,8 @@ def cmd_apply_batch(args):
                "company": r.get("company") or "", "url": r.get("url"), "apply_url": r.get("url"), "location": r.get("location") or "",
                "dedupe_key": r["k"], "posted_at": None}
         db.upsert_job(job)
-        db.update_job(r["k"], answers=r.get("answers") or {}, status="new")
+        ai = {norm(q) for q in r.get("ai_answers") or {}} - {norm(q) for q in r.get("answers") or {}}
+        db.update_job(r["k"], answers=dict(r.get("ai_answers") or {}, **(r.get("answers") or {})), status="new")
         print(f"{mode}: {job['title']} at {job['company']}", flush=True)
         try:
             worker.process(r["k"], mode)
@@ -137,10 +141,14 @@ def cmd_apply_batch(args):
             db.update_job(r["k"], status="error", status_note=str(e)[:300])
         done, att = db.get_job(r["k"]), db.latest_attempt(r["k"], mode)
         shot = att and att.get("screenshot")
+        fields = [{k: f.get(k) for k in ("label", "answer", "source", "note", "required", "site_value")} for f in (att or {}).get("fields", [])]
+        for f in fields:
+            if f["source"] == "user" and norm(f["label"] or "") in ai:
+                f["source"] = "ai"
         results.append({
             "k": r["k"], "mode": mode, "status": done["status"], "note": done.get("status_note") or "",
             "title": done.get("title") or "", "company": done.get("company") or "", "apply_url": done.get("apply_url") or "",
-            "fields": [{k: f.get(k) for k in ("label", "answer", "source", "note", "required", "site_value")} for f in (att or {}).get("fields", [])],
+            "fields": fields,
             "missing": [{k: m.get(k) for k in ("label", "kind", "options", "note")} for m in (att or {}).get("missing", [])],
             "screenshot": str(config.SHOTS_DIR / shot) if shot else None,
         })

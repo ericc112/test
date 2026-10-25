@@ -9,6 +9,9 @@ from .sources import http
 # Forms JobBot knows how to fill and submit end to end.
 SUPPORTED = ("greenhouse", "lever", "ashby")
 
+# Careers sites with engines of their own (apply/workday.py, apply/taleo.py), which confirm what they send.
+OWN_ENGINE_SITES = re.compile(r"myworkdayjobs\.com|\.tbe\.taleo\.net", re.I)
+
 # Careers sites that make you create an account with each employer. With a password set, JobBot signs in there or
 # creates that account (Workday and Taleo Business Edition have engines of their own); without one, you apply there.
 ACCOUNT_SITES = re.compile(
