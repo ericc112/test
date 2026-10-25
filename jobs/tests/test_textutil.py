@@ -19,6 +19,29 @@ class TextUtilTests(unittest.TestCase):
         self.assertEqual(split_list("a, b\nc;;"), ["a", "b", "c"])
         self.assertEqual(split_list(["x", " ", "y"]), ["x", "y"])
 
+    def test_yes_and_no_in_other_words(self):
+        self.assertEqual(pick_option("No", ["Select One", "Yes", "Not to my knowledge"]), "Not to my knowledge")
+        self.assertEqual(pick_option("No", ["I have never been employed by the U.S. Federal Government.",
+                                            "I am currently employed by the U.S. Federal Government."]),
+                         "I have never been employed by the U.S. Federal Government.")
+        self.assertEqual(pick_option("No", ["I consent to receive emails", "I do not consent to receive emails"]),
+                         "I do not consent to receive emails")
+        self.assertEqual(pick_option("Yes", ["I am able to meet the onsite requirements", "I am not able to"]),
+                         "I am able to meet the onsite requirements")
+        self.assertEqual(pick_option("Yes", ["By checking this box, I consent to the use of AI", "I opt out"]),
+                         "By checking this box, I consent to the use of AI")
+        self.assertIsNone(pick_option("No", ["Yes", "Maybe"]))
+
+    def test_numbers_pick_their_range(self):
+        self.assertEqual(pick_option("65000", ["$40,000-$50,000", "$60,000-$70,000"]), "$60,000-$70,000")
+        self.assertEqual(pick_option("$65,000", ["0 - 30,000", "60,000 - 70,000"]), "60,000 - 70,000")
+        self.assertEqual(pick_option("0", ["Less than 1 year", "More than 1 year, less than 3 years"]), "Less than 1 year")
+        self.assertEqual(pick_option("2", ["0-1 Year", "1-3 Years", "5+ Years"]), "1-3 Years")
+        self.assertEqual(pick_option("6", ["0-1 Year", "1-3 Years", "5+ Years"]), "5+ Years")
+        self.assertEqual(pick_option("0", ["No previous relevant work experience", "Up to 2 years"]), "No previous relevant work experience")
+        self.assertEqual(pick_option("0.3", ["0 - 6 months", "6 - 11 months", "1 - 2 years"]), "0 - 6 months")
+        self.assertEqual(pick_option("2", ["0", "1", "2", "3"]), "2")
+
     def test_pick_option_yes_no_prefix(self):
         opts = ["Yes, I intend to work remotely.", "No, I intend to work from an office location."]
         self.assertEqual(pick_option("Yes", opts), opts[0])

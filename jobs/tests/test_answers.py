@@ -211,7 +211,8 @@ class RuleTests(unittest.TestCase):
         me = dict(PROFILE, currently_enrolled=True, discipline="Supply Chain Management")
         hrd = ("Are you currently enrolled in an undergraduate or graduate Human Resources Development or HR Instructional "
                "Design-related degree program (or pending enrollment in a Master's program in one of these disciplines)")
-        self.assertIsNone(ans(q(hrd, "select", ["Yes, I am currently enrolled in an undergraduate degree.", "No"]), profile=me).option)
+        # Enrolled, but not in that field: No (your answer for Olin's HR program).
+        self.assertEqual(ans(q(hrd, "select", ["Yes, I am currently enrolled in an undergraduate degree.", "No"]), profile=me).option, "No")
         self.assertEqual(ans(q("Are you currently enrolled in a supply chain degree program?", "radio", ["Yes", "No"]), profile=me).option, "Yes")
         self.assertEqual(ans(q("Are you currently enrolled in a degree program?", "radio", ["Yes", "No"]), profile=me).option, "Yes")
 
@@ -375,9 +376,113 @@ class EmployerTieTests(unittest.TestCase):
                                  previous_employers="Acme"))
 
     def test_other_questions_are_left_alone(self):
-        for label in ["Are you currently employed?", "What is your family name?", "Do you have a relative who is a government official?",
-                      "Is any member of your family employed by a competitor of Acme?", "If yes, please explain."]:
+        for label in ["Are you currently employed?", "What is your family name?", "If yes, please explain."]:
             self.assertIsNone(self.a(label), label)
+        # A relative in government or at a competitor: none that your profile knows of.
+        self.assertEqual(self.a("Is any member of your family employed by a competitor of Acme?"), "No")
+
+
+class CommonQuestionTests(unittest.TestCase):
+    """Screening questions from real applications, answered from the profile (no AI, JobBot's default answers)."""
+    ME = dict(PROFILE, city="Katy", state="Texas", citizenship="U.S. citizen", discipline="Supply chain management",
+              skills="Excel, Power BI, SAP", languages="English", expected_graduation="May 2027", school_year="",
+              eeo_veteran="I am not a protected veteran", salary_expectation="65000")
+
+    def a(self, label, options=None, kind="select", job=None, **profile):
+        ctx = Context(profile=dict(self.ME, **profile), bank=DEFAULT_ANSWERS,
+                      job=job or {"title": "Supply Chain Intern - Summer 2027", "company": "Acme", "location": "Houston, TX"})
+        r = answer(q(label, kind, options), ctx)
+        return r.option if r.option not in (None, []) else (r.value if r.resolved(q(label, kind, options)) else None)
+
+    def test_conflicts_and_history_are_no_in_the_forms_own_words(self):
+        knowing = ["Select One", "Yes", "Not to my knowledge"]
+        self.assertEqual(self.a("Do you have a close family member who works for a government agency?", knowing), "Not to my knowledge")
+        self.assertEqual(self.a("Are you (or your spouse) a Current Government Employee?", ["Yes", "No"]), "No")
+        self.assertEqual(self.a("Have you ever been terminated or asked to resign by any former employer?", ["Yes", "No"]), "No")
+        self.assertEqual(self.a("Are you subject to any non-competition, non-disclosure or other agreement?", ["Yes", "No"]), "No")
+        self.assertEqual(self.a("In the past two years, have you donated to a candidate for any federal office?", ["Yes", "No"]), "No")
+        self.assertEqual(self.a("Do you have military training or a military certification related to this position?", ["Yes", "No"]), "No")
+        self.assertEqual(self.a("Have you previously interviewed with Acme?", ["Yes", "No"]), "No")
+        self.assertEqual(self.a("Have you ever participated in the recruitment process with Acme?", ["Yes", "No"]), "No")
+        self.assertEqual(self.a("Are you currently working or have you previously worked as an employee, intern, contractor, "
+                                "consultant, supplier for Acme?", ["Yes", "No"]), "No")
+
+    def test_acknowledgements_are_agreed_whatever_they_quote(self):
+        self.assertEqual(self.a("By selecting I accept, I certify that all information is true. I understand my employment may be "
+                                "terminated if any answer is false.", ["I Accept", "I Decline"]), "I Accept")
+        self.assertEqual(self.a("I attest that I have no post-government employment restrictions.", ["Yes", "No"]), "Yes")
+        self.assertEqual(self.a("Some jobs require you to work in the office. Are you able to meet the requirements with or "
+                                "without reasonable accommodations?", ["Yes", "No"], remote_preference="any"), "Yes")
+
+    def test_employer_ai_screening_and_job_contact_are_agreed(self):
+        self.assertEqual(self.a("Do you agree to the use of machine learning tools to analyze your application? Without AI, "
+                                "recruiters process it without the use of AI scoring.", ["Yes; I agree", "No; I do not agree"]), "Yes; I agree")
+        self.assertEqual(self.a("Would you like Acme to contact you about future job opportunities?", ["Yes; I agree", "No"]), "Yes; I agree")
+        self.assertEqual(self.a("Our recruiters may need to contact you about your application by text message.",
+                                ["I accept text messages regarding this role", "I do not want to be contacted by text message"]),
+                         "I accept text messages regarding this role")
+        # Marketing texts still follow your opt-in (off).
+        self.assertEqual(self.a("By selecting YES you allow Acme to send you marketing text messages.", ["YES, I consent", "NO, I do not"]),
+                         "NO, I do not")
+        # Your own use of AI is yours to describe.
+        self.assertIsNone(self.a("Which of the following best describes how you use AI tools today?", ["I use them daily", "Never"]))
+
+    def test_places_and_preferences(self):
+        places = ["Seattle, WA", "Austin, TX", "San Jose, CA", "I have no preference for a location"]
+        seattle = {"title": "Finance Analyst Intern - 2027 - Seattle", "company": "Acme"}
+        self.assertEqual(self.a("What is your 1st location preference?", places, job=seattle), "Seattle, WA")
+        self.assertEqual(self.a("What is your 2nd location preference?", places, job=seattle), "I have no preference for a location")
+        self.assertEqual(self.a("Select ALL areas in which you would be willing to accept an offer.",
+                                ["California", "Texas", "Open to all other locations not listed"], "checkboxes", job={"title": "x"}),
+                         ["Texas", "Open to all other locations not listed"])
+        self.assertEqual(self.a("Preferred Location 2:", ["Austin, Texas", "Dallas, Texas", "New York, NY"], job={"title": "x"}), "Dallas, Texas")
+        self.assertEqual(self.a("Please confirm which Internship cohort you prefer to join",
+                                ["May 2027 - July 2027", "No preference - I can join any cohort"]), "No preference - I can join any cohort")
+        self.assertEqual(self.a("Select the brands you are interested in working with.",
+                                ["FOX Sports", "FOX Corporate (Human Resources, Legal, Finance/Accounting)"], "checkboxes",
+                                job={"title": "Finance - Corporate Internship", "company": "FOX"}),
+                         ["FOX Corporate (Human Resources, Legal, Finance/Accounting)"])
+        self.assertEqual(self.a("Are you a California resident?", ["Yes", "No"]), "No")
+        self.assertEqual(self.a("Do you currently reside in one of the following states?",
+                                ["Alabama, Alaska, Hawaii", "Colorado, Michigan", "None of the above"]), "None of the above")
+        self.assertEqual(self.a("If invited for an in person interview in our McLean, VA office, would you require travel assistance?",
+                                ["Yes", "No"]), "Yes")
+        self.assertEqual(self.a("What is your preferred location type? Check all that apply.",
+                                ["On-Site", "Remote", "Hybrid"], "checkboxes", remote_preference="any"), ["On-Site", "Remote", "Hybrid"])
+
+    def test_school_work_and_skills(self):
+        self.assertEqual(self.a("What type of work are you looking for? Most positions require you to be on-site.",
+                                ["Summer Internship", "Year-Round Internship", "Full-time"]), "Summer Internship")
+        self.assertEqual(self.a("What is your current enrollment class status?",
+                                ["Undergraduate - Junior", "Undergraduate - Senior"]), "Undergraduate - Senior")
+        self.assertEqual(self.a("In which of the following fields do you hold a degree?",
+                                ["Accounting", "Finance", "Business Administration", "None of the above"], "checkboxes"),
+                         ["Business Administration"])
+        self.assertEqual(self.a("Are you currently enrolled in or a recent graduate from a degree program in Data Science, "
+                                "Computer Science, Statistics?", ["Yes", "No"]), "No")
+        self.assertEqual(self.a("Are you currently an undergraduate or Master degree student?", ["Yes", "No"]), "Yes")
+        self.assertEqual(self.a("Which of the following programs do you have at least 2 years of experience using?",
+                                ["SQL", "Tableau", "Excel"], "checkboxes"), ["Excel"])
+        self.assertEqual(self.a("Are you proficient in any other languages below?", ["Spanish", "French", "None of the Above"],
+                                "checkboxes"), ["None of the Above"])
+        self.assertEqual(self.a("Indicate your proficiency of the English language:", ["Basic", "Advanced", "Fluent / Native Speaker"]),
+                         "Fluent / Native Speaker")
+        self.assertEqual(self.a("What days/times are you available to work?", ["I am available anytime", "Only weekdays"]),
+                         "I am available anytime")
+        self.assertEqual(self.a("Will you require our Company to provide immigration sponsorship now or in the future?",
+                                ["Yes – I hold a temporary visa status and will require sponsorship",
+                                 "No – I hold a temporary visa status that provides work authorization",
+                                 "N/A – I am a US citizen, US national, legal permanent resident"]),
+                         "N/A – I am a US citizen, US national, legal permanent resident")
+        self.assertEqual(self.a("What are your salary expectations for this role?", ["$50,000 - $60,000", "$60,000 - $70,000"]),
+                         "$60,000 - $70,000")
+
+    def test_last_available_date_from_the_program_dates(self):
+        ctx = Context(profile=self.ME, bank=DEFAULT_ANSWERS, job={"title": "Spring Co-Op 2027", "company": "Acme",
+                      "description": "You must be available to work full-time from January – July 2027."})
+        self.assertEqual(answer(q("What is your last available work date?", input_type="wd_date"), ctx).value, "2027-07-31")
+        ctx.job["description"] = "This internship is from May 17, 2027 to August 6, 2027 (12 weeks)."
+        self.assertEqual(answer(q("What is your last available work date?"), ctx).value, "08/06/2027")
 
 
 STUDENT = dict(PROFILE, gpa="3.62", expected_graduation="May 2028", graduation_year="", school_year="Junior",
@@ -444,7 +549,7 @@ class StudentTests(unittest.TestCase):
         on_site = Context(job={"source": "greenhouse", "company": "Gusto, Inc.", "title": "Finance Intern"}, **ctx)
         self.assertEqual(answer(question, on_site).option, ["Gusto Website"])
         via_board = Context(job={"source": "himalayas", "company": "Gusto, Inc.", "title": "Finance Intern"}, **ctx)
-        self.assertFalse(answer(question, via_board).resolved(question))  # found on a job board: don't claim the company site
+        self.assertEqual(answer(question, via_board).option, ["LinkedIn"])  # found on a job board: never the company site
 
 
 class SafetyTests(unittest.TestCase):

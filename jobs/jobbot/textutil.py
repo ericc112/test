@@ -90,6 +90,39 @@ def _alias_set(value):
     return {v}
 
 
+# Options that say "No" or "Yes" without the word: "Not to my knowledge", "I have never been employed by…", "I agree".
+NO_LIKE = re.compile(r"^(not to my knowledge|not that i('m| am) aware|none\b|never\b|n/?a\b|not applicable|i('m| am) not\b|"
+                     r"i (have never|have not|haven't|do not|don't|did not|didn't|will not|won't|no longer)\b)")
+YES_LIKE = re.compile(r"^(i (agree|acknowledge|consent|accept|confirm|certify|understand|can|will|have read|attest)\b|i('m| am) able\b|"
+                      r"by (checking|clicking|selecting) this box,? i (consent|agree|acknowledge|accept))")
+
+
+def _numbers(s):
+    return [float(m.group(1).replace(",", "")) * (1000 if m.group(2) else 1)
+            for m in re.finditer(r"(\d[\d,]*(?:\.\d+)?)\s*(k)?\b", s or "", re.I)]
+
+
+def in_range(value, option):
+    """Whether a number falls in a range option: "$60,000-$70,000", "Less than 1 year", "More than 1 year, less than
+    3 years", "5+ Years", "0 - 6 months", "No previous relevant work experience" (zero)."""
+    o, nums = norm(option), _numbers(option)
+    if re.search(r"\bmonths?\b", o) and not re.search(r"\byears?\b", o):
+        nums = [n / 12 for n in nums]
+    if not nums:
+        return value == 0 and bool(re.match(r"(no|none)\b", o))
+    above = re.search(r"\b(more than|over|above|greater than)\b", o)
+    below = re.search(r"\b(less than|under|below|fewer than)\b", o)
+    if len(nums) >= 2:
+        lo, hi = nums[:2]
+        return (lo < value if above else lo <= value) and (value < hi if below else value <= hi)
+    n = nums[0]
+    if below or re.search(r"\bup to\b|or (less|fewer|below)", o):
+        return value < n if below and not re.search(r"or (less|fewer|below)", o) else value <= n
+    if above or re.search(r"\+|or more|at least|\bplus\b", o):
+        return value > n if above and not re.search(r"or more", o) else value >= n
+    return value == n
+
+
 def pick_option(answer, options):
     """Choose the option that best matches an answer. Returns the option text or None."""
     if answer is None or not options:
@@ -109,12 +142,20 @@ def pick_option(answer, options):
     for o in opts:
         if norm(o) in names:
             return o
-    # Yes/No style answers: "Yes" matches "Yes, I intend to work remotely."
+    # A number picks the range it falls in: 65000 → "$60,000-$70,000", 0 → "Less than 1 year".
+    num = re.fullmatch(r"\$?\s*(\d[\d,]*(?:\.\d+)?)\s*(k)?\s*(years?|yrs?)?", str(answer).strip(), re.I)
+    if num:
+        value = float(num.group(1).replace(",", "")) * (1000 if num.group(2) else 1)
+        ranged = [o for o in opts if in_range(value, o)]
+        if ranged:
+            return ranged[0]
+    # Yes/No style answers: "Yes" matches "Yes, I intend to work remotely."; "No" also "Not to my knowledge".
     if a in ("yes", "no"):
         for o in opts:
             if re.match(rf"^{a}\b", norm(o)):
                 return o
-        return None
+        like = NO_LIKE if a == "no" else YES_LIKE
+        return next((o for o in opts if like.match(norm(o))), None)
     for o in opts:
         no = norm(o)
         if any(re.match(rf"^{re.escape(n)}\b", no) for n in names if len(n) > 1):
