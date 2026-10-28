@@ -144,7 +144,7 @@ class WorkdayEngine(Engine):
         for raw in info["questions"]:
             q = Question(key=f"{tag}:{raw['key']}", kind=raw["kind"], label=raw["label"] or raw["auto"], required=raw["required"],
                          options=raw["options"], input_type=raw.get("input_type") or "", value=raw.get("value"),
-                         section=raw.get("section") or "")
+                         section=raw.get("section") or "", block=raw.get("block") or "")
             self._where[q.key] = (raw["auto"], raw["nth"], raw["key"])
             qs.append(q)
         # "From" and "To (Actual or Expected)" next to your school are your education's dates, even where

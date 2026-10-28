@@ -293,6 +293,9 @@ DEFAULT_LLM = {
 DEFAULTS = {
     "profile": DEFAULT_PROFILE,
     "answers": DEFAULT_ANSWERS,
+    # Answers you gave on applications elsewhere (the JobBot page, an earlier install), brought in with
+    # `python -m jobbot import-answers`: [{"q": question, "a": answer, "company": …}]. Used like the ones you give here.
+    "learned": [],
     "search": DEFAULT_SEARCH,
     "automation": DEFAULT_AUTOMATION,
     "llm": DEFAULT_LLM,

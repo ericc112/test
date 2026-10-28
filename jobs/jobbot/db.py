@@ -376,6 +376,21 @@ def _decode_attempt(row):
     return d
 
 
+def learned_answers():
+    """Every answer you've given for a job's questions, newest first: [{"q", "a", "company"}]."""
+    with connect() as c:
+        rows = c.execute("SELECT company, answers FROM jobs WHERE answers IS NOT NULL AND answers NOT IN ('', '{}') "
+                         "ORDER BY updated_at DESC").fetchall()
+    out = []
+    for row in rows:
+        try:
+            given = json.loads(row["answers"]) or {}
+        except ValueError:
+            continue
+        out += [{"q": q, "a": a, "company": row["company"] or ""} for q, a in given.items() if a not in (None, "", [])]
+    return out
+
+
 def list_attempts(job_id):
     with connect() as c:
         rows = c.execute(

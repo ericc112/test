@@ -35,7 +35,19 @@ def build_context(job, mode):
         planned=planned,
         files=files,
         llm=Claude.from_settings(db.get_setting("llm")),
+        learned=learned(),
     )
+
+
+def learned():
+    """Answers you've given on other applications: here (newest first), then ones brought in from elsewhere."""
+    out, seen = [], set()
+    for e in db.learned_answers() + list(db.get_setting("learned") or []):
+        key = norm(e.get("q") or "")
+        if key and key not in seen and e.get("a") not in (None, "", []):
+            seen.add(key)
+            out.append(e)
+    return out
 
 
 class Worker(threading.Thread):

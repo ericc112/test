@@ -34,5 +34,9 @@ if not exist ".jobbot-setup-done" (
   echo Setup finished.
   echo.
 )
+if exist "..\jobbot-answers.json" (
+  echo Bringing in your answers from other applications...
+  py -m jobbot import-answers "..\jobbot-answers.json"
+)
 py -m jobbot
 pause

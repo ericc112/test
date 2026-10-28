@@ -91,7 +91,8 @@ class Claude:
         p = ctx.profile
         profile = {k: v for k, v in p.items() if k not in ("resume_text", "cover_letter", "resume_file", "cover_letter_file") and not _SECRET_KEY.search(k) and v not in ("", None)}
         resume = p.get("resume_text") or "(no resume text available)"
-        saved = "\n".join(f"- {e['q']}: {e['a']}" for e in ctx.bank or [] if e.get("q") and e.get("a") not in (None, ""))
+        saved = "\n".join(f"- {e['q']}: {e['a']}" for e in list(ctx.bank or []) + list(ctx.learned or [])[:80]
+                          if e.get("q") and e.get("a") not in (None, "", []))
         return [
             {"type": "text", "text": SYSTEM},
             {

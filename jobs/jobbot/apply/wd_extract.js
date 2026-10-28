@@ -26,6 +26,7 @@
     const secName = sec ? `${sec.getAttribute("data-automation-id") || ""} ${head ? head.innerText : ""}` : "";
     if (/education/i.test(secName)) q.section = "education";
     if (/workExperience|work experience/i.test(secName)) q.section = "employment";
+    q.block = sec ? clean(head ? head.innerText : sec.getAttribute("data-automation-id") || "") : "";  // "Work Experience 2"
     const file = box.querySelector('input[type=file]');
     const radios = [...box.querySelectorAll('input[type=radio]')];
     const checks = [...box.querySelectorAll('input[type=checkbox]')];

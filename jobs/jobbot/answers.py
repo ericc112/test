@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass, field, replace
 import calendar
 from datetime import date, timedelta
 
+from .resume import ordered as resume_jobs
 from .textutil import contains_phrase, norm, pick_option, split_list, words
 
 TEXT = {"text", "textarea", "combobox"}
@@ -52,6 +53,7 @@ class Question:
     multi: bool = False
     value: object = None
     section: str = ""  # "education" | "employment" when the field sits in such a block
+    block: str = ""  # which one, when a form repeats it: "Work Experience 2"
 
 
 @dataclass
@@ -82,6 +84,8 @@ class Context:
     planned: dict = field(default_factory=dict)  # norm(label) -> (answer, source) from the reviewed fill
     files: dict = field(default_factory=dict)
     llm: object = None
+    blocks: dict = field(default_factory=dict)  # work-experience block -> the job from your resume it holds
+    learned: list = field(default_factory=list)  # answers you gave on other applications: [{"q", "a", "company"}]
 
 
 def yn(flag):
@@ -1079,8 +1083,76 @@ def _coerce(result, source="profile"):
 HISTORY_DATE = re.compile(r"\b(start|end|from|to)\b.{0,12}\b(date|month|year)\b|^(month|year)$|current(ly)? (role|job|position|work)")
 
 
+def _block_number(block):
+    m = re.search(r"(\d+)\s*$", block or "")
+    return int(m.group(1)) if m else None
+
+
+def _same(a, b):
+    a, b = norm(a), norm(b)
+    return bool(a and b) and (a == b or a in b or b in a)
+
+
+def map_blocks(questions, ctx):
+    """Which job from your resume each work-experience block holds: the one whose company or title the block already
+    shows (Workday fills blocks in from your resume), else the one in that place in your resume. A block showing a job
+    your resume doesn't have gets none."""
+    jobs = resume_jobs(ctx.profile.get("resume_text") or "")
+    blocks = {}
+    for q in questions:
+        if q.section == "employment" and q.block and q.block not in ctx.blocks:
+            blocks.setdefault(q.block, []).append(q)
+    for block, qs in blocks.items():
+        shown = {}
+        for q in qs:
+            label = norm(q.label)
+            if isinstance(q.value, str) and q.value.strip() and not re.search(r"description|location|date|from|to\b", label):
+                if re.search(r"\b(company|employer|organi[sz]ation)\b", label):
+                    shown["company"] = q.value
+                elif re.search(r"\b(title|position|role)\b", label):
+                    shown["title"] = q.value
+        job = next((j for j in jobs if _same(j["company"], shown.get("company"))), None) or \
+            next((j for j in jobs if _same(j["title"], shown.get("title"))), None)
+        if job is None and not shown:
+            n = _block_number(block)
+            job = jobs[n - 1] if n and n <= len(jobs) else None
+        ctx.blocks[block] = job
+
+
+def _from_job(q, job, label, ctx):
+    """A work-experience field from that job in your resume."""
+    def when(ym):
+        year, month = ym
+        text = f"{MONTHS[(month or 1) - 1].capitalize()} {year}"
+        a = _coerce(_graduation(q, replace(ctx, profile={**ctx.profile, "expected_graduation": text, "graduation_year": str(year)})))
+        if a is not None:
+            a.note = "From your resume"
+        return a
+    if re.search(r"currently (work|employed)|current(ly)? (employed|work) (here|there)|^current (role|job|position)$", label):
+        return Answer(bool(job["current"]), "profile", note="From your resume")
+    if re.match(r"(from|start)\b", label) or re.search(r"\bstart (date|month|year)\b", label):
+        return when(job["start"]) if job["start"] else None
+    if re.match(r"(to|end)\b", label) or re.search(r"\bend (date|month|year)\b", label):
+        return Answer(None, "skip") if job["current"] else (when(job["end"]) if job["end"] else None)
+    for rx, key in ((r"description|responsibilit|duties|accomplishment|summary", "description"), (r"^location\b|\bcity\b", "location"),
+                    (r"\b(company|employer|organi[sz]ation)\b", "company"), (r"\b(title|position|role)\b", "title")):
+        if re.search(rx, label):
+            if isinstance(q.value, str) and _same(q.value, job[key]):  # the form's own wording of it ("Amazon.com Services LLC")
+                return Answer(q.value, "profile", note="Already filled in")
+            return Answer(job[key] or None, "profile", note="From your resume")
+    return None
+
+
 def _section_answer(q, ctx, label):
     """Fields in a repeated education/employment block. None = not handled here."""
+    if q.section == "employment" and q.block:
+        job = ctx.blocks.get(q.block)
+        if job:
+            a = _from_job(q, job, label, ctx)
+            if a is not None:
+                return a
+        elif (_block_number(q.block) or 1) > 1:
+            return Answer(None, "profile")  # another job, not in your resume: never your current one's details
     if q.section == "education" and re.match(r"(from|start)\b", label):  # Workday: "From"
         start = (ctx.profile.get("education_start") or "").strip()
         return _coerce(_graduation(q, replace(ctx, profile={**ctx.profile, "expected_graduation": start, "graduation_year": ""}))) \
@@ -1112,12 +1184,88 @@ def _section_answer(q, ctx, label):
     return None
 
 
+# --------------------------------------------------------------------- answers you gave before
+# A new question that asks what you've answered on another application, in other words: "What are your salary
+# expectations?" after "Desired compensation?". Its key words are reduced to concepts (salary, pay and compensation are
+# one), and an earlier answer counts only when every concept of the new question is in the earlier one and the earlier
+# one adds at most one more: "years of experience in finance" never takes your answer to "years of experience".
+_LEARN_STOP = set("""what which how many much do does did are is was were be been being have has had you your yours we our us
+the a an of to in on at for with by from as or and any all this that these those please select choose provide indicate enter
+list state describe tell if will would can could should may might must currently current base annual annually monthly total
+overall approximately following below above applicable role position job company organization organisation opportunity
+yes no there their they it its i me my am about like whether such per e g eg etc""".split())
+_LEARN_SYNONYMS = [
+    ("pay", "salary compensation pay wage wages remuneration"), ("expect", "expectation expect desired desire minimum target"),
+    ("before", "previously previous before prior past former formerly ever"), ("work", "work worked working employ employed employee employment"),
+    ("family", "relative relatives family spouse parent parents sibling siblings child children household related"),
+    ("authorize", "authorized authorised authorization authorisation eligible eligibility legally"),
+    ("sponsor", "sponsor sponsorship visa"), ("place", "location locations office offices site sites city cities"),
+    ("prefer", "prefer preference preferred interest interested"), ("agree", "agree consent acknowledge accept"),
+    ("degree", "degree major field discipline"), ("graduate", "graduate graduation complete completion"),
+    ("interview", "interview interviewed interviewing"), ("apply", "apply applied applying application"),
+    ("year", "year years yr yrs"), ("relocate", "relocate relocation relocating move"),
+]
+_LEARN_MAP = {w: canon for canon, ws in _LEARN_SYNONYMS for w in ws.split()}
+_NEGATION = re.compile(r"\b(not|never|without|neither|nor)\b")
+# Answers that belong to the one application they were given on: where and on which team you'd work, that program's
+# dates, a dated signature, and essays about that employer.
+_THIS_JOB_ONLY = re.compile(r"locations?|offices?|\bsites?\b|cit(y|ies)|region|area|brand|business group|team|rotation|cohort|"
+                            r"last available|start date|end date|available to (start|begin)|when (can|could) you start|signature|"
+                            r"\bsign\b|today'?s date|cover letter|\bwhy\b|tell us|describe|explain|i understand")
+
+
+def _stem(w):
+    for suffix, keep in (("ies", "y"), ("ing", ""), ("ed", ""), ("es", ""), ("s", "")):
+        if w.endswith(suffix) and len(w) - len(suffix) >= 4:
+            return w[: -len(suffix)] + keep
+    return w
+
+
+def _concepts(label, company=""):
+    gone = set(words(company)) - _LEARN_STOP
+    text = re.sub(r"select all that apply|check all that apply", " ", norm(label))
+    out = set()
+    for w in words(text):
+        if w in _LEARN_STOP or w in gone or len(w) < 2:
+            continue
+        out.add(_LEARN_MAP.get(w) or _LEARN_MAP.get(_stem(w)) or _stem(w))
+    return out
+
+
+def _learned(q, ctx):
+    """Your answer to the same question on another application, mapped onto this form's options."""
+    want = _concepts(q.label, (ctx.job or {}).get("company") or "")
+    if len(want) < 2 or not ctx.learned:
+        return None
+    negated = bool(_NEGATION.search(norm(q.label)))
+    best = None
+    if _THIS_JOB_ONLY.search(norm(q.label)):
+        return None
+    for e in ctx.learned:
+        if _THIS_JOB_ONLY.search(norm(e.get("q") or "")) or (isinstance(e.get("a"), str) and len(e["a"]) > 150):
+            continue
+        have = _concepts(e.get("q") or "", e.get("company") or "")
+        if want - have or len(have - want) > 1 or bool(_NEGATION.search(norm(e.get("q") or ""))) != negated:
+            continue
+        value = e.get("a")
+        if isinstance(value, list) and q.kind != "checkboxes":
+            value = value[0] if len(value) == 1 else None
+        if value in (None, "", []) or (q.kind in TEXT and not isinstance(value, str)):
+            continue
+        a = resolve_options(q, Answer(value, "user", note=f"Your answer to “{(e.get('q') or '')[:80]}”"
+                                                         + (f" ({e['company']})" if e.get("company") else "")))
+        score = len(have & want) / len(have | want)
+        if a.resolved(q) and (best is None or score > best[0]):
+            best = (score, a)
+    return best[1] if best else None
+
+
 def rule_answer(q, ctx):
     label = norm(q.label)
     if q.section:
         a = _section_answer(q, ctx, label)
         if a is not None:
-            return a if a.value not in (None, "", []) else None
+            return a if a.value not in (None, "", []) or a.source in ("skip", "blank") else None
     for rx, kinds, fn in _COMPILED:
         if q.kind not in kinds or not rx.search(label):
             continue
@@ -1207,11 +1355,12 @@ def answer(q, ctx):
     else:
         banked = None if DISTANCE.search(q.label or "") else _bank_lookup(q.label or "", ctx.bank)
         a = Answer(banked, "bank") if banked is not None else rule_answer(q, ctx)
-    if a is None:
-        return Answer(None, "")
-    if a.source == "skip":
+    if a is not None and a.source in ("skip", "blank"):
         return a
-    return resolve_options(q, a)
+    a = resolve_options(q, a) if a is not None else None
+    if a is None or not a.resolved(q):  # nothing here knew: what you answered on another application, if it was this
+        a = _learned(q, ctx) or a or Answer(None, "")
+    return a
 
 
 ACK_STATEMENT = re.compile(r"^\W*(\d+\.\s*)?(by (selecting|checking|clicking|submitting|signing)|"
@@ -1229,6 +1378,7 @@ def needs_ai(q, a, optional=False):
 
 def answer_all(questions, ctx):
     """Answer every question; ask Claude (once, in a batch) for required leftovers."""
+    map_blocks(questions, ctx)
     answers = {q.key: answer(q, ctx) for q in questions}
     if ctx.llm is not None:
         optional = getattr(ctx.llm, "answer_optional", False)
