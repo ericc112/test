@@ -84,5 +84,20 @@ class WorkExperienceBlockTests(unittest.TestCase):
         self.assertIsNone(out[("Work Experience 2", "Job Title")])  # not the current job's title either
 
 
+class CurrentJobTests(unittest.TestCase):
+    def ask(self, label, **profile):
+        question = Question("q", "text", label, True)
+        ctx = Context(profile=dict(PROFILE, resume_text=WORDY, **profile), bank=DEFAULT_ANSWERS)
+        return answer_all([question], ctx)["q"].value
+
+    def test_the_resume_names_your_current_job_when_the_profile_doesnt(self):
+        self.assertEqual(self.ask("Current employer", current_company="", current_title=""), "Northwind Traders")
+        self.assertEqual(self.ask("Current job title", current_company="", current_title=""), "Supply Chain Analyst Intern")
+
+    def test_your_profile_wins_and_jobs_never_mix(self):
+        self.assertEqual(self.ask("Current employer", current_company="Initech", current_title="Analyst"), "Initech")
+        self.assertIsNone(self.ask("Current job title", current_company="Initech", current_title=""))
+
+
 if __name__ == "__main__":
     unittest.main()
