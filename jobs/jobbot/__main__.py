@@ -111,6 +111,9 @@ def cmd_apply_batch(args):
         if bank:
             ours = {b["q"] for b in bank}
             db.set_setting("answers", bank + [b for b in db.get_setting("answers") if b["q"] not in ours])
+        # Answers you gave on other applications (the page's Applying list): reused for the same question in other words.
+        if isinstance(mine.get("learned"), list):
+            db.set_setting("learned", [e for e in mine["learned"] if isinstance(e, dict) and e.get("q") and e.get("a") not in (None, "", [])])
     if args.resume:
         src = Path(args.resume)
         config.ensure_dirs()
@@ -211,6 +214,28 @@ def _board_status(row):
     if status == "applying":
         return "needs_input" if row.get("needsNote") else "queued"
     return "new"
+
+
+def cmd_import_answers(args):
+    """Bring in answers you gave on applications elsewhere (the JobBot page, an earlier install): a JSON list of
+    {"q": question, "a": answer, "company": …}, or {"learned": [...], "answer_bank": [{"q": pattern, "a": …}]}. JobBot
+    reuses them for the same question asked in other words. Running it again with the same file changes nothing."""
+    from .textutil import norm
+    data = json.loads(Path(args.file).read_text(encoding="utf-8"))
+    rows = data.get("learned") if isinstance(data, dict) else data
+    bank = data.get("answer_bank") if isinstance(data, dict) else None
+    if bank:  # your saved "question contains … → answer" rules: ahead of JobBot's defaults, as on the page
+        ours = [b for b in bank if isinstance(b, dict) and b.get("q") and "a" in b]
+        keys = {b["q"] for b in ours}
+        db.set_setting("answers", ours + [b for b in db.get_setting("answers") if b.get("q") not in keys])
+        print(f"{len(ours)} saved answer(s) in your answer bank.")
+    have = db.get_setting("learned") or []
+    known = {(norm(e.get("q") or ""), json.dumps(e.get("a"))) for e in have}
+    added = [e for e in rows or [] if isinstance(e, dict) and e.get("q") and e.get("a") not in (None, "", [])
+             and (norm(e["q"]), json.dumps(e["a"])) not in known]
+    # Newest first: a later answer to the same question wins over an older one.
+    db.set_setting("learned", added + [e for e in have if norm(e.get("q") or "") not in {norm(a["q"]) for a in added}])
+    print(f"{len(added)} answer(s) added; JobBot now knows {len(db.get_setting('learned'))} from other applications.")
 
 
 def cmd_import_board(args):
@@ -363,6 +388,9 @@ def main(argv=None):
     s = sub.add_parser("import-board", help="import jobs from a Muse board export (JSON)")
     s.add_argument("file", help="the board export file ({\"jobs\": [...], \"profile\": {...}})")
     s.set_defaults(fn=cmd_import_board)
+    s = sub.add_parser("import-answers", help="bring in answers you gave on other applications, to reuse for the same questions")
+    s.add_argument("file", help='JSON: [{"q": question, "a": answer, "company": ...}] or {"learned": [...]}')
+    s.set_defaults(fn=cmd_import_answers)
     s = sub.add_parser("read-listings", help="read job listings from screenshots, a screen recording, a PDF or text")
     s.add_argument("files", nargs="*", help="screenshots (PNG, JPG), recordings (MP4, MOV), PDFs, saved pages or text files")
     s.add_argument("--text", help="a text file of listings copied from a job board")

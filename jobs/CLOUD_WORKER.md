@@ -84,7 +84,11 @@ recordings and copied text the owner adds in the page's **Upload** tab and lists
    and stop. If `resume_id` is set, download the resume with the `Artifact` tool
    (`action: "read"`, `url` above, `path: <resume_id>`); keep the file name from `resume_name`.
    Write the profile document's fields to `/tmp/jobbot-run/profile.json`, including `answer_bank` (the
-   owner's saved answers, which `apply-batch` puts ahead of JobBot's defaults).
+   owner's saved answers, which `apply-batch` puts ahead of JobBot's defaults), and `learned`: every answer the owner
+   gave on earlier applications, so JobBot reuses it when another form asks the same thing in other words. Build it
+   from all documents in `data/users/me/apps/items` (you queried the open ones in step 1; `list` the rest), newest
+   `updated_at` first: each document's `fields` whose `source` is `"user"`, as
+   `{"q": label, "a": answer, "company": job.c}`.
 
 5. **Apply in groups of 3.** Commands in this session are cut off after 10 minutes, so never run
    more than 3 applications in one command. For each group of up to 3 claimed requests:

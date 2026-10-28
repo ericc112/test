@@ -260,10 +260,14 @@
 
   // Which repeated block a field sits in, so "End date year" can mean graduation (education)
   // or a past job (employment).
+  // Which one, when the form repeats the block: "employment 2" is the second job.
+  const boxes = { education: [], employment: [] };
   for (const q of questions) {
     const el = document.querySelector(`[data-jobbot="${q.key}"], [data-jobbot^="${q.key}:"]`);
     const box = el && el.closest("[class*=employment], [class*=experience], [class*=work-history], [class*=workHistory], [class*=education], [class*=Education]");
     q.section = !box ? "" : /education/i.test(box.className) ? "education" : "employment";
+    if (box && !boxes[q.section].includes(box)) boxes[q.section].push(box);
+    q.block = box ? `${q.section} ${boxes[q.section].indexOf(box) + 1}` : "";
   }
 
   // Page-level signals.

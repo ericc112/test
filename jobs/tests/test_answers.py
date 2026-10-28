@@ -485,6 +485,37 @@ class CommonQuestionTests(unittest.TestCase):
         self.assertEqual(answer(q("What is your last available work date?"), ctx).value, "08/06/2027")
 
 
+class LearnedAnswerTests(unittest.TestCase):
+    """Your answers on other applications, reused when a form asks the same thing in other words."""
+    LEARNED = [{"q": "Minimum Pay Desired", "a": "62000", "company": "KeyCorp"},
+               {"q": "Hispanic or Latino?", "a": "No", "company": "Johnson & Johnson"},
+               {"q": "How many years of experience do you have in financial analysis?", "a": "Less than 1 year", "company": "Ecolab"},
+               {"q": "Have you previously interviewed with Marvell?", "a": "No", "company": "Marvell"}]
+
+    def a(self, label, options=None, kind="select", company="Acme"):
+        question = q(label, kind, options)
+        r = answer(question, Context(profile=PROFILE, bank=DEFAULT_ANSWERS, job={"company": company}, learned=self.LEARNED))
+        return (r.option if r.option not in (None, []) else r.value) if r.resolved(question) else None
+
+    def test_the_same_question_in_other_words(self):
+        self.assertEqual(self.a("What are your salary expectations?", ["$50,000 - $60,000", "$60,000 - $70,000"]), "$60,000 - $70,000")
+        self.assertEqual(self.a("What is your desired base salary?", kind="text"), "62000")
+        self.assertEqual(self.a("Are you Hispanic/Latino?", ["Yes", "No"]), "No")
+        self.assertEqual(self.a("Have you interviewed with us before?", ["Yes", "No"]), "No")
+
+    def test_a_different_question_never_borrows_an_answer(self):
+        # More specific than what you answered, or about something else: not yours to reuse.
+        self.assertIsNone(self.a("How many years of experience do you have in financial planning?",
+                                 ["Less than 1 year", "1-3 years"]))
+        self.assertIsNone(self.a("Have you previously worked with a staffing agency?", ["Yes", "No"]))
+        self.assertIsNone(self.a("Are you not Hispanic or Latino?", ["Yes", "No"]))
+
+    def test_your_answer_for_this_job_and_the_rules_come_first(self):
+        question = q("What are your salary expectations?", "text")
+        ctx = Context(profile=dict(PROFILE, salary_expectation="70000"), bank=DEFAULT_ANSWERS, learned=self.LEARNED)
+        self.assertEqual(answer(question, ctx).value, "70000")
+
+
 STUDENT = dict(PROFILE, gpa="3.62", expected_graduation="May 2028", graduation_year="", school_year="Junior",
                currently_enrolled=True, internship_terms="Summer 2027", minor="Economics")
 

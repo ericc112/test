@@ -71,6 +71,19 @@ class ApplyBatchTests(unittest.TestCase):
         fields = json.loads(self.out.read_text())[0]["fields"]
         self.assertEqual([f["source"] for f in fields], ["ai", "user"])
 
+    def test_import_answers_from_other_applications(self):
+        f = self.tmp.dir / "answers.json"
+        f.write_text(json.dumps({"learned": [{"q": "Minimum Pay Desired", "a": "62000", "company": "KeyCorp"}],
+                                 "answer_bank": [{"q": "valid driver's license", "a": "Yes"}]}))
+        cli.cmd_import_answers(SimpleNamespace(file=str(f)))
+        cli.cmd_import_answers(SimpleNamespace(file=str(f)))  # again: nothing doubles
+        self.assertEqual(db.get_setting("learned"), [{"q": "Minimum Pay Desired", "a": "62000", "company": "KeyCorp"}])
+        self.assertEqual(db.get_setting("answers")[0], {"q": "valid driver's license", "a": "Yes"})
+        from jobbot.worker import learned
+        db.upsert_job({"id": "x:1", "source": "x", "title": "Intern", "company": "Acme", "url": "u", "dedupe_key": "x:1"})
+        db.update_job("x:1", answers={"Desired compensation?": "70000"})
+        self.assertEqual([e["q"] for e in learned()], ["Desired compensation?", "Minimum Pay Desired"])  # yours here first
+
     def test_time_limit_leaves_the_rest_for_the_next_run(self):
         done = []
         args = SimpleNamespace(requests=str(self.requests), profile=None, resume=None, out=str(self.out),
