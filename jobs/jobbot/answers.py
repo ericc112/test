@@ -1119,6 +1119,23 @@ def map_blocks(questions, ctx):
         ctx.blocks[block] = job
 
 
+def current_from_resume(ctx):
+    """Your current job when your profile doesn't name it: the one your resume lists as ongoing (else its latest).
+    Only ever fills what the profile leaves blank, and never mixes in another job's details."""
+    p = ctx.profile
+    if p.get("current_company") and p.get("current_title"):
+        return
+    work = [j for j in resume_jobs(p.get("resume_text") or "") if j["kind"] == "work"]
+    job = next((j for j in work if j["current"]), work[0] if work else None)
+    if not job or (p.get("current_company") and not _same(p["current_company"], job["company"])):
+        return
+    fill = {"current_company": job["company"], "current_title": job["title"], "current_job_location": job["location"],
+            "current_job_description": job["description"]}
+    if job["current"] and job["start"]:
+        fill["current_job_start"] = f"{MONTHS[(job['start'][1] or 1) - 1].capitalize()} {job['start'][0]}"
+    ctx.profile = {**p, **{k: v for k, v in fill.items() if v and not p.get(k)}}
+
+
 def _from_job(q, job, label, ctx):
     """A work-experience field from that job in your resume."""
     def when(ym):
@@ -1378,6 +1395,7 @@ def needs_ai(q, a, optional=False):
 
 def answer_all(questions, ctx):
     """Answer every question; ask Claude (once, in a batch) for required leftovers."""
+    current_from_resume(ctx)
     map_blocks(questions, ctx)
     answers = {q.key: answer(q, ctx) for q in questions}
     if ctx.llm is not None:
