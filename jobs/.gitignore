@@ -2,3 +2,9 @@
 data/
 __pycache__/
 *.pyc
+
+# The updater's own bookkeeping (Start-JobBot.bat runs `py -m jobbot.update`).
+.jobbot-version
+.jobbot-files
+.jobbot-setup-done
+Start-JobBot.new.bat

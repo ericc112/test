@@ -407,6 +407,10 @@ def main(argv=None):
     if not argv or argv[0].startswith("-") and argv[0] not in ("-h", "--help"):
         argv = ["serve", *argv]  # `python -m jobbot --phone` means `serve --phone`
     args = p.parse_args(argv)
+    if not getattr(args, "data", None):
+        came_from = config.adopt_old_data()  # your data, from the jobs/data folder of the copy you used before
+        if came_from:
+            print(f"Brought your profile, answers and jobs over from {came_from}. They now live in {config.DATA_DIR}.")
     args.fn(args)
 
 

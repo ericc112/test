@@ -1,6 +1,8 @@
 @echo off
 title JobBot
 cd /d "%~dp0"
+rem An update brought a newer version of this launcher: switch to it. (cmd reads this whole line first, so replacing the file is safe.)
+if exist "Start-JobBot.new.bat" ( copy /y "Start-JobBot.new.bat" "Start-JobBot.bat" >nul & del "Start-JobBot.new.bat" & "Start-JobBot.bat" & exit /b )
 echo ============================================
 echo   JobBot
 echo   Leave this window OPEN while you use it.
@@ -18,6 +20,9 @@ if %errorlevel% neq 0 (
   pause
   exit /b 1
 )
+rem Bring JobBot up to date from GitHub. Your profile, answers and jobs live in your user folder, so nothing is lost.
+py -m jobbot.update
+echo.
 if not exist ".jobbot-setup-done" (
   echo First run only: installing what JobBot needs.
   echo This can take a few minutes - please wait...

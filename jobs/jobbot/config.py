@@ -1,14 +1,25 @@
 """Paths and default settings.
 
-Everything personal (profile, resume, database, screenshots) lives under DATA_DIR,
-which is git-ignored. Override it with the JOBBOT_DATA environment variable.
+Everything personal (profile, resume, answers, database, screenshots) lives under DATA_DIR, in your own user
+folder rather than in the jobs folder: a new copy of JobBot (or an update) never touches it. On Windows that's
+%LOCALAPPDATA%\\JobBot, elsewhere ~/.jobbot. Override it with the JOBBOT_DATA environment variable.
 """
 import json
 import os
+import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = Path(os.environ.get("JOBBOT_DATA", ROOT / "data"))
+
+
+def _default_data_dir():
+    if os.environ.get("JOBBOT_DATA"):
+        return Path(os.environ["JOBBOT_DATA"])
+    local = os.environ.get("LOCALAPPDATA")
+    return Path(local) / "JobBot" if local else Path.home() / ".jobbot"
+
+
+DATA_DIR = _default_data_dir()
 DB_PATH = DATA_DIR / "jobbot.db"
 FILES_DIR = DATA_DIR / "files"
 SHOTS_DIR = DATA_DIR / "screenshots"
@@ -307,6 +318,27 @@ def use_data_dir(path):
     global DATA_DIR, DB_PATH, FILES_DIR, SHOTS_DIR
     DATA_DIR = Path(path)
     DB_PATH, FILES_DIR, SHOTS_DIR = DATA_DIR / "jobbot.db", DATA_DIR / "files", DATA_DIR / "screenshots"
+
+
+def adopt_old_data():
+    """The first time JobBot starts with its data in your user folder: bring over what an earlier copy kept in its own
+    jobs/data folder (this copy's, or the newest one in a folder next to it), so nothing has to be set up or imported
+    again. Returns the folder it came from, or None."""
+    if os.environ.get("JOBBOT_DATA") or (DATA_DIR / "jobbot.db").exists():
+        return None
+    found = [ROOT / "data" / "jobbot.db"]
+    for base in {ROOT.parent, ROOT.parent.parent}:
+        for pattern in ("*/jobs/data/jobbot.db", "*/*/jobs/data/jobbot.db", "*/data/jobbot.db"):
+            try:
+                found += base.glob(pattern)
+            except OSError:
+                continue
+    found = [f for f in found if f.is_file() and (f.parent.parent / "jobbot").is_dir()]
+    if not found:
+        return None
+    src = max(found, key=lambda f: f.stat().st_mtime).parent
+    shutil.copytree(src, DATA_DIR, dirs_exist_ok=True)
+    return src
 
 
 def ensure_dirs():
