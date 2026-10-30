@@ -52,4 +52,4 @@ Cloud containers are temporary. After any `grade`, `review`, `learn`, `add` or `
 `cd betting && python3 -m unittest discover -s tests` (numpy is the only dependency).
 
 ## Job search app (`jobs/`)
-`jobs/` is a separate project: JobBot, a local web app that searches job boards, ranks matches and fills/submits applications (see `jobs/README.md`). The betting instructions above don't apply to it. Personal data lives in `jobs/data/` (git-ignored); never commit it. Tests: `cd jobs && python3 -m unittest discover -s tests -t .`
+`jobs/` is a separate project: JobBot, a local web app that searches job boards, ranks matches and fills/submits applications (see `jobs/README.md`). The betting instructions above don't apply to it. Personal data lives outside the repo (the user folder: `%LOCALAPPDATA%\JobBot` or `~/.jobbot`, or `JOBBOT_DATA`; older copies used the git-ignored `jobs/data/`); never commit it. Tests: `cd jobs && python3 -m unittest discover -s tests -t .`

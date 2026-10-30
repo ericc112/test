@@ -46,6 +46,10 @@ It runs on your own computer: it needs a real browser, your resume, and your per
 
 The easy way: double-click **Start-JobBot.bat** in this folder. The first time you run it, it installs what JobBot needs (the Python packages and its browser) and then opens JobBot for you; after that, a double-click just opens it. Leave its window open while you use JobBot — closing it turns JobBot off.
 
+**It keeps itself up to date.** Each time it starts, Start-JobBot.bat checks GitHub for a newer JobBot and updates this folder in place (only the program; offline, it starts the version you have). There's no need to download it again.
+
+**Your data stays put.** Your profile, resume, answers, settings and jobs live in your user folder (`%LOCALAPPDATA%\JobBot` on Windows, `~/.jobbot` elsewhere; `JOBBOT_DATA` picks another), not in this folder, so updates and new copies never touch them. The first time a copy starts with nothing there, it brings over what an earlier copy kept in its own `jobs\data` folder (this one's, or the newest one in a folder next to it).
+
 Prefer to type it yourself? The commands are:
 
 ```bash
@@ -226,7 +230,7 @@ python3 -m jobbot settings search '{"keywords": ["data engineer"], ...}'
 
 ## Privacy
 
-- Everything lives in `jobs/data/`: the SQLite database, your resume, screenshots, and your API key if you save one. The folder is git-ignored. Set `JOBBOT_DATA=/some/path` to keep it elsewhere.
+- Everything lives in your user folder (`%LOCALAPPDATA%\JobBot` on Windows, `~/.jobbot` elsewhere): the SQLite database, your resume, screenshots, and your API key if you save one. Never in the repository (`jobs/data/`, used by older copies, is git-ignored). Set `JOBBOT_DATA=/some/path` to keep it elsewhere.
 - The server listens on `127.0.0.1` only. It has no login, so don't expose it with `--host 0.0.0.0` on a shared network.
 - Job boards see ordinary page requests from your computer. Employers only receive what you (or auto-submit) send.
 
