@@ -490,13 +490,11 @@ def _roles(players: dict, out_ids: set) -> tuple[list, list, str | None]:
     return rec, rush, qb
 
 
-# ------------------------------------------------------------------ the simulator
-def simulate(target: dict, history: list[dict], n: int = 50000, seed: int = 7, out_ids: set | None = None,
-             L: dict | None = None, listed: dict | None = None) -> dict:
-    """Simulate one game. target: parsed game (needs home/away, spread_home, total). history: earlier games.
-    listed: {player_id: {market: line}} from DraftKings (who the book expects to play).
-    Returns {"teams": {tid: {...arrays}}, "players": {pid: {stat: array}}, "meta": {...}}."""
-    rng = np.random.default_rng(seed)
+def game_inputs(target: dict, history: list[dict], L: dict | None = None, out_ids: set | None = None,
+                listed: dict | None = None) -> dict:
+    """Everything one simulated game reads, before any random draw: market-implied totals, team and player
+    profiles, who is active, shares after inactives are redistributed, and the per-drive TD/FG rates.
+    simulate() uses it, and the browser simulator (simlab) gets the same numbers."""
     L = L or league_params(history)
     home, away = target["home"], target["away"]
     if target.get("spread_home") is None or target.get("total") is None:
@@ -507,40 +505,19 @@ def simulate(target: dict, history: list[dict], n: int = 50000, seed: int = 7, o
     for tid, lst in (target.get("out") or {}).items():
         out_ids |= {i["id"] for i in lst if (i.get("status") or "").lower() in ("out", "doubtful", "injured reserve", "ir", "suspension")}
     opp = {home: away, away: home}
-
-    # 1. drives -> points, margin, opening drive
     d_mu = (T[home]["drives"] + T[away]["drives"]) / 2
-    D = np.clip(np.rint(rng.normal(d_mu, 1.0, n)), 7, 16).astype(int)
-    extra = rng.integers(0, 2, n)                 # one team often gets one more possession
-    home_first = rng.random(n) < 0.5
-    nd = {home: D + np.where(home_first, extra, 0), away: D + np.where(home_first, 0, extra)}
-    pts, tds, fgs, first = {}, {}, {}, {}
-    for tid in (home, away):
-        q = T[tid]["fg_per_td"]
-        p_td = implied[tid] / ((d_mu + 0.25) * (7.0 + 3.0 * q))   # +0.25: the odd extra possession
-        p_fg = q * p_td
-        s = p_td + p_fg
-        if s > 0.85:
-            p_td, p_fg = p_td * 0.85 / s, p_fg * 0.85 / s
-        maxd = nd[tid].max()
-        u = rng.random((n, maxd))
-        live = np.arange(maxd)[None, :] < nd[tid][:, None]
-        td_m, fg_m = (u < p_td) & live, (u >= p_td) & (u < p_td + p_fg) & live
-        tds[tid], fgs[tid] = td_m.sum(1), fg_m.sum(1)
-        pts[tid] = 7 * tds[tid] + 3 * fgs[tid]
-        first[tid] = td_m[:, 0] | fg_m[:, 0]
-    margin = {home: pts[home] - pts[away], away: pts[away] - pts[home]}
-
     listed = listed or {}
     season = int(target["date"][:4]) if int(target["date"][5:7]) >= 3 else int(target["date"][:4]) - 1
     seen_any = {pid for g in history for ps in g["players"].values() for pid in ps}
-    res = {"teams": {}, "players": {}, "meta": {"implied": implied, "league": L, "profiles": T, "out_ids": sorted(out_ids),
-                                                "line_implied": []}}
+    teams, line_implied = {}, []
     for tid in (home, away):
-        o = opp[tid]
-        tp, op = T[tid], T[o]
+        tp, op = T[tid], T[opp[tid]]
+        q = tp["fg_per_td"]
+        p_td = implied[tid] / ((d_mu + 0.25) * (7.0 + 3.0 * q))   # +0.25: the odd extra possession
+        p_fg = q * p_td
+        if p_td + p_fg > 0.85:
+            p_td, p_fg = p_td * 0.85 / (p_td + p_fg), p_fg * 0.85 / (p_td + p_fg)
         P = player_profiles(tid, history, L, keep=set(listed))
-        # 2. volume
         plays_mu = L["plays"] * (tp["plays"] / L["plays"]) * (op["plays_allowed"] / L["plays"])
         att_mu = plays_mu * tp["db_rate"] * (1 - tp["sack"])
         car_mu = plays_mu * (1 - tp["db_rate"])
@@ -550,27 +527,71 @@ def simulate(target: dict, history: list[dict], n: int = 50000, seed: int = 7, o
             team, name = athlete_info(pid, season)
             if team == tid:
                 P[pid] = {**implied_profile(lines, att_mu, car_mu, L), "name": name or pid}
-                res["meta"]["line_implied"].append(pid)
+                line_implied.append(pid)
         rec_ids, rush_ids, qb = _roles(P, out_ids)
+        # Attempts go to active receivers, fringe receivers, or nobody (throwaways and spikes, the league's
+        # 1 - targets/attempts). Volume vacated by inactive players goes 75% to the active players in
+        # proportion to their shares and 25% to the fringe (the backup who wasn't playing).
+        untgt = L.get("untargeted", 0.06)
+        tshare = np.concatenate([_fill(np.array([P[p]["tgt_share"] for p in rec_ids]), 1 - untgt, FRINGE_T), [untgt]])
+        cshare = _fill(np.array([P[p]["car_share"] for p in rush_ids]), 1.0, FRINGE_C)
+        teams[tid] = {"P": P, "rec_ids": rec_ids, "rush_ids": rush_ids, "qb": qb, "plays_mu": plays_mu,
+                      "p_td": p_td, "p_fg": p_fg, "tshare": tshare, "cshare": cshare,
+                      "sack_rate": min(max(tp["sack"] * op["sack_forced"] / L["sack"], 0.02), 0.15),
+                      "pass_adj": op["ypa_allowed"] / L["ypt_att"], "rush_adj": op["ypc_allowed"] / L["ypc"],
+                      "int_rate": min(max(P[qb]["int"] * op["int_forced"] / L["int"], 0.005), 0.08) if qb else None}
+    return {"L": L, "T": T, "implied": implied, "out_ids": out_ids, "d_mu": d_mu, "teams": teams, "line_implied": line_implied}
+
+
+# ------------------------------------------------------------------ the simulator
+def simulate(target: dict, history: list[dict], n: int = 50000, seed: int = 7, out_ids: set | None = None,
+             L: dict | None = None, listed: dict | None = None) -> dict:
+    """Simulate one game. target: parsed game (needs home/away, spread_home, total). history: earlier games.
+    listed: {player_id: {market: line}} from DraftKings (who the book expects to play).
+    Returns {"teams": {tid: {...arrays}}, "players": {pid: {stat: array}}, "meta": {...}}."""
+    rng = np.random.default_rng(seed)
+    gi = game_inputs(target, history, L=L, out_ids=out_ids, listed=listed)
+    L, T, implied = gi["L"], gi["T"], gi["implied"]
+    home, away = target["home"], target["away"]
+    opp = {home: away, away: home}
+
+    # 1. drives -> points, margin, opening drive
+    d_mu = gi["d_mu"]
+    D = np.clip(np.rint(rng.normal(d_mu, 1.0, n)), 7, 16).astype(int)
+    extra = rng.integers(0, 2, n)                 # one team often gets one more possession
+    home_first = rng.random(n) < 0.5
+    nd = {home: D + np.where(home_first, extra, 0), away: D + np.where(home_first, 0, extra)}
+    pts, tds, fgs, first = {}, {}, {}, {}
+    for tid in (home, away):
+        p_td, p_fg = gi["teams"][tid]["p_td"], gi["teams"][tid]["p_fg"]
+        maxd = nd[tid].max()
+        u = rng.random((n, maxd))
+        live = np.arange(maxd)[None, :] < nd[tid][:, None]
+        td_m, fg_m = (u < p_td) & live, (u >= p_td) & (u < p_td + p_fg) & live
+        tds[tid], fgs[tid] = td_m.sum(1), fg_m.sum(1)
+        pts[tid] = 7 * tds[tid] + 3 * fgs[tid]
+        first[tid] = td_m[:, 0] | fg_m[:, 0]
+    margin = {home: pts[home] - pts[away], away: pts[away] - pts[home]}
+
+    res = {"teams": {}, "players": {}, "meta": {"implied": implied, "league": L, "profiles": T, "out_ids": sorted(gi["out_ids"]),
+                                                "line_implied": gi["line_implied"]}}
+    for tid in (home, away):
+        o = opp[tid]
+        tp, op = T[tid], T[o]
+        ti = gi["teams"][tid]
+        P, rec_ids, rush_ids, qb, plays_mu = ti["P"], ti["rec_ids"], ti["rush_ids"], ti["qb"], ti["plays_mu"]
         plays = np.maximum(35, rng.normal(plays_mu + L["beta_plays"] * margin[tid], L.get("plays_resid_sd", PLAYS_SD) * PLAYS_SD_MULT, n))
         db_rate = np.clip(rng.normal(tp["db_rate"] + L["beta_db"] * margin[tid], L.get("db_resid_sd", DB_SD), n), 0.3, 0.85)
         dropbacks = np.rint(plays * db_rate).astype(int)
-        sack_rate = tp["sack"] * op["sack_forced"] / L["sack"]
-        sacks = rng.binomial(dropbacks, min(max(sack_rate, 0.02), 0.15))
+        sacks = rng.binomial(dropbacks, ti["sack_rate"])
         att = dropbacks - sacks
         car = np.rint(plays).astype(int) - dropbacks
         # 3. efficiency shocks tied to the points residual
         z = (pts[tid] - pts[tid].mean()) / max(pts[tid].std(), 1e-9)
         e_pass = np.exp(PASS_SHOCK_SD * (SHOCK_RHO * z + math.sqrt(1 - SHOCK_RHO ** 2) * rng.standard_normal(n)) - PASS_SHOCK_SD ** 2 / 2)
         e_rush = np.exp(RUSH_SHOCK_SD * (SHOCK_RHO * z + math.sqrt(1 - SHOCK_RHO ** 2) * rng.standard_normal(n)) - RUSH_SHOCK_SD ** 2 / 2)
-        pass_adj = (op["ypa_allowed"] / L["ypt_att"])
-        rush_adj = (op["ypc_allowed"] / L["ypc"])
-        # 4. shares. Attempts go to active receivers, fringe receivers, or nobody (throwaways and spikes,
-        # the league's 1 - targets/attempts). Volume vacated by inactive players goes 75% to the active
-        # players in proportion to their shares and 25% to the fringe (the backup who wasn't playing).
-        untgt = L.get("untargeted", 0.06)
-        tshare = np.concatenate([_fill(np.array([P[p]["tgt_share"] for p in rec_ids]), 1 - untgt, FRINGE_T), [untgt]])
-        cshare = _fill(np.array([P[p]["car_share"] for p in rush_ids]), 1.0, FRINGE_C)
+        pass_adj, rush_adj, tshare, cshare = ti["pass_adj"], ti["rush_adj"], ti["tshare"], ti["cshare"]
+        # 4. shares (see game_inputs), wobbled per game and split by multinomial
         tgt = _multinomial(rng, att, _dirichlet(rng, tshare, n, SHARE_ALPHA))
         carries = _multinomial(rng, np.maximum(car, 0), _dirichlet(rng, cshare, n, SHARE_ALPHA))
         # 5. per-play yards
@@ -599,9 +620,8 @@ def simulate(target: dict, history: list[dict], n: int = 50000, seed: int = 7, o
         # 6. QB line and TDs
         if qb:
             d = pl.setdefault(qb, {})
-            irate = P[qb]["int"] * op["int_forced"] / L["int"]
             d["pass_att"], d["completions"], d["pass_yds"] = att, comp_tot, rec_tot
-            d["pass_int"] = rng.binomial(att, min(max(irate, 0.005), 0.08))
+            d["pass_int"] = rng.binomial(att, ti["int_rate"])
         n_td = tds[tid]
         rush_p = np.clip(tp["rush_td_share"] + 0.004 * margin[tid], 0.15, 0.75)
         rush_td = rng.binomial(n_td, rush_p)

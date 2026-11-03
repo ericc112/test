@@ -159,6 +159,16 @@ python -m edge nfl --backtest 3-8                   # replay finished weeks agai
 - **No prices.** The NFL prop feed carries lines but no prices, so there is no market component and no label above Medium.
 - **Role flags cap a leg at Low:** back from injury, under 3 games with the team, or a line far from the model (the book likely knows something).
 
+## Sim Lab: the browser simulator (`simlab/index.html`, `edge/simlab.py`)
+A published page that runs 50,000 simulations per game in the viewer's browser, so it costs no Claude usage to run.
+- **Leagues:** NFL with every player prop (a JavaScript port of `edge/nfl.py`), plus game-level models for college football (drives), NBA and college basketball (margin/total), NHL and soccer (Poisson goals fitted to the no-vig moneyline and total; soccer adds a Dixon-Coles low-score fix), and a custom form for any game, baseball included.
+- **What you can watch:** the run counting up to 50,000 with the probabilities converging (±2 SE band); live re-simulation from a score and clock you type in; a simulated game played out event by event, with win probability re-simulated 50,000 times at every event.
+- **Data:** the page can't fetch anything itself (artifact CSP), so lines, injuries and NFL player inputs ship in `data.js`. Refresh with:
+```bash
+python -m edge simlab --out simlab/data.js     # then republish index.html with data.js beside it
+```
+- **Same honesty as the kit:** the backtest table and the calibration weights ship with the data. Its numbers are model output, not picks: `edge verify` still applies before naming one.
+
 ## Limitations
 - Entry grading assumes power-style entries, where every leg must hit. Flex and Squad Ride payouts need manual entry for now.
 - Fantasy-point props have no grader yet, because scoring differs by app.

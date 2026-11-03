@@ -91,6 +91,10 @@ def main(argv=None):
     nf.add_argument("--all", action="store_true", help="show every prop, not just the top 30")
     nf.add_argument("--log", action="store_true", help="log every priced prop to bets.csv (skips ones already logged)")
     nf.add_argument("--backtest", help="replay finished weeks against DraftKings closing lines, e.g. 3-8")
+    sl = sub.add_parser("simlab", help="write the data file for the browser simulator (Sim Lab)")
+    sl.add_argument("--out", default="simlab_data.js")
+    sl.add_argument("--week", type=int, help="NFL week (default: the next one with games to play)")
+    sl.add_argument("--no-backtest", action="store_true", help="skip the ~40 s NFL backtest summary")
     t = sub.add_parser("tag")
     t.add_argument("id")
     t.add_argument("reason")
@@ -293,6 +297,9 @@ def main(argv=None):
             print(f"Logged {added} new prop(s) to bets.csv.")
     elif args.cmd == "nfl":
         _nfl(args)
+    elif args.cmd == "simlab":
+        from . import simlab
+        print(simlab.export(args.out, nfl_week=args.week, backtest_weeks=None if args.no_backtest else (3, 8)))
     elif args.cmd == "tag":
         if L.base_tag(args.reason) not in R.TAGS:
             print(f"note: '{args.reason}' is not a standard tag ({', '.join(R.TAGS)}); recorded anyway")
