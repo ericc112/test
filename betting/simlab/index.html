@@ -1902,17 +1902,21 @@ function nbaAnim(e, idx) {
       const add = (side, i, f, v) => { if (i != null && i >= 0 && B[side][i]) B[side][i][f] += v; };
       if (x.k === "shot") { if (x.made) { add(o, x.who, "pts", (x.three ? 3 : 2) + (x.and1 ? 1 : 0)); add(o, x.ast, "ast", 1); } else add(x.orb ? o : 1 - o, x.rb, "reb", 1); }
       if (x.k === "ft") add(o, x.who, "pts", x.m.filter(Boolean).length); });
-    bcBox(); } };
+  } };
 }
 function pName(pl, side, i, caps) { if (!pl || i == null || i < 0 || !pl[side] || !pl[side][i]) return ""; const n = lastName(pl[side][i]); return caps ? n.toUpperCase() : n; }
 const nbaPName = (side, i, caps) => pName(BC.pnames, side, i, caps);
+// Seconds played so far in the simulated game (48 minutes of regulation, then 5-minute overtimes).
+function nbaElapsed() { const s = BC.s || {}; if (s.clock == null) return 0; const ot = s.ot || 0; return Math.max(0, ot ? 2880 + (ot - 1) * 300 + (300 - s.clock) : 2880 - s.clock); }
 function bcBox() {
   const el = $("bcBox"); if (!BC.pbox || BC.sport !== "nba") { el.hidden = true; return; }
-  el.hidden = false; const g = BC.g;
-  el.innerHTML = [1, 0].map((side) => { const rows = BC.pbox[side].map((r, i) => ({ ...r, nm: BC.pnames[side][i], mn: BC.mins ? BC.mins[side][i] : null })).filter((r) => r.mn == null || r.mn > 0.5)
-    .sort((a, b) => b.pts - a.pts || b.reb - a.reb);
-    return `<div><table><caption>${esc(side === 0 ? g.home : g.away)}</caption><thead><tr><th>Player</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th></tr></thead><tbody>${rows.map((r) =>
-      `<tr><td>${esc(r.nm)}</td><td>${r.mn == null ? "—" : Math.round(r.mn)}</td><td>${r.pts}</td><td>${r.reb}</td><td>${r.ast}</td></tr>`).join("")}</tbody></table></div>`; }).join("");
+  el.hidden = false; const g = BC.g, gone = nbaElapsed() / 2880;
+  // each player's minutes for this simulated game, accrued evenly with the clock: substitutions aren't modelled
+  el.innerHTML = [1, 0].map((side) => { const rows = BC.pbox[side].map((r, i) => ({ ...r, nm: BC.pnames[side][i], full: BC.mins ? BC.mins[side][i] : null })).filter((r) => r.full == null || r.full > 0.5)
+    .sort((a, b) => b.pts - a.pts || b.reb - a.reb || (b.full || 0) - (a.full || 0));
+    return `<div><table><caption>${esc(side === 0 ? g.home : g.away)}</caption><thead><tr><th>Player</th><th title="Minutes so far: the player's minutes for this simulated game, building up with the clock">MIN</th><th>PTS</th><th>REB</th><th>AST</th></tr></thead><tbody>${rows.map((r) =>
+      `<tr><td>${esc(r.nm)}</td><td>${r.full == null ? "—" : Math.round(r.full * gone)}</td><td>${r.pts}</td><td>${r.reb}</td><td>${r.ast}</td></tr>`).join("")}</tbody></table></div>`; }).join("") +
+    `<p class="bc-note" style="grid-column:1/-1;margin:0">Minutes build up with the clock at each player's share for this game (${BC.mins ? "drawn from his projected minutes" : "projected"}). Who is on the floor at a given moment isn't modelled.</p>`;
 }
 
 // ---------- NHL ----------
@@ -2026,6 +2030,7 @@ function bcBug(final) {
     <span class="bc-wpt">${wp == null ? "win prob…" : `${esc(g.home)} ${Math.round(100 * wp)}%`}</span>`;
   $("bcWpA").style.width = wp == null ? "50%" : `${100 * (1 - wp)}%`; $("bcWpH").style.width = wp == null ? "50%" : `${100 * wp}%`;
   $("bcWpA").style.background = C.away; $("bcWpH").style.background = C.home;
+  if (BC.sport === "nba") bcBox();
 }
 function bcWp(e) {
   if (BC.wpBusy || e.kind === "kick") return; const k = BC.sport;
