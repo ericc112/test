@@ -295,6 +295,30 @@ class Availability(unittest.TestCase):
         self.assertLess(s1["p3"], s0["p3"])
 
 
+class SeasonPrior(unittest.TestCase):
+    def test_prior_moves_margin_not_total(self):
+        from gamesim import nba
+        R = dict(Basketball.R, league=dict(Basketball.R["league"]), teams={"AAA": {"games": 4}, "BBB": {"games": 4}}, and1=0.08)
+        prior = {"AAA": {"net_last": 6.0, "roster_delta": -2.0}, "BBB": {"net_last": -4.0, "roster_delta": 1.0}}
+        sh, sa = nba.prior_shifts(R, prior, "AAA", "BBB", k=4, rho=0.5)
+        self.assertAlmostEqual(sh, 0.5 * 0.5 * 4.0, places=6)          # w = 4/(4+4), target 0.5 x (6 - 2), current 0
+        self.assertAlmostEqual(sa, 0.5 * 0.5 * -3.0, places=6)
+        H0 = nba.side(R, "_", "_", True); A0 = nba.side(R, "_", "_", False)
+        H1, A1 = nba.apply_prior(H0, A0, R, sh, sa)
+        pace = R["league"]["pace"]
+        dm = pace * ((nba.ppp_expected(H1, .08) - nba.ppp_expected(A1, .08)) - (nba.ppp_expected(H0, .08) - nba.ppp_expected(A0, .08)))
+        dt = pace * ((nba.ppp_expected(H1, .08) + nba.ppp_expected(A1, .08)) - (nba.ppp_expected(H0, .08) + nba.ppp_expected(A0, .08)))
+        self.assertAlmostEqual(dm, sh - sa, delta=0.1)
+        self.assertAlmostEqual(dt, 0.0, delta=0.1)
+
+    def test_roster_delta_counts_arrivals_and_departures(self):
+        from gamesim import nba
+        lv = {"1": {"name": "Star", "value": 8.0, "gp": 82, "teams": {"AAA": 1.0}}, "2": {"name": "Wing", "value": 4.0, "gp": 41, "teams": {"BBB": 0.5}}}
+        R0 = {"league": dict(Basketball.R["league"]), "teams": {}, "and1": 0.07}
+        p = nba.preseason_prior(R0, lv, "BBB", {"1"})                     # the star moved from AAA to BBB, the wing left
+        self.assertAlmostEqual(p["roster_delta"], nba.INJURY_BETA * (8.0 - 4.0 * 0.5))
+
+
 class Cutoffs(unittest.TestCase):
     """Audit M1/M2: ratings for a US day use every game of earlier US days and nothing from that day."""
 

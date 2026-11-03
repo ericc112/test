@@ -405,6 +405,9 @@ def backtest(games: list[dict], minutes: int, shot_clock: int, min_games: int = 
             if availability and minutes == 48:               # fitted on the NBA only
                 H, A, det = sides_with_availability(R, games, g, cut, absent_from_box("nba" if minutes == 48 else "ncaab", games, g, cut),
                                                     "nba" if minutes == 48 else "ncaab")
+                ctx = prior_context("nba", int(g["date"][:4]) if g["date"][5:7] >= "09" else int(g["date"][:4]) - 1) if PRIOR_K else None
+                box = _box_cached("nba", g["id"])          # the active roster at tip-off
+                H, A, _ = with_prior(H, A, R, ctx, g["home"], g["away"], {g[s_]: {r["id"] for r in box.get(g[s_], [])} for s_ in ("home", "away")})
             else:
                 H, A, det = side(R, g["home"], g["away"], not g["neutral"]), side(R, g["away"], g["home"], False), None
             sim = simulate(H, A, R, minutes, n=n, seed=seed + len(recs), shot_clock=shot_clock)
@@ -679,3 +682,106 @@ def absent_tonight(lg: str, games: list[dict], team: str, before: str, out_names
     roster = {r["id"] for r in (_box_cached(lg, tg[-1]["id"]).get(team) or [])} if tg else set()
     names = {n.lower() for n in out_names}
     return {pid for pid, v in vals["players"].items() if v["name"].lower() in names or (roster and pid not in roster)}
+
+
+# ------------------------------------------------------------------ preseason prior: last season, moved with the players
+# Early in a season each team's rating is a handful of games shrunk toward league average. The prior replaces "average"
+# with last season's strength, regressed toward average (PRIOR_RHO) and corrected for players who left or arrived (their
+# Game Score value x INJURY_BETA), and fades as this season's games pile up (worth PRIOR_K games). Both constants are
+# set by the fair test: tuned on 2025-26 (prior from 2024-25), judged on 2026-27 (prior from 2025-26).
+# OFF: the fair test (2026-11-03) did not show a reliable gain. Tuned on all of 2025-26 (979 games) the best setting
+# (k 4, rho 0.4) moved the margin RMSE 14.478 -> 14.464: better Oct-Dec (14.42 -> 14.26), slightly worse Jan-Apr
+# (14.50 -> 14.53). On the held-out 2026-27 games (93) it moved 15.08 -> 14.83 (CI of the change includes 0) while
+# winners right fell from 59 to 55. Tuned on Oct-Dec only (k 25, rho 0.55) it hurt Jan-Apr significantly.
+PRIOR_K = None
+PRIOR_RHO = None
+
+
+def team_net(R: dict, team: str) -> float:
+    """Points per game better than a league-average team on a neutral floor, at league pace."""
+    and1 = R.get("and1", 0.07)
+    return R["league"]["pace"] * (ppp_expected(side(R, team, "_", False), and1) - ppp_expected(side(R, "_", team, False), and1))
+
+
+def season_player_values(lg: str, games: list[dict], before: str) -> dict:
+    """Every player's season: {pid: {name, value (per game he played, vs his team's bench), gp, teams: {team: share of
+    that team's games he played}}}. A player traded mid-season gets his games-weighted value across teams."""
+    teams = sorted({g[s] for g in games if g["final"] and g["date"] < before for s in ("home", "away")})
+    out = {}
+    for t in teams:
+        v = player_values(lg, games, t, before)
+        for pid, p in v["players"].items():
+            o = out.setdefault(pid, {"name": p["name"], "vsum": 0.0, "gp": 0, "teams": {}})
+            o["vsum"] += p["value"] * p["gp"]
+            o["gp"] += p["gp"]
+            o["teams"][t] = 1.0 - p["missed_share"]
+    for o in out.values():
+        o["value"] = o["vsum"] / max(o["gp"], 1)
+    return out
+
+
+def preseason_prior(R_last: dict, last_vals: dict, team: str, roster_now: set, games_last: int = 82) -> dict:
+    """Last season's net rating for `team`, plus the value of players who arrived minus those who left (each weighted
+    by how much he played: arrivals by games played last season, leavers by their share of this team's games)."""
+    arrived = [(p["name"], p["value"] * min(p["gp"] / games_last, 1.0)) for pid, p in last_vals.items()
+               if pid in roster_now and team not in p["teams"]]
+    left = [(p["name"], p["value"] * p["teams"][team]) for pid, p in last_vals.items()
+            if team in p["teams"] and pid not in roster_now]
+    delta = INJURY_BETA * (sum(v for _, v in arrived) - sum(v for _, v in left))
+    return {"net_last": team_net(R_last, team) if team in R_last["teams"] else 0.0, "roster_delta": delta,
+            "arrived": sorted(arrived, key=lambda x: -x[1])[:4], "left": sorted(left, key=lambda x: -x[1])[:4]}
+
+
+def prior_shifts(R: dict, prior: dict, home: str, away: str, k: float | None = None, rho: float | None = None) -> tuple:
+    """Margin points each team moves by when its current rating is blended with the prior (weight k / (k + games))."""
+    k, rho = PRIOR_K if k is None else k, PRIOR_RHO if rho is None else rho
+    out = []
+    for t in (home, away):
+        n = R["teams"].get(t, {}).get("games", 0)
+        w = k / (k + n) if k else 0.0
+        target = rho * (prior[t]["net_last"] + prior[t]["roster_delta"])
+        out.append(w * (target - (team_net(R, t) if t in R["teams"] else 0.0)))
+    return tuple(out)
+
+
+def apply_prior(H: dict, A: dict, R: dict, s_home: float, s_away: float) -> tuple:
+    """Move the margin by s_home - s_away without moving the total: each offense up by half its own shift and down by
+    half the opponent's."""
+    d = (s_home - s_away) / 2
+    return shift_offense(H, R, d), shift_offense(A, R, -d)
+
+
+LAST_SEASON = {2025: ("20241022", "20250413"), 2026: ("20251021", "20260412")}   # regular season of the year before
+
+
+def prior_context(lg: str, season_year: int, _memo={}) -> dict | None:
+    """Last season's ratings and player values (for the preseason prior), or None if that season isn't available."""
+    key = (lg, season_year)
+    if key not in _memo:
+        span = LAST_SEASON.get(season_year)
+        if lg != "nba" or span is None:
+            _memo[key] = None
+        else:
+            G0 = season_games(lg, *span)
+            R0 = ratings(G0, "2099-01-01", 48)
+            R0["and1"] = 0.07
+            _memo[key] = {"R0": R0, "lv": season_player_values(lg, G0, "2099-01-01"), "season": span}
+    return _memo[key]
+
+
+def latest_roster(lg: str, games: list[dict], team: str, before: str) -> set:
+    """Players on the team's most recent box score before `before` (played or not)."""
+    tg = sorted((g for g in games if g["final"] and g["date"] < before and team in (g["home"], g["away"])), key=lambda g: g["date"])
+    return {r["id"] for r in (_box_cached(lg, tg[-1]["id"]).get(team) or [])} if tg else set()
+
+
+def with_prior(H: dict, A: dict, R: dict, ctx: dict | None, home: str, away: str, rosters: dict) -> tuple:
+    """Apply the preseason prior (no-op while PRIOR_K is unset or there's no last-season context)."""
+    if not ctx or not PRIOR_K:
+        return H, A, None
+    prior = {t: preseason_prior(ctx["R0"], ctx["lv"], t, rosters[t]) for t in (home, away)}
+    sh, sa = prior_shifts(R, prior, home, away)
+    H2, A2 = apply_prior(H, A, R, sh, sa)
+    for t, s in ((home, sh), (away, sa)):
+        prior[t]["shift"] = s
+    return H2, A2, prior

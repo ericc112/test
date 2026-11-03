@@ -206,3 +206,27 @@ Backtest on finished games it never saw (`likely_bt.py`):
 \*The NHL "spread" is a ±1.5 puck line, not a margin estimate.
 
 The most likely game is far closer to reality than a random simulated game and about as close as the closing line, but not better.
+
+## Tested after review, not switched on: preseason prior moved with the players
+
+**Idea:**
+- Start each team from last season's strength, regressed toward average.
+- Correct it for players who left or arrived (Game Score value × the availability scale).
+- Let it fade as this season's games come in (worth k games).
+
+**Fair test:** tune on 2025-26 with 2024-25 as "last season", then judge on 2026-27 with 2025-26 as "last season". The tuning never sees 2026-27. Expected margins are the engine's analytic means with availability, so only the prior differs.
+
+**Results:**
+
+| | Without prior | With prior |
+|---|---|---|
+| Tuned on all of 2025-26 (979 games), best k 4, rho 0.4: margin RMSE | 14.478 | 14.464 |
+| — Oct–Dec | 14.42 | 14.26 |
+| — Jan–Apr | 14.50 | 14.53 |
+| Tuned on Oct–Dec only (k 25, rho 0.55): Oct–Dec | 14.42 | 14.11 (the line: 14.11) |
+| Tuned on Oct–Dec only (k 25, rho 0.55): Jan–Apr | 14.50 | 14.74 (significantly worse) |
+| **Held out, 2026-27 (93 games): margin RMSE** | 15.08 | 14.83 (CI of the change includes 0; the line: 13.49) |
+| Held out, 2026-27: winners right | 59 | 55 |
+| Held out, 2026-27: games closer to the result | | 48% |
+
+**Verdict: not a reliable gain, so `PRIOR_K` stays unset.** The code (`preseason_prior`, `prior_shifts`, `with_prior`) and its tests remain for a later, better-specified attempt; candidates are a weight that stops after the first weeks, and a better player value than Game Score.

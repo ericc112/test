@@ -279,7 +279,13 @@ def engines(data: dict) -> dict:
         gone = lambda team: {i["name"] for i in inj if i["team"] == team and (i["status"] or "").lower() in ("out", "doubtful")}
         absent = {s_: gnba.absent_tonight("nba", G, g[s_], cut, gone(g[s_])) for s_ in ("home", "away")}
         H, A, det = gnba.sides_with_availability(R, G, g, cut, absent)
+        # preseason prior: last season's strength moved with the players (fades as this season's games pile up)
+        H, A, prior = gnba.with_prior(H, A, R, gnba.prior_context("nba", y) if gnba.PRIOR_K else None, g["home"], g["away"],
+                                      {g[s_]: gnba.latest_roster("nba", G, g[s_], cut) for s_ in ("home", "away")})
         sides[g["id"]] = {"home": {k: round(v, 4) for k, v in H.items()}, "away": {k: round(v, 4) for k, v in A.items()},
+                          "prior": None if not prior else {t: {"net_last": round(v["net_last"], 2), "roster_delta": round(v["roster_delta"], 2),
+                                                                "shift": round(v["shift"], 2), "arrived": [n for n, _ in v["arrived"][:2]],
+                                                                "left": [n for n, _ in v["left"][:2]]} for t, v in prior.items()},
                           "games": [R["teams"].get(g["home"], {}).get("games", 0), R["teams"].get(g["away"], {}).get("games", 0)],
                           "availability": {s_: {"points": round(det[s_]["points"], 2), "rows": det[s_]["rows"][:6]} for s_ in ("home", "away")},
                           "no_availability": {"home": {k: round(v, 4) for k, v in gnba.side(R, g["home"], g["away"], True).items()},

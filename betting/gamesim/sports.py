@@ -41,6 +41,9 @@ def run_basketball(lg: str, game_id: str, sims: int = 50000, seed: int = 2026, o
                      for i in t.get("injuries", []) or [] if (i.get("status") or "").lower() in ("out", "doubtful")} for s_ in ("home", "away")}
         absent = {s_: nba.absent_tonight(lg, games, target[s_], day, outs[s_]) for s_ in ("home", "away")}
         H, A, avail = nba.sides_with_availability(R, games, target, day, absent, lg)
+        y0 = int(target["date"][:4]) if target["date"][5:7] >= "09" else int(target["date"][:4]) - 1
+        H, A, _prior = nba.with_prior(H, A, R, nba.prior_context(lg, y0) if nba.PRIOR_K else None, target["home"], target["away"],
+                                      {target[s_]: nba.latest_roster(lg, games, target[s_], day) for s_ in ("home", "away")})
     else:
         H = nba.side(R, target["home"], target["away"], not target["neutral"])
         A = nba.side(R, target["away"], target["home"], False)
