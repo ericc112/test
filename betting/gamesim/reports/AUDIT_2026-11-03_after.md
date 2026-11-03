@@ -230,3 +230,29 @@ The most likely game is far closer to reality than a random simulated game and a
 | Held out, 2026-27: games closer to the result | | 48% |
 
 **Verdict: not a reliable gain, so `PRIOR_K` stays unset.** The code (`preseason_prior`, `prior_shifts`, `with_prior`) and its tests remain for a later, better-specified attempt; candidates are a weight that stops after the first weeks, and a better player value than Game Score.
+
+## Applied after review: player layer prior and role swings (proposal 4)
+
+**Fixes:**
+1. Shrink each player's per-minute volume and shooting toward **his own last season**, worth 100 minutes, instead of his team's average.
+2. A per-player, per-game **role swing**: a log-normal of 0.35 on shots, rebounds and assists, drawn separately for each.
+
+**Tuning:** 2026-27 games before Nov 2 only.
+- *Prior strength:* projected-points MAE fell from 4.88 (team average) to 4.76 (100 minutes, best of 100 to 3,200). Starters' bias moved from −0.70 to +0.50.
+- *Role swing:* the 10–90% ranges held 29% of points outside them with no swing; 0.30 gave 22%, 0.40 gave 19%, so 0.35 was used.
+
+**Fair test, the same 143 Nov 2 starters with DraftKings pre-game points lines:**
+
+| | Before | After |
+|---|---|---|
+| Over/under calls right | 71 of 143 | 69 of 143 |
+| Brier (a coin flip is 0.250) | 0.278 | 0.275 |
+| Points MAE | 5.31 | 5.23 (the line: 4.83) |
+| Stars (lines ≥ 20): projection minus line | −2.4 | −1.2 |
+| On the 96 priced lines: model's calls right / the book's lean right | 43 / 51 | 40 / 51 |
+
+**Season calibration after (59 games, 1,164 player-games):** outside the 10–90% range for points 19.5%, rebounds 17.2%, assists 21.3%, 3s 24.1%. The projection MAE now beats a plain season average (points 4.76 vs 4.85, rebounds 1.92 vs 1.99).
+
+**Verdict:**
+- The projections and ranges are more accurate, so both fixes are switched on (`PLAYER_PRIOR_MIN`, `PLAYER_SHOCK`).
+- The over/under calls did **not** improve and remain at coin-flip level. The book's lines are better, and the page says so.

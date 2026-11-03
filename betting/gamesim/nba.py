@@ -461,8 +461,11 @@ def reb_credit(games: list[dict], before: str) -> float:
     return float(min(1.0, reb / miss)) if miss else 0.93
 
 
-PLAYER_PRIOR_MIN = None   # minutes of last-season per-minute rates in each player's prior (None: team average, as before)
-PLAYER_SHOCK = 0.0        # per-player per-game volume shock (log SD) used by the browser player layer
+# Player layer, fair-tested 2026-11-03: tuned on 2026-27 games before Nov 2, judged on the Nov 2 starters' DraftKings
+# points lines. Projection MAE 5.31 -> 5.23, stars' gap to the line -2.4 -> -1.2, Brier 0.278 -> 0.275 (a coin flip
+# is 0.250); over/under calls 71 -> 69 of 143, no better: the book's lean got 51 of 96 to the model's 40.
+PLAYER_PRIOR_MIN = 100.0  # minutes of the player's own last-season per-minute rates in his prior (else team average)
+PLAYER_SHOCK = 0.35       # per-player per-game role swing (log SD): 10-90% ranges hold ~20% of results (was 29%)
 
 
 def season_player_totals(lg: str, games: list[dict], before: str = "2099-01-01") -> dict:
@@ -482,7 +485,7 @@ def season_player_totals(lg: str, games: list[dict], before: str = "2099-01-01")
 
 
 def player_profiles(lg: str, games: list[dict], team: str, before: str, out_names: set | None = None, recent: int = 5,
-                    prior_tot: dict | None = None, prior_min: float | None = None) -> dict:
+                    prior_tot: dict | None = None, prior_min: float | None = -1.0) -> dict:
     """Rotation for one team from this season's box scores before `before`: projected minutes (recency-weighted
     over the last `recent` team games, 0 when a player sat), per-minute rates for 2PA, 3PA, FTA, assists, offensive
     and defensive rebounds and turnovers (shrunk toward the team's per-player average by 60 minutes), and 2P%, 3P%,
@@ -491,6 +494,8 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
     season minutes and flagged `returning`. Who is on the floor together is not modelled: shares scale with each
     player's minutes."""
     out_names = {n.lower() for n in (out_names or set())}
+    if prior_min == -1.0:
+        prior_min = PLAYER_PRIOR_MIN
     tg = [g for g in games if g["final"] and g["date"] < before and team in (g["home"], g["away"])]
     boxes = []
     for g in tg:
@@ -566,7 +571,7 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
     return {"players": players, "games": len(boxes), "ast_rate": T["ast"] / max(T["fgm"], 1), "shock": PLAYER_SHOCK}
 
 
-def player_backtest(lg: str, games: list[dict], before: str, min_prior: int = 3) -> dict:
+def player_backtest(lg: str, games: list[dict], before: str, min_prior: int = 3, prior_tot: dict | None = None) -> dict:
     """Out-of-sample check of the player inputs: for each finished game, profiles from earlier games only (players who
     did not play removed, as if the injury report were known) give expected points, rebounds and assists as
     minutes x per-minute rates; compared with the box score and with the season-to-date per-game average. This scores
@@ -582,7 +587,7 @@ def player_backtest(lg: str, games: list[dict], before: str, min_prior: int = 3)
         for team in (g["home"], g["away"]):
             rows = box.get(team) or []
             sat = {r["name"] for r in rows if r["dnp"]}
-            pr = player_profiles(lg, games, team, g["date"], sat)
+            pr = player_profiles(lg, games, team, g["date"], sat, prior_tot=prior_tot)
             if pr["games"] < min_prior:
                 continue
             prof = {q["id"]: q for q in pr["players"]}

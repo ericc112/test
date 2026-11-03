@@ -290,12 +290,14 @@ def engines(data: dict) -> dict:
                           "availability": {s_: {"points": round(det[s_]["points"], 2), "rows": det[s_]["rows"][:6]} for s_ in ("home", "away")},
                           "no_availability": {"home": {k: round(v, 4) for k, v in gnba.side(R, g["home"], g["away"], True).items()},
                                               "away": {k: round(v, 4) for k, v in gnba.side(R, g["away"], g["home"], False).items()}}}
+    span0 = gnba.LAST_SEASON.get(y)                       # player layer prior: each player's own last season
+    PT = gnba.season_player_totals("nba", gnba.season_games("nba", *span0)) if span0 else None
     for g in nba_games:                                   # player layer: rotation, per-minute rates, injury report
         inj = [i for i in g.get("injuries", []) if i["team"] in (g["home"], g["away"])]
         gone = lambda team: {i["name"] for i in inj if i["team"] == team and (i["status"] or "").lower() in ("out", "doubtful")}
         pl = {}
         for side in ("home", "away"):
-            pr = gnba.player_profiles("nba", G, g[side], gs_data.cutoff(gs_data.us_day(g["start"])), gone(g[side]))
+            pr = gnba.player_profiles("nba", G, g[side], gs_data.cutoff(gs_data.us_day(g["start"])), gone(g[side]), prior_tot=PT)
             pr["players"] = [{k: round(v, 4) if isinstance(v, float) else v for k, v in p.items()} for p in pr["players"]]
             pr["ast_rate"] = round(pr["ast_rate"], 4)
             pl[side] = pr
@@ -307,7 +309,7 @@ def engines(data: dict) -> dict:
                         "avg_home": {k: round(v, 4) for k, v in gnba.side(R, "_", "_", True).items()}},
                   "sides": sides, "backtest": _bt("nba", lambda: gnba.backtest(G, 48, 24, n=6000)), "backtest_prior": gbt.prior_metrics("nba"),
                   "info": gbt.info_weights(_bt_records("nba") + gbt.prior_records("nba")),
-                  "players_bt": _bt("nba_players", lambda: {"metrics": gnba.player_backtest("nba", G, cut)}),
+                  "players_bt": _bt("nba_players", lambda: {"metrics": gnba.player_backtest("nba", G, cut, prior_tot=PT)}),
                   # calibration of the browser player layer on finished games (written by the audit's pl_check.js run)
                   "players_cal": _json_or_none(os.path.join(gs_data.CACHE, "bt_nba_players_cal.json"))}
     # the "most likely game" backtest (written by the audit's likely_bt.py): accuracy of the most common simulated score
