@@ -148,6 +148,10 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
 .warnbox { border-left: 3px solid var(--warn); padding: 8px 12px; background: color-mix(in srgb, var(--warn) 10%, transparent); border-radius: 0 8px 8px 0; font-size: .88rem }
 .honest table { min-width: 560px }
 @media (prefers-reduced-motion: reduce) { .bar i { transition: none } }
+.pill.PLAY { background: color-mix(in srgb, var(--good) 22%, transparent); color: var(--good) }
+.pill.PASS { background: color-mix(in srgb, var(--muted) 16%, transparent); color: var(--muted) }
+table.dec, #factorTbl { min-width: 600px }
+#qbRow { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) }
 </style>
 
 <div class="wrap">
@@ -190,6 +194,8 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
           </div>
         </div>
         <div class="inputs" id="inputs"></div>
+        <div class="row" id="engineRow"></div>
+        <div class="inputs" id="qbRow" hidden></div>
         <div class="row">
           <button class="btn primary" id="runBtn">Run 50,000</button>
           <button class="btn" id="resetBtn">Reset to DraftKings</button>
@@ -224,6 +230,14 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
             <div class="legend"><span>Home win % as runs pile up. The band is simulation error (±2 SE): it shrinks with more runs. Model error doesn't.</span></div>
           </div>
         </div>
+      </section>
+
+      <section class="panel" id="decisionPanel" hidden aria-label="Market comparison">
+        <div class="row"><h2>Market comparison</h2><span class="spacer"></span><span class="note" id="decNote"></span></div>
+        <div class="tbl-wrap"><table id="decTbl" class="dec"><thead></thead><tbody></tbody></table></div>
+        <p class="note" id="decErr"></p>
+        <div class="row"><button class="btn" id="factorBtn">Compute factor table</button><span class="note" id="factorNote"></span></div>
+        <div class="tbl-wrap" id="factorWrap" hidden><table id="factorTbl"><thead></thead><tbody></tbody></table></div>
       </section>
 
       <section class="panel" aria-label="Live game">
@@ -543,12 +557,181 @@ function anchoredOver(v, dk, line) {
   const pu = Number.isInteger(line) ? push / v.length : 0; return (over / v.length) / Math.max(1 - pu, 1e-9);
 }
 
+// ---------- gamesim engines (ports of betting/gamesim: nfl_pbp.py, nba.py, nhl.py) ----------
+const RZ_EDGES = [1, 2, 3, 5, 7, 10, 13, 16, 20];
+const CHART = new Set([-2, -5, -9, -10, -12, -13, 1, 5, 12]);
+const sgm = (z) => 1 / (1 + Math.exp(-z));
+const lgt = (p) => Math.log(p / (1 - p));
+function pickArr(a) { return a[Math.floor(rnd() * a.length)]; }
+function dot(w, x) { let s = 0; for (let i = 0; i < w.length; i++) s += w[i] * x[i]; return s; }
+function softPick(W, x, adj) {
+  const K = W.length, z = new Array(K); let mx = -1e9;
+  for (let k = 0; k < K; k++) { z[k] = dot(W[k], x) + (adj ? adj[k] : 0); if (z[k] > mx) mx = z[k]; }
+  let s = 0; for (let k = 0; k < K; k++) { z[k] = Math.exp(z[k] - mx); s += z[k]; }
+  let u = rnd() * s; for (let k = 0; k < K; k++) { u -= z[k]; if (u <= 0) return k; } return K - 1;
+}
+function nflTempo(q, h, d) { if ((q === 2 && h < 120) || (q >= 4 && h < 300 && d <= 0) || (q >= 4 && h < 600 && d < -8)) return 1; if (q >= 4 && h < 600 && d > 0) return 2; return 0; }
+const ybin = (t) => t <= 3 ? 0 : t <= 7 ? 1 : t <= 12 ? 2 : 3;
+const zbin = (y) => y <= 10 ? 0 : y <= 20 ? 1 : y <= 40 ? 2 : y <= 80 ? 3 : 4;
+function poolKey(down, togo, yl) {
+  const dg = down >= 3 ? 1 : 0;
+  if (yl <= 20) { const v = Math.ceil(yl); let i = 0; while (i < RZ_EDGES.length && RZ_EDGES[i] < v) i++; return 100 + dg * 10 + i; }
+  return dg * 20 + ybin(togo) * 5 + zbin(yl);
+}
+const callX = (down, togo, yl, diff, tp, q2) => [1, +(down === 2), +(down === 3), Math.log(Math.max(togo, 1)), yl / 100, Math.max(-21, Math.min(21, diff)) / 10, +(tp === 1), +(tp === 2), +q2];
+function fourthX(yl, togo, diff, qtr, hs) { const late = qtr >= 4 && hs < 600;
+  return [1, yl / 100, (yl / 100) ** 2, Math.log(Math.max(togo, 1)), Math.max(-21, Math.min(21, diff)) / 10, +(late && diff < 0), +(late && diff > 0), +(qtr === 2 && hs < 120), Math.max(-3, Math.min(3, (yl + 17 - 45) / 10))]; }
+const passX = (down, togo, yl, tp) => [1, +(down === 2), +(down === 3), Math.log(Math.max(togo, 1)), yl / 100, +(yl <= 10), +(tp === 1)];
+function nflGain(g0, yl, mult) {
+  if (yl <= 20) { if (g0 >= 1) return yl; if (g0 > 0) return Math.max(1, Math.min(Math.round(g0 * yl * mult), yl - 1)); return g0; }
+  return g0 > 0 ? Math.max(1, Math.round(g0 * mult)) : g0;
+}
+
+// NFL: every snap. C = {M, home, away, hfa, wind, env}; st = optional live state; log = optional array of states after each snap
+function nflPlayGame(C, st, log) {
+  const M = C.M, S = [C.home, C.away], env = C.env !== false;
+  const z = env ? [normal(), normal()] : [0, 0];
+  const ym = z.map((v) => Math.exp(M.yard_sd * v - M.yard_sd * M.yard_sd / 2));
+  const hb = [1 + (C.hfa || 0), 1];
+  const score = [st ? st.sh : 0, st ? st.sa : 0];
+  let half = st ? st.half : 1, clock = st ? st.clock : 1800;
+  const recv1 = st && st.recv1 != null ? st.recv1 : (rnd() < 0.5 ? 1 : 0);
+  let poss = 0, yl = 70, down = 1, togo = 10, tos = st && st.tos ? st.tos.slice() : [3, 3];
+  const otPoss = [0, 0]; let wentOT = half === 3, plays = 0, done = false;
+  const kickoffTo = (rec, trail) => { let s = pickArr(M.kick), r = rec; if (trail) { if (rnd() < M.onside) { r = 1 - rec; s = 55; } else s = 50; } poss = r; yl = s; down = 1; togo = Math.min(10, s); };
+  if (st && st.poss != null) { poss = st.poss; yl = st.yl; down = st.down; togo = st.togo; } else kickoffTo(recv1, false);
+  while (!done && plays < 450) {
+    const o = poss, d = 1 - o, diff = score[o] - score[d], hs = clock;
+    const qtr = half === 1 ? (hs > 900 ? 1 : 2) : half === 2 ? (hs > 900 ? 3 : 4) : 5;
+    const tp = nflTempo(qtr, hs, diff); plays++;
+    const kneel = (qtr >= 4 && diff > 0 && down <= 3 && hs <= 42 * (4 - down) - 38 * tos[d]) || (qtr === 2 && hs <= 40 && yl >= 60 && diff >= 0);
+    let act = 0;                                                       // 0 run, 1 pass, 2 punt, 3 FG, 4 kneel
+    if (down === 4 && !kneel) { const ch = softPick(M.W4, fourthX(yl, togo, diff, qtr, hs)); act = ch === 1 ? 2 : ch === 2 ? 3 : 0; }
+    if (hs <= 8 && yl + 17 <= 58 && (qtr === 2 || (qtr >= 4 && diff >= -3 && diff <= 0)) && !kneel) act = 3;
+    if (act === 0 && !kneel && rnd() < sgm(dot(M.b_call, callX(Math.min(down, 3), togo, yl, diff, tp, qtr === 2 && hs < 120)) + S[o].pass_offset)) act = 1;
+    if (kneel) act = 4;
+    const penal = act <= 1 && rnd() < M.pen.p;
+    let gain = 0, cat = 0, turnover = false, newTo = 0, made = false, puntRec = false, offp = false;   // cat: 0 run_in 1 comp_in 2 inc 3 oob 4 sack 5 pen
+    const key = poolKey(down, togo, yl);
+    if (act === 0 && !penal) {
+      gain = nflGain(pickArr(M.run[key] || M.run["13"]), yl, S[o].ypr_mult * ym[o] * hb[o]);
+      if (rnd() < M.fum_run) { turnover = true; newTo = 100 - (yl - gain); }
+    } else if (act === 1 && !penal) {
+      const r = softPick(M.Wp, passX(down, togo, yl, tp), [S[o].comp + 0.5 * M.yard_sd * z[o], 0, S[o].int, S[o].sack]);
+      if (r === 0) { gain = nflGain(pickArr(M.comp[key] || M.comp["13"]), yl, S[o].ypc_mult * ym[o] * hb[o]); cat = 1; if (rnd() < M.fum_comp) { turnover = true; newTo = 100 - (yl - gain); } }
+      else if (r === 1) cat = 2;
+      else if (r === 3) { gain = pickArr(M.sack); cat = 4; }
+      else { const spot = yl - pickArr(M.int_air), ret = pickArr(M.int_ret); newTo = spot <= 0 ? 80 : 100 - spot - ret; turnover = true; cat = 2; }
+    }
+    if ((cat === 0 || cat === 1) && act <= 1 && !penal && rnd() < (cat === 1 ? 0.22 : 0.12)) cat = 3;
+    if (penal) { offp = rnd() < M.pen.p_off; gain = offp ? -pickArr(M.pen.off_yds) : Math.min(pickArr(M.pen.def_yds), Math.max(yl - 1, 1)); cat = 5; }
+    const scrim = act <= 1 || act === 4;
+    const newy = yl - (act === 4 ? -1 : gain);
+    const td = scrim && !turnover && newy <= 0 && !penal, safety = scrim && !turnover && newy >= 100, pick6 = turnover && newTo <= 0;
+    const first = scrim && !turnover && !td && !safety && act !== 4 && (gain >= togo || (penal && !offp && rnd() < M.pen.def_first));
+    const nd = first ? 1 : (penal ? down : down + 1), ntg = first ? Math.min(10, newy) : togo - gain;
+    const downsLost = scrim && !turnover && !td && !safety && !first && nd > 4 && act !== 4;
+    if (act === 2) { newTo = pickArr(M.punt[String(Math.min(9, Math.floor(yl / 10)))] || [70]); puntRec = true; }
+    if (act === 3) { made = rnd() < sgm(M.fg[0] + M.fg[1] * (yl + 17 - 40) / 10 + (C.wind || 0)); if (!made) newTo = Math.min(100 - (yl + 7), 80); }
+    const conv = td && qtr >= 4 && CHART.has(diff + 6) ? (rnd() < M.two ? 2 : 0) : (rnd() < M.xp ? 1 : 0);
+    score[o] += (td ? 6 + conv : 0) + (made ? 3 : 0);
+    score[d] += (pick6 ? 6 + (rnd() < M.xp ? 1 : 0) : 0) + (safety ? 2 : 0);
+    let secs = pickArr(M.run_off[String(cat * 3 + tp)] || [30]);
+    if (act === 2 || act === 3 || td || turnover || safety) secs = 8;
+    const need = !(cat === 2 || cat === 3 || cat === 5) && scrim && !td && !turnover && !safety && act !== 4;
+    const defTo = need && qtr >= 4 && hs < 180 && diff > 0 && tos[d] > 0;
+    const offTo = need && !defTo && ((qtr === 2 && hs < 120) || (qtr >= 4 && hs < 120 && diff <= 0)) && tos[o] > 0;
+    if (defTo || offTo) secs = Math.min(secs, 7); if (defTo) tos[d]--; if (offTo) tos[o]--;
+    let nc = hs - secs; if (half <= 2 && hs > 120 && nc < 120) nc = 120; if (act === 4) nc = hs - 40; clock = nc;
+    if (scrim && !turnover && !td && !safety && !downsLost && act !== 4) { yl = Math.min(99, Math.max(1, newy)); down = nd; togo = Math.max(ntg, 1); }
+    const flip = (turnover && !pick6) || downsLost || puntRec || (act === 3 && !made);
+    if (flip) { poss = d; yl = Math.min(99, Math.max(1, downsLost ? 100 - newy : newTo)); down = 1; togo = Math.min(10, yl); }
+    const scO = td || made;
+    if (scO) kickoffTo(d, score[o] < score[d] && qtr >= 4 && clock < 150);
+    if (pick6) kickoffTo(o, false);
+    if (safety) kickoffTo(d, false);
+    if (half === 3) { if (flip || scO || pick6 || safety) otPoss[o]++; if (otPoss[0] >= 1 && otPoss[1] >= 1 && score[0] !== score[1]) done = true; }
+    if (act === 4 && qtr >= 4) done = true;
+    if (!done && clock <= 0) {
+      if (half === 1) { half = 2; clock = 1800; tos = [3, 3]; kickoffTo(1 - recv1, false); }
+      else if (half === 2) { if (score[0] !== score[1]) done = true; else { half = 3; clock = 600; wentOT = true; tos = [2, 2]; kickoffTo(rnd() < 0.5 ? 1 : 0, false); } }
+      else done = true;
+    }
+    if (log) log.push({ half, clock: Math.max(clock, 0), poss, yl, down, togo, tos: tos.slice(), sh: score[0], sa: score[1], off: o, td, fg: made, safety, pick6,
+      to: turnover, act, gain, done, t: half === 3 ? 1 : Math.min(1, (half - 1) * 0.5 + (1800 - Math.max(clock, 0)) / 3600) });
+  }
+  return [score[0], score[1], wentOT ? 1 : 0];
+}
+
+// NBA: every possession. C = {R, home, away, minutes, shotClock, env}; st = {sh, sa, clock, poss, ot}
+function nbaPossGame(C, st, log) {
+  const R = C.R, S = [C.home, C.away], minutes = C.minutes || 48, shotClock = C.shotClock || 24, env = C.env !== false;
+  const pace0 = R.pace + (S[0].pace_off + S[1].pace_off) / 2;
+  const paceG = pace0 * (env ? Math.exp(normal() * R.sd_pace / Math.max(pace0, 1)) : 1);
+  const spp = minutes * 60 / (2 * paceG) * R.dur_scale;
+  const L2 = S.map((s) => lgt(s.p2) + (env ? normal() * R.sd_p2 : 0) / (s.p2 * (1 - s.p2)));
+  const L3 = S.map((s) => lgt(s.p3) + (env ? normal() * R.sd_p3 : 0) / (s.p3 * (1 - s.p3)));
+  const score = [st ? st.sh : 0, st ? st.sa : 0];
+  let clock = st ? st.clock : minutes * 60, poss = st && st.poss != null ? st.poss : (rnd() < 0.5 ? 1 : 0), ot = st && st.ot ? st.ot : 0, np = 0;
+  for (;;) {
+    const o = poss, d = 1 - o, c = clock, diff = score[o] - score[d], late = c <= 60;
+    const foul = late && diff >= 3 && diff <= 8 && c > 2, hold = c <= shotClock && diff > 0 && !foul, need3 = late && diff === -3;
+    let dur = foul ? 2 + 4 * rnd() : hold ? c : gamma(4) * spp / 4, pts = 0;
+    if (foul) pts += (rnd() < S[o].ftp) + (rnd() < S[o].ftp);
+    else if (!hold) {
+      if (rnd() < S[o].to) { /* turnover */ }
+      else if (!need3 && rnd() < S[o].ft_rate) pts += (rnd() < S[o].ftp) + (rnd() < S[o].ftp);
+      else for (let att = 0; att < 3; att++) {
+        const is3 = need3 || rnd() < S[o].three;
+        if (rnd() < sgm(is3 ? L3[o] : L2[o])) { pts += is3 ? 3 : 2; if (rnd() < R.and1 && rnd() < S[o].ftp) pts += 1; break; }
+        if (rnd() < S[o].orb) { dur += 5; continue; } break;
+      }
+    }
+    dur = Math.min(dur, c); score[o] += pts; clock = c - dur; np++; poss = d;
+    if (log) log.push({ clock, poss, ot, sh: score[0], sa: score[1], pts, off: o, foul, t: ot ? 1 : 1 - clock / (minutes * 60) });
+    if (clock <= 0) { if (score[0] !== score[1] || ot >= 8) { if (score[0] === score[1]) score[0]++; break; } clock = 300; ot++; poss = rnd() < 0.5 ? 1 : 0; }
+  }
+  return [score[0], score[1], ot > 0 ? 1 : 0, np];
+}
+
+// NHL: 10-second ticks. C = {R, en, home, away, env, homeIce}; st = {sh, sa, tick, pp}
+function nhlEventGame(C, st, log) {
+  const R = C.R, S = [C.home, C.away], en = C.en, env = C.env !== false, T = 360;
+  const ev = S.map((s) => s.shots * 0.88 * s.fin / 360 * R.goal_scale); if (C.homeIce !== false) ev[0] *= R.home_mult;
+  const pen = [S[1].ppo / 360, S[0].ppo / 360], pph = S.map((s) => -Math.log(1 - s.ppc) / 12), shg = R.shg_per_pp / 12;
+  const sh = [0, 1].map(() => env ? Math.exp(normal() * R.sd_fin) : 1);
+  const enF = en.for_per_min * 10 / 60, enA = en.against_per_min * 10 / 60;
+  const score = [st ? st.sh : 0, st ? st.sa : 0], pp = st && st.pp ? st.pp.slice() : [0, 0];
+  for (let k = st ? st.tick : 0; k < T; k++) {
+    const left = (T - k) * 10;
+    if (pp[0] === 0 && pp[1] === 0) { if (rnd() < pen[0]) pp[1] = 12; else if (rnd() < pen[1]) pp[0] = 12; }
+    const diff = score[0] - score[1];
+    const pullH = (diff === -1 && left <= 120) || (diff === -2 && left <= 180), pullA = (diff === 1 && left <= 120) || (diff === 2 && left <= 180);
+    for (let i = 0; i < 2; i++) {
+      const j = 1 - i, onPP = pp[i] > 0, onPK = pp[j] > 0, pi = i === 0 ? pullH : pullA, pj = i === 0 ? pullA : pullH;
+      let h = onPP ? pph[i] : (onPK ? shg : ev[i] * sh[i]); if (pi) h = Math.max(h, enF); if (pj) h = enA;
+      if (rnd() < h) { score[i]++; if (onPP) pp[i] = 0; if (log) log.push({ tick: k + 1, team: i, pp: onPP, en: pj, sh: score[0], sa: score[1], t: (k + 1) / T }); }
+    }
+    pp[0] = Math.max(pp[0] - 1, 0); pp[1] = Math.max(pp[1] - 1, 0);
+    if (log && (k + 1) % 30 === 0) log.push({ tick: k + 1, sh: score[0], sa: score[1], t: (k + 1) / T, marker: true, pp: false });
+  }
+  let ot = 0;
+  if (score[0] === score[1]) {
+    ot = 1; let so = 0;
+    if (rnd() < R.ot_decided) { if (rnd() < ev[0] * sh[0] / (ev[0] * sh[0] + ev[1] * sh[1])) score[0]++; else score[1]++; }
+    else { so = 1; if (rnd() < R.so_home) score[0]++; else score[1]++; }
+    if (log) log.push({ tick: T, team: score[0] > score[1] ? 0 : 1, ot: 1, so, sh: score[0], sa: score[1], t: 1 });
+  }
+  return [score[0], score[1], ot];
+}
+const ENGINES = { nflpbp: nflPlayGame, nbaposs: nbaPossGame, nhlev: nhlEventGame };
+
 // ---------- message loop ----------
 let current = 0;
 onmessage = (e) => {
   const m = e.data;
-  if (m.cmd === "nfl" || m.cmd === "run") current = m.id;        // a new run supersedes the old one; other asks don't
-  if (m.cmd !== "alt") seed((m.seed || 7) + m.id * 7919);
+  if (m.cmd === "nfl" || m.cmd === "run" || (m.cmd === "eng" && m.track)) current = m.id;        // a new run supersedes the old one; other asks don't
+  if (m.cmd !== "alt") seed(m.fixedSeed != null ? m.fixedSeed : (m.seed || 7) + m.id * 7919);
   if (m.cmd === "nfl") {
     nflRun(m.cfg, m.n, m.cfg.pace ? 1250 : 5000, (agg, k) => { if (current === m.id) postMessage({ id: m.id, kind: "progress", agg }); },
       (agg) => { if (current !== m.id) return; postMessage({ id: m.id, kind: "done", agg, summary: summarize(m.cfg.props) }); },
@@ -565,6 +748,21 @@ onmessage = (e) => {
       if (k < n) setTimeout(step, delay);
     };
     step();
+  } else if (m.cmd === "eng") {
+    const fn = ENGINES[m.engine], g = newAgg(m.p), n = m.n; let k = 0;
+    const chunk = m.whole ? n : (m.pace ? 1000 : 2500), delay = m.pace ? 25 : 0;
+    const step = () => {
+      if (m.track && current !== m.id) return;
+      const end = Math.min(n, k + chunk);
+      for (; k < end; k++) { const r = fn(m.cfg, m.st || null, null); addAgg(g, m.p, r[0], r[1], 0, 0); g.otc = (g.otc || 0) + (r[2] ? 1 : 0); }
+      g.conv.push([k, g.hw / Math.max(g.hw + g.aw, 1)]);
+      postMessage({ id: m.id, kind: k < n ? "progress" : "done", agg: g });
+      if (k < n) setTimeout(step, delay);
+    };
+    step();
+  } else if (m.cmd === "eng_watch") {
+    const log = [], r = ENGINES[m.engine](m.cfg, null, log);
+    postMessage({ id: m.id, kind: "watch", log, final: [r[0], r[1]] });
   } else if (m.cmd === "watch") {
     const out = [0, 0, 0, 0], log = []; simOne(m.model, m.p, { f: 1, sh: 0, sa: 0, half: 0 }, out, log);
     postMessage({ id: m.id, kind: "watch", log, final: [out[0], out[1]] });
@@ -667,7 +865,7 @@ function params() {
   if (s === "basketball") { const tt = x.total ?? (lp.minutes === 40 ? 145 : 225);
     return { spread: x.spread ?? 0, total: tt, sdM: lp.sd_margin, sdT: lp.sd_total, minutes: lp.minutes, mMin: -40, mMax: 40, tMin: Math.floor((tt - 70) / 5) * 5, tStep: 5, tBins: 28 }; }
   if (s === "hockey" || s === "soccer") { const gp = goalParams(x, s === "hockey");
-    return { ...gp, total: x.total ?? null, spread: s === "hockey" ? -1.5 : null, mMin: -6, mMax: 6, tMin: 0, tStep: 1, tBins: 13 }; }
+    return { ...gp, total: x.total ?? null, spread: s === "hockey" ? (x.spread ?? -1.5) : null, mMin: -6, mMax: 6, tMin: 0, tStep: 1, tBins: 13 }; }
   const bp = baseballP(x.ml_home, x.ml_away, x.total); return { ...bp, total: x.total ?? null, spread: -1.5, mMin: -10, mMax: 10, tMin: 0, tStep: 1, tBins: 25 };
 }
 
@@ -746,7 +944,7 @@ function tilesFor(agg, p, m, el) {
   T.push(tile("away", `${esc(g.away)} win`, fmtPct(agg.aw / n), `fair ${fair(agg.aw / n)}`));
   if (s === "soccer") T.push(tile("", "Draw", fmtPct(agg.dr / n), `fair ${fair(agg.dr / n)}`));
   T.push(tile("home", `${esc(g.home)} win`, fmtPct(agg.hw / n), `fair ${fair(agg.hw / n)}`));
-  if (p.spread != null) { const lab = s === "hockey" || s === "baseball" ? `${esc(g.home)} −1.5` : `${esc(g.home)} ${sgn(p.spread)}`;
+  if (p.spread != null) { const lab = `${esc(g.home)} ${sgn(p.spread)}`;
     T.push(tile("", `Cover ${lab}`, fmtPct(agg.cov / Math.max(n - agg.cpush, 1)), agg.cpush ? `push ${fmtPct(agg.cpush / n)}` : "no push possible")); }
   if (p.total != null) T.push(tile("", `Over ${p.total}`, fmtPct(agg.ov / Math.max(n - agg.opush, 1)), agg.opush ? `push ${fmtPct(agg.opush / n)}` : ""));
   T.push(tile("", "Avg score", `${(agg.sa / n).toFixed(1)}–${(agg.sh / n).toFixed(1)}`, `${esc(g.away)}–${esc(g.home)}`));
@@ -758,7 +956,7 @@ function onProgress(agg, p, m) {
   $("odo").textContent = agg.n.toLocaleString(); $("barFill").style.width = (100 * agg.n / N) + "%";
   tilesFor(agg, p, m, $("tiles")); drawDist(); drawConv();
 }
-function runSim() {
+function runSimOld() {
   const m = model(), p = params(), g = game();
   state.summary = null; state.runId++;
   $("runNote").textContent = sportNote(m, p);
@@ -854,7 +1052,7 @@ function periodLabels() { const s = sportOf(model());
   const lp = state.custom ? state.customGame.params : league().params; return lp.minutes === 40 ? [[0.5, "H2"]] : [[0.25, "Q2"], [0.5, "Q3"], [0.75, "Q4"]]; }
 
 // ---------- live ----------
-function renderLiveInputs() {
+function renderLiveInputsOld() {
   const s = sportOf(model()); const f = [];
   f.push(`<label class="field"><span class="label">${esc(game().away)} score</span><input id="lvA" type="number" min="0" value="0"></label>`);
   f.push(`<label class="field"><span class="label">${esc(game().home)} score</span><input id="lvH" type="number" min="0" value="0"></label>`);
@@ -881,7 +1079,7 @@ async function remainAt(st) {
   const r = await ask2({ cmd: "remain", model: sportOf(model()), p: state.p || params(), st, n: N });
   return r.agg;
 }
-$("liveBtn").onclick = async () => {
+const liveOld = async () => {
   stopWatch(); const st = liveState(); state.p = params();
   $("tA").textContent = st.sa; $("tH").textContent = st.sh; $("tClock").textContent = st.label;
   const agg = await remainAt(st); tilesFor(agg, state.p, model(), $("liveTiles"));
@@ -891,7 +1089,7 @@ $("clearBtn").onclick = () => { state.timeline = []; drawTime(); };
 
 // watch one simulated game, re-simulating the rest of it 50,000 times at every event
 function stopWatch() { if (state.watch) { clearTimeout(state.watch.timer); state.watch = null; } $("pauseBtn").disabled = true; $("pauseBtn").textContent = "Pause"; }
-$("watchBtn").onclick = () => {
+const watchOld = () => {
   stopWatch(); state.p = params(); state.timeline = []; $("tLog").innerHTML = "";
   ask({ cmd: "watch", model: sportOf(model()), p: state.p }, (msg) => {
     const ev = msg.log.filter(e => e.what !== undefined); state.watch = { ev, i: 0, paused: false, timer: null };
@@ -899,7 +1097,7 @@ $("watchBtn").onclick = () => {
     remainAt({ f: 1, sh: 0, sa: 0, half: 0 }).then(a => { state.timeline.push({ t: 0, p: a.hw / a.n }); drawTime(); tilesFor(a, state.p, model(), $("liveTiles")); nextEvent(); });
   });
 };
-$("pauseBtn").onclick = () => { const w = state.watch; if (!w) return; w.paused = !w.paused; $("pauseBtn").textContent = w.paused ? "Resume" : "Pause"; if (!w.paused) nextEvent(); };
+$("pauseBtn").onclick = () => { const w = state.watch; if (!w) return; w.paused = !w.paused; $("pauseBtn").textContent = w.paused ? "Resume" : "Pause"; if (!w.paused) (w.kind ? nextEngEvent() : nextEvent()); };
 function clockText(t) { const s = sportOf(model());
   if (s === "soccer") return Math.round(t * 90) + "'"; if (s === "baseball") { const hf = Math.min(17, Math.max(0, Math.ceil(t * 18) - 1)); return (hf % 2 ? "Bot " : "Top ") + (Math.floor(hf / 2) + 1); }
   const nP = s === "hockey" ? 3 : (s === "basketball" && (state.custom ? state.customGame.params : league().params).minutes === 40 ? 2 : 4); const mins = s === "football" || s === "hockey" ? 60 : (state.custom ? state.customGame.params : league().params).minutes;
@@ -1000,11 +1198,11 @@ function renderHonest() {
     <li>50,000 runs make the simulation's own noise tiny (the band in the chart above). They do nothing for wrong inputs: a late scratch, a role change, weather.</li>
     <li>Other sports here run game-level models fitted to the market line, so their win and total percentages sit close to the no-vig line by design. Their value is the live re-simulation from the current score, not beating the line.</li>
     <li>Lines are a snapshot from the time above, and this page can't fetch new ones. Edit any line to re-run, or ask Claude to refresh the data file. After games, grade in the kit and post-mortem every loss.</li></ul>`;
-  $("honest").innerHTML = h;
+  $("honest").innerHTML = h + renderEngineBacktests();
 }
 
 // ---------- wiring ----------
-function selectGame() { state.inputs = {}; state.timeline = []; stopWatch(); $("tLog").innerHTML = ""; $("liveTiles").innerHTML = ""; $("tA").textContent = "—"; $("tH").textContent = "—"; $("tClock").textContent = "pre-game";
+function selectGame() { state.qb = { home: 0, away: 0 }; state.inputs = {}; state.timeline = []; stopWatch(); $("tLog").innerHTML = ""; $("liveTiles").innerHTML = ""; $("tA").textContent = "—"; $("tH").textContent = "—"; $("tClock").textContent = "pre-game";
   renderMatchup(); drawTime(); runSim(); }
 $("runBtn").onclick = runSim;
 $("resetBtn").onclick = () => { state.inputs = {}; renderMatchup(); runSim(); };
@@ -1015,6 +1213,227 @@ $("dTotal").onclick = () => { state.dist = "total"; $("dMargin").setAttribute("a
 let rz; window.addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { drawDist(); drawConv(); drawTime(); }, 120); });
 try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawDist(); drawConv(); drawTime(); }); } catch (e) {}
 new MutationObserver(() => { drawDist(); drawConv(); drawTime(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+// ===== gamesim engines in the page: NFL play by play, NBA possession by possession, NHL event clock =====
+const E = D.engines || {};
+const ENG = { nfl: { key: "nflpbp", label: "Play by play", old: "Drive model + player props" },
+              nba: { key: "nbaposs", label: "Possession by possession", old: "Game level (fitted to the line)" },
+              nhl: { key: "nhlev", label: "Event clock", old: "Game level (fitted to the line)" } };
+state.useNew = true; state.qb = { home: 0, away: 0 };
+const engLeague = () => state.custom ? null : league().key;
+function engAvail() { const k = engLeague(), g = game(); if (!k || !E[k] || !g) return false;
+  return k === "nfl" ? !!(E.nfl.games && E.nfl.games[g.id]) : !!(E[k].sides && E[k].sides[g.id]); }
+const engOn = () => state.useNew && engAvail();
+function engCfg(over) {
+  const k = engLeague(), g = game();
+  if (k === "nfl") { const G = E.nfl.games[g.id]; return { M: E.nfl.M, home: G.qb.home[state.qb.home] || G.qb.home[0], away: G.qb.away[state.qb.away] || G.qb.away[0], hfa: E.nfl.M.hfa, wind: 0, ...(over || {}) }; }
+  if (k === "nba") { const s = E.nba.sides[g.id]; return { R: E.nba.R, home: s.home, away: s.away, minutes: 48, shotClock: 24, ...(over || {}) }; }
+  const s = E.nhl.sides[g.id]; return { R: E.nhl.R, en: E.nhl.en, home: s.home, away: s.away, ...(over || {}) };
+}
+function engNote(k) {
+  if (k === "nfl") { const M = E.nfl.M; return `Every snap: run/pass call, 4th-down decisions, sacks, picks, yards from ${M.n_plays.toLocaleString()} real plays, penalties, clock, timeouts, special teams. It doesn't use the betting line.`; }
+  if (k === "nba") return `Every possession: turnovers, 2s and 3s, foul trips, offensive rebounds, late fouling, overtime. Ratings from ${E.nba.R.n_games} games this season; it doesn't use the line.`;
+  return `10-second clock: even-strength goals (shots × finishing × projected goalie), power plays, pulled goalies, 3-on-3 OT, shootout. ${E.nhl.R.n_games} games this season; it doesn't use the line.`;
+}
+function renderEngineRow() {
+  const row = $("engineRow"), qbr = $("qbRow"), k = engLeague();
+  if (!engAvail()) { row.innerHTML = ""; qbr.hidden = true; return; }
+  row.innerHTML = `<span class="label">Engine</span><div class="seg" role="group" aria-label="Engine">
+    <button id="engNew" aria-pressed="${state.useNew}">${ENG[k].label}</button><button id="engOld" aria-pressed="${!state.useNew}">${ENG[k].old}</button></div>
+    <span class="note">${state.useNew ? "From the gamesim models in the repo, with backtested error bars." : "The original page model."}</span>`;
+  $("engNew").onclick = () => { state.useNew = true; renderLiveInputs(); runSim(); };
+  $("engOld").onclick = () => { state.useNew = false; renderLiveInputs(); runSim(); };
+  if (k === "nfl" && state.useNew) {
+    const G = E.nfl.games[game().id], g = game();
+    const sel = (side) => `<label class="field"><span class="label">${esc(g[side])} QB</span><select id="qb_${side}">${G.qb[side].map((q, i) =>
+      `<option value="${i}" ${i === state.qb[side] ? "selected" : ""}>${esc(q.name)}${q.projected ? " (projected)" : ""}${q.qb_known ? "" : " · no data"}</option>`).join("")}</select></label>`;
+    qbr.innerHTML = sel("away") + sel("home") + `<span class="note" style="grid-column:1/-1">Starters are projected from the ${esc(G.starter_source)}. Confirm at the inactive list, 90 minutes before kickoff.</span>`;
+    qbr.hidden = false;
+    ["home", "away"].forEach((s) => $("qb_" + s).onchange = (e) => { state.qb[s] = Number(e.target.value); runSim(); });
+  } else qbr.hidden = true;
+}
+function runSim() {
+  renderEngineRow();
+  if (!engOn()) { $("decisionPanel").hidden = true; return runSimOld(); }
+  const m = model(), p = params(), k = engLeague();
+  state.summary = null; state.runId++; const my = state.runId;
+  $("runBtn").disabled = true; $("players").hidden = k !== "nfl"; $("factorWrap").hidden = true; $("factorNote").textContent = "";
+  $("runNote").textContent = engNote(k);
+  ask({ cmd: "eng", engine: ENG[k].key, cfg: engCfg(), p, n: N, pace: state.pace, track: true }, (msg) => {
+    if (my !== state.runId) return;
+    onProgress(msg.agg, p, m);
+    if (msg.kind === "done") { $("runBtn").disabled = false; renderDecision(msg.agg, p); if (k === "nfl") runPropsAfter(p); }
+  });
+}
+function runPropsAfter(p) {
+  const g = game(), nf = g.nfl; if (!nf) return;
+  const cfg = JSON.parse(JSON.stringify({ ...nf, consts: D.consts, agg: p, pace: false }));
+  const fp = footballP(p.spread, p.total, nf.d_mu, nf.teams.home.p_fg / nf.teams.home.p_td, nf.teams.away.p_fg / nf.teams.away.p_td);
+  cfg.teams.home.p_td = fp.pTdH; cfg.teams.home.p_fg = fp.pFgH; cfg.teams.away.p_td = fp.pTdA; cfg.teams.away.p_fg = fp.pFgA;
+  $("propNote").textContent = "Pricing player props (drive-level player model)…"; const my = state.runId;
+  ask({ cmd: "nfl", cfg, n: N }, (msg) => { if (my === state.runId && msg.kind === "done") { state.summary = msg.summary; renderProps(); } });
+}
+const nvp = (a, b) => { const x = imp(a), y = imp(b); return x == null || y == null ? null : x / (x + y); };
+function massAbove(bins, mn, step, cut) { let s = 0, n = 0; bins.forEach((c, i) => { n += c; if (mn + i * step + step / 2 > cut) s += c; }); return n ? s / n : 0; }
+function renderDecision(agg, p) {
+  const k = engLeague(), g = { ...game(), ...state.inputs }, n = agg.n, bt = E[k].backtest || {};
+  const pH = agg.hw / Math.max(agg.hw + agg.aw, 1), se = (q) => Math.sqrt(q * (1 - q) / n);
+  const pc = p.spread != null ? agg.cov / Math.max(n - agg.cpush, 1) : null, po = p.total != null ? agg.ov / Math.max(n - agg.opush, 1) : null;
+  const rms = (m) => ((bt[m] || bt.win || {}).rms_vs_market) || 0.12;
+  const nvH = nvp(g.ml_home, g.ml_away), nvH0 = nvp(g.open_ml_home, g.open_ml_away);
+  const news = { win: nvH != null && nvH0 != null ? Math.abs(nvH - nvH0) / 2 : 0, cover: 0, total: 0 };
+  if (g.open_spread != null && p.spread != null) news.cover = Math.abs(massAbove(agg.mh, agg.mMin, 1, -p.spread) - massAbove(agg.mh, agg.mMin, 1, -g.open_spread)) / 2;
+  if (g.open_total != null && p.total != null) news.total = Math.abs(massAbove(agg.th, agg.tMin, agg.tStep, p.total) - massAbove(agg.th, agg.tMin, agg.tStep, g.open_total)) / 2;
+  const err = { win: Math.hypot(se(pH), rms("win"), news.win), cover: pc == null ? 0 : Math.hypot(se(pc), rms("cover"), news.cover), total: po == null ? 0 : Math.hypot(se(po), rms("total"), news.total) };
+  const nvC = nvp(g.spread_home_odds, g.spread_away_odds), nvO = nvp(g.over, g.under);
+  const spLab = k === "nhl" ? "puck line" : "spread";
+  const rows = [[`${g.home} moneyline`, pH, nvH, err.win], [`${g.away} moneyline`, 1 - pH, nvH == null ? null : 1 - nvH, err.win]];
+  if (pc != null) rows.push([`${g.home} ${sgn(p.spread)} (${spLab})`, pc, nvC, err.cover], [`${g.away} ${sgn(-p.spread)} (${spLab})`, 1 - pc, nvC == null ? null : 1 - nvC, err.cover]);
+  if (po != null) rows.push([`Over ${p.total}`, po, nvO, err.total], [`Under ${p.total}`, 1 - po, nvO == null ? null : 1 - nvO, err.total]);
+  const dec = rows.map(([nm, pm, pk, e]) => { if (pk == null) return [nm, pm, pk, e, null, null, "PASS"];
+    const edge = pm - pk, mg = edge - 1.5 * e; return [nm, pm, pk, e, edge, mg, edge >= 0.02 && mg > 0 ? "PLAY" : "PASS"]; });
+  const pp = (x) => x == null ? "—" : (x > 0 ? "+" : "") + (100 * x).toFixed(1) + " pts";
+  $("decTbl").querySelector("thead").innerHTML = "<tr><th class='l'>Bet</th><th>Model</th><th>No-vig market</th><th>Edge</th><th>Total error</th><th>Edge − 1.5 × error</th><th>Verdict</th></tr>";
+  $("decTbl").querySelector("tbody").innerHTML = dec.map(([nm, pm, pk, e, edge, mg, v]) => `<tr><td class="l name">${esc(nm)}</td><td>${fmtPct(pm)}</td><td>${pk == null ? "no price" : fmtPct(pk)}</td>
+    <td>${pp(edge)}</td><td>±${(100 * e).toFixed(1)} pts</td><td>${pp(mg)}</td><td><span class="pill ${v}">${v}</span></td></tr>`).join("");
+  const b = bt.win;
+  $("decErr").innerHTML = `Rule: PLAY only if the edge over the no-vig price is at least 2 points <b>and</b> the edge minus 1.5 × total error is above zero. ` +
+    `Total error = √(simulation error² + backtest gap to the closing market² + half the line move since open²). Here: simulation ±${(100 * se(pH)).toFixed(2)}, ` +
+    `backtest ±${(100 * rms("win")).toFixed(1)} (win), line move ±${(100 * news.win).toFixed(1)}. ` +
+    (b ? `Out of sample this engine scored a winner Brier of ${b.brier_model.toFixed(3)} against the market's ${b.brier_market.toFixed(3)} over ${b.n} games, so it has not beaten the market.` : "") +
+    (pc != null && nvC == null ? " The spread price isn't in the data, so that row has no market." : "");
+  $("decNote").textContent = `${n.toLocaleString()} simulations · ${ENG[k].label.toLowerCase()} engine`;
+  $("decisionPanel").hidden = false;
+}
+// factor table: each factor added alone to a neutral matchup, common random numbers
+async function factorTable() {
+  const k = engLeague(); if (!engOn()) return;
+  const p = params(), btn = $("factorBtn"); btn.disabled = true; $("factorNote").textContent = "Running…";
+  const P = async (cfg) => { const r = await ask2({ cmd: "eng", engine: ENG[k].key, cfg, p, n: 20000, whole: true, fixedSeed: 77 }); return r.agg.hw / Math.max(r.agg.hw + r.agg.aw, 1); };
+  const full = engCfg(), rows = [];
+  let base;
+  if (k === "nfl") {
+    const N0 = { comp: 0, sack: 0, int: 0, ypc_mult: 1, ypr_mult: 1, pass_offset: 0 }, pick = (s, ks) => Object.fromEntries(ks.map((x) => [x, s[x]]));
+    base = await P({ ...full, home: N0, away: N0, hfa: 0 });
+    rows.push(["Neutral baseline (two average teams, no home field)", base]);
+    rows.push(["Passing matchup: QB vs pass defence (completion, sack, INT, yards per catch)", await P({ ...full, home: { ...N0, ...pick(full.home, ["comp", "sack", "int", "ypc_mult"]) }, away: { ...N0, ...pick(full.away, ["comp", "sack", "int", "ypc_mult"]) }, hfa: 0 })]);
+    rows.push(["Rushing matchup: yards per carry vs run defence", await P({ ...full, home: { ...N0, ypr_mult: full.home.ypr_mult }, away: { ...N0, ypr_mult: full.away.ypr_mult }, hfa: 0 })]);
+    rows.push(["Play-calling tendency (neutral pass rate)", await P({ ...full, home: { ...N0, pass_offset: full.home.pass_offset }, away: { ...N0, pass_offset: full.away.pass_offset }, hfa: 0 })]);
+    rows.push(["Home field (calibrated to the observed home margin)", await P({ ...full, home: N0, away: N0 })]);
+  } else if (k === "nba") {
+    const R = E.nba.R; base = await P({ ...full, home: R.avg, away: R.avg });
+    rows.push(["Neutral baseline (two average teams, no home court)", base]);
+    rows.push(["Home court alone (calibrated to this season's home margin)", await P({ ...full, home: R.avg_home, away: R.avg })]);
+    rows.push(["Pace", await P({ ...full, home: { ...R.avg, pace_off: full.home.pace_off }, away: { ...R.avg, pace_off: full.away.pace_off } })]);
+  } else {
+    const R = E.nhl.R, s = E.nhl.sides[game().id]; base = await P({ ...full, home: R.avg, away: R.avg, homeIce: false });
+    rows.push(["Neutral baseline (two average teams, no home ice)", base]);
+    rows.push(["Team ratings (shots, finishing, power plays) with league-average goalies", await P({ ...full, home: s.home_lg_goalie, away: s.away_lg_goalie, homeIce: false })]);
+    rows.push(["Home ice (calibrated to last season's home margin)", await P({ ...full, home: R.avg, away: R.avg })]);
+    const fullP = await P(full);
+    rows.push([`Projected goalies (${s.goalies.away || "?"} / ${s.goalies.home || "?"}) vs league-average save %`, fullP, fullP - await P({ ...full, home: s.home_lg_goalie, away: s.away_lg_goalie })]);
+  }
+  const fullP = await P(full);
+  rows.push(["Correlated game environment (vs none)", fullP, fullP - await P({ ...full, env: false })]);
+  rows.push(["Rest, travel, injuries other than QB (not modelled)", base, 0]);
+  rows.push(["ALL FACTORS (full model)", fullP, fullP - base]);
+  const g = game();
+  $("factorTbl").querySelector("thead").innerHTML = `<tr><th class="l">Factor</th><th>${esc(g.home)} win</th><th>vs neutral</th></tr>`;
+  $("factorTbl").querySelector("tbody").innerHTML = rows.map(([nm, v, d]) => { const dd = d != null ? d : v - base;
+    return `<tr><td class="l">${esc(nm)}</td><td>${fmtPct(v)}</td><td>${(dd > 0 ? "+" : "") + (100 * dd).toFixed(1)} pts</td></tr>`; }).join("");
+  $("factorWrap").hidden = false; btn.disabled = false;
+  $("factorNote").textContent = "20,000 runs per row, same random numbers in every row. Factors interact, so rows don't add exactly.";
+}
+// live and watch on the engines
+function renderLiveInputs() {
+  if (!engOn()) return renderLiveInputsOld();
+  const k = engLeague(), g = game(), f = [];
+  f.push(`<label class="field"><span class="label">${esc(g.away)} score</span><input id="lvA" type="number" min="0" value="0"></label>`);
+  f.push(`<label class="field"><span class="label">${esc(g.home)} score</span><input id="lvH" type="number" min="0" value="0"></label>`);
+  const per = k === "nfl" ? ["Q1", "Q2", "Q3", "Q4", "OT"] : k === "nba" ? ["Q1", "Q2", "Q3", "Q4", "OT"] : ["P1", "P2", "P3"];
+  f.push(`<label class="field"><span class="label">Period</span><select id="lvPer">${per.map((x, i) => `<option value="${i}">${x}</option>`).join("")}</select></label>`);
+  f.push(`<label class="field"><span class="label">Clock left</span><input id="lvClock" value="${k === "nfl" ? "15:00" : k === "nba" ? "12:00" : "20:00"}" inputmode="numeric"></label>`);
+  if (k !== "nhl") f.push(`<label class="field"><span class="label">Ball</span><select id="lvPoss"><option value="1">${esc(g.away)}</option><option value="0">${esc(g.home)}</option></select></label>`);
+  if (k === "nfl") {
+    f.push(`<label class="field"><span class="label">Ball on</span><select id="lvSide"><option value="own">own</option><option value="opp">opponent</option></select></label>`);
+    f.push(`<label class="field"><span class="label">Yard line</span><input id="lvYd" type="number" min="1" max="50" value="25"></label>`);
+    f.push(`<label class="field"><span class="label">Down</span><select id="lvDown"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>`);
+    f.push(`<label class="field"><span class="label">To go</span><input id="lvTogo" type="number" min="1" max="99" value="10"></label>`);
+  }
+  $("liveInputs").innerHTML = f.join("");
+}
+function clockSecs() { const [mm, ss] = String($("lvClock").value || "0").split(":").map(Number); return (mm || 0) * 60 + (ss || 0); }
+function engLiveState() {
+  const k = engLeague(), sh = Number($("lvH").value) || 0, sa = Number($("lvA").value) || 0, per = Number($("lvPer").value) || 0, c = clockSecs();
+  if (k === "nfl") {
+    const half = per <= 1 ? 1 : per <= 3 ? 2 : 3, hc = per === 4 ? Math.min(c, 600) : (per % 2 === 0 ? 900 + Math.min(c, 900) : Math.min(c, 900));
+    const yd = Math.max(1, Math.min(50, Number($("lvYd").value) || 25)), yl = $("lvSide").value === "own" ? 100 - yd : yd;
+    const st = { sh, sa, half, clock: hc, poss: Number($("lvPoss").value), yl, down: Number($("lvDown").value) || 1, togo: Math.max(1, Number($("lvTogo").value) || 10), tos: [3, 3] };
+    return { st, t: half === 3 ? 1 : (half - 1) * 0.5 + (1800 - hc) / 3600, label: `${["Q1", "Q2", "Q3", "Q4", "OT"][per]} ${$("lvClock").value}` };
+  }
+  if (k === "nba") {
+    const rem = per === 4 ? Math.min(c, 300) : (3 - per) * 720 + Math.min(c, 720);
+    return { st: { sh, sa, clock: rem, poss: Number($("lvPoss").value), ot: per === 4 ? 1 : 0 }, t: per === 4 ? 1 : 1 - rem / 2880, label: `${["Q1", "Q2", "Q3", "Q4", "OT"][per]} ${$("lvClock").value}` };
+  }
+  const elapsed = per * 1200 + (1200 - Math.min(c, 1200));
+  return { st: { sh, sa, tick: Math.floor(elapsed / 10), pp: [0, 0] }, t: elapsed / 3600, label: `P${per + 1} ${$("lvClock").value}` };
+}
+async function engRemain(st, n) { const r = await ask2({ cmd: "eng", engine: ENG[engLeague()].key, cfg: engCfg(), p: state.p || params(), n, st, whole: true }); return r.agg; }
+$("liveBtn").onclick = async () => {
+  if (!engOn()) return liveOld();
+  stopWatch(); state.p = params(); const L = engLiveState();
+  $("tA").textContent = L.st.sa; $("tH").textContent = L.st.sh; $("tClock").textContent = L.label;
+  $("liveTiles").innerHTML = `<span class="note">Re-simulating the rest of the game 50,000 times…</span>`;
+  const agg = await engRemain(L.st, N); tilesFor(agg, state.p, model(), $("liveTiles"));
+  state.timeline.push({ t: L.t, p: agg.hw / Math.max(agg.hw + agg.aw, 1) }); state.timeline.sort((a, b) => a.t - b.t); drawTime();
+};
+$("watchBtn").onclick = () => {
+  if (!engOn()) return watchOld();
+  stopWatch(); state.p = params(); state.timeline = []; $("tLog").innerHTML = "";
+  const k = engLeague(), g = game();
+  ask({ cmd: "eng_watch", engine: ENG[k].key, cfg: engCfg() }, (msg) => {
+    let ev = msg.log;
+    if (k === "nfl") ev = ev.filter((e, i) => e.td || e.fg || e.safety || e.pick6 || e.to || i % 5 === 4 || e.done);
+    else if (k === "nba") ev = ev.filter((e, i) => i % 8 === 7 || (e.t > 0.96 && e.pts > 0) || e.ot);
+    state.watch = { ev, i: 0, paused: false, timer: null, kind: k };
+    $("pauseBtn").disabled = false; $("tA").textContent = 0; $("tH").textContent = 0; $("tClock").textContent = "start";
+    engRemain(null, k === "nfl" ? 5000 : 20000).then((a) => { state.timeline.push({ t: 0, p: a.hw / Math.max(a.hw + a.aw, 1) }); drawTime(); tilesFor(a, state.p, model(), $("liveTiles")); nextEngEvent(); });
+  });
+};
+function engEventText(k, e, g) {
+  if (k === "nfl") { const tm = e.off === 0 ? g.home : g.away;
+    return e.td ? `${tm} touchdown` : e.fg ? `${tm} field goal` : e.safety ? `Safety` : e.pick6 ? `Pick-six` : e.to ? `${tm} turnover` : ""; }
+  if (k === "nba") return e.pts ? `${e.off === 0 ? g.home : g.away} ${e.pts}${e.foul ? " (free throws)" : ""}` : "";
+  return e.marker ? "" : e.ot ? (e.so ? "Shootout winner" : "Overtime goal") : `${e.team === 0 ? g.home : g.away} goal${e.pp ? " (power play)" : ""}${e.en ? " (empty net)" : ""}`;
+}
+async function nextEngEvent() {
+  const w = state.watch; if (!w || w.paused || !w.kind) return;
+  if (w.i >= w.ev.length) { $("tClock").textContent = "Final"; stopWatch(); return; }
+  const e = w.ev[w.i++], g = game(), k = w.kind;
+  $("tA").textContent = e.sa; $("tH").textContent = e.sh; $("tClock").textContent = clockText(Math.min(e.t, 1));
+  const txt = engEventText(k, e, g);
+  if (txt) { const d = document.createElement("div"); d.innerHTML = `<span class="t">${esc(clockText(Math.min(e.t, 1)))}</span><span><span class="sc">${esc(txt)}</span></span><span class="spacer"></span><span class="num">${e.sa}–${e.sh}</span>`; $("tLog").prepend(d); }
+  let st;
+  if (k === "nfl") st = e.done ? null : { sh: e.sh, sa: e.sa, half: e.half, clock: e.clock, poss: e.poss, yl: e.yl, down: e.down, togo: e.togo, tos: e.tos };
+  else if (k === "nba") st = { sh: e.sh, sa: e.sa, clock: e.clock, poss: e.poss, ot: e.ot };
+  else st = { sh: e.sh, sa: e.sa, tick: e.tick, pp: [0, 0] };
+  if (st && !(k === "nhl" && e.ot)) {
+    const a = await engRemain(st, k === "nfl" ? 5000 : 20000); if (state.watch !== w) return;
+    state.timeline.push({ t: Math.min(e.t, 1), p: a.hw / Math.max(a.hw + a.aw, 1) }); tilesFor(a, state.p, model(), $("liveTiles"));
+  } else state.timeline.push({ t: 1, p: e.sh > e.sa ? 1 : e.sh < e.sa ? 0 : 0.5 });
+  drawTime();
+  w.timer = setTimeout(nextEngEvent, k === "nba" ? 250 : 450);
+}
+function renderEngineBacktests() {
+  const rows = [["NFL play by play", E.nfl], ["NBA possessions", E.nba], ["NHL event clock", E.nhl]].filter(([, x]) => x && x.backtest);
+  if (!rows.length) return "";
+  let h = `<h3 style="margin-top:8px">The gamesim engines, out of sample</h3><p class="note">Each finished game re-simulated using only data from before it, against the closing no-vig lines. The gap to the market sets the error bars above.</p>
+    <div class="tbl-wrap"><table><thead><tr><th class="l">Engine</th><th class="l">Market</th><th>Games</th><th>Brier: model</th><th>Brier: market</th><th>RMS gap to market</th></tr></thead><tbody>`;
+  rows.forEach(([nm, x]) => Object.entries(x.backtest).forEach(([mk, v]) => {
+    h += `<tr><td class="l">${nm}</td><td class="l">${mk === "win" ? "winner" : mk === "cover" ? "spread" : "total"}</td><td>${v.n}</td><td>${v.brier_model.toFixed(3)}</td><td>${v.brier_market.toFixed(3)}</td><td>${(100 * v.rms_vs_market).toFixed(1)} pts</td></tr>`; }));
+  return h + "</tbody></table></div>";
+}
+$("factorBtn").onclick = factorTable;
 
 $("pulled").textContent = D.pulled ? `Lines and injuries as of ${new Date(D.pulled).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "No data file loaded: use Any game (custom).";
 renderRail(); renderHonest();

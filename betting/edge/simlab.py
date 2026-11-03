@@ -18,6 +18,10 @@ import re
 
 import numpy as np
 
+import os
+
+from gamesim import data as gs_data
+
 from . import nfl
 from .blend import load_adjustments
 from .grade import _get
@@ -52,6 +56,7 @@ def market(summary: dict) -> dict:
     ps, tot, ml = pc.get("pointSpread") or {}, pc.get("total") or {}, pc.get("moneyline") or {}
     return {"spread": sp, "total": pc.get("overUnder"), "ml_home": _num(h.get("moneyLine")), "ml_away": _num(a.get("moneyLine")),
             "ml_draw": _num(d.get("moneyLine")), "over": _num(pc.get("overOdds")), "under": _num(pc.get("underOdds")),
+            "spread_home_odds": _num(h.get("spreadOdds")), "spread_away_odds": _num(a.get("spreadOdds")),
             "open_spread": _num(((ps.get("home") or {}).get("open") or {}).get("line")),
             "open_total": _num(((tot.get("over") or {}).get("open") or {}).get("line")),
             "open_ml_home": _num(((ml.get("home") or {}).get("open") or {}).get("odds")),
@@ -166,6 +171,7 @@ def export(path: str, nfl_week: int | None = None, backtest_weeks: tuple = (3, 8
                             "params": {"minutes": 60, "drives": float(L.get("drives", 10.2)), "ot": "nfl"}, "games": games})
     for key, label, p, model, days, params in LEAGUES:
         data["leagues"].append({"key": key, "label": label, "model": model, "params": params, "games": league_games(p, days, today)})
+    data["engines"] = engines(data)
     if backtest_weeks:
         bt = nfl.backtest(season, list(range(backtest_weeks[0], backtest_weeks[1] + 1)), n=10000)
         s = bt["summary"]
@@ -175,3 +181,104 @@ def export(path: str, nfl_week: int | None = None, backtest_weeks: tuple = (3, 8
     with open(path, "w") as f:
         f.write("window.SIMLAB = " + json.dumps(data, separators=(",", ":"), default=lambda o: o.tolist() if isinstance(o, np.ndarray) else str(o)) + ";\n")
     return {"path": path, "nfl_week": nfl_week, "games": {lg["key"]: len(lg["games"]) for lg in data["leagues"]}}
+
+
+# ------------------------------------------------------------------ the gamesim engines, for the browser
+def _sub(v, k: int, nd: int | None = None, seed: int = 1) -> list:
+    """Subsample an empirical pool to at most k values (seeded) and round it, to keep the data file small."""
+    a = np.asarray(v, float)
+    if len(a) > k:
+        a = np.random.default_rng(seed).choice(a, k, replace=False)
+    return [round(float(x), nd) if nd else int(round(float(x))) for x in a]
+
+
+def _bt(name: str, compute):
+    """Backtest metrics, cached in .cache/gamesim/bt_<name>.json (recomputed when missing)."""
+    path = os.path.join(gs_data.CACHE, f"bt_{name}.json")
+    if os.path.exists(path):
+        return json.load(open(path))["metrics"]
+    bt = compute()
+    json.dump(bt, open(path, "w"))
+    return bt["metrics"]
+
+
+def engines(data: dict) -> dict:
+    """Fitted NFL play-by-play, NBA possession and NHL event engines plus per-game inputs and backtests."""
+    from gamesim import backtest as gbt, nba as gnba, nfl_pbp, nhl as gnhl, players as gpl
+    today = dt.date.today()
+    out = {}
+    # ---- NFL play by play
+    sched = gs_data.schedule()
+    nfl_games = next(lg for lg in data["leagues"] if lg["key"] == "nfl")["games"]
+    rows = {r["espn"]: r for r in sched if r["espn"]}
+    first = min((rows[g["id"]]["gameday"] for g in nfl_games if g["id"] in rows), default=None)
+    if first:
+        season = int(rows[nfl_games[0]["id"]]["season"])
+        P, P0 = gs_data.pbp(season), gs_data.pbp(season - 1)
+        wind = {g["game_id"]: (0.0 if g["roof"] in ("dome", "closed") else gs_data.f(g["wind"], 0.0) or 0.0) for g in sched if g["season"] in (str(season), str(season - 1))}
+        B = nfl_pbp.build(P, P0, sched, first, wind=wind)
+        M, pr = B["M"], B["ratings"]
+        pools = M["pools"]
+        cm = {"b_call": [round(x, 5) for x in M["b_call"]], "W4": np.round(M["W4"], 5).tolist(), "Wp": np.round(M["Wp"], 5).tolist(),
+              "run": {str(k[1]): _sub(v, 1500, 3 if k[1] >= 100 else None) for k, v in pools.items() if k[0] == "run"},
+              "comp": {str(k[1]): _sub(v, 1500, 3 if k[1] >= 100 else None) for k, v in pools.items() if k[0] == "comp"},
+              "sack": _sub(pools[("sack", 0)], 800), "int_air": _sub(pools[("int_air", 0)], 600), "int_ret": _sub(pools[("int_ret", 0)], 600),
+              "run_off": {str(k): _sub(v, 1200) for k, v in M["run_off"].items()}, "punt": {str(k): _sub(v, 600) for k, v in M["punt"].items()},
+              "kick": _sub(M["kick"], 1500), "fum_run": M["fum_run"], "fum_comp": M["fum_comp"], "xp": M["xp"], "two": M["two"],
+              "onside": M["onside_rate"], "fg": [float(x) for x in M["fg_beta"]], "yard_sd": M["yard_sd"], "hfa": M["hfa"],
+              "home_margin_target": M["home_margin_target"],
+              "pen": {"p": M["pen"]["p"], "p_off": M["pen"]["p_off"], "def_first": M["pen"]["def_first"],
+                      "off_yds": _sub(M["pen"]["off_yds"], 400), "def_yds": _sub(M["pen"]["def_yds"], 400)},
+              "n_plays": M["n_plays"], "n_fourth": M["n_fourth"]}
+        games = {}
+        for g in nfl_games:
+            r = rows.get(g["id"])
+            if not r:
+                continue
+            opts = {}
+            for side, team, opp in (("home", r["home_team"], r["away_team"]), ("away", r["away_team"], r["home_team"])):
+                q = gpl.starting_qb(season, team)
+                opts[side] = []
+                for i, name in enumerate(q["depth"][:3]):
+                    gs = gpl.gsis_for(season, team, name)
+                    si = nfl_pbp.side_inputs(pr, team, opp, gs, M)
+                    opts[side].append({"name": name, "projected": i == 0, **{k: round(v, 4) if isinstance(v, float) else v for k, v in si.items()}})
+            games[g["id"]] = {"qb": opts, "starter_source": f"ESPN depth chart via nflverse, snapshot {gs_data.depth_chart(season, r['home_team'])[0]}"}
+        out["nfl"] = {"M": cm, "games": games,
+                      "backtest": _bt("pbp", lambda: gbt.run_pbp(sched, P, P0, str(season), list(range(4, int(rows[nfl_games[0]["id"]]["week"]))), n=10000))}
+    # ---- NBA possessions
+    nba_games = next(lg for lg in data["leagues"] if lg["key"] == "nba")["games"]
+    y = today.year if today.month >= 9 else today.year - 1
+    yday = (today - dt.timedelta(days=1)).strftime("%Y%m%d")
+    G = gnba.season_games("nba", f"{y}1018", yday)
+    R = gnba.calibrate(gnba.ratings(G, today.isoformat(), 48), G, today.isoformat(), 48, 24)
+    sides = {}
+    for g in nba_games:
+        sides[g["id"]] = {"home": {k: round(v, 4) for k, v in gnba.side(R, g["home"], g["away"], True).items()},
+                          "away": {k: round(v, 4) for k, v in gnba.side(R, g["away"], g["home"], False).items()},
+                          "games": [R["teams"].get(g["home"], {}).get("games", 0), R["teams"].get(g["away"], {}).get("games", 0)]}
+    out["nba"] = {"R": {"pace": R["league"]["pace"], "sd_pace": R["sd_pace"], "sd_p2": R["sd_p2"], "sd_p3": R["sd_p3"], "dur_scale": R["dur_scale"],
+                        "and1": R["and1"], "home_scale": R["home_scale"], "ppg": R["ppg_target"], "home_margin": R["home_margin"], "n_games": R["n_games"],
+                        "avg": {k: round(v, 4) for k, v in gnba.side(R, "_", "_", False).items()},
+                        "avg_home": {k: round(v, 4) for k, v in gnba.side(R, "_", "_", True).items()}},
+                  "sides": sides, "backtest": _bt("nba", lambda: gnba.backtest(G, 48, 24, n=6000))}
+    # ---- NHL event clock
+    nhl_games = next(lg for lg in data["leagues"] if lg["key"] == "nhl")["games"]
+    G = gnhl.season_games(f"{y}1005", yday)
+    en = gnhl.empty_net_rates(f"{y}1005", yday, max_games=120)
+    R = gnhl.calibrate(gnhl.ratings(G, today.isoformat()), en)
+    sides = {}
+    for g in nhl_games:
+        gh, ga = R["starters"].get(g["home"], {}), R["starters"].get(g["away"], {})
+        sides[g["id"]] = {"home": {k: round(v, 5) for k, v in gnhl.side(R, g["home"], g["away"], True, ga.get("id")).items()},
+                          "away": {k: round(v, 5) for k, v in gnhl.side(R, g["away"], g["home"], False, gh.get("id")).items()},
+                          "home_lg_goalie": {k: round(v, 5) for k, v in gnhl.side(R, g["home"], g["away"], True).items()},
+                          "away_lg_goalie": {k: round(v, 5) for k, v in gnhl.side(R, g["away"], g["home"], False).items()},
+                          "goalies": {"home": gh.get("name"), "away": ga.get("name"),
+                                      "home_sv": R["goalies"].get(gh.get("id"), {}).get("sv"), "away_sv": R["goalies"].get(ga.get("id"), {}).get("sv")}}
+    out["nhl"] = {"R": {"goal_scale": R["goal_scale"], "home_mult": R["home_mult"], "sd_fin": R["sd_fin"], "shg_per_pp": R["league"]["shg_per_pp"],
+                        "ot_decided": R["league"]["ot_decided"], "so_home": R["league"]["so_home"], "gpg": R["gpg"], "sv": R["league"]["sv"],
+                        "home_prior": R["home_prior"], "lam": R["lam"], "n_games": R["n_games"],
+                        "avg": {k: round(v, 5) for k, v in gnhl.side(R, "_", "_", False).items()}},
+                  "en": en, "sides": sides, "backtest": _bt("nhl", lambda: gnhl.backtest(G, en, n=6000))}
+    return out
