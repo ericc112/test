@@ -311,6 +311,7 @@ def engines(data: dict) -> dict:
                         "avg_home": {k: round(v, 4) for k, v in gnba.side(R, "_", "_", True).items()}},
                   "sides": sides, "backtest": _bt("nba", lambda: gnba.backtest(G, 48, 24, n=6000)), "backtest_prior": gbt.prior_metrics("nba"),
                   "info": gbt.info_weights(_bt_records("nba") + gbt.prior_records("nba")),
+                  "anchor": gnba.PROP_ANCHOR,
                   "players_bt": _bt("nba_players", lambda: {"metrics": gnba.player_backtest("nba", G, cut, prior_tot=PT)}),
                   # calibration of the browser player layer on finished games (written by the audit's pl_check.js run)
                   "players_cal": _json_or_none(os.path.join(gs_data.CACHE, "bt_nba_players_cal.json"))}

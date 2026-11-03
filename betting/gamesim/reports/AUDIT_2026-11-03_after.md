@@ -284,3 +284,54 @@ The most likely game is far closer to reality than a random simulated game and a
 **Season, after all three player fixes (1,232 player-games):** points MAE 4.62, against 4.83 for a season average (originally 4.80 vs 4.85). Outside the 10–90% range: points 18.9%, rebounds 17.3%, assists 22.7%.
 
 **Verdict:** switched on. Projections, minutes and probabilities are better. Over/under calls are still a coin flip; the book's lines are better.
+
+## Player projections vs the "elite projection" spec (applied after review)
+
+**Flaws found against the spec, and what happened to each:**
+
+- **F1. Minutes ignored the simulated score** (spec steps 1 and 5): starters didn't lose minutes in simulated blowouts. **Fixed:** garbage time. Once a 4th-quarter lead reaches 12 + 1.5 × minutes left, each team's top five keep 30% of their role. It was fitted to real starters' minutes by final margin (2,566 team-games):
+
+  | Final margin | Simulated change vs close games | Real change |
+  |---|---|---|
+  | 15–20 | −1.5 min | −1.6 |
+  | 20–25 | −2.5 | −2.7 |
+  | 25–30 | −3.5 | −3.7 |
+  | 30+ | −4.6 | −4.6 |
+  | 30+, before the fix | −0.1 | |
+
+- **F2. No pull toward the market** (step 7). **Fixed:** with a DraftKings line, the final projection is the line + w × (simulated − line), with w = 0.26 / 0.24 / 0.62 for points / rebounds / assists, fitted on pre-Nov 2 lines (624 / 579 / 444). Held out on Nov 2 (208 / 196 / 158 lines):
+
+  | | Points | Rebounds | Assists |
+  |---|---|---|---|
+  | MAE, before → after (the line) | 5.01 → 4.72 (4.72) | 2.00 → 1.81 (1.83) | 1.77 → 1.71 (1.68) |
+  | Brier, before → after (the book) | 0.258 → 0.247 (0.250) | 0.252 → 0.247 (0.247) | 0.265 → 0.258 (0.244) |
+  | Calls right, before → after | 105 → 112 | 114 → 113 | 74 → 74 |
+
+- **F3. No recency weighting of rates** (step 2). **Tested, no gain:** with actual minutes, points MAE was 3.833 → 3.835 at a decay of 0.9. Left off. With actual minutes, points MAE is 3.8 against 5.1 with projected minutes: minutes are the dominant error.
+- **F4. Outputs** (step 6). **Fixed:** the projection card shows:
+  - minutes with a 25th–75th range;
+  - the projection, the simulated mean, median and 25th–75th for points, rebounds and assists;
+  - the DraftKings line, over/under, and the book's no-vig over;
+  - error bars (backtest MAE);
+  - the season average and the movers vs it (minutes, per-minute rate, this game);
+  - the biggest risk;
+  - what isn't modelled.
+- **F5. No formula-vs-simulation reconciliation** (step 5). **Fixed:** flagged past 10%, with a stat-specific reason.
+- **F6. Inputs the free data doesn't have.** Not fixable here; they are named on the card and covered by the error bars:
+  - potential assists and rebound chances (tracking data);
+  - on/off splits (lineup data);
+  - position-specific defence;
+  - confirmed lineups and minutes restrictions;
+  - personal fouls (only as minutes variance);
+  - rest days.
+
+**Worked example, Gilgeous-Alexander, OKC @ CLE, Nov 2 (pre-game, 50,000 runs, graded after):**
+
+| | Projection | 25th–75th | DraftKings line | P(over) | Actual |
+|---|---|---|---|---|---|
+| Minutes | 34.9 | 32–38 | | | 39 |
+| Points | 29.3 (simulated 28.6) | 22–36 | 29.5 | 47% (book no-vig 49%) | 43 |
+| Rebounds | 3.8 (simulated 4.9) | 2–5 | 3.5 | 51% | 3 |
+| Assists | 4.4 (simulated 3.7) | 3–6 | 5.5 | 31% | 8 |
+
+With six teammates out, his real usage rose far beyond the model's proportional redistribution: shot share 23.9% → 25.8%, minutes 32.6 → 36.2 before scaling. This is the on/off gap named in F6.

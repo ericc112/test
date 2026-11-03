@@ -470,6 +470,11 @@ def reb_credit(games: list[dict], before: str) -> float:
 # a + b x minutes left. Fitted 2026-11-03 on pre-Nov 2 games to real starters' minutes by final margin (2,566 team-games
 # 2025-27): simulated -1.5/-2.5/-3.5/-4.6 minutes at 15-20/20-25/25-30/30+ points vs real -1.6/-2.7/-3.7/-4.6.
 PLAYER_GARBAGE = {"a": 12.0, "b": 1.5, "g": 0.3}
+# Market anchor for player props (when DraftKings has a line): final mean = line + w x (simulated mean - line), and the
+# simulated distribution is shifted to it. w fitted 2026-11-03 on 2026-27 games before Nov 2 (624 / 579 / 444 player
+# lines); on the held-out Nov 2 lines it cut the MAE from 5.01 to 4.72 (points), 2.00 to 1.81 (rebounds), 1.77 to 1.71
+# (assists), and the Brier from 0.258 / 0.252 / 0.265 to 0.247 / 0.247 / 0.258.
+PROP_ANCHOR = {"pts": 0.26, "reb": 0.24, "ast": 0.62}
 PLAYER_RATE_DECAY = None      # per-game decay of the weight on older games in a player's rates (None: equal weights)
 MINUTES_WHEN_PLAYING = True   # chance he plays x minutes when he plays (see player_profiles)
 PLAYER_PRIOR_MIN = 100.0  # minutes of the player's own last-season per-minute rates in his prior (else team average)

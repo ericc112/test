@@ -1598,10 +1598,11 @@ function nbaLine(reset) {
   const dkL = lk ? ((((nbaSide().players.lines || {})[pid] || {})[lk]) || {}).line : null;
   if (reset || $("nlL").value === "") $("nlL").value = dkL != null ? dkL : (Math.floor(hMean(hs)) + 0.5).toFixed(1);   // DraftKings' line when posted
   const L = Number($("nlL").value), n = hs.reduce((a, b) => a + b, 0);
-  let ov = 0, un = 0; hs.forEach((c, k) => { if (k > L) ov += c; else if (k < L) un += c; });
+  const wA = (E.nba.anchor || {})[lk], shA = dkL != null && wA != null ? wA * (hMean(hs) - dkL) + dkL - hMean(hs) : 0;   // blended with DK's line
+  let ov = 0, un = 0; hs.forEach((c, k) => { if (k + shA > L) ov += c; else if (k + shA < L) un += c; });
   const po = ov / n, pu = un / n, fair = (q) => q <= 0 || q >= 1 ? "—" : q >= 0.5 ? `${Math.round(-100 * q / (1 - q))}` : `+${Math.round(100 * (1 - q) / q)}`;
   nbaCard();
-  $("nlOut").innerHTML = `${esc(pl.name)} ${NBHM[h][0]} ${L}: over <b>${fmtPct(po)}</b> (fair ${fair(po)}) · under <b>${fmtPct(pu)}</b> (fair ${fair(pu)})${po + pu < 0.999 ? ` · push ${fmtPct(1 - po - pu)}` : ""} · average ${hMean(hs).toFixed(1)}, median ${hq(hs, 0.5)}`;
+  $("nlOut").innerHTML = `${esc(pl.name)} ${NBHM[h][0]} ${L}: over <b>${fmtPct(po)}</b> (fair ${fair(po)}) · under <b>${fmtPct(pu)}</b> (fair ${fair(pu)})${po + pu < 0.999 ? ` · push ${fmtPct(1 - po - pu)}` : ""} · projection ${(hMean(hs) + shA).toFixed(1)}${shA ? ` (simulated ${hMean(hs).toFixed(1)}, blended with DraftKings' ${dkL})` : ""}, median ${Math.round(hq(hs, 0.5) + shA)}`;
 }
 // The projection card: everything for one player, every number from the simulation, the profile or the backtest.
 function nbaCard() {
@@ -1615,7 +1616,9 @@ function nbaCard() {
   let movers = [], recon = [];
   const body = rows.map(([lab, h, k, formula]) => {
     const hs = nbHist(pl, h), mean = hMean(hs), Lx = lines[k], Lv = Lx ? Lx.line : null;
-    let ov = null, un = null; if (Lv != null) { ov = 0; un = 0; hs.forEach((c, x) => { if (x > Lv) ov += c; else if (x < Lv) un += c; }); ov /= n; un /= n; }
+    // with a DraftKings line: final = line + w x (simulated - line), the simulated distribution shifted to it
+    const w = (E.nba.anchor || {})[k], fin = Lv != null && w != null ? Lv + w * (mean - Lv) : mean, sh = fin - mean;
+    let ov = null, un = null; if (Lv != null) { ov = 0; un = 0; hs.forEach((c, x) => { if (x + sh > Lv) ov += c; else if (x + sh < Lv) un += c; }); ov /= n; un /= n; }
     const mk = Lx ? nv(Lx.over, Lx.under) : null, err = (bt[k] || {}).mae;
     const f = formula(simMin), diff = mean / Math.max(f, 0.01) - 1;
     if (Math.abs(diff) > 0.10) recon.push(`${lab.toLowerCase()} ${diff > 0 ? "+" : ""}${(100 * diff).toFixed(0)}% (${{
@@ -1624,7 +1627,7 @@ function nbaCard() {
       ast: "assists only come on teammates' made baskets in the simulation, at the team's assist rate, so the opponent's defence and his teammates' shooting set the pool" }[k]})`);
     if (se.min > 0 && se.gp) { const sRate = se[k] / se.min, fRate = formula(1);
       movers.push([lab, [["minutes", (simMin - se.min) * sRate], ["per-minute rate (last-season prior, shrinkage)", (fRate - sRate) * simMin], ["this game (pace, opponent, teammates out, garbage time)", mean - f]]]); }
-    return `<tr><td class="l name">${lab}</td><td>${mean.toFixed(1)}</td><td>${hq(hs, 0.5)}</td><td>${hq(hs, 0.25)}–${hq(hs, 0.75)}</td>
+    return `<tr><td class="l name">${lab}</td><td><b>${fin.toFixed(1)}</b></td><td>${mean.toFixed(1)}</td><td>${Math.round(hq(hs, 0.5) + sh)}</td><td>${Math.round(hq(hs, 0.25) + sh)}–${Math.round(hq(hs, 0.75) + sh)}</td>
       <td>${Lv == null ? "no line yet" : Lv}</td><td>${pct(ov)}</td><td>${pct(un)}</td><td>${mk == null ? "—" : pct(mk)}</td><td>${err == null ? "—" : "±" + err.toFixed(1)}</td>
       <td>${se.gp ? se[k].toFixed(1) : "—"}</td></tr>`; }).join("");
   const top = movers.length ? movers[0][1].slice().sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])) : [];
@@ -1632,9 +1635,9 @@ function nbaCard() {
   const ptsRate = (2 * p.fga2 * p.p2 + 3 * p.fga3 * p.p3 + p.fta * p.ftp);
   const upd = Object.values(lines).map((x) => x.updated).filter(Boolean).sort().pop();
   $("nbaCard").innerHTML = `<div><span class="k">Minutes</span> <b>${simMin.toFixed(1)}</b> (25th–75th ${hq(mh, 0.25)}–${hq(mh, 0.75)}) · season ${se.min ? se.min.toFixed(1) : "—"} in ${se.gp || 0} games · ${p.starter ? "started his last game" : "came off the bench last game"}${p.returning ? " · back from injury: 90% of his minutes" : ""}</div>
-    <div class="tbl-wrap"><table><thead><tr><th class="l">Stat</th><th>Mean</th><th>Median</th><th>25th–75th</th><th>DraftKings line</th><th>Over</th><th>Under</th><th>Book's no-vig over</th><th>Error bar (avg miss)</th><th>Season avg</th></tr></thead><tbody>${body}</tbody></table></div>
+    <div class="tbl-wrap"><table><thead><tr><th class="l">Stat</th><th>Projection</th><th>Simulated</th><th>Median</th><th>25th–75th</th><th>DraftKings line</th><th>Over</th><th>Under</th><th>Book's no-vig over</th><th>Error bar (avg miss)</th><th>Season avg</th></tr></thead><tbody>${body}</tbody></table></div>
     <div class="note">${Object.keys(lines).length ? `DraftKings via ESPN, line as of ${esc(upd || sd.players.lines_pulled)} (data pulled ${esc(sd.players.lines_pulled)}).` : `No DraftKings line for this game in the data yet (they're posted on game day); type a line above to price one.`}
-      Error bars are the average miss of these projections on this season's games (${(bt.n || 0).toLocaleString()} player-games). ${recon.length ? `Formula (minutes × his rates) and simulation differ by more than 10% on ${recon.join("; ")}.` : `Formula (minutes × his rates) and simulation agree within 10% on all three.`}</div>
+      ${Object.keys(lines).length ? `Projection = DraftKings' line + ${["pts", "reb", "ast"].map((k) => `${Math.round(100 * (E.nba.anchor || {})[k])}%`).join(" / ")} (points / rebounds / assists) of the simulation's gap from it: the share the simulation's disagreements were worth on earlier games (on Nov 2 it brought the average miss to the line's level). Without a line the projection is the simulation. ` : ""}Error bars are the average miss of these projections on this season's games (${(bt.n || 0).toLocaleString()} player-games). ${recon.length ? `Formula (minutes × his rates) and simulation differ by more than 10% on ${recon.join("; ")}.` : `Formula (minutes × his rates) and simulation agree within 10% on all three.`}</div>
     ${top.length ? `<div><span class="k">What moved his points most vs his season average (${se.pts.toFixed(1)})</span><ul>${top.map(([nm, v]) => `<li>${nm}: ${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}</li>`).join("")}</ul></div>` : ""}
     <div><span class="k">Biggest risk</span> minutes: in ${pct(lo / n)} of simulated games he played 6+ fewer than projected (foul trouble, a blowout, a knock); each lost minute costs about ${ptsRate.toFixed(2)} points. Not modelled: confirmed lineups, minutes restrictions, rest days, on/off splits, tracking data (potential assists, rebound chances).</div>`;
 }
