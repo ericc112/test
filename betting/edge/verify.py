@@ -114,6 +114,10 @@ def started(row: dict) -> bool | None:
         if row.get("sport") == "cs2":
             m = _get(f"https://api.bo3.gg/api/v1/matches?filter%5Bmatches.id%5D%5Beq%5D={row['event_id']}")["results"]
             return bool(m) and m[0].get("status") in ("current", "finished")
+        if row.get("sport") in ("nfl", "cfb"):
+            lg = "college-football" if row["sport"] == "cfb" else "nfl"
+            s = _get(f"https://site.api.espn.com/apis/site/v2/sports/football/{lg}/summary?event={row['event_id']}")
+            return s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_SCHEDULED"
         if row.get("sport") == "mlb":
             g = _get(f"https://statsapi.mlb.com/api/v1/schedule?gamePk={row['event_id']}")["dates"][0]["games"][0]
             return g["status"]["abstractGameState"] != "Preview"
@@ -208,6 +212,41 @@ def check_cs2(rep: Report, adj: dict):
             f"model now {pm:.2f}, logged {lm}" + (" (event under way: live data, pre-game number stands)" if off and getattr(rep, "locked", False) else ""))
 
 
+def check_nfl(rep: Report, adj: dict):
+    """Re-run the simulator (same seed, fresh lines and injury report), recount history at this line, and
+    confirm DraftKings still posts this line (the NFL feed has lines but no prices)."""
+    from . import nfl
+    r = rep.row
+    if getattr(rep, "locked", False):
+        rep.add("WARN", "offered", "game under way or over: pick is locked; audit only (never rewritten)")
+    res = nfl.price_game(str(r["event_id"]), n=50000)
+    hit = [x for x in res["rows"] if str(x["player_id"]) == str(r["player_id"]) and x["market"] == r["market"]]
+    if not hit:
+        rep.add("FAIL", "offered", f"DraftKings no longer posts {r['player']} {r['market']}: pulled (injury/role?)")
+        return
+    x = hit[0]
+    if abs(x["line"] - float(r["line"])) > 1e-9:
+        rep.add("WARN" if getattr(rep, "locked", False) else "FAIL", "offered", f"DraftKings line moved {r['line']} -> {x['line']}")
+    else:
+        rep.add("PASS", "offered", f"DraftKings still at {x['line']} (no price in the feed: confirm the odds on screen)")
+    line = float(r["line"])
+    o, u = nfl.player_history(str(r["player_id"]), None, res["history"], r["market"], line)
+    ph = (o if r["side"] == "over" else u) / max(o + u, 1) if o + u else None
+    logged = _f(r.get("p_hist"))
+    if ph is None and logged is None:
+        rep.add("PASS", "recount", "no history component used")
+    else:
+        bad = ph is None or logged is None or abs(ph - logged) > TOL_HIST
+        rep.add("FAIL" if bad else "PASS", "recount", f"2026 games recount to {ph if ph is None else round(ph, 2)} over {o + u} (logged {logged})")
+    pm = x["p_model"] if x["side"] == r["side"] else nfl.calibrated(1 - x["p_sim"], r["market"])
+    lm = _f(r.get("p_model"))
+    off = lm is None or abs(pm - lm) > TOL_MODEL
+    rep.add("WARN" if off and getattr(rep, "locked", False) else "FAIL" if off else "PASS", "reprice",
+            f"simulator now {pm:.3f} (calibrated), logged {lm}")
+    if x["flags"]:
+        rep.add("WARN", "role", "; ".join(x["flags"]))
+
+
 def check_mlb_history(rep: Report):
     from .grade import MLB_STATS, _get
     r = rep.row
@@ -265,11 +304,14 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
                 check_cs2(rep, adj)
             elif sport == "mlb":
                 check_mlb_history(rep)
+            elif sport == "nfl":
+                check_nfl(rep, adj)
             else:
                 rep.add("WARN", "recount", f"no automatic recount for {sport} yet: recount history by hand before publishing")
         except Exception as e:
             rep.add("FAIL", "recount", f"back-check crashed ({type(e).__name__}: {str(e)[:60]}): not verified")
-        check_offered(rep)
+        if sport != "nfl":   # check_nfl reads the DraftKings board itself
+            check_offered(rep)
     repriced = any(n == "reprice" and st == "PASS" for st, n, _ in rep.checks)
     if row.get("date") and row["date"] < dt.date.today().isoformat() and not repriced:
         rep.add("WARN", "freshness", f"priced on {row['date']} and not re-run today: odds, lineups and lines may have moved")

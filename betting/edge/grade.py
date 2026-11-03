@@ -87,6 +87,7 @@ def nhl_value(event_id: str, player_id: str, market: str, cache: dict):
 NFL_STATS = {
     "pass_yds": ("passing", "YDS"), "rush_yds": ("rushing", "YDS"), "rush_att": ("rushing", "CAR"),
     "rec_yds": ("receiving", "YDS"), "receptions": ("receiving", "REC"),
+    "completions": ("passing", "C/ATT"), "pass_td": ("passing", "TD"), "pass_int": ("passing", "INT"),
 }
 
 
@@ -114,6 +115,11 @@ def nfl_value(event_id: str, player_id: str, market: str, cache: dict, league: s
         if all(t is None for t in tds):
             return "void", None
         return "final", sum(t or 0 for t in tds)
+    if market == "rush_rec_yds":
+        parts = [stat("rushing", "YDS"), stat("receiving", "YDS")]
+        if all(t is None for t in parts):
+            return "void", None
+        return "final", sum(t or 0 for t in parts)
     if market == "pass_att":
         for team in s["boxscore"].get("players", []):
             for cat in team["statistics"]:

@@ -80,6 +80,17 @@ def main(argv=None):
     pb.add_argument("--player")
     pb.add_argument("--types", default="standard", help="odds types to include: standard,goblin,demon")
     pb.add_argument("--log", action="store_true", help="log every priced prop to bets.csv (skips ones already logged)")
+    nf = sub.add_parser("nfl", help="NFL game simulator (ESPN box scores + DraftKings lines)")
+    nf.add_argument("--event", help="ESPN event id (see --week)")
+    nf.add_argument("--week", type=int, help="list a week's games with event ids and DraftKings lines")
+    nf.add_argument("--season", type=int)
+    nf.add_argument("--n", type=int, default=50000, help="simulations (default 50,000)")
+    nf.add_argument("--out", nargs="*", default=[], help="extra inactive players by name (the injury report is read automatically)")
+    nf.add_argument("--alt", nargs="*", default=[], help='app or alt lines to price, e.g. "Swift:rush_yds:52.5"')
+    nf.add_argument("--player", help="only props for players whose name contains this")
+    nf.add_argument("--all", action="store_true", help="show every prop, not just the top 30")
+    nf.add_argument("--log", action="store_true", help="log every priced prop to bets.csv (skips ones already logged)")
+    nf.add_argument("--backtest", help="replay finished weeks against DraftKings closing lines, e.g. 3-8")
     t = sub.add_parser("tag")
     t.add_argument("id")
     t.add_argument("reason")
@@ -280,6 +291,8 @@ def main(argv=None):
                 added += 1
             L.write_bets(bets)
             print(f"Logged {added} new prop(s) to bets.csv.")
+    elif args.cmd == "nfl":
+        _nfl(args)
     elif args.cmd == "tag":
         if L.base_tag(args.reason) not in R.TAGS:
             print(f"note: '{args.reason}' is not a standard tag ({', '.join(R.TAGS)}); recorded anyway")
@@ -294,6 +307,87 @@ def main(argv=None):
             R.write_pm(pms)
         R.render_md(pms, rows)
         print("tagged", args.id)
+
+
+def _nfl(args):
+    from . import nfl as N
+    season = args.season or (dt.date.today().year if dt.date.today().month >= 3 else dt.date.today().year - 1)
+    if args.week:
+        for e in N.week_events(season, args.week):
+            g = N.game(e["id"])
+            line = f"{g['abbr'][g['home']]} {g['spread_home']:+g}, total {g['total']}" if g["spread_home"] is not None else "no line yet"
+            print(f"{e['id']}  {e['date'][:16]}  {e['away_abbr']} @ {e['home_abbr']}  {e['status'].replace('STATUS_', '').lower():10s} {line}")
+        return
+    if args.backtest:
+        a, _, b = args.backtest.partition("-")
+        weeks = list(range(int(a), int(b or a) + 1))
+        bt = N.backtest(season, weeks, n=min(args.n, 10000))
+        s = bt["summary"]
+        print(f"Backtest {season} weeks {weeks[0]}-{weeks[-1]}: {s['n']} DraftKings closing props (only earlier games used)")
+        print(f"{'market':13s} {'n':>5s} {'avg miss: sim':>14s} {'DK line':>8s} {'Brier sim':>10s} (0.250 = line as a coin flip)")
+        for mk, v in s["by_market"].items():
+            dk = "       -" if mk == "anytime_td" else f"{v['mae_line']:8.2f}"   # a TD 'line' of 0.5 isn't a forecast
+            print(f"{mk:13s} {v['n']:5d} {v['mae_median']:14.2f} {dk} {v['brier_model']:10.3f}")
+        print("Calibration of the raw simulation at the DK line (side it favours: predicted -> actual):")
+        for lo, hi, n, pm, hit in s["calibration"]:
+            print(f"  {lo:.2f}-{min(hi, 1):.2f}  n={n:5d}  {pm:.1%} -> {hit:.1%}")
+        print("Suggested MODEL_SHRINK (paste into edge/nfl.py only after a full-season look):", N.fit_shrink(bt["records"]))
+        return
+    if not args.event:
+        print("Give --event ID (find it with --week N) or --backtest 3-8.")
+        return
+    alt = []
+    for a in args.alt:
+        name, mk, ln = a.rsplit(":", 2)
+        alt.append((name, mk, float(ln)))
+    r = N.price_game(args.event, n=args.n, season=args.season, out_names=args.out, alt=alt)
+    g, sim = r["target"], r["sim"]
+    print(f"{g['abbr'][g['away']]} @ {g['abbr'][g['home']]}  DraftKings {g['abbr'][g['home']]} {g['spread_home']:+g}, total {g['total']}"
+          f"  | {args.n:,} simulations from {r['history_games']} earlier games")
+    for tid, t in sim["teams"].items():
+        print(f"  {t['abbr']}: implied {sim['meta']['implied'][tid]:.1f}, sim {t['points'].mean():.1f} pts, win {np.mean(t['margin'] > 0):.1%}, "
+              f"opening drive scores {np.mean(t['first_drive_score']):.1%}, {t['plays'].mean():.0f} plays, {t['pass_att'].mean():.1f} att / {t['car'].mean():.1f} car")
+    if sim["meta"]["out_ids"]:
+        print(f"  inactive (injury report Out/Doubtful, or --out): {len(sim['meta']['out_ids'])} player(s) removed, volume redistributed")
+    rows = [x for x in r["rows"] if not args.player or args.player.lower() in x["player"].lower()]
+    shown = rows if args.all else rows[:30]
+    print(f"\n{'p':>5} {'conf':6s} {'player':20s} {'tm':3s} {'market':12s} {'side':5s} {'line':>6} {'median':>7} {'sim':>5} {'cal':>5} {'hist(n)':>8}  flags")
+    for x in shown:
+        h = "  - " if x["p_hist"] is None else f"{x['p_hist']:.2f}"
+        print(f"{x['p_final']:.3f} {x['confidence']:6s} {x['player'][:20]:20s} {x['team']:3s} {x['market']:12s} {x['side']:5s} {x['line']:6g} "
+              f"{x['median']:7.1f} {x['p_sim']:.2f} {x['p_model']:.2f} {h}({x['hist_n']})  {'; '.join(x['flags'])}")
+    if len(rows) > len(shown):
+        print(f"... {len(rows) - len(shown)} more (--all)")
+    for a in r["alts"]:
+        src = f"centred on DK {a['dk_line']}" if a["anchored"] else "no DK line: raw simulation"
+        print(f"ALT {a['player']} {a['market']} {a['line']}: over {a['p_over']:.1%} / under {a['p_under']:.1%} ({src})")
+    print("\nsim = raw simulated P; cal = shrunk toward the line by the backtest weight (what goes into the blend).")
+    print("The NFL feed carries DraftKings lines but no prices, so there is no market component: no label above Medium,")
+    print("and every pick still needs `python -m edge verify ID` before it is named.")
+    if args.log:
+        bets = L.read_bets()
+        seen = {(b["event_id"], str(b["player_id"]), b["market"], str(float(b["line"])) if b["line"] else "", b["side"]) for b in bets}
+        nid = max(int(b["id"]) for b in bets if b["id"].isdigit()) + 1
+        added = 0
+        ev = f"{g['abbr'][g['away']]} @ {g['abbr'][g['home']]}"
+        for x in r["rows"]:
+            k = (str(g["event_id"]), str(x["player_id"]), x["market"], str(float(x["line"])), x["side"])
+            if k in seen or "not priced" in " ".join(x["flags"]):
+                continue
+            vol = x.get("volume")
+            bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": "nfl", "event": ev, "event_id": g["event_id"],
+                         "player": x["player"], "player_id": x["player_id"], "market": x["market"], "line": x["line"], "side": x["side"],
+                         "book": "DraftKings line (no price)", "p_model": x["p_model"], "p_market": "",
+                         "p_hist": "" if x["p_hist"] is None else x["p_hist"], "hist_n": x["hist_n"], "p_final": x["p_final"],
+                         "confidence": x["confidence"], "action": "lean" if x["confidence"] in ("High", "Medium") else "pass",
+                         "segment": f"nfl:{x['market']}:{x['side']}", "group": f"nfl-{g['event_id']}", "status": "pending",
+                         "proj": round(x["median"], 1), "opp_proj": "" if vol is None else round(vol[1], 1),
+                         "notes": f"edge nfl ({args.n} sims); raw sim {x['p_sim']}; DK line {x['line']} (open {x.get('open')})"
+                                  + (f"; {'; '.join(x['flags'])}" if x["flags"] else "")})
+            nid += 1
+            added += 1
+        L.write_bets(bets)
+        print(f"Logged {added} new prop(s) to bets.csv.")
 
 
 def _review(rows, ids, accept):

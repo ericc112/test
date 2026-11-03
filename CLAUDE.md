@@ -29,10 +29,11 @@ Every pick you name to the user, at any confidence, must pass `python3 -m edge v
 - **Started or finished picks are never rewritten.** Their audit result is added as a note.
 - **Show the verdict next to every pick.** Include each WARN, e.g. "Boom line not readable automatically: confirm 8.5 Less on your screen".
 - **After `edge learn` changes weights,** run `python3 -m edge verify --open --refresh` before recommending anything.
-- **Never type a number into `edge prob` by hand when a pricer exists** (`edge pp`, `edge passes`, `edge/lol.py`, `edge/cs2.py`). Copy-typing is how 0.728 became 0.78.
+- **Never type a number into `edge prob` by hand when a pricer exists** (`edge pp`, `edge passes`, `edge nfl`, `edge/lol.py`, `edge/cs2.py`). Copy-typing is how 0.728 became 0.78.
 
 ## While working
 - For a PrizePicks board, start with `python3 -m edge pp --league <CS2|UCL|...> [--match TEAM] --log`: it prices every supported prop with the same blend and gates, marks MORE-ONLY lines (no under available) and thin or new-to-team players. Read the flagged legs yourself before recommending anything.
+- For an NFL game, start with `python3 -m edge nfl --week N` then `python3 -m edge nfl --event ID [--alt "Name:market:line"] --log`: a 50,000-run drive-level simulation priced against every DraftKings line. Its numbers are pre-calibrated toward the line (it doesn't beat the DK line on its own: README), and it flags returning or thin players and lines far from the model. Re-check the calibration with `--backtest 3-8` as the season goes on.
 - Final probabilities come from `python3 -m edge prob --model .. --market .. --hist .. --hist-n .. --segment sport:market:side`. Report the confidence it returns; don't override it upward.
 - Log every evaluated prop (bets, leans and passes) with `python3 -m edge add ...` (fields: header of `bets.csv`; market keys: `betting/README.md`). Include `event_id` and `player_id` so it can be auto-graded, and `proj` (projected median) and `opp_proj` (projected BF / PA / TOI / rounds) so a loss can be traced to volume or rate.
 - Before the user submits an entry, run `python3 -m edge card` and remove any leg it flags as unpriced or under break-even (LESSONS L20).

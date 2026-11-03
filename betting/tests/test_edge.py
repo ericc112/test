@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from edge import cs2, grade, learn, pp, review, soccer, verify  # noqa: E402
+from edge import cs2, grade, learn, nfl, pp, review, soccer, verify  # noqa: E402
 from edge.blend import DEFAULT_ADJ, final_probability  # noqa: E402
 from edge.odds import devig, fair_american, kelly_fraction, stake  # noqa: E402
 from edge.pickem import PAYOUTS, Leg, best_entries, breakeven, entry_summary, squad_ride  # noqa: E402
@@ -372,6 +372,84 @@ class Grading(unittest.TestCase):
             grade.GRADERS["nhl"] = orig
         self.assertEqual(rows[0]["status"], "won")
         self.assertEqual(rows[0]["result_value"], 2)
+
+    def test_nfl_new_markets_from_cache(self):
+        box = {"header": {"competitions": [{"status": {"type": {"name": "STATUS_FINAL"}}}]},
+               "boxscore": {"players": [{"statistics": [
+                   {"name": "passing", "labels": ["C/ATT", "YDS", "AVG", "TD", "INT"], "athletes": [{"athlete": {"id": 1}, "stats": ["24/34", "247", "7.3", "1", "0"]}]},
+                   {"name": "rushing", "labels": ["CAR", "YDS", "AVG", "TD", "LONG"], "athletes": [{"athlete": {"id": 2}, "stats": ["27", "69", "2.6", "3", "7"]}]},
+                   {"name": "receiving", "labels": ["REC", "YDS", "AVG", "TD", "LONG", "TGTS"], "athletes": [{"athlete": {"id": 2}, "stats": ["2", "10", "5.0", "0", "8", "3"]}]}]}]}}
+        cache = {("nfl", "9"): box}
+        self.assertEqual(grade.nfl_value("9", "1", "completions", cache), ("final", 24.0))
+        self.assertEqual(grade.nfl_value("9", "1", "pass_td", cache), ("final", 1.0))
+        self.assertEqual(grade.nfl_value("9", "1", "pass_int", cache), ("final", 0.0))
+        self.assertEqual(grade.nfl_value("9", "2", "rush_rec_yds", cache), ("final", 79.0))
+        self.assertEqual(grade.nfl_value("9", "2", "anytime_td", cache), ("final", 3.0))
+
+
+def _nfl_game(eid, date, home, away, hs, as_, players):
+    """Synthetic parsed game: players = {team: {pid: line}}; team totals are summed from them."""
+    g = {"event_id": eid, "date": date, "week": 1, "final": True, "home": home, "away": away, "abbr": {home: "H" + home, away: "A" + away},
+         "score": {home: hs, away: as_}, "spread_home": -3.0, "total": 45.0, "teams": {}, "players": players, "out": {},
+         "drives": {home: ["td", "fg", "none", "none", "td", "none", "none", "fg", "none", "none"],
+                    away: ["none", "td", "none", "fg", "none", "none", "td", "none", "none", "none"]},
+         "first_drive": {home: "td", away: "none"}}
+    for tid, ps in players.items():
+        tot = lambda f: sum(p.get(f, 0) for p in ps.values())
+        t = {f: tot(k) for f, k in (("pass_att", "pass_att"), ("sacks", "sacks"), ("car", "car"), ("tgt", "tgt"), ("rec", "rec"),
+                                    ("rec_yds", "rec_yds"), ("rush_yds", "rush_yds"), ("pass_td", "pass_td"), ("rush_td", "rush_td"),
+                                    ("pass_int", "pass_int"))}
+        t["plays"] = t["pass_att"] + t["sacks"] + t["car"]
+        g["teams"][tid] = t
+    return g
+
+
+def _nfl_team(prefix, shift=0):
+    qb = {"name": prefix + " QB", "pass_att": 34, "comp": 22, "pass_yds": 240, "pass_td": 2, "pass_int": 1, "sacks": 2, "car": 4, "rush_yds": 20}
+    rb = {"name": prefix + " RB", "car": 20, "rush_yds": 85, "rush_td": 1, "tgt": 4, "rec": 3, "rec_yds": 20}
+    w1 = {"name": prefix + " WR1", "tgt": 10 + shift, "rec": 7, "rec_yds": 95, "rec_td": 1}
+    w2 = {"name": prefix + " WR2", "tgt": 7, "rec": 4, "rec_yds": 55, "rec_td": 1}
+    te = {"name": prefix + " TE", "tgt": 6, "rec": 4, "rec_yds": 40}
+    return {prefix + "qb": qb, prefix + "rb": rb, prefix + "w1": w1, prefix + "w2": w2, prefix + "te": te}
+
+
+class NFLSimulator(unittest.TestCase):
+    def setUp(self):
+        self.hist = [_nfl_game(str(i), f"2026-09-{10 + 7 * i:02d}", "1", "2", 24, 20,
+                               {"1": _nfl_team("h", i % 2), "2": _nfl_team("a")}) for i in range(3)]
+        self.target = dict(self.hist[0], event_id="99", date="2026-10-20", spread_home=-3.0, total=45.0, out={})
+
+    def test_points_match_market_and_qb_yards_add_up(self):
+        sim = nfl.simulate(self.target, self.hist, n=20000, seed=3)
+        h, a = sim["teams"]["1"], sim["teams"]["2"]
+        self.assertAlmostEqual(h["points"].mean(), 24.0, delta=1.0)   # (45 + 3) / 2
+        self.assertAlmostEqual(a["points"].mean(), 21.0, delta=1.0)
+        P = sim["players"]
+        rec = sum(P[p]["rec_yds"] for p in ("hrb", "hw1", "hw2", "hte"))
+        self.assertTrue(np.all(P["hqb"]["pass_yds"] >= rec - 1e-9))   # QB yards = his receivers' yards (+ fringe)
+        self.assertTrue(np.all(P["hqb"]["completions"] <= P["hqb"]["pass_att"]))
+        self.assertGreater(np.mean(h["margin"] > 0), 0.5)
+
+    def test_inactive_volume_goes_to_teammates(self):
+        base = nfl.simulate(self.target, self.hist, n=20000, seed=4)
+        out = nfl.simulate(self.target, self.hist, n=20000, seed=4, out_ids={"hw1"})
+        self.assertNotIn("hw1", out["players"])
+        self.assertGreater(out["players"]["hw2"]["targets"].mean(), base["players"]["hw2"]["targets"].mean() * 1.15)
+
+    def test_fill_and_calibration(self):
+        f = nfl._fill(np.array([0.3, 0.2]), 0.94, 0.03)
+        self.assertAlmostEqual(f.sum(), 0.94)
+        self.assertGreater(f[0], 0.3)                     # vacated volume reaches the active players
+        self.assertAlmostEqual(nfl.calibrated(0.5, "rec_yds"), 0.5)
+        self.assertLess(nfl.calibrated(0.8, "rec_yds"), 0.6)   # yardage: the line carries most of the information
+        arr = np.random.default_rng(1).gamma(2.0, 25.0, 50000)
+        self.assertAlmostEqual(nfl.anchored_over(arr, 60.5, 60.5), 0.5, delta=0.01)
+        self.assertLess(nfl.anchored_over(arr, 60.5, 80.5), 0.5)
+
+    def test_role_flags(self):
+        self.assertTrue(nfl.role_flags({"returning": True}, "rec_yds", 40.5, 41.0, 45.0))
+        self.assertTrue(any("far from" in f for f in nfl.role_flags({}, "rush_yds", 18.5, 50.0, 55.0)))
+        self.assertEqual(nfl.role_flags({}, "rec_yds", 40.5, 38.0, 44.0), [])
 
 
 if __name__ == "__main__":
