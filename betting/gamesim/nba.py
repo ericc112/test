@@ -464,6 +464,7 @@ def reb_credit(games: list[dict], before: str) -> float:
 # Player layer, fair-tested 2026-11-03: tuned on 2026-27 games before Nov 2, judged on the Nov 2 starters' DraftKings
 # points lines. Projection MAE 5.31 -> 5.23, stars' gap to the line -2.4 -> -1.2, Brier 0.278 -> 0.275 (a coin flip
 # is 0.250); over/under calls 71 -> 69 of 143, no better: the book's lean got 51 of 96 to the model's 40.
+MINUTES_WHEN_PLAYING = False  # chance he plays x minutes when he plays (see player_profiles); off until its fair test decides
 PLAYER_PRIOR_MIN = 100.0  # minutes of the player's own last-season per-minute rates in his prior (else team average)
 PLAYER_SHOCK = 0.35       # per-player per-game role swing (log SD): 10-90% ranges hold ~20% of results (was 29%)
 
@@ -524,6 +525,28 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
         w = [0.85 ** (len(last) - 1 - i) for i in range(len(last))]
         mins = [next((r["min"] for r in rows if r["id"] == pid and not r["dnp"]), 0.0) for _, rows in last]
         a["proj"] = float(np.dot(w, mins) / sum(w))
+        if MINUTES_WHEN_PLAYING:
+            # Minutes when he plays: recency-weighted over his last `recent` appearances. Whoever sits tonight is
+            # removed through the injury report, so counting the games he missed as 0 minutes double-counted his
+            # absence (Curry projected 19 minutes after missing 2 of 7). Out of the rotation: no minutes in any of the
+            # team's last 3 games (unless he's back from injury, below).
+            # Expected minutes = chance he plays x minutes when he plays. The chance counts coach's-decision benchings
+            # in the team's last `recent` games; games he missed injured or off the roster don't count either way.
+            # Starters sit near 1, so the 240-minute scaling comes out of the deep bench, not the stars.
+            played = [r["min"] for _, rows in boxes for r in rows if r["id"] == pid and not r["dnp"] and r["min"] > 0][-recent:]
+            wp = [0.85 ** (len(played) - 1 - i) for i in range(len(played))]
+            avail = []
+            for _, rows in last:
+                r = next((r for r in rows if r["id"] == pid), None)
+                if r is None:
+                    continue
+                if not r["dnp"] and r["min"] > 0:
+                    avail.append(1.0)
+                elif not r["reason"] or "COACH" in r["reason"].upper():
+                    avail.append(0.0)
+            rate = float(np.mean(avail)) if avail else 0.0
+            a["play_rate"] = rate
+            a["proj"] = rate * float(np.dot(wp, played) / sum(wp)) if played else 0.0
         a["starter"] = any(r["id"] == pid and r["starter"] for r in last[-1][1])
         lr = next((r for r in last[-1][1] if r["id"] == pid), None)
         hurt = bool(lr and lr["dnp"] and lr["reason"] and "COACH" not in lr["reason"].upper())
