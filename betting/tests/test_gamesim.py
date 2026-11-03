@@ -273,6 +273,28 @@ class BasketballPlayers(unittest.TestCase):
         self.assertEqual(self.nba.reb_credit(g, "2026-10-20"), 0.93)
 
 
+class Availability(unittest.TestCase):
+    """Who is out tonight, priced against who played in the rating sample (no double counting)."""
+
+    def test_shift_is_relative_to_games_already_missed(self):
+        from gamesim import nba
+        vals = {"players": {"a": {"name": "Star", "value": 6.0, "missed_share": 0.0}, "b": {"name": "Hurt", "value": 4.0, "missed_share": 0.5},
+                            "c": {"name": "Back", "value": 3.0, "missed_share": 0.8}}}
+        self.assertAlmostEqual(nba.availability_shift(vals, set())["lost"], -0.5 * 4 - 0.8 * 3)       # all play: better than rated
+        self.assertAlmostEqual(nba.availability_shift(vals, {"a"})["lost"], 6 - 2 - 2.4)               # the star sits
+        self.assertAlmostEqual(nba.availability_shift(vals, {"b"})["lost"], 0.5 * 4 - 2.4)             # half priced in already
+
+    def test_offense_shift_moves_points_by_the_requested_amount(self):
+        from gamesim import nba
+        R = dict(Basketball.R, league=dict(Basketball.R["league"]), teams={}, and1=0.08)
+        s0 = nba.side(R, "_", "_", False)
+        s1 = nba.shift_offense(s0, R, -3.0)
+        pace = R["league"]["pace"]
+        self.assertAlmostEqual((nba.ppp_expected(s1, 0.08) - nba.ppp_expected(s0, 0.08)) * pace, -3.0, delta=0.15)
+        self.assertLess(s1["p2"], s0["p2"])
+        self.assertLess(s1["p3"], s0["p3"])
+
+
 class Cutoffs(unittest.TestCase):
     """Audit M1/M2: ratings for a US day use every game of earlier US days and nothing from that day."""
 

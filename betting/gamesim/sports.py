@@ -34,8 +34,16 @@ def run_basketball(lg: str, game_id: str, sims: int = 50000, seed: int = 2026, o
     target = nba.parse(nba.data._json(f"https://site.api.espn.com/apis/site/v2/sports/{path}/summary?event={game_id}", f"{lg}_sum_{game_id}.json", 900))
     day = nba.data.cutoff(nba.data.us_day(target["date"]))      # every game of earlier US days, last night's included
     R = nba.calibrate(nba.ratings(games, day, minutes), games, day, minutes, shot_clock)
-    H = nba.side(R, target["home"], target["away"], not target["neutral"])
-    A = nba.side(R, target["away"], target["home"], False)
+    avail = None
+    if lg == "nba":                            # availability: tonight's Out/Doubtful list priced into each offense
+        summ = nba.data._json(f"https://site.api.espn.com/apis/site/v2/sports/{path}/summary?event={game_id}", f"{lg}_sum_{game_id}.json", 900)
+        outs = {s_: {i["athlete"]["displayName"] for t in summ.get("injuries", []) or [] if t["team"]["abbreviation"] == target[s_]
+                     for i in t.get("injuries", []) or [] if (i.get("status") or "").lower() in ("out", "doubtful")} for s_ in ("home", "away")}
+        absent = {s_: nba.absent_tonight(lg, games, target[s_], day, outs[s_]) for s_ in ("home", "away")}
+        H, A, avail = nba.sides_with_availability(R, games, target, day, absent, lg)
+    else:
+        H = nba.side(R, target["home"], target["away"], not target["neutral"])
+        A = nba.side(R, target["away"], target["home"], False)
     ln = target["line"]
     t0 = dt.datetime.now()
     sim = nba.simulate(H, A, R, minutes, n=sims, seed=seed, shot_clock=shot_clock)
@@ -112,7 +120,12 @@ def run_basketball(lg: str, game_id: str, sims: int = 50000, seed: int = 2026, o
       f"possession length ×{R['dur_scale']:.3f}, extra free throws on {100 * R['and1']:.0f}% of makes (and-ones, technicals, 3-shot fouls), "
       f"home court ×{R['home_scale']:.2f} → a league-average game scores {R['ppg_target']:.1f} a team with a {R['home_margin']:+.1f} home margin. "
       f"Shooting-luck sd: 2P {R['sd_p2']:.3f}, 3P {R['sd_p3']:.3f}; pace sd {R['sd_pace']:.1f}.")
-    w("\n**Not modelled (flagged):** player minutes, injuries and lineups (no player layer yet), rest and back-to-backs, referees. "
+    if avail:
+        w("\n**Availability (priced in):** " + "; ".join(f"{target[s_]} {avail[s_]['points']:+.1f} pts (" + (", ".join(
+            f"{r['name']} {'out' if r['out_tonight'] else 'back'}, missed {100 * r['missed_share']:.0f}% so far" for r in avail[s_]["rows"][:3]) or "no change") + ")"
+            for s_ in ("away", "home")) + f". Scale: {nba.INJURY_BETA} margin points per Game Score point of value lost, fitted on 2025-26 Nov-Jan "
+          "and validated on Feb-Apr (margin RMSE 15.20 -> 14.65).")
+    w("\n**Not modelled (flagged):** lineups and on-court combinations, rest and back-to-backs, referees. "
       "Any line move the model can't explain widens the error bar.")
     w(f"\n## 2. Results ({sims:,} simulations)\n")
     w(f"| | {away} | {home} |\n|---|---|---|")

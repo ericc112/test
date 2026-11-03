@@ -362,7 +362,30 @@ def calibrate(R: dict, games: list[dict], before: str, minutes: int, shot_clock:
     return R
 
 
-def backtest(games: list[dict], minutes: int, shot_clock: int, min_games: int = 3, n: int = 6000, seed: int = 3) -> dict:
+def sides_with_availability(R: dict, games: list[dict], g: dict, cut: str, absent: dict, lg: str = "nba") -> tuple:
+    """Home and away sides with each offense moved by INJURY_BETA x the value it is missing tonight (absent: {side:
+    set of player ids out tonight}). Returns (home side, away side, detail)."""
+    h, a = side(R, g["home"], g["away"], not g.get("neutral", False)), side(R, g["away"], g["home"], False)
+    det = {}
+    for s_ in ("home", "away"):
+        det[s_] = availability_shift(player_values(lg, games, g[s_], cut), absent.get(s_, set()))
+        det[s_]["points"] = -INJURY_BETA * det[s_]["lost"]
+    return shift_offense(h, R, det["home"]["points"]), shift_offense(a, R, det["away"]["points"]), det
+
+
+def absent_from_box(lg: str, games: list[dict], g: dict, cut: str) -> dict:
+    """Backtest availability: players in the rating sample who did not play in this game (injury report plus late
+    scratches; known at tip-off, mostly earlier)."""
+    box = _box_cached(lg, g["id"])
+    out = {}
+    for s_ in ("home", "away"):
+        played = {r["id"] for r in box.get(g[s_], []) if not r["dnp"] and r["min"] > 0}
+        out[s_] = {pid for pid in player_values(lg, games, g[s_], cut)["players"] if pid not in played}
+    return out
+
+
+def backtest(games: list[dict], minutes: int, shot_clock: int, min_games: int = 3, n: int = 6000, seed: int = 3,
+             availability: bool = True) -> dict:
     from .backtest import metrics, no_vig
     recs = []
     by_day = defaultdict(list)
@@ -379,8 +402,12 @@ def backtest(games: list[dict], minutes: int, shot_clock: int, min_games: int = 
             if min(R["teams"].get(g["home"], {}).get("games", 0), R["teams"].get(g["away"], {}).get("games", 0)) < min_games:
                 continue
             ln = g["line"]
-            sim = simulate(side(R, g["home"], g["away"], not g["neutral"]), side(R, g["away"], g["home"], False), R, minutes,
-                           n=n, seed=seed + len(recs), shot_clock=shot_clock)
+            if availability and minutes == 48:               # fitted on the NBA only
+                H, A, det = sides_with_availability(R, games, g, cut, absent_from_box("nba" if minutes == 48 else "ncaab", games, g, cut),
+                                                    "nba" if minutes == 48 else "ncaab")
+            else:
+                H, A, det = side(R, g["home"], g["away"], not g["neutral"]), side(R, g["away"], g["home"], False), None
+            sim = simulate(H, A, R, minutes, n=n, seed=seed + len(recs), shot_clock=shot_clock)
             h, a = sim["home"], sim["away"]
             res = g["score"]["home"] - g["score"]["away"]
             tot = g["score"]["home"] + g["score"]["away"]
@@ -391,7 +418,9 @@ def backtest(games: list[dict], minutes: int, shot_clock: int, min_games: int = 
                          "mk_cover": no_vig(ln["spread_home_odds"], ln["spread_away_odds"]),
                          "covered": None if sp is None or res + sp == 0 else float(res + sp > 0),
                          "p_over": None if tl is None else float((h + a > tl).mean()), "mk_over": no_vig(ln["over_odds"], ln["under_odds"]),
-                         "overed": None if tl is None or tot == tl else float(tot > tl), "sim_total": float((h + a).mean()), "total": tot})
+                         "overed": None if tl is None or tot == tl else float(tot > tl), "sim_total": float((h + a).mean()), "total": tot,
+                         "sim_margin": float((h - a).mean()), "margin": res,
+                         "avail_points": None if det is None else [det["home"]["points"], det["away"]["points"]]})
     return {"records": recs, "metrics": metrics(recs)}
 
 
@@ -406,13 +435,16 @@ def _box_players(s: dict) -> dict:
         lab = st.get("labels") or []
         rows = []
         for a in st.get("athletes", []):
+            if not (a.get("athlete") or {}).get("id"):
+                continue                           # occasional placeholder rows without a player
             v = dict(zip(lab, a.get("stats") or []))
             fg, tp, ft = _split(v.get("FG", "0-0")), _split(v.get("3PT", "0-0")), _split(v.get("FT", "0-0"))
             rows.append({"id": a["athlete"]["id"], "name": a["athlete"]["displayName"], "pos": (a["athlete"].get("position") or {}).get("abbreviation", ""),
                          "starter": bool(a.get("starter")), "dnp": bool(a.get("didNotPlay")) or not v, "reason": a.get("reason") or "",
                          "min": data.f(v.get("MIN"), 0) or 0, "pts": data.f(v.get("PTS"), 0) or 0, "fgm": fg[0], "fga": fg[1], "tpm": tp[0], "tpa": tp[1],
                          "ftm": ft[0], "fta": ft[1], "oreb": data.f(v.get("OREB"), 0) or 0, "dreb": data.f(v.get("DREB"), 0) or 0,
-                         "ast": data.f(v.get("AST"), 0) or 0, "tov": data.f(v.get("TO"), 0) or 0})
+                         "ast": data.f(v.get("AST"), 0) or 0, "tov": data.f(v.get("TO"), 0) or 0,
+                         "stl": data.f(v.get("STL"), 0) or 0, "blk": data.f(v.get("BLK"), 0) or 0, "pf": data.f(v.get("PF"), 0) or 0})
         out[t["team"]["abbreviation"]] = rows
     return out
 
@@ -536,3 +568,114 @@ def player_backtest(lg: str, games: list[dict], before: str, min_prior: int = 3)
         a = np.array(v)
         out[k] = {"mae": float(np.abs(a[:, 0]).mean()), "bias": float(a[:, 0].mean()), "base_mae": float(np.abs(a[:, 1]).mean())}
     return out
+
+
+
+# ------------------------------------------------------------------ availability: who is out, priced into team strength
+INJURY_K = 200.0          # minutes of bench-level prior on a player's per-minute value
+# Margin points per Game Score point of value lost (availability_shift). Fitted on 2025-26 Nov-Jan (682 games,
+# ratings-only residuals): 0.50 +- 0.10; full season 0.53 +- 0.07. On the held-out Feb-Apr games it cut the margin
+# RMSE from 15.20 to 14.65 points.
+INJURY_BETA = 0.50
+
+
+def _box_cached(lg: str, gid: str, _memo={}):
+    key = (lg, gid)
+    if key not in _memo:
+        p = os.path.join(data.CACHE, f"{lg}_sum_{gid}.json")
+        if os.path.exists(p):
+            with open(p) as f:
+                _memo[key] = _box_players(json.load(f))
+        else:
+            _memo[key] = {}
+    return _memo[key]
+
+
+def _gmsc(r: dict) -> float:
+    """Hollinger Game Score from one box-score line."""
+    return (r["pts"] + 0.4 * r["fgm"] - 0.7 * r["fga"] - 0.4 * (r["fta"] - r["ftm"]) + 0.7 * r["oreb"] + 0.3 * r["dreb"]
+            + r.get("stl", 0) + 0.7 * r["ast"] + 0.7 * r.get("blk", 0) - 0.4 * r.get("pf", 0) - r["tov"])
+
+
+def player_values(lg: str, games: list[dict], team: str, before: str) -> dict:
+    """Each player's worth to `team` in the games its ratings were fitted on (finished, before `before`): Game Score
+    per minute above the team's bench level (players outside its top five by minutes), shrunk toward the bench by
+    INJURY_K minutes; his minutes when he plays; and the share of those team games he missed, which the team rating
+    already reflects."""
+    tg = [g for g in games if g["final"] and g["date"] < before and team in (g["home"], g["away"])]
+    acc, n = {}, 0
+    for g in tg:
+        rows = _box_cached(lg, g["id"]).get(team)
+        if not rows:
+            continue
+        n += 1
+        for r in rows:
+            a = acc.setdefault(r["id"], {"name": r["name"], "gs": 0.0, "min": 0.0, "gp": 0})
+            if not r["dnp"] and r["min"] > 0:
+                a["gs"] += _gmsc(r)
+                a["min"] += r["min"]
+                a["gp"] += 1
+    if not n:
+        return {"games": 0, "players": {}}
+    top = sorted(acc.values(), key=lambda a: -a["min"])
+    bench = [a for a in top[5:] if a["min"] > 0]
+    repl = sum(a["gs"] for a in bench) / max(sum(a["min"] for a in bench), 1.0) if bench else 0.25
+    out = {}
+    for pid, a in acc.items():
+        if a["gp"] == 0:
+            continue
+        pm = (a["gs"] + INJURY_K * repl) / (a["min"] + INJURY_K)
+        out[pid] = {"name": a["name"], "value": (pm - repl) * a["min"] / a["gp"], "min": a["min"] / a["gp"],
+                    "gp": a["gp"], "missed_share": 1.0 - a["gp"] / n}
+    return {"games": n, "replacement_per_min": repl, "players": out}
+
+
+def availability_shift(vals: dict, absent: set) -> dict:
+    """Game Score points per game the team is missing tonight relative to the lineup its rating was fitted on:
+    sum over players of value x (absent tonight - share of the rating games he missed). A player who already sat
+    half the games is half priced in; one back from a long absence makes the team better than its rating."""
+    tot, rows = 0.0, []
+    for pid, v in vals["players"].items():
+        d = v["value"] * ((1.0 if pid in absent else 0.0) - v["missed_share"])
+        if abs(d) > 0.05:
+            rows.append({"name": v["name"], "value": round(v["value"], 2), "missed_share": round(v["missed_share"], 2),
+                         "out_tonight": pid in absent, "shift": round(d, 2)})
+        tot += d
+    return {"lost": tot, "rows": sorted(rows, key=lambda r: -abs(r["shift"]))}
+
+
+def ppp_expected(s: dict, and1: float) -> float:
+    """Expected points per possession from one side's rates (the possession engine's structure, analytically)."""
+    pm = s["three"] * s["p3"] + (1 - s["three"]) * s["p2"]
+    shot = s["three"] * s["p3"] * 3 + (1 - s["three"]) * s["p2"] * 2 + pm * and1 * s["ftp"]
+    miss = (1 - pm) * s["orb"]
+    return (1 - s["to"]) * (s["ft_rate"] * 2 * s["ftp"] + (1 - s["ft_rate"]) * shot * (1 + miss + miss * miss))
+
+
+def shift_offense(s: dict, R: dict, points: float) -> dict:
+    """Move a side's 2- and 3-point make rates by one common logit step so it scores `points` more per game
+    (negative: fewer), at the game's pace."""
+    if not points:
+        return s
+    pace = R["league"]["pace"] + s.get("pace_off", 0.0)
+    target = points / max(pace, 1.0)
+    lo = lambda p: np.log(p / (1 - p))
+    sg = lambda z: 1 / (1 + np.exp(-z))
+    base = ppp_expected(s, R.get("and1", 0.0))
+    def at(d):
+        t = dict(s)
+        t["p2"], t["p3"] = float(sg(lo(s["p2"]) + d)), float(sg(lo(s["p3"]) + d))
+        return t
+    slope = (ppp_expected(at(0.01), R.get("and1", 0.0)) - base) / 0.01
+    return at(target / slope if slope else 0.0)
+
+
+def absent_tonight(lg: str, games: list[dict], team: str, before: str, out_names: set) -> set:
+    """Live availability: players listed Out or Doubtful, plus players from the rating sample who are no longer on the
+    roster (missing from the team's latest box score altogether, e.g. traded). A player on the latest box who sat
+    injured and isn't listed now counts as back."""
+    vals = player_values(lg, games, team, before)
+    tg = sorted((g for g in games if g["final"] and g["date"] < before and team in (g["home"], g["away"])), key=lambda g: g["date"])
+    roster = {r["id"] for r in (_box_cached(lg, tg[-1]["id"]).get(team) or [])} if tg else set()
+    names = {n.lower() for n in out_names}
+    return {pid for pid, v in vals["players"].items() if v["name"].lower() in names or (roster and pid not in roster)}

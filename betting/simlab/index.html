@@ -1394,7 +1394,12 @@ function engCfg(over) {
 }
 function engNote(k) {
   if (k === "nfl") { const M = E.nfl.M; return `Every snap: run/pass call, 4th-down decisions, sacks, picks, yards from ${M.n_plays.toLocaleString()} real plays, penalties, clock, timeouts, special teams. It doesn't use the betting line.`; }
-  if (k === "nba") return `Every possession: turnovers, 2s and 3s, foul trips, offensive rebounds, late fouling, overtime. Ratings from ${E.nba.R.n_games} games this season; it doesn't use the line.`;
+  if (k === "nba") { const av = (E.nba.sides[game().id] || {}).availability, g = game();
+    const one = (s) => { const a = av && av[s]; if (!a) return ""; const top = a.rows.filter((r) => Math.abs(r.shift) >= 0.2).slice(0, 3)
+      .map((r) => `${r.name} ${r.out_tonight ? "out" : "back"}${r.missed_share > 0 ? ` (missed ${Math.round(100 * r.missed_share)}% so far)` : ""}`).join(", ");
+      return `${g[s]} ${a.points >= 0 ? "+" : "−"}${Math.abs(a.points).toFixed(1)} pts${top ? ": " + top : ""}`; };
+    return `Every possession: turnovers, 2s and 3s, foul trips, offensive rebounds, late fouling, overtime. Ratings from ${E.nba.R.n_games} games this season; it doesn't use the line. ` +
+      (av ? `Availability, priced into team strength from tonight's injury report against who played in the games the ratings came from: ${one("away")}; ${one("home")}.` : ""); }
   const gs = (E.nhl.sides[game().id] || {}).goalies || {}, g = game();
   return `10-second clock: even-strength goals (shots × finishing × goalie), power plays, pulled goalies, 3-on-3 OT, shootout. ${E.nhl.R.n_games} games this season; it doesn't use the line. ` +
     `Goalies assumed: ${gs.away || "unknown"} (${g.away}) and ${gs.home || "unknown"} (${g.home}), each team's most recent starter, not a confirmed starter. Check the confirmed goalies before puck drop; the factor table shows how much the goalie moves the number.`;

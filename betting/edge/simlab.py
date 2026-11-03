@@ -274,9 +274,16 @@ def engines(data: dict) -> dict:
     R = gnba.calibrate(gnba.ratings(G, cut, 48), G, cut, 48, 24)
     sides = {}
     for g in nba_games:
-        sides[g["id"]] = {"home": {k: round(v, 4) for k, v in gnba.side(R, g["home"], g["away"], True).items()},
-                          "away": {k: round(v, 4) for k, v in gnba.side(R, g["away"], g["home"], False).items()},
-                          "games": [R["teams"].get(g["home"], {}).get("games", 0), R["teams"].get(g["away"], {}).get("games", 0)]}
+        # availability: tonight's Out/Doubtful list (and players gone from the roster) priced into each offense
+        inj = [i for i in g.get("injuries", []) if i["team"] in (g["home"], g["away"])]
+        gone = lambda team: {i["name"] for i in inj if i["team"] == team and (i["status"] or "").lower() in ("out", "doubtful")}
+        absent = {s_: gnba.absent_tonight("nba", G, g[s_], cut, gone(g[s_])) for s_ in ("home", "away")}
+        H, A, det = gnba.sides_with_availability(R, G, g, cut, absent)
+        sides[g["id"]] = {"home": {k: round(v, 4) for k, v in H.items()}, "away": {k: round(v, 4) for k, v in A.items()},
+                          "games": [R["teams"].get(g["home"], {}).get("games", 0), R["teams"].get(g["away"], {}).get("games", 0)],
+                          "availability": {s_: {"points": round(det[s_]["points"], 2), "rows": det[s_]["rows"][:6]} for s_ in ("home", "away")},
+                          "no_availability": {"home": {k: round(v, 4) for k, v in gnba.side(R, g["home"], g["away"], True).items()},
+                                              "away": {k: round(v, 4) for k, v in gnba.side(R, g["away"], g["home"], False).items()}}}
     for g in nba_games:                                   # player layer: rotation, per-minute rates, injury report
         inj = [i for i in g.get("injuries", []) if i["team"] in (g["home"], g["away"])]
         gone = lambda team: {i["name"] for i in inj if i["team"] == team and (i["status"] or "").lower() in ("out", "doubtful")}
