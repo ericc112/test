@@ -6,8 +6,12 @@ The backtest replays finished games this way and scores the model against the cl
 """
 from __future__ import annotations
 
+import json
+import os
+
 import numpy as np
 
+from . import data
 from . import drives as dm
 from . import engine, players, ratings
 from .data import f
@@ -138,3 +142,26 @@ def run_pbp(sched: list[dict], plays_season: list[dict], plays_prior: list[dict]
                          "overed": None if mk["total"] is None or f(g["total"]) == mk["total"] else float(f(g["total"]) > mk["total"]),
                          "sim_total": S["total_mean"], "sim_margin": S["margin_mean"]})
     return {"records": recs, "metrics": metrics(recs)}
+
+
+def prior_metrics(name: str) -> dict | None:
+    """Metrics of last season's full out-of-sample backtest for an engine (cached as .cache/gamesim/bt_<name>_prior.json:
+    nba, nhl, pbp), so the structural error isn't set by a few dozen games of the current season."""
+    path = os.path.join(data.CACHE, f"bt_{name}_prior.json")
+    if not os.path.exists(path):
+        return None
+    with open(path) as fh:
+        return json.load(fh).get("metrics")
+
+
+def pooled_rms(*metric_sets) -> dict:
+    """Structural error per market: the RMS gap to the closing no-vig market, pooled over every out-of-sample
+    backtest given (current season and last season), weighted by games."""
+    acc = {}
+    for M in metric_sets:
+        for k, v in (M or {}).items():
+            if isinstance(v, dict) and v.get("rms_vs_market") is not None and v.get("n"):
+                a = acc.setdefault(k, [0.0, 0])
+                a[0] += v["n"] * v["rms_vs_market"] ** 2
+                a[1] += v["n"]
+    return {k: (ss / n) ** 0.5 for k, (ss, n) in acc.items() if n}

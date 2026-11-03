@@ -229,7 +229,9 @@ def simulate(home: dict, away: dict, R: dict, minutes: int = 48, n: int = 50000,
         u = rng.random((k, 6))
         late = c <= 60
         # endgame choices
-        foul = late & (diff >= 3) & (diff <= 8) & (c > 2)                       # defence trails by 3-8: foul at once
+        # the defence trails: it fouls at once when down 3-8 in the last minute, and when down 1-2 once the shot clock
+        # is off (otherwise the leader would run out the clock untouched)
+        foul = late & (c > 2) & (((diff >= 3) & (diff <= 8)) | ((diff >= 1) & (diff <= 2) & (c <= shot_clock)))
         hold = (c <= shot_clock) & (diff > 0) & ~foul                           # leader runs out the clock
         need3 = late & (diff == -3)
         dur = np.where(foul, rng.uniform(2, 6, k), np.where(hold, c, rng.gamma(4.0, 1.0, k) * sec_per_poss[a] / 4.0))
@@ -278,6 +280,29 @@ def simulate(home: dict, away: dict, R: dict, minutes: int = 48, n: int = 50000,
     return {"home": score[:, 0], "away": score[:, 1], "ot": ot > 0, "possessions": nposs, "trace": log, "stats": stats}
 
 
+def pace_resid_sd(G: list[dict], before: str, minutes: int, folds: int = 5) -> float | None:
+    """Out-of-fold SD of game pace (possessions per team per 48) around the team pace ratings: each fold's games are
+    predicted from ratings fitted on the other folds, so the residual holds game-to-game variation plus the rating
+    error a forecast actually faces, not in-sample fit."""
+    if len(G) < 40:
+        return None
+    res = []
+    for k in range(folds):
+        test = G[k::folds]
+        ids = {g["id"] for g in test}
+        Rk = ratings([g for g in G if g["id"] not in ids], before, minutes)
+        T, L = Rk["teams"], Rk["league"]["pace"]
+        for g in test:
+            if g["home"] not in T or g["away"] not in T:
+                continue
+            h, a = T[g["home"]], T[g["away"]]
+            fit = L + (h.get("off_pace", 0) + a.get("def_pace", 0) + a.get("off_pace", 0) + h.get("def_pace", 0)) / 2
+            mins = minutes + 5 * max(0, g["periods"] - (4 if minutes == 48 else 2))
+            obs = (poss(g["box"]["home"], g["box"]["away"]) + poss(g["box"]["away"], g["box"]["home"])) / 2 * minutes / mins
+            res.append(obs - fit)
+    return float(np.std(res)) if len(res) > 20 else None
+
+
 def calibrate(R: dict, games: list[dict], before: str, minutes: int, shot_clock: int, n: int = 12000) -> dict:
     """Fit three league constants so a league-average game reproduces this season's games before `before`:
     possession length (sim possessions = box-score pace), and-one rate (points per game) and home edge
@@ -289,6 +314,15 @@ def calibrate(R: dict, games: list[dict], before: str, minutes: int, shot_clock:
     for _ in range(3):                     # possession length: simulated possessions per team = box-score pace
         s0 = simulate(avg, dict(avg), R, minutes, n=n, seed=1, shot_clock=shot_clock)
         R["dur_scale"] *= float(s0["possessions"].mean() / 2) / R["league"]["pace"]
+    # pace shock: only the game-to-game pace variation the possession process doesn't already produce. The raw
+    # per-team pace SD (ratings()) also holds team differences and the engine's own possession-count noise, so using
+    # it as the shock double-counted (total-points SD 22.1 vs 18.5-18.9 real). Target: out-of-fold residual of game
+    # pace around the team pace ratings, minus the engine's intrinsic possession SD.
+    s_i = simulate(avg, dict(avg), {**R, "sd_pace": 0.0}, minutes, n=n, seed=3, shot_clock=shot_clock)
+    intr = float((s_i["possessions"][~s_i["ot"]] / 2).std())
+    obs = pace_resid_sd(G, before, minutes)
+    R["sd_pace_raw"], R["sd_pace_target"], R["sd_pace_intrinsic"] = R["sd_pace"], obs, intr
+    R["sd_pace"] = float(np.sqrt(max(obs ** 2 - intr ** 2, 0.0))) if obs else R["sd_pace"]
     lo, hi = 0.0, 0.4                       # extra free throws per made shot (and-ones, technicals, 3-shot fouls)
     for _ in range(9):
         R["and1"] = (lo + hi) / 2
@@ -299,15 +333,31 @@ def calibrate(R: dict, games: list[dict], before: str, minutes: int, shot_clock:
             hi = R["and1"]
     R["and1"] = (lo + hi) / 2
     target = R["home_margin"]
+    # home edge as the difference from a no-home run on the same random numbers: one seeded run's own margin noise
+    # (SE ~0.2 points) otherwise lands in the fitted home scale
+    s0 = simulate(avg, dict(avg), R, minutes, n=n, seed=2, shot_clock=shot_clock)
+    m0 = float((s0["home"] - s0["away"]).mean())
     lo, hi = 0.0, 4.0
     for _ in range(7):
         R["home_scale"] = (lo + hi) / 2
         sh = simulate(side(R, "_", "_", True), side(R, "_", "_", False), R, minutes, n=n, seed=2, shot_clock=shot_clock)
-        if float((sh["home"] - sh["away"]).mean()) < target:
+        if float((sh["home"] - sh["away"]).mean()) - m0 < target:
             lo = R["home_scale"]
         else:
             hi = R["home_scale"]
     R["home_scale"] = (lo + hi) / 2
+    # scoring level on the configuration games are actually played in (a home side): the home edge was added on top
+    # of an away-style baseline, which put it into the total too (+2 points)
+    hs = side(R, "_", "_", True)
+    lo, hi = max(R["and1"] - 0.1, 0.0), R["and1"] + 0.05
+    for _ in range(8):
+        R["and1"] = (lo + hi) / 2
+        s1 = simulate(hs, dict(avg), R, minutes, n=n, seed=1, shot_clock=shot_clock)
+        if float((s1["home"].mean() + s1["away"].mean()) / 2) < ppg:
+            lo = R["and1"]
+        else:
+            hi = R["and1"]
+    R["and1"] = (lo + hi) / 2
     R["ppg_target"] = ppg
     return R
 
@@ -318,12 +368,13 @@ def backtest(games: list[dict], minutes: int, shot_clock: int, min_games: int = 
     by_day = defaultdict(list)
     for g in games:
         if g["final"] and len(g["box"]) == 2 and g["line"]["ml_home"] is not None:
-            by_day[g["date"][:10]].append(g)
+            by_day[data.us_day(g["date"])].append(g)          # US day: no same-evening games leak in
     for day in sorted(by_day):
-        R = ratings(games, day, minutes)
+        cut = data.cutoff(day)
+        R = ratings(games, cut, minutes)
         if R["n_games"] < 20:
             continue
-        R = calibrate(R, games, day, minutes, shot_clock, n=6000)
+        R = calibrate(R, games, cut, minutes, shot_clock, n=6000)
         for g in by_day[day]:
             if min(R["teams"].get(g["home"], {}).get("games", 0), R["teams"].get(g["away"], {}).get("games", 0)) < min_games:
                 continue

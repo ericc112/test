@@ -14,7 +14,7 @@ import os
 
 import numpy as np
 
-from . import engine, nba, report
+from . import backtest, engine, nba, report
 from .backtest import fair_american, no_vig
 from .report import pct, pts
 
@@ -32,7 +32,7 @@ def run_basketball(lg: str, game_id: str, sims: int = 50000, seed: int = 2026, o
     yesterday = (dt.date.today() - dt.timedelta(days=1)).strftime("%Y%m%d")
     games = nba.season_games(lg, _season_start(lg), yesterday)
     target = nba.parse(nba.data._json(f"https://site.api.espn.com/apis/site/v2/sports/{path}/summary?event={game_id}", f"{lg}_sum_{game_id}.json", 900))
-    day = target["date"][:10]
+    day = nba.data.cutoff(nba.data.us_day(target["date"]))      # every game of earlier US days, last night's included
     R = nba.calibrate(nba.ratings(games, day, minutes), games, day, minutes, shot_clock)
     H = nba.side(R, target["home"], target["away"], not target["neutral"])
     A = nba.side(R, target["away"], target["home"], False)
@@ -43,7 +43,7 @@ def run_basketball(lg: str, game_id: str, sims: int = 50000, seed: int = 2026, o
     S = engine.summary(sim, ln["spread_home"], ln["total"])
     bt = nba.backtest(games, minutes, shot_clock, n=6000)
     M = bt["metrics"]
-    rms = {k: M[k]["rms_vs_market"] for k in M}
+    rms = backtest.pooled_rms(M, backtest.prior_metrics(lg))           # + last season's full backtest
     # factor table: neutral, then each factor alone
     avg = nba.side(R, "_", "_", False)
     base_p = lambda h, a, env=True: float((lambda s: (s["home"] > s["away"]).mean())(nba.simulate(h, a, R, minutes, n=sims, seed=seed, env=env, shot_clock=shot_clock)))
@@ -161,7 +161,7 @@ def run_hockey(game_id: str, sims: int = 50000, seed: int = 2026, out: str | Non
     games = nhl.season_games(f"{y}1005", yesterday)
     en = nhl.empty_net_rates(f"{y}1005", yesterday, max_games=120)
     target = nhl.parse(nhl.data._json(f"https://site.api.espn.com/apis/site/v2/sports/{nhl.PATH}/summary?event={game_id}", f"nhl_sum_{game_id}.json", 900))
-    day = target["date"][:10]
+    day = nhl.data.cutoff(nhl.data.us_day(target["date"]))      # every game of earlier US days, last night's included
     R = nhl.calibrate(nhl.ratings(games, day), en)
     home, away, ln = target["home"], target["away"], target["line"]
     gh, ga = R["starters"].get(home, {}), R["starters"].get(away, {})          # projected: each team's most recent starter
@@ -174,7 +174,7 @@ def run_hockey(game_id: str, sims: int = 50000, seed: int = 2026, out: str | Non
     S = engine.summary(sim, sp, tl)
     bt = nhl.backtest(games, en, n=6000)
     M = bt["metrics"]
-    rms = {k: M[k]["rms_vs_market"] for k in M}
+    rms = backtest.pooled_rms(M, backtest.prior_metrics("nhl"))        # + last season's full backtest
     rms.setdefault("cover", rms.get("win", 0.1))
     avg = nhl.side(R, "_", "_", False)
     pw = lambda h, a, **kw: float((lambda s: (s["home"] > s["away"]).mean())(nhl.simulate(h, a, R, en, n=sims, seed=seed, **kw)))

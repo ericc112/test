@@ -93,7 +93,7 @@ def main(argv=None):
     # validation: replay this season's earlier weeks (from week 4) out of sample
     bt = (backtest.run_pbp if pbp else backtest.run)(sched, P, P0, str(season), list(range(4, week)), n=10000)
     M = bt["metrics"]
-    rms = {k: M[k]["rms_vs_market"] for k in M}
+    rms = backtest.pooled_rms(M, backtest.prior_metrics("pbp" if pbp else "drive"))   # + last season's full backtest
 
     # starter scenarios for both teams: each of the top three QBs on the depth chart
     scen = []

@@ -52,11 +52,20 @@ def _ybin(togo):
 
 
 def _zbin(yl):
+    """Field zone by distance to goal. Own 10 to the goal line is its own zone: losses there are bounded by the end
+    zone, and borrowing them from the own 20 replayed own-20 sacks at the own 3 (4.5x the real safety rate)."""
     y = np.asarray(yl)
-    return np.where(y <= 10, 0, np.where(y <= 20, 1, np.where(y <= 40, 2, np.where(y <= 80, 3, 4))))
+    return np.where(y <= 10, 0, np.where(y <= 20, 1, np.where(y <= 40, 2, np.where(y <= 80, 3, np.where(y <= 90, 4, 5)))))
 
 
 RZ_EDGES = np.array([1, 2, 3, 5, 7, 10, 13, 16, 20])
+FALLBACK_KEY = 15         # 1st/2nd down, 8-12 to go, between the 20 and the 40 of the far half (a typical snap)
+
+
+def sack_deep(pools):
+    """Sack yards inside the own 10 (enough real samples), else the overall pool."""
+    d = pools.get(("sack", 1))
+    return d if d is not None and len(d) >= 25 else pools[("sack", 0)]
 
 
 def pool_key(down, togo, yl):
@@ -65,7 +74,7 @@ def pool_key(down, togo, yl):
     down, togo, yl = np.asarray(down), np.asarray(togo), np.asarray(yl)
     dg = (down >= 3).astype(int)
     rz = 100 + dg * 10 + np.searchsorted(RZ_EDGES, np.ceil(yl))
-    out = dg * 20 + _ybin(togo) * 5 + _zbin(yl)
+    out = dg * 24 + _ybin(togo) * 6 + _zbin(yl)
     return np.where(yl <= 20, rz, out)
 
 
@@ -144,7 +153,7 @@ def fit(plays: list[dict], before: str, wind: dict | None = None, fg_beta=None, 
         elif p["complete_pass"] == "1":
             pools[("comp", key)].append(yg)
         elif p["sack"] == "1":
-            pools[("sack", 0)].append(yg)
+            pools[("sack", int(y0 > 90))].append(yg)       # sacks inside the own 10 are their own pool
         elif p["interception"] == "1":
             pools[("int_air", 0)].append(f(p["air_yards"], 10) or 10)
             pools[("int_ret", 0)].append(f(p["return_yards"], 0) or 0)
@@ -365,6 +374,7 @@ def simulate(sides: dict, M: dict, n: int = 50000, seed: int = 2026, hfa: float 
         act = np.full(a.size, RUN)
         kneel = (qtr >= 4) & (diff > 0) & (dn <= 3) & (hs <= 42 * (4 - dn) - 38 * tos[a, d])
         kneel |= (qtr == 2) & (hs <= 40) & (y >= 60) & (diff >= 0)
+        kneel &= y <= 98                                        # never kneel at the own 1: that is a safety
         is4 = (dn == 4) & ~kneel
         if is4.any():
             Z = _fourth_x(y[is4], tg[is4], diff[is4], qtr[is4], hs[is4]) @ M["W4"].T
@@ -393,7 +403,7 @@ def simulate(sides: dict, M: dict, n: int = 50000, seed: int = 2026, hfa: float 
         # runs
         m = (act == RUN) & ~penal
         if m.any():
-            g0 = _pick(rng, run_pool, key[m], pools[("run", 13)])
+            g0 = _pick(rng, run_pool, key[m], pools[("run", FALLBACK_KEY)])
             gain[m] = _gain(g0, y[m], ypr_m[o[m]] * ymult[a[m], o[m]] * home_bonus[o[m]])
             fum = rng.random(m.sum()) < M["fum_run"]
             ii = np.flatnonzero(m)[fum]
@@ -412,7 +422,7 @@ def simulate(sides: dict, M: dict, n: int = 50000, seed: int = 2026, hfa: float 
             ii = np.flatnonzero(m)
             c = ii[r == COMP]
             if c.size:
-                g0 = _pick(rng, comp_pool, key[c], pools[("comp", 13)])
+                g0 = _pick(rng, comp_pool, key[c], pools[("comp", FALLBACK_KEY)])
                 gain[c] = _gain(g0, y[c], ypc_m[o[c]] * ymult[a[c], o[c]] * home_bonus[o[c]])
                 cat[c] = CAT["comp_in"]
                 fum = c[rng.random(c.size) < M["fum_comp"]]
@@ -420,7 +430,7 @@ def simulate(sides: dict, M: dict, n: int = 50000, seed: int = 2026, hfa: float 
             cat[ii[r == INC]] = CAT["inc"]
             s_ = ii[r == SACK]
             if s_.size:
-                gain[s_] = _pick(rng, {0: pools[("sack", 0)]}, np.zeros(s_.size, int), pools[("sack", 0)])
+                gain[s_] = _pick(rng, {0: pools[("sack", 0)], 1: sack_deep(pools)}, (y[s_] > 90).astype(int), pools[("sack", 0)])
                 cat[s_] = CAT["sack"]
             t_ = ii[r == INT]
             if t_.size:

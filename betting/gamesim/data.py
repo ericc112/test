@@ -60,6 +60,24 @@ def _json(url: str, name: str, max_age: float | None = 1800):
         return json.load(f)
 
 
+def us_day(iso: str) -> str:
+    """US calendar day of an ESPN UTC timestamp ('2026-11-03T00:30Z' is the evening of Nov 2 in the US). Shifting by
+    10 hours puts every US game (noon ET to 10:30 pm PT tip-offs) on its local date."""
+    t = dt.datetime.strptime(iso[:16], "%Y-%m-%dT%H:%M")
+    return (t - dt.timedelta(hours=10)).strftime("%Y-%m-%d")
+
+
+def cutoff(day: str) -> str:
+    """Ratings cutoff for games on US day `day`: everything that started before 10:00Z that morning, i.e. every game
+    of earlier US days (late West-coast games included) and nothing from that day. Compare with ESPN 'date' strings."""
+    return f"{day}T10:00Z"
+
+
+def now_cutoff() -> str:
+    """Cutoff for today's slate: all games of earlier US days, including last night's (which carry today's UTC date)."""
+    return cutoff(us_day(dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M")))
+
+
 def pulled_at(name: str) -> str:
     p = os.path.join(CACHE, name)
     return dt.datetime.fromtimestamp(os.path.getmtime(p), dt.timezone.utc).strftime("%Y-%m-%d %H:%MZ") if os.path.exists(p) else "?"

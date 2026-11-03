@@ -146,6 +146,21 @@ class PlayByPlay(unittest.TestCase):
         gl = [p["td"] for g in self.sim["trace"] for p in g if p["act"] in ("run", "pass") and not p["pen"] and p["yl"] <= 2]
         self.assertTrue(0.35 <= np.mean(gl) <= 0.65)                                 # real: ~51% of snaps inside the 2
 
+    def test_safeties_and_kneels_near_the_own_goal_line(self):
+        # audit M5: own-20 losses replayed at the own 3 gave 0.19 safeties a game (real 2025: 0.044)
+        saf, kneel_deep = 0, 0
+        for g in self.sim["trace"]:
+            for p in g:
+                if p["act"] == "kneel" and p["yl"] > 98:
+                    kneel_deep += 1
+                if p["act"] in ("run", "pass", "kneel") and not p["pen"] and not p["turnover"]:
+                    if p["yl"] - (-1.0 if p["act"] == "kneel" else p["gain"]) >= 100:
+                        saf += 1
+        self.assertEqual(kneel_deep, 0)
+        # 0.19 before the fix, ~0.12 after; real is 0.044 (the rest needs a "backed up" term in the call and sack
+        # models: a proposal in the audit report, not applied)
+        self.assertLess(saf / len(self.sim["trace"]), 0.15)
+
     def test_better_passing_offense_wins_more(self):
         from gamesim import nfl_pbp
         s = nfl_pbp.simulate({"home": {**self.N, "comp": 0.3, "ypc_mult": 1.15}, "away": dict(self.N)}, self.M, n=4000, seed=2)
@@ -170,6 +185,22 @@ class Basketball(unittest.TestCase):
         avg = nba.side(self.R, "_", "_", False)
         s = nba.simulate({**avg, "p3": 0.40, "p2": 0.57}, dict(avg), self.R, 48, n=20000, seed=2)
         self.assertGreater(float((s["home"] > s["away"]).mean()), 0.65)
+
+    def test_trailing_team_fouls_when_shot_clock_is_off(self):
+        # audit C1: down 1-2 with the shot clock off, the trailing team never got the ball back (leader won 100%)
+        from gamesim import nba
+        avg = nba.side(self.R, "_", "_", False)
+        s = nba.simulate(avg, dict(avg), self.R, 48, n=4000, seed=4, trace=4000)
+        checked = 0
+        for g in s["trace"]:
+            for p in g:
+                own, opp = (p["score"][0], p["score"][1]) if p["off"] == 0 else (p["score"][1], p["score"][0])
+                lead_before = own - p["pts"] - opp
+                if 2 < p["clock"] <= 24 and 1 <= lead_before <= 2:
+                    checked += 1
+                    self.assertTrue(p["foul"], p)
+                    self.assertFalse(p["hold"], p)
+        self.assertGreater(checked, 20)
 
     def test_late_fouling_happens(self):
         from gamesim import nba
@@ -240,6 +271,25 @@ class BasketballPlayers(unittest.TestCase):
         g = [{"final": True, "date": "2026-10-20", "box": {"home": {"fga": 90, "fgm": 42, "orb": 10, "drb": 34}, "away": {"fga": 88, "fgm": 40, "orb": 11, "drb": 33}}}]
         self.assertAlmostEqual(self.nba.reb_credit(g, "2026-10-21"), 88 / 96)
         self.assertEqual(self.nba.reb_credit(g, "2026-10-20"), 0.93)
+
+
+class Cutoffs(unittest.TestCase):
+    """Audit M1/M2: ratings for a US day use every game of earlier US days and nothing from that day."""
+
+    def test_us_day_and_cutoff(self):
+        self.assertEqual(data.us_day("2026-11-03T00:30Z"), "2026-11-02")      # 7:30 pm ET on Nov 2
+        self.assertEqual(data.us_day("2026-11-03T06:30Z"), "2026-11-02")      # 10:30 pm PT on Nov 2
+        self.assertEqual(data.us_day("2026-11-03T17:00Z"), "2026-11-03")      # noon ET on Nov 3
+        cut = data.cutoff("2026-11-03")
+        self.assertTrue("2026-11-03T03:00Z" < cut)                             # last night's late game is in
+        self.assertFalse("2026-11-03T23:30Z" < cut)                            # tonight's early game is out
+
+    def test_pooled_rms(self):
+        a = {"win": {"n": 100, "rms_vs_market": 0.10}}
+        b = {"win": {"n": 300, "rms_vs_market": 0.14}, "total": {"n": 300, "rms_vs_market": 0.09}}
+        r = backtest.pooled_rms(a, b, None)
+        self.assertAlmostEqual(r["win"], ((100 * 0.01 + 300 * 0.0196) / 400) ** 0.5)
+        self.assertAlmostEqual(r["total"], 0.09)
 
 
 class Hockey(unittest.TestCase):

@@ -334,15 +334,23 @@ def calibrate(R: dict, en: dict, n: int = 20000) -> dict:
     for _ in range(3):
         s = simulate(avg, dict(avg), R, en, n=n, seed=1, env=False, home_ice=False)
         R["goal_scale"] *= R["gpg"] / max(float((s["home"].mean() + s["away"].mean()) / 2), 0.5)
+    # home edge as the difference from a no-home-ice run on the same random numbers: the target (~0.13 goals) is
+    # only ~7 standard errors of one 20,000-game run, so fitting the raw margin put that run's noise into the edge
+    s0 = simulate(avg, dict(avg), R, en, n=n, seed=2, env=False, home_ice=False)
+    m0 = float((s0["home"] - s0["away"]).mean())
     lo, hi = 0.9, 1.4
     for _ in range(8):
         R["home_mult"] = (lo + hi) / 2
         s = simulate(avg, dict(avg), R, en, n=n, seed=2, env=False)
-        if float((s["home"] - s["away"]).mean()) < R["home_target"]:
+        if float((s["home"] - s["away"]).mean()) - m0 < R["home_target"]:
             lo = R["home_mult"]
         else:
             hi = R["home_mult"]
     R["home_mult"] = (lo + hi) / 2
+    # goal scale again with home ice on, so the home edge doesn't add to the total
+    for _ in range(2):
+        s = simulate(avg, dict(avg), R, en, n=n, seed=1, env=False)
+        R["goal_scale"] *= R["gpg"] / max(float((s["home"].mean() + s["away"].mean()) / 2), 0.5)
     # finishing-shock size: match the observed spread of total goals (the raw residual estimate also carries goalie noise)
     if R.get("total_sd_target"):
         raw = R["sd_fin"]
@@ -365,9 +373,10 @@ def backtest(games: list[dict], en: dict, min_games: int = 4, n: int = 6000, see
     by_day = defaultdict(list)
     for g in games:
         if g["final"] and len(g["box"]) == 2 and g["line"]["ml_home"] is not None:
-            by_day[g["date"][:10]].append(g)
+            by_day[data.us_day(g["date"])].append(g)          # US day: no same-evening games leak in
     for day in sorted(by_day):
-        R = ratings(games, day)
+        cut = data.cutoff(day)
+        R = ratings(games, cut)
         if R["n_games"] < 30:
             continue
         R = calibrate(R, en, n=6000)

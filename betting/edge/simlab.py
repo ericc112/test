@@ -197,6 +197,14 @@ def _sub(v, k: int, nd: int | None = None, seed: int = 1) -> list:
     return [round(float(x), nd) if nd else int(round(float(x))) for x in a]
 
 
+def _json_or_none(path: str):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
 def _bt(name: str, compute):
     """Backtest metrics, cached in .cache/gamesim/bt_<name>.json (recomputed when missing)."""
     path = os.path.join(gs_data.CACHE, f"bt_{name}.json")
@@ -227,7 +235,7 @@ def engines(data: dict) -> dict:
         cm = {"b_call": [round(x, 5) for x in M["b_call"]], "W4": np.round(M["W4"], 5).tolist(), "Wp": np.round(M["Wp"], 5).tolist(),
               "run": {str(k[1]): _sub(v, 1500, 3 if k[1] >= 100 else None) for k, v in pools.items() if k[0] == "run"},
               "comp": {str(k[1]): _sub(v, 1500, 3 if k[1] >= 100 else None) for k, v in pools.items() if k[0] == "comp"},
-              "sack": _sub(pools[("sack", 0)], 800), "int_air": _sub(pools[("int_air", 0)], 600), "int_ret": _sub(pools[("int_ret", 0)], 600),
+              "sack": _sub(pools[("sack", 0)], 800), "sack_deep": _sub(nfl_pbp.sack_deep(pools), 400), "int_air": _sub(pools[("int_air", 0)], 600), "int_ret": _sub(pools[("int_ret", 0)], 600),
               "run_off": {str(k): _sub(v, 1200) for k, v in M["run_off"].items()}, "punt": {str(k): _sub(v, 600) for k, v in M["punt"].items()},
               "kick": _sub(M["kick"], 1500), "fum_run": M["fum_run"], "fum_comp": M["fum_comp"], "xp": M["xp"], "two": M["two"],
               "onside": M["onside_rate"], "fg": [float(x) for x in M["fg_beta"]], "yard_sd": M["yard_sd"], "hfa": M["hfa"],
@@ -250,13 +258,15 @@ def engines(data: dict) -> dict:
                     opts[side].append({"name": name, "projected": i == 0, **{k: round(v, 4) if isinstance(v, float) else v for k, v in si.items()}})
             games[g["id"]] = {"qb": opts, "starter_source": f"ESPN depth chart via nflverse, snapshot {gs_data.depth_chart(season, r['home_team'])[0]}"}
         out["nfl"] = {"M": cm, "games": games,
-                      "backtest": _bt("pbp", lambda: gbt.run_pbp(sched, P, P0, str(season), list(range(4, int(rows[nfl_games[0]["id"]]["week"]))), n=10000))}
+                      "backtest": _bt("pbp", lambda: gbt.run_pbp(sched, P, P0, str(season), list(range(4, int(rows[nfl_games[0]["id"]]["week"]))), n=10000)),
+                      "backtest_prior": gbt.prior_metrics("pbp")}
     # ---- NBA possessions
     nba_games = next(lg for lg in data["leagues"] if lg["key"] == "nba")["games"]
     y = today.year if today.month >= 9 else today.year - 1
     yday = (today - dt.timedelta(days=1)).strftime("%Y%m%d")
     G = gnba.season_games("nba", f"{y}1018", yday)
-    R = gnba.calibrate(gnba.ratings(G, today.isoformat(), 48), G, today.isoformat(), 48, 24)
+    cut = gs_data.now_cutoff()               # every game of earlier US days, last night's included (UTC dates lag)
+    R = gnba.calibrate(gnba.ratings(G, cut, 48), G, cut, 48, 24)
     sides = {}
     for g in nba_games:
         sides[g["id"]] = {"home": {k: round(v, 4) for k, v in gnba.side(R, g["home"], g["away"], True).items()},
@@ -267,23 +277,25 @@ def engines(data: dict) -> dict:
         gone = lambda team: {i["name"] for i in inj if i["team"] == team and (i["status"] or "").lower() in ("out", "doubtful")}
         pl = {}
         for side in ("home", "away"):
-            pr = gnba.player_profiles("nba", G, g[side], g["start"][:10], gone(g[side]))
+            pr = gnba.player_profiles("nba", G, g[side], gs_data.cutoff(gs_data.us_day(g["start"])), gone(g[side]))
             pr["players"] = [{k: round(v, 4) if isinstance(v, float) else v for k, v in p.items()} for p in pr["players"]]
             pr["ast_rate"] = round(pr["ast_rate"], 4)
             pl[side] = pr
         pl["injuries"] = inj
         sides[g["id"]]["players"] = pl
     out["nba"] = {"R": {"pace": R["league"]["pace"], "sd_pace": R["sd_pace"], "sd_p2": R["sd_p2"], "sd_p3": R["sd_p3"], "dur_scale": R["dur_scale"],
-                        "and1": R["and1"], "home_scale": R["home_scale"], "reb_credit": round(gnba.reb_credit(G, today.isoformat()), 4), "ppg": R["ppg_target"], "home_margin": R["home_margin"], "n_games": R["n_games"],
+                        "and1": R["and1"], "home_scale": R["home_scale"], "reb_credit": round(gnba.reb_credit(G, cut), 4), "ppg": R["ppg_target"], "home_margin": R["home_margin"], "n_games": R["n_games"],
                         "avg": {k: round(v, 4) for k, v in gnba.side(R, "_", "_", False).items()},
                         "avg_home": {k: round(v, 4) for k, v in gnba.side(R, "_", "_", True).items()}},
-                  "sides": sides, "backtest": _bt("nba", lambda: gnba.backtest(G, 48, 24, n=6000)),
-                  "players_bt": _bt("nba_players", lambda: {"metrics": gnba.player_backtest("nba", G, today.isoformat())})}
+                  "sides": sides, "backtest": _bt("nba", lambda: gnba.backtest(G, 48, 24, n=6000)), "backtest_prior": gbt.prior_metrics("nba"),
+                  "players_bt": _bt("nba_players", lambda: {"metrics": gnba.player_backtest("nba", G, cut)}),
+                  # calibration of the browser player layer on finished games (written by the audit's pl_check.js run)
+                  "players_cal": _json_or_none(os.path.join(gs_data.CACHE, "bt_nba_players_cal.json"))}
     # ---- NHL event clock
     nhl_games = next(lg for lg in data["leagues"] if lg["key"] == "nhl")["games"]
     G = gnhl.season_games(f"{y}1005", yday)
     en = gnhl.empty_net_rates(f"{y}1005", yday, max_games=120)
-    R = gnhl.calibrate(gnhl.ratings(G, today.isoformat()), en)
+    R = gnhl.calibrate(gnhl.ratings(G, gs_data.now_cutoff()), en)
     sides = {}
     for g in nhl_games:
         gh, ga = R["starters"].get(g["home"], {}), R["starters"].get(g["away"], {})
@@ -297,5 +309,5 @@ def engines(data: dict) -> dict:
                         "ot_decided": R["league"]["ot_decided"], "so_home": R["league"]["so_home"], "gpg": R["gpg"], "sv": R["league"]["sv"],
                         "home_prior": R["home_prior"], "lam": R["lam"], "n_games": R["n_games"],
                         "avg": {k: round(v, 5) for k, v in gnhl.side(R, "_", "_", False).items()}},
-                  "en": en, "sides": sides, "backtest": _bt("nhl", lambda: gnhl.backtest(G, en, n=6000))}
+                  "en": en, "sides": sides, "backtest": _bt("nhl", lambda: gnhl.backtest(G, en, n=6000)), "backtest_prior": gbt.prior_metrics("nhl")}
     return out
