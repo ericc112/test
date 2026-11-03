@@ -71,6 +71,7 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 | `edge/pp.py` | PrizePicks board fetch and routing to pricers; More-only and goblin/demon handling |
 | `edge/cs2.py` | CS2 maps 1-2 kills/headshots model from bo3.gg, with roster-era detection and newcomer flags |
 | `edge/soccer.py` | Soccer passes attempted: possession × match passes × share × minutes, from ESPN |
+| `gamesim/` | One-game NFL model: ridge EPA ratings, drive-by-drive clocked simulation, out-of-sample backtest, error bars and decision rule (`python -m gamesim --game ID`) |
 | `edge/nfl.py` | NFL game simulator (drives → points → volume → shares → per-play yards), DraftKings-line pricing, backtest |
 | `edge/review.py` | Post-mortem for every loss: feed detail, linked legs, suggested root cause |
 | `edge/card.py` | One leg per game script, best entry, entry-leg pricing check |
