@@ -28,7 +28,13 @@ PBP_COLS = ["game_id", "season", "season_type", "week", "posteam", "defteam", "h
             "success", "qb_dropback", "passer_player_id", "passer_player_name", "wp", "half_seconds_remaining",
             "game_seconds_remaining", "qtr", "score_differential", "yardline_100", "down", "fixed_drive", "fixed_drive_result",
             "drive_play_count", "drive_time_of_possession", "drive_start_transition", "field_goal_result", "kick_distance",
-            "extra_point_result", "two_point_conv_result", "qb_kneel", "qb_spike", "game_date", "play_id"]
+            "extra_point_result", "two_point_conv_result", "qb_kneel", "qb_spike", "game_date", "play_id",
+            # play-level fields for the play-by-play engine
+            "yards_gained", "complete_pass", "incomplete_pass", "interception", "sack", "fumble_lost", "touchdown", "penalty",
+            "penalty_yards", "penalty_team", "first_down_penalty", "ydstogo", "posteam_timeouts_remaining", "defteam_timeouts_remaining",
+            "out_of_bounds", "qb_scramble", "return_yards", "touchback", "timeout", "timeout_team", "two_point_attempt",
+            "kickoff_attempt", "own_kickoff_recovery", "punt_attempt", "field_goal_attempt", "return_touchdown", "safety",
+            "extra_point_attempt", "first_down", "punt_blocked", "fumble", "air_yards"]
 
 
 def _fetch(url: str, path: str, max_age: float | None, tries: int = 4) -> str:
@@ -63,7 +69,7 @@ def pulled_at(name: str) -> str:
 def pbp(season: int, max_age: float = 6 * 3600) -> list[dict]:
     """Regular-season plays for a season, only the columns the model reads (parsed once, cached as JSON)."""
     raw = _fetch(f"{NFLVERSE}/pbp/play_by_play_{season}.csv.gz", os.path.join(CACHE, f"pbp_{season}.csv.gz"), max_age)
-    slim = os.path.join(CACHE, f"pbp_{season}.slim.json")
+    slim = os.path.join(CACHE, f"pbp_{season}.slim2.json")
     if os.path.exists(slim) and os.path.getmtime(slim) >= os.path.getmtime(raw):
         with open(slim) as f:
             return json.load(f)

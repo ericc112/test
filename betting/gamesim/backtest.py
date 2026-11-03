@@ -109,3 +109,32 @@ def metrics(recs: list[dict]) -> dict:
         out[key] = {"n": len(rs), "brier_model": bm, "brier_market": bk, "logloss_model": lm, "logloss_market": lk,
                     "rms_vs_market": float(np.sqrt(np.mean(diff ** 2))), "mean_vs_market": float(diff.mean()), "calibration": cal}
     return out
+
+
+def run_pbp(sched: list[dict], plays_season: list[dict], plays_prior: list[dict], season: str, weeks: list[int],
+            n: int = 10000, seed: int = 11) -> dict:
+    """Same out-of-sample replay with the play-by-play engine (league model and ratings rebuilt each week)."""
+    from . import nfl_pbp
+    recs = []
+    for w in weeks:
+        games = [g for g in sched if g["season"] == season and g["game_type"] == "REG" and int(g["week"]) == w and g["result"]]
+        if not games:
+            continue
+        B = nfl_pbp.build(plays_season, plays_prior, sched, min(g["gameday"] for g in games))
+        for g in games:
+            pr = B["ratings"] if g["gameday"] == min(x["gameday"] for x in games) else \
+                nfl_pbp.play_ratings([p for p in plays_season if p["game_date"] < g["gameday"]], plays_prior)
+            sides = {"home": nfl_pbp.side_inputs(pr, g["home_team"], g["away_team"], g["home_qb_id"], B["M"]),
+                     "away": nfl_pbp.side_inputs(pr, g["away_team"], g["home_team"], g["away_qb_id"], B["M"])}
+            mk = market(g)
+            sim = nfl_pbp.simulate(sides, B["M"], n=n, seed=seed + int(g["gameday"].replace("-", "")) % 1000, hfa=B["M"]["hfa"])
+            S = engine.summary(sim, mk["spread_home"], mk["total"])
+            res = f(g["result"])
+            recs.append({"game": g["game_id"], "week": w, "p_home": S["home_win"][0] / max(1 - S["tie"][0], 1e-9),
+                         "mk_home": mk["p_home"], "won": None if res == 0 else float(res > 0),
+                         "p_cover": S.get("home_cover", (None,))[0], "mk_cover": mk["p_cover"],
+                         "covered": None if mk["spread_home"] is None or res + mk["spread_home"] == 0 else float(res + mk["spread_home"] > 0),
+                         "p_over": S.get("over", (None,))[0], "mk_over": mk["p_over"],
+                         "overed": None if mk["total"] is None or f(g["total"]) == mk["total"] else float(f(g["total"]) > mk["total"]),
+                         "sim_total": S["total_mean"], "sim_margin": S["margin_mean"]})
+    return {"records": recs, "metrics": metrics(recs)}

@@ -96,7 +96,7 @@ class MarketAndRules(unittest.TestCase):
         self.assertEqual(backtest.fair_american(0.75), "-300")
 
 
-@unittest.skipUnless(os.path.exists(os.path.join(data.CACHE, "pbp_2026.slim.json")), "needs cached 2026 play-by-play")
+@unittest.skipUnless(os.path.exists(os.path.join(data.CACHE, "pbp_2026.slim2.json")), "needs cached 2026 play-by-play")
 class ReproducesRatings(unittest.TestCase):
     def test_simulated_season_scoring_tracks_ratings(self):
         """Each team vs a league-average opponent: simulated points should line up with what its ratings imply and
@@ -121,6 +121,35 @@ class ReproducesRatings(unittest.TestCase):
         allpts = [float(x) for g in sched for x in (g["home_score"], g["away_score"])]
         avg = engine.simulate({"home": dict(AVG), "away": dict(AVG)}, M, n=20000, seed=10, hfa=False)
         self.assertLess(abs((avg["home"].mean() + avg["away"].mean()) / 2 - np.mean(allpts)), 2.0)
+
+
+@unittest.skipUnless(os.path.exists(os.path.join(data.CACHE, "pbp_2026.slim2.json")), "needs cached play-by-play")
+class PlayByPlay(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from gamesim import drives, nfl_pbp
+        P25, P26 = data.pbp(2025), data.pbp(2026)
+        allp = P25 + P26
+        DM = drives.fit(allp, drives.build_drives(allp), before="2026-11-03")
+        cls.M = nfl_pbp.fit(allp, "2026-11-03", fg_beta=DM["fg_beta"], fg_wind=DM["fg_wind"])
+        cls.N = {"comp": 0.0, "sack": 0.0, "int": 0.0, "ypc_mult": 1.0, "ypr_mult": 1.0, "pass_offset": 0.0}
+        cls.sim = nfl_pbp.simulate({"home": dict(cls.N), "away": dict(cls.N)}, cls.M, n=4000, seed=1, trace=300)
+
+    def test_snaps_and_scoring_look_like_the_nfl(self):
+        self.assertTrue(140 <= self.sim["plays"].mean() <= 156)                       # real 2026: 147 snaps a game
+        ppg = (self.sim["home"].mean() + self.sim["away"].mean()) / 2
+        self.assertTrue(19 <= ppg <= 26)                                              # real 2025-26: 23.0
+
+    def test_gains_are_whole_yards_and_goal_line_scores(self):
+        gains = [p["gain"] for g in self.sim["trace"] for p in g if p["act"] in ("run", "pass")]
+        self.assertTrue(all(float(x).is_integer() for x in gains))
+        gl = [p["td"] for g in self.sim["trace"] for p in g if p["act"] in ("run", "pass") and not p["pen"] and p["yl"] <= 2]
+        self.assertTrue(0.35 <= np.mean(gl) <= 0.65)                                 # real: ~51% of snaps inside the 2
+
+    def test_better_passing_offense_wins_more(self):
+        from gamesim import nfl_pbp
+        s = nfl_pbp.simulate({"home": {**self.N, "comp": 0.3, "ypc_mult": 1.15}, "away": dict(self.N)}, self.M, n=4000, seed=2)
+        self.assertGreater(float((s["home"] > s["away"]).mean()), 0.6)
 
 
 if __name__ == "__main__":

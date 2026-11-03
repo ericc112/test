@@ -89,3 +89,59 @@ def pct(x, d=1):
 
 def pts(x, d=1):
     return "n/a" if x is None else f"{100 * x:+.{d}f} pts"
+
+
+NEUTRAL_PBP = {"comp": 0.0, "sack": 0.0, "int": 0.0, "ypc_mult": 1.0, "ypr_mult": 1.0, "pass_offset": 0.0}
+
+
+def factor_table_pbp(sides: dict, sides_no_qb: dict, M: dict, n: int, seed: int, fg_wind_logit: float) -> list[tuple]:
+    """Play-by-play engine: home win probability for a neutral matchup, then each factor added alone."""
+    from . import nfl_pbp
+    N = NEUTRAL_PBP
+
+    def p(h, a, hfa=0.0, wind=0.0, env=True):
+        s = nfl_pbp.simulate({"home": {**N, **h}, "away": {**N, **a}}, M, n=n, seed=seed, hfa=hfa, fg_wind_logit=wind, env=env)
+        S = engine.summary(s)
+        return S["home_win"][0] / max(1 - S["tie"][0], 1e-9)
+    pick = lambda s, ks: {k: s[k] for k in ks}
+    H, A = sides["home"], sides["away"]
+    base = p({}, {})
+    rows = [("Neutral baseline (two average teams, no home field)", base, 0.0)]
+    tests = [("Passing matchup: QB vs pass defense (completion, sack, INT, yards per catch)", p(pick(H, ["comp", "sack", "int", "ypc_mult"]), pick(A, ["comp", "sack", "int", "ypc_mult"]))),
+             ("Rushing matchup: yards per carry vs run defense", p(pick(H, ["ypr_mult"]), pick(A, ["ypr_mult"]))),
+             ("Play-calling tendency (neutral pass rate)", p(pick(H, ["pass_offset"]), pick(A, ["pass_offset"]))),
+             ("Home-field advantage (calibrated to the observed home margin)", p({}, {}, hfa=M["hfa"])),
+             ("Weather (wind on field goals)", p({}, {}, wind=fg_wind_logit))]
+    for name, v in tests:
+        rows.append((name, v, v - base))
+    full = p(H, A, hfa=M["hfa"], wind=fg_wind_logit)
+    noqb = p(sides_no_qb["home"], sides_no_qb["away"], hfa=M["hfa"], wind=fg_wind_logit)
+    rows.append(("Starting QBs (vs league-average QBs, same defenses)", full, full - noqb))
+    rows.append(("Correlated game environment (vs plays drawn independently)", full, full - p(H, A, hfa=M["hfa"], wind=fg_wind_logit, env=False)))
+    rows.append(("Rest (both teams on 4 days)", base, 0.0))
+    rows.append(("Travel / time zone (no fitted coefficient)", base, 0.0))
+    rows.append(("Non-QB injuries (no per-player impact rating)", base, 0.0))
+    rows.append(("ALL FACTORS (full model)", full, full - base))
+    return rows
+
+
+def param_se_pbp(sched_row: dict, plays_season: list[dict], plays_prior: list[dict], M: dict, qb_home: str, qb_away: str,
+                 B: int = 20, n: int = 4000, seed: int = 99) -> float:
+    """Rating uncertainty for the play engine: resample this season's earlier games, re-fit play ratings, re-simulate."""
+    from . import nfl_pbp
+    rng = np.random.default_rng(seed)
+    by_game = {}
+    for p in plays_season:
+        if p["game_date"] < sched_row["gameday"]:
+            by_game.setdefault(p["game_id"], []).append(p)
+    gids = list(by_game)
+    vals = []
+    for b in range(B):
+        boot = [pl for i in rng.choice(len(gids), len(gids), replace=True) for pl in by_game[gids[i]]]
+        pr = nfl_pbp.play_ratings(boot, plays_prior)
+        sides = {"home": nfl_pbp.side_inputs(pr, sched_row["home_team"], sched_row["away_team"], qb_home, M),
+                 "away": nfl_pbp.side_inputs(pr, sched_row["away_team"], sched_row["home_team"], qb_away, M)}
+        S = engine.summary(nfl_pbp.simulate(sides, M, n=n, seed=seed + b, hfa=M["hfa"]))
+        vals.append(S["home_win"][0] / max(1 - S["tie"][0], 1e-9))
+    v = np.var(vals, ddof=1) - np.mean(vals) * (1 - np.mean(vals)) / n
+    return float(np.sqrt(max(v, 0.0)))

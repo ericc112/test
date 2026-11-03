@@ -28,6 +28,7 @@ def main(argv=None):
     ap.add_argument("--qb-home", help="override the projected home starter (name as on the depth chart)")
     ap.add_argument("--qb-away")
     ap.add_argument("--bootstrap", type=int, default=40)
+    ap.add_argument("--engine", choices=("pbp", "drive"), default="pbp", help="play-by-play (default) or drive-by-drive")
     ap.add_argument("--out")
     a = ap.parse_args(argv)
     t0 = time.time()
@@ -65,12 +66,25 @@ def main(argv=None):
 
     spread_home = dk["spread_home"] if dk and dk["spread_home"] is not None else -data.f(row["spread_line"], 0)
     total = dk["total"] if dk and dk["total"] is not None else data.f(row["total_line"])
-    sim = engine.simulate({"home": inp["home"], "away": inp["away"], "fg_wind_logit": fg_wind_logit}, model, n=a.sims, seed=a.seed)
+    pbp = None
+    if a.engine == "pbp":
+        from . import nfl_pbp
+        B = nfl_pbp.build(P, P0, sched, row["gameday"], wind=wind)
+        Mp, prt = B["M"], B["ratings"]
+        mk_sides = lambda qh, qa: {"home": nfl_pbp.side_inputs(prt, home, away, qh, Mp), "away": nfl_pbp.side_inputs(prt, away, home, qa, Mp)}
+        sides = mk_sides(starters["home"]["gsis"], starters["away"]["gsis"])
+        ts = time.time()
+        sim = nfl_pbp.simulate(sides, Mp, n=a.sims, seed=a.seed, hfa=Mp["hfa"], fg_wind_logit=fg_wind_logit)
+        t_sim = time.time() - ts
+        pbp = {"M": Mp, "sides": sides, "mk_sides": mk_sides, "stats": sim["stats"], "plays": float(sim["plays"].mean())}
+    else:
+        ts = time.time()
+        sim = engine.simulate({"home": inp["home"], "away": inp["away"], "fg_wind_logit": fg_wind_logit}, model, n=a.sims, seed=a.seed)
+        t_sim = time.time() - ts
     S = engine.summary(sim, spread_home, total)
-    t_sim = time.time() - t0
 
     # validation: replay this season's earlier weeks (from week 4) out of sample
-    bt = backtest.run(sched, P, P0, str(season), list(range(4, week)), n=10000)
+    bt = (backtest.run_pbp if pbp else backtest.run)(sched, P, P0, str(season), list(range(4, week)), n=10000)
     M = bt["metrics"]
     rms = {k: M[k]["rms_vs_market"] for k in M}
 
@@ -81,8 +95,12 @@ def main(argv=None):
             g = players.gsis_for(season, team, name)
             kw = {"qb_home": g, "qb_away": starters["away"]["gsis"]} if side == "home" else {"qb_home": starters["home"]["gsis"], "qb_away": g}
             i2 = backtest.inputs_for(row, P, P0, drives_all, fg_wind_logit=fg_wind_logit, **kw)
-            s2 = engine.summary(engine.simulate({"home": i2["home"], "away": i2["away"], "fg_wind_logit": fg_wind_logit}, model,
-                                                n=a.sims, seed=a.seed), spread_home, total)
+            if pbp:
+                sd2 = pbp["mk_sides"](kw["qb_home"], kw["qb_away"])
+                s2 = engine.summary(nfl_pbp.simulate(sd2, pbp["M"], n=a.sims, seed=a.seed, hfa=pbp["M"]["hfa"], fg_wind_logit=fg_wind_logit), spread_home, total)
+            else:
+                s2 = engine.summary(engine.simulate({"home": i2["home"], "away": i2["away"], "fg_wind_logit": fg_wind_logit}, model,
+                                                    n=a.sims, seed=a.seed), spread_home, total)
             scen.append({"team": team, "qb": name, "is_starter": name == starters[side]["name"], "qb_epa": i2[side]["qb"]["starter_epa"],
                          "qb_db": i2[side]["qb"]["starter_db"], "delta": i2[side]["qb_delta"],
                          "p_home": s2["home_win"][0] / max(1 - s2["tie"][0], 1e-9), "cover": s2["home_cover"][0], "over": s2["over"][0],
@@ -90,8 +108,12 @@ def main(argv=None):
     rng_of = lambda k: (max(x[k] for x in scen if x["team"] == home) - min(x[k] for x in scen if x["team"] == home)) / 4
     scen_sd = {"win": rng_of("p_home"), "cover": rng_of("cover"), "total": rng_of("over")}
 
-    p_se = report.param_se(row, P, P0, drives_all, model, starters["home"]["gsis"], starters["away"]["gsis"], B=a.bootstrap)
-    factors = report.factor_table(inp, model, a.sims, a.seed)
+    if pbp:
+        p_se = report.param_se_pbp(row, P, P0, pbp["M"], starters["home"]["gsis"], starters["away"]["gsis"], B=min(a.bootstrap, 20))
+        factors = report.factor_table_pbp(pbp["sides"], pbp["mk_sides"](None, None), pbp["M"], a.sims, a.seed, fg_wind_logit)
+    else:
+        p_se = report.param_se(row, P, P0, drives_all, model, starters["home"]["gsis"], starters["away"]["gsis"], B=a.bootstrap)
+        factors = report.factor_table(inp, model, a.sims, a.seed)
 
     # market comparison and the decision rule
     tie = S["tie"][0]
@@ -130,7 +152,7 @@ def main(argv=None):
     dec_wide = [(name, pm, pk, wide[k], report.decision(pm, pk, wide[k])) for (name, pm, pk, e, d), k in zip(dec, which)]
 
     out = render(a, row, dk, ctx, model, inp, starters, S, p_h, mc_w, err_w, err_c, err_t, rms, scen, scen_sd, p_se, factors,
-                 dec, M, spread_home, total, wx, fg_wind_logit, season, home, away, time.time() - t0, t_sim, news, dec_wide, wide)
+                 dec, M, spread_home, total, wx, fg_wind_logit, season, home, away, time.time() - t0, t_sim, news, dec_wide, wide, pbp)
     path = a.out or os.path.join(HERE, "reports", f"{a.game}.md")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
@@ -140,13 +162,15 @@ def main(argv=None):
 
 
 def render(a, row, dk, ctx, model, inp, starters, S, p_h, mc_w, err_w, err_c, err_t, rms, scen, scen_sd, p_se, factors, dec, M,
-           spread_home, total, wx, fg_wind_logit, season, home, away, secs, t_sim, news, dec_wide, wide):
+           spread_home, total, wx, fg_wind_logit, season, home, away, secs, t_sim, news, dec_wide, wide, pbp=None):
     L = []
     w = L.append
     R = inp["ratings"]["teams"]
     w(f"# {away} at {home}: {a.sims:,}-simulation game model")
-    w(f"\n{row['gameday']} {row['gametime']} ET, {row['stadium']} ({row['roof']}, {row['surface']}). Seed {a.seed}. "
-      f"Run {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%MZ}; {secs:.0f} s in total, the {a.sims:,} simulations themselves well under a few seconds.")
+    eng = "play-by-play" if pbp else "drive-by-drive"
+    w(f"\n{row['gameday']} {row['gametime']} ET, {row['stadium']} ({row['roof']}, {row['surface']}). Seed {a.seed}. Engine: **{eng}**. "
+      f"Run {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%MZ}; {secs:.0f} s in total, of which the {a.sims:,} simulations took {t_sim:.1f} s"
+      + (f" ({pbp['stats']['snaps']:,} snaps, {pbp['plays']:.0f} per game, {pbp['stats']['iterations']} vectorised steps)." if pbp else "."))
     if dk:
         w(f"\n**Market ({dk['provider']} via ESPN, pulled {dk['pulled']}):** {home} {dk['ml_home']:+.0f} / {away} {dk['ml_away']:+.0f}; "
           f"spread {home} {spread_home:+g} ({dk['spread_home_odds']:+.0f}) / {away} {-spread_home:+g} ({dk['spread_away_odds']:+.0f}); "
@@ -201,7 +225,22 @@ def render(a, row, dk, ctx, model, inp, starters, S, p_h, mc_w, err_w, err_c, er
     w(f"- Referee: {ctx['referee'] or '**missing** (crew not in the schedule data yet)'}. No adjustment.")
 
     w("\n## 2. Engine")
-    w(f"\nDrive by drive with the game clock. The drive model covers TD, FG try, punt, turnover, downs and safety, fitted on "
+    if pbp:
+        Mp, sd = pbp["M"], pbp["sides"]
+        w(f"\nEvery snap, with down, distance, spot, clock and timeouts. Fitted on {Mp['n_plays']:,} scrimmage plays and {Mp['n_fourth']:,} fourth downs "
+          f"before the game: run or pass call, 4th-down go/punt/FG, pass result (complete, incomplete, INT, sack), yards from real plays of the same down "
+          f"group, distance and spot (inside the 20 as a share of the distance to goal), penalties ({100 * Mp['pen']['p']:.1f}% of snaps), seconds to the "
+          f"next snap by result and tempo, timeouts, the two-minute warning, punts, kickoffs, onside kicks (recovered {100 * Mp['onside_rate']:.0f}% of "
+          f"{Mp['n_onside']}), FGs by distance and wind, XP {100 * Mp['xp']:.1f}%, two-point {100 * Mp['two']:.1f}%. Game environment per simulation: "
+          f"each offense's yards shock (sd {Mp['yard_sd']:.3f}, also tilting its completion rate). Home edge {100 * Mp['hfa']:.1f}% in yards, calibrated "
+          f"to the observed {Mp['home_margin_target']:+.2f}-point home margin.\n")
+        w("| Offense | QB in data | Completion (logit vs league) | Sack | INT | Yards per catch × | Yards per carry × | Pass tendency (logit) |")
+        w("|---|---|---|---|---|---|---|---|")
+        for side, team in (("away", away), ("home", home)):
+            x = sd[side]
+            w(f"| {team} ({starters[side]['name']}) | {'yes' if x['qb_known'] else 'no (league average)'} | {x['comp']:+.3f} | {x['sack']:+.3f} | {x['int']:+.3f} | "
+              f"{x['ypc_mult']:.3f} | {x['ypr_mult']:.3f} | {x['pass_offset']:+.3f} |")
+    w(f"\n{'For reference, the drive model (`--engine drive`): ' if pbp else ''}Drive by drive with the game clock. The drive model covers TD, FG try, punt, turnover, downs and safety, fitted on "
       f"{model['n_drives']:,} drives. FG makes come from distance and wind ({model['n_fga']:,} attempts). XP {model['xp']:.1%}, two-point "
       f"{model['two']:.1%}, return TD on {model['p_def_td']:.1%} of turnovers. Shared game environment per sim: offense shock "
       f"sd {model['sigma_game']:.3f} EPA/play, pace shock sd {model['pace_sd']:.3f} (log). Endgame: kneel-downs, two-minute and "
@@ -258,7 +297,7 @@ def render(a, row, dk, ctx, model, inp, starters, S, p_h, mc_w, err_w, err_c, er
 
     w("\n## 6. Starter scenarios")
     w("\nEach of the top three QBs on each depth chart, the other team's projected starter held fixed.\n")
-    w(f"| Team | QB | EPA/dropback (n) | Offense adjustment | {home} win | {home} cover {spread_home:+g} | Over {total} | Mean total |")
+    w(f"| Team | QB | EPA/dropback (n) | Drive-model EPA/play adjustment | {home} win | {home} cover {spread_home:+g} | Over {total} | Mean total |")
     w("|---|---|---|---|---|---|---|---|")
     for x in scen:
         se = "no data" if x["qb_epa"] is None else f"{x['qb_epa']:+.3f} ({x['qb_db']:.0f})"
@@ -268,7 +307,9 @@ def render(a, row, dk, ctx, model, inp, starters, S, p_h, mc_w, err_w, err_c, er
     w("\n## 7. Validation (out of sample)")
     wk = int(row["week"])
     w(f"\nThis season's weeks 4–{wk - 1}, each game simulated using only data from before it, against the closing "
-      "no-vig lines in the nflverse schedule. Rating shrinkage was tuned on the previous season, never on these games.\n")
+      "no-vig lines in the nflverse schedule. "
+      + ("The play ratings' shrinkage (150 plays) is a fixed prior, not tuned on any games.\n" if pbp else
+         "Rating shrinkage was tuned on the previous season, never on these games.\n"))
     w("| Market | Games | Brier: model | Brier: market | Log loss: model | Log loss: market | RMS gap to market |")
     w("|---|---|---|---|---|---|---|")
     for k, v in M.items():
