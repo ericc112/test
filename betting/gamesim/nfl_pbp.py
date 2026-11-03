@@ -449,7 +449,8 @@ def simulate(sides: dict, M: dict, n: int = 50000, seed: int = 2026, hfa: float 
             offp = rng.random(ii.size) < pen["p_off"]
             yd_o = _pick(rng, {0: pen["off_yds"]}, np.zeros(ii.size, int), pen["off_yds"])
             yd_d = _pick(rng, {0: pen["def_yds"]}, np.zeros(ii.size, int), pen["def_yds"])
-            gain[ii] = np.where(offp, -yd_o, np.minimum(yd_d, np.maximum(y[ii] - 1, 1)))
+            # offensive fouls near the own goal line are half the distance (only a foul in the end zone is a safety)
+            gain[ii] = np.where(offp, -np.minimum(yd_o, np.floor((100 - y[ii]) / 2)), np.minimum(yd_d, np.maximum(y[ii] - 1, 1)))
             cat[ii] = CAT["pen"]
         # ---- apply scrimmage results
         scrim = (act <= PASS) | (act == KNEEL)

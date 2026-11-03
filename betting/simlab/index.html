@@ -328,6 +328,7 @@ table.dec, #factorTbl { min-width: 600px }
         </div>
         <div class="row"><div class="seg" role="group" aria-label="Team" id="nbaTeamSeg"></div><span class="note">Average per simulated game; underneath, the range of the middle 80% of games (10th to 90th percentile).</span></div>
         <div class="tbl-wrap"><table id="nbaPlTbl"><thead></thead><tbody></tbody></table></div>
+        <p class="note" id="nbaCal"></p>
         <h3>Where the points come from</h3>
         <div class="src-legend"><span><i class="pt2"></i>2-pointers</span><span><i class="pt3"></i>3-pointers</span><span><i class="ptf"></i>Free throws</span></div>
         <div class="src" id="nbaSrc"></div>
@@ -340,6 +341,7 @@ table.dec, #factorTbl { min-width: 600px }
           <label class="field"><span class="label">Line</span><input id="nlL" type="number" step="0.5" inputmode="decimal"></label>
           <div class="line-out" id="nlOut" aria-live="polite"></div>
         </div>
+        <p class="note" id="nlCal"></p>
         <p class="note" id="nbaBt"></p>
         <div class="warnbox">These are model numbers, not picks. In the kit, a pick is named only after <span class="num">python3 -m edge verify ID</span> passes. The data feed has no NBA player prop lines, so nothing here is compared with a book.</div>
       </section>
@@ -642,11 +644,11 @@ function softPick(W, x, adj) {
 }
 function nflTempo(q, h, d) { if ((q === 2 && h < 120) || (q >= 4 && h < 300 && d <= 0) || (q >= 4 && h < 600 && d < -8)) return 1; if (q >= 4 && h < 600 && d > 0) return 2; return 0; }
 const ybin = (t) => t <= 3 ? 0 : t <= 7 ? 1 : t <= 12 ? 2 : 3;
-const zbin = (y) => y <= 10 ? 0 : y <= 20 ? 1 : y <= 40 ? 2 : y <= 80 ? 3 : 4;
+const zbin = (y) => y <= 10 ? 0 : y <= 20 ? 1 : y <= 40 ? 2 : y <= 80 ? 3 : y <= 90 ? 4 : 5;   // own 10 to the goal line: its own zone
 function poolKey(down, togo, yl) {
   const dg = down >= 3 ? 1 : 0;
   if (yl <= 20) { const v = Math.ceil(yl); let i = 0; while (i < RZ_EDGES.length && RZ_EDGES[i] < v) i++; return 100 + dg * 10 + i; }
-  return dg * 20 + ybin(togo) * 5 + zbin(yl);
+  return dg * 24 + ybin(togo) * 6 + zbin(yl);
 }
 const callX = (down, togo, yl, diff, tp, q2) => [1, +(down === 2), +(down === 3), Math.log(Math.max(togo, 1)), yl / 100, Math.max(-21, Math.min(21, diff)) / 10, +(tp === 1), +(tp === 2), +q2];
 function fourthX(yl, togo, diff, qtr, hs) { const late = qtr >= 4 && hs < 600;
@@ -675,7 +677,7 @@ function nflPlayGame(C, st, log) {
     const qtr = half === 1 ? (hs > 900 ? 1 : 2) : half === 2 ? (hs > 900 ? 3 : 4) : 5;
     const tp = nflTempo(qtr, hs, diff); plays++;
     const pre = log ? { yl, down, togo, poss: o, half, clock: hs, sh: score[0], sa: score[1] } : null; let pres = null;
-    const kneel = (qtr >= 4 && diff > 0 && down <= 3 && hs <= 42 * (4 - down) - 38 * tos[d]) || (qtr === 2 && hs <= 40 && yl >= 60 && diff >= 0);
+    const kneel = ((qtr >= 4 && diff > 0 && down <= 3 && hs <= 42 * (4 - down) - 38 * tos[d]) || (qtr === 2 && hs <= 40 && yl >= 60 && diff >= 0)) && yl <= 98;   // never at the own 1
     let act = 0;                                                       // 0 run, 1 pass, 2 punt, 3 FG, 4 kneel
     if (down === 4 && !kneel) { const ch = softPick(M.W4, fourthX(yl, togo, diff, qtr, hs)); act = ch === 1 ? 2 : ch === 2 ? 3 : 0; }
     if (hs <= 8 && yl + 17 <= 58 && (qtr === 2 || (qtr >= 4 && diff >= -3 && diff <= 0)) && !kneel) act = 3;
@@ -685,18 +687,18 @@ function nflPlayGame(C, st, log) {
     let gain = 0, cat = 0, turnover = false, newTo = 0, made = false, puntRec = false, offp = false;   // cat: 0 run_in 1 comp_in 2 inc 3 oob 4 sack 5 pen
     const key = poolKey(down, togo, yl);
     if (act === 0 && !penal) {
-      gain = nflGain(pickArr(M.run[key] || M.run["13"]), yl, S[o].ypr_mult * ym[o] * hb[o]);
+      gain = nflGain(pickArr(M.run[key] || M.run["15"]), yl, S[o].ypr_mult * ym[o] * hb[o]);
       if (rnd() < M.fum_run) { turnover = true; newTo = 100 - (yl - gain); }
     } else if (act === 1 && !penal) {
       const r = softPick(M.Wp, passX(down, togo, yl, tp), [S[o].comp + 0.5 * M.yard_sd * z[o], 0, S[o].int, S[o].sack]);
       pres = ["comp", "inc", "int", "sack"][r];
-      if (r === 0) { gain = nflGain(pickArr(M.comp[key] || M.comp["13"]), yl, S[o].ypc_mult * ym[o] * hb[o]); cat = 1; if (rnd() < M.fum_comp) { turnover = true; newTo = 100 - (yl - gain); } }
+      if (r === 0) { gain = nflGain(pickArr(M.comp[key] || M.comp["15"]), yl, S[o].ypc_mult * ym[o] * hb[o]); cat = 1; if (rnd() < M.fum_comp) { turnover = true; newTo = 100 - (yl - gain); } }
       else if (r === 1) cat = 2;
-      else if (r === 3) { gain = pickArr(M.sack); cat = 4; }
+      else if (r === 3) { gain = pickArr(yl > 90 && M.sack_deep ? M.sack_deep : M.sack); cat = 4; }
       else { const spot = yl - pickArr(M.int_air), ret = pickArr(M.int_ret); newTo = spot <= 0 ? 80 : 100 - spot - ret; turnover = true; cat = 2; }
     }
     if ((cat === 0 || cat === 1) && act <= 1 && !penal && rnd() < (cat === 1 ? 0.22 : 0.12)) cat = 3;
-    if (penal) { offp = rnd() < M.pen.p_off; gain = offp ? -pickArr(M.pen.off_yds) : Math.min(pickArr(M.pen.def_yds), Math.max(yl - 1, 1)); cat = 5; }
+    if (penal) { offp = rnd() < M.pen.p_off; gain = offp ? -Math.min(pickArr(M.pen.off_yds), Math.floor((100 - yl) / 2)) : Math.min(pickArr(M.pen.def_yds), Math.max(yl - 1, 1)); cat = 5; }   // half the distance
     const scrim = act <= 1 || act === 4;
     const newy = yl - (act === 4 ? -1 : gain);
     const td = scrim && !turnover && newy <= 0 && !penal, safety = scrim && !turnover && newy >= 100, pick6 = turnover && newTo <= 0;
@@ -811,7 +813,7 @@ function nbaPossGame(C, st, log, tk) {
   if (tk) nbBegin(tk);
   for (;;) {
     const o = poss, d = 1 - o, c = clock, diff = score[o] - score[d], late = c <= 60;
-    const foul = late && diff >= 3 && diff <= 8 && c > 2, hold = c <= shotClock && diff > 0 && !foul, need3 = late && diff === -3;
+    const foul = late && c > 2 && ((diff >= 3 && diff <= 8) || (diff >= 1 && diff <= 2 && c <= shotClock)), hold = c <= shotClock && diff > 0 && !foul, need3 = late && diff === -3;
     let dur = foul ? 2 + 4 * rnd() : hold ? c : gamma(4) * spp / 4, pts = 0;
     const seq = log ? [] : null;
     if (foul) { const a = rnd() < S[o].ftp, b = rnd() < S[o].ftp, w = tk ? nbFT(tk, o, a + b, 2) : -1; pts += a + b; if (seq) seq.push({ k: "foul" }, { k: "ft", m: [a, b], who: w }); }
@@ -1393,7 +1395,9 @@ function engCfg(over) {
 function engNote(k) {
   if (k === "nfl") { const M = E.nfl.M; return `Every snap: run/pass call, 4th-down decisions, sacks, picks, yards from ${M.n_plays.toLocaleString()} real plays, penalties, clock, timeouts, special teams. It doesn't use the betting line.`; }
   if (k === "nba") return `Every possession: turnovers, 2s and 3s, foul trips, offensive rebounds, late fouling, overtime. Ratings from ${E.nba.R.n_games} games this season; it doesn't use the line.`;
-  return `10-second clock: even-strength goals (shots × finishing × projected goalie), power plays, pulled goalies, 3-on-3 OT, shootout. ${E.nhl.R.n_games} games this season; it doesn't use the line.`;
+  const gs = (E.nhl.sides[game().id] || {}).goalies || {}, g = game();
+  return `10-second clock: even-strength goals (shots × finishing × goalie), power plays, pulled goalies, 3-on-3 OT, shootout. ${E.nhl.R.n_games} games this season; it doesn't use the line. ` +
+    `Goalies assumed: ${gs.away || "unknown"} (${g.away}) and ${gs.home || "unknown"} (${g.home}), each team's most recent starter, not a confirmed starter. Check the confirmed goalies before puck drop; the factor table shows how much the goalie moves the number.`;
 }
 function renderEngineRow() {
   const row = $("engineRow"), qbr = $("qbRow"), k = engLeague();
@@ -1491,6 +1495,10 @@ function renderNbaPlayers() {
   sel.innerHTML = ["away", "home"].map((s, si) => `<optgroup label="${esc(g[s])}">${sd.players[s].players.map((p, i) => `<option value="${s === "home" ? 0 : 1}:${i}">${esc(p.name)}</option>`).join("")}</optgroup>`).join("");
   if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev; else sel.value = `${ti}:${rows[0].i}`;
   nbaLine(true);
+  const cal = E.nba.players_cal;
+  $("nbaCal").textContent = cal && cal.pts ? `Calibration check, ${cal.pts.n.toLocaleString()} player-games this season (${cal.games} games, each simulated from earlier games only): ` +
+    `${(cal.pts.pit_tails_10_90).toFixed(0)}% of actual points, ${(cal.reb.pit_tails_10_90).toFixed(0)}% of rebounds and ${(cal.ast.pit_tails_10_90).toFixed(0)}% of assists landed outside the 10–90% range, where 20% should. The ranges are too narrow: real games swing more than this model does.` : "";
+  $("nlCal").textContent = cal && cal.pts ? `At the page's default line (the average rounded down, plus a half), the over/under calls had no edge over always guessing the base rate for points (Brier ${cal.pts.line_brier.toFixed(4)} vs ${cal.pts.line_brier_coinflip_at_base.toFixed(4)}) or rebounds (${cal.reb.line_brier.toFixed(4)} vs ${cal.reb.line_brier_coinflip_at_base.toFixed(4)}), a little for assists (${cal.ast.line_brier.toFixed(4)} vs ${cal.ast.line_brier_coinflip_at_base.toFixed(4)}) and 3s (${cal.tpm.line_brier.toFixed(4)} vs ${cal.tpm.line_brier_coinflip_at_base.toFixed(4)}). Probabilities far from 50% are the least reliable, because the ranges are too narrow.` : "";
   const bt = E.nba.players_bt;
   $("nbaBt").textContent = bt && bt.pts ? `Backtest, ${bt.n.toLocaleString()} player-games this season (each projected only from earlier games, with who sat out known): points missed by ${bt.pts.mae.toFixed(1)} on average (a plain season average: ${bt.pts.base_mae.toFixed(1)}), rebounds ${bt.reb.mae.toFixed(1)} (${bt.reb.base_mae.toFixed(1)}), assists ${bt.ast.mae.toFixed(1)} (${bt.ast.base_mae.toFixed(1)}). So far these projections are no more accurate than a season average; the value here is the full distribution and how it ties to the team simulation, not sharper means.` : "";
 }
@@ -1525,7 +1533,11 @@ function renderDecision(agg, p) {
   const k = engLeague(), g = { ...game(), ...state.inputs }, n = agg.n, bt = E[k].backtest || {};
   const pH = agg.hw / Math.max(agg.hw + agg.aw, 1), se = (q) => Math.sqrt(q * (1 - q) / n);
   const pc = p.spread != null ? agg.cov / Math.max(n - agg.cpush, 1) : null, po = p.total != null ? agg.ov / Math.max(n - agg.opush, 1) : null;
-  const rms = (m) => ((bt[m] || bt.win || {}).rms_vs_market) || 0.12;
+  // structural error: RMS gap to the closing market, pooled over this season's backtest and last season's full one
+  const bp = E[k].backtest_prior || {};
+  const rms = (m) => { let ss = 0, nn = 0; for (const B of [bt, bp]) { const v = B[m] || B.win; if (v && v.rms_vs_market != null && v.n) { ss += v.n * v.rms_vs_market ** 2; nn += v.n; } }
+    return nn ? Math.sqrt(ss / nn) : 0.12; };
+  const btN = (m) => [bt, bp].reduce((a, B) => a + (((B[m] || B.win) || {}).n || 0), 0);
   const nvH = nvp(g.ml_home, g.ml_away), nvH0 = nvp(g.open_ml_home, g.open_ml_away);
   const news = { win: nvH != null && nvH0 != null ? Math.abs(nvH - nvH0) / 2 : 0, cover: 0, total: 0 };
   if (g.open_spread != null && p.spread != null) news.cover = Math.abs(massAbove(agg.mh, agg.mMin, 1, -p.spread) - massAbove(agg.mh, agg.mMin, 1, -g.open_spread)) / 2;
@@ -1536,8 +1548,12 @@ function renderDecision(agg, p) {
   const rows = [[`${g.home} moneyline`, pH, nvH, err.win], [`${g.away} moneyline`, 1 - pH, nvH == null ? null : 1 - nvH, err.win]];
   if (pc != null) rows.push([`${g.home} ${sgn(p.spread)} (${spLab})`, pc, nvC, err.cover], [`${g.away} ${sgn(-p.spread)} (${spLab})`, 1 - pc, nvC == null ? null : 1 - nvC, err.cover]);
   if (po != null) rows.push([`Over ${p.total}`, po, nvO, err.total], [`Under ${p.total}`, 1 - po, nvO == null ? null : 1 - nvO, err.total]);
+  // error is at least the part of the disagreement with the market that hasn't carried information out of sample
+  // (info[m].b_lo: 95% lower bound of its weight next to the market; 0 means unproven)
+  const info = E[k].info || {}, mkOf = (nm) => /moneyline/.test(nm) ? "win" : /^(Over|Under)/.test(nm) ? "total" : "cover";
   const dec = rows.map(([nm, pm, pk, e]) => { if (pk == null) return [nm, pm, pk, e, null, null, "PASS"];
-    const edge = pm - pk, mg = edge - 1.5 * e; return [nm, pm, pk, e, edge, mg, edge >= 0.02 && mg > 0 ? "PLAY" : "PASS"]; });
+    const edge = pm - pk, bl = (info[mkOf(nm)] || {}).b_lo ?? 0, eu = Math.max(e, (1 - bl) * Math.abs(edge)), mg = edge - 1.5 * eu;
+    return [nm, pm, pk, eu, edge, mg, edge >= 0.02 && mg > 0 ? "PLAY" : "PASS"]; });
   const pp = (x) => x == null ? "—" : (x > 0 ? "+" : "") + (100 * x).toFixed(1) + " pts";
   $("decTbl").querySelector("thead").innerHTML = "<tr><th class='l'>Bet</th><th>Model</th><th>No-vig market</th><th>Edge</th><th>Total error</th><th>Edge − 1.5 × error</th><th>Verdict</th></tr>";
   $("decTbl").querySelector("tbody").innerHTML = dec.map(([nm, pm, pk, e, edge, mg, v]) => `<tr><td class="l name">${esc(nm)}</td><td>${fmtPct(pm)}</td><td>${pk == null ? "no price" : fmtPct(pk)}</td>
@@ -1545,9 +1561,12 @@ function renderDecision(agg, p) {
   const b = bt.win;
   $("decErr").innerHTML = `Rule: PLAY only if the edge over the no-vig price is at least 2 points <b>and</b> the edge minus 1.5 × total error is above zero. ` +
     `Total error = √(simulation error² + backtest gap to the closing market² + half the line move since open²). Here: simulation ±${(100 * se(pH)).toFixed(2)}, ` +
-    `backtest ±${(100 * rms("win")).toFixed(1)} (win), line move ±${(100 * news.win).toFixed(1)}. ` +
+    `backtest ±${(100 * rms("win")).toFixed(1)} (win, ${btN("win")} games: this season${bp.win ? " and all of last season" : ""}), line move ±${(100 * news.win).toFixed(1)}. ` +
     (b ? `Out of sample this engine scored a winner Brier of ${b.brier_model.toFixed(3)} against the market's ${b.brier_market.toFixed(3)} over ${b.n} games, so it has not beaten the market.` : "") +
-    (pc != null && nvC == null ? " The spread price isn't in the data, so that row has no market." : "");
+    (pc != null && nvC == null ? " The spread price isn't in the data, so that row has no market." : "") +
+    (info.win && info.win.b != null ? ` Where this model disagrees with the market, has the disagreement paid off? Out of sample (${info.win.n} games), its weight next to the closing line was ${info.win.b.toFixed(2)} ± ${info.win.se.toFixed(2)} for winners` +
+      (info.total && info.total.b != null ? `, ${info.total.b.toFixed(2)} ± ${info.total.se.toFixed(2)} for totals` : "") + ` (1 = worth its face value, 0 = noise). ` +
+      `Until that is clearly above 0, a disagreement counts as error: the total error is never smaller than the edge, so every row is a PASS.` : "");
   $("decNote").textContent = `${n.toLocaleString()} simulations · ${ENG[k].label.toLowerCase()} engine`;
   $("decisionPanel").hidden = false;
 }

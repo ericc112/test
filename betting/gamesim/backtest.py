@@ -165,3 +165,39 @@ def pooled_rms(*metric_sets) -> dict:
                 a[0] += v["n"] * v["rms_vs_market"] ** 2
                 a[1] += v["n"]
     return {k: (ss / n) ** 0.5 for k, (ss, n) in acc.items() if n}
+
+
+def prior_records(name: str) -> list[dict]:
+    path = os.path.join(data.CACHE, f"bt_{name}_prior.json")
+    if not os.path.exists(path):
+        return []
+    with open(path) as fh:
+        return json.load(fh).get("records", [])
+
+
+INFO_KEYS = {"win": ("p_home", "mk_home", "won"), "cover": ("p_cover", "mk_cover", "covered"), "total": ("p_over", "mk_over", "overed")}
+
+
+def info_weights(records: list[dict]) -> dict:
+    """How much of the model's disagreement with the closing market is information, out of sample: logistic
+    regression of the result on logit(market) and logit(model) - logit(market). b = 1: the disagreement is worth its
+    face value; b = 0: it is noise. b_lo is the 95% lower bound clipped to [0, 1]: the share the decision rule
+    may trust. (Audit 2026-11-03: b was -0.05 +- 0.22 for NBA winners, -0.17 +- 0.29 for NFL winners.)"""
+    lg = lambda p: np.log(np.clip(p, 1e-4, 1 - 1e-4) / (1 - np.clip(p, 1e-4, 1 - 1e-4)))
+    out = {}
+    for mk, (pk, qk, yk) in INFO_KEYS.items():
+        S = [r for r in records if r.get(pk) is not None and r.get(qk) is not None and r.get(yk) is not None]
+        if len(S) < 50:
+            out[mk] = {"n": len(S), "b": None, "se": None, "b_lo": 0.0}
+            continue
+        p, q, y = (np.array([r[k] for r in S], float) for k in (pk, qk, yk))
+        X = np.c_[np.ones(len(S)), lg(q), lg(p) - lg(q)]
+        w = np.zeros(3)
+        for _ in range(100):
+            z = 1 / (1 + np.exp(-X @ w)); H = X.T @ (X * (z * (1 - z))[:, None]) + 1e-6 * np.eye(3)
+            st = np.linalg.solve(H, X.T @ (z - y)); w -= st
+            if np.abs(st).max() < 1e-10:
+                break
+        se = float(np.sqrt(np.linalg.inv(H)[2, 2]))
+        out[mk] = {"n": len(S), "b": float(w[2]), "se": se, "b_lo": float(min(1.0, max(0.0, w[2] - 1.96 * se)))}
+    return out

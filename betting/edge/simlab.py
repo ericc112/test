@@ -205,6 +205,11 @@ def _json_or_none(path: str):
         return None
 
 
+def _bt_records(name: str) -> list[dict]:
+    d = _json_or_none(os.path.join(gs_data.CACHE, f"bt_{name}.json"))
+    return (d or {}).get("records", [])
+
+
 def _bt(name: str, compute):
     """Backtest metrics, cached in .cache/gamesim/bt_<name>.json (recomputed when missing)."""
     path = os.path.join(gs_data.CACHE, f"bt_{name}.json")
@@ -259,7 +264,7 @@ def engines(data: dict) -> dict:
             games[g["id"]] = {"qb": opts, "starter_source": f"ESPN depth chart via nflverse, snapshot {gs_data.depth_chart(season, r['home_team'])[0]}"}
         out["nfl"] = {"M": cm, "games": games,
                       "backtest": _bt("pbp", lambda: gbt.run_pbp(sched, P, P0, str(season), list(range(4, int(rows[nfl_games[0]["id"]]["week"]))), n=10000)),
-                      "backtest_prior": gbt.prior_metrics("pbp")}
+                      "backtest_prior": gbt.prior_metrics("pbp"), "info": gbt.info_weights(_bt_records("pbp") + gbt.prior_records("pbp"))}
     # ---- NBA possessions
     nba_games = next(lg for lg in data["leagues"] if lg["key"] == "nba")["games"]
     y = today.year if today.month >= 9 else today.year - 1
@@ -288,6 +293,7 @@ def engines(data: dict) -> dict:
                         "avg": {k: round(v, 4) for k, v in gnba.side(R, "_", "_", False).items()},
                         "avg_home": {k: round(v, 4) for k, v in gnba.side(R, "_", "_", True).items()}},
                   "sides": sides, "backtest": _bt("nba", lambda: gnba.backtest(G, 48, 24, n=6000)), "backtest_prior": gbt.prior_metrics("nba"),
+                  "info": gbt.info_weights(_bt_records("nba") + gbt.prior_records("nba")),
                   "players_bt": _bt("nba_players", lambda: {"metrics": gnba.player_backtest("nba", G, cut)}),
                   # calibration of the browser player layer on finished games (written by the audit's pl_check.js run)
                   "players_cal": _json_or_none(os.path.join(gs_data.CACHE, "bt_nba_players_cal.json"))}
@@ -309,5 +315,6 @@ def engines(data: dict) -> dict:
                         "ot_decided": R["league"]["ot_decided"], "so_home": R["league"]["so_home"], "gpg": R["gpg"], "sv": R["league"]["sv"],
                         "home_prior": R["home_prior"], "lam": R["lam"], "n_games": R["n_games"],
                         "avg": {k: round(v, 5) for k, v in gnhl.side(R, "_", "_", False).items()}},
-                  "en": en, "sides": sides, "backtest": _bt("nhl", lambda: gnhl.backtest(G, en, n=6000)), "backtest_prior": gbt.prior_metrics("nhl")}
+                  "en": en, "sides": sides, "backtest": _bt("nhl", lambda: gnhl.backtest(G, en, n=6000)), "backtest_prior": gbt.prior_metrics("nhl"),
+                  "info": gbt.info_weights(_bt_records("nhl") + gbt.prior_records("nhl"))}
     return out

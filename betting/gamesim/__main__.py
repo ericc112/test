@@ -94,6 +94,7 @@ def main(argv=None):
     bt = (backtest.run_pbp if pbp else backtest.run)(sched, P, P0, str(season), list(range(4, week)), n=10000)
     M = bt["metrics"]
     rms = backtest.pooled_rms(M, backtest.prior_metrics("pbp" if pbp else "drive"))   # + last season's full backtest
+    info = backtest.info_weights(bt["records"] + backtest.prior_records("pbp" if pbp else "drive"))
 
     # starter scenarios for both teams: each of the top three QBs on the depth chart
     scen = []
@@ -136,7 +137,8 @@ def main(argv=None):
     bets = [(f"{home} moneyline", p_h, nv_h, err_w), (f"{away} moneyline", 1 - p_h, None if nv_h is None else 1 - nv_h, err_w),
             (f"{home} {spread_home:+g}", pc, nv_c, err_c), (f"{away} {-spread_home:+g}", 1 - pc, None if nv_c is None else 1 - nv_c, err_c),
             (f"Over {total}", po, nv_o, err_t), (f"Under {total}", 1 - po, None if nv_o is None else 1 - nv_o, err_t)]
-    dec = [(name, pm, pk, e, report.decision(pm, pk, e)) for name, pm, pk, e in bets]
+    dec = [(name, pm, pk, d["err_used"], d) for name, pm, pk, e in bets
+           for d in [report.decision(pm, pk, e, info[report.market_of(name)]["b_lo"])]]
 
     # Missing input: the market has moved on news the model can't see (open vs current DraftKings line).
     # The part of that move the model's own starter scenarios don't explain widens the error bar (sd = half of it).
@@ -156,7 +158,8 @@ def main(argv=None):
     errw = {"win": report.total_error(mc_w, rms.get("win", 0.12), scen_sd["win"]) ** 2, "cover": err_c ** 2, "total": err_t ** 2}
     wide = {k: float(np.sqrt(errw[k] + news[k] ** 2)) for k in ("win", "cover", "total")}
     which = ["win", "win", "cover", "cover", "total", "total"]
-    dec_wide = [(name, pm, pk, wide[k], report.decision(pm, pk, wide[k])) for (name, pm, pk, e, d), k in zip(dec, which)]
+    dec_wide = [(name, pm, pk, d2["err_used"], d2) for (name, pm, pk, e, d), k in zip(dec, which)
+                for d2 in [report.decision(pm, pk, wide[k], info[k]["b_lo"])]]
 
     out = render(a, row, dk, ctx, model, inp, starters, S, p_h, mc_w, err_w, err_c, err_t, rms, scen, scen_sd, p_se, factors,
                  dec, M, spread_home, total, wx, fg_wind_logit, season, home, away, time.time() - t0, t_sim, news, dec_wide, wide, pbp)

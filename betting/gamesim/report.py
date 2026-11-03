@@ -11,13 +11,22 @@ EDGE_MIN = 0.02        # decision rule: edge over no-vig >= 2 points ...
 ERR_MULT = 1.5         # ... and edge - 1.5 x total error > 0
 
 
-def decision(p_model: float, p_market: float | None, err: float) -> dict:
+def market_of(name: str) -> str:
+    return "win" if "moneyline" in name else "total" if name.startswith(("Over", "Under")) else "cover"
+
+
+def decision(p_model: float, p_market: float | None, err: float, b_lo: float | None = None) -> dict:
+    """PLAY only if edge >= 2 points and edge - 1.5 x error > 0. With b_lo (backtest.info_weights), the error is at
+    least the part of the disagreement with the market that hasn't been shown to carry information out of sample:
+    where the model disagrees most, it has been most wrong (audit 2026-11-03, M12)."""
     if p_market is None:
-        return {"edge": None, "margin": None, "verdict": "PASS (no market price)"}
+        return {"edge": None, "margin": None, "verdict": "PASS (no market price)", "err_used": err}
     edge = p_model - p_market
+    if b_lo is not None:
+        err = max(err, (1.0 - b_lo) * abs(edge))
     margin = edge - ERR_MULT * err
     play = edge >= EDGE_MIN and margin > 0
-    return {"edge": edge, "margin": margin, "verdict": "PLAY" if play else "PASS"}
+    return {"edge": edge, "margin": margin, "verdict": "PLAY" if play else "PASS", "err_used": err}
 
 
 def total_error(mc: float, structural: float, scenario: float = 0.0) -> float:

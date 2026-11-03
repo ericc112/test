@@ -44,6 +44,7 @@ def run_basketball(lg: str, game_id: str, sims: int = 50000, seed: int = 2026, o
     bt = nba.backtest(games, minutes, shot_clock, n=6000)
     M = bt["metrics"]
     rms = backtest.pooled_rms(M, backtest.prior_metrics(lg))           # + last season's full backtest
+    info = backtest.info_weights(bt["records"] + backtest.prior_records(lg))
     # factor table: neutral, then each factor alone
     avg = nba.side(R, "_", "_", False)
     base_p = lambda h, a, env=True: float((lambda s: (s["home"] > s["away"]).mean())(nba.simulate(h, a, R, minutes, n=sims, seed=seed, env=env, shot_clock=shot_clock)))
@@ -87,7 +88,7 @@ def run_basketball(lg: str, game_id: str, sims: int = 50000, seed: int = 2026, o
     if "over" in S:
         po = S["over"][0]
         bets += [(f"Over {tl}", po, nv_o, err["total"]), (f"Under {tl}", 1 - po, None if nv_o is None else 1 - nv_o, err["total"])]
-    dec = [(nm, pm, pk, e, report.decision(pm, pk, e)) for nm, pm, pk, e in bets]
+    dec = [(nm, pm, pk, d["err_used"], d) for nm, pm, pk, e in bets for d in [report.decision(pm, pk, e, info[report.market_of(nm)]["b_lo"])]]
     # render
     L = []
     w = L.append
@@ -175,6 +176,7 @@ def run_hockey(game_id: str, sims: int = 50000, seed: int = 2026, out: str | Non
     bt = nhl.backtest(games, en, n=6000)
     M = bt["metrics"]
     rms = backtest.pooled_rms(M, backtest.prior_metrics("nhl"))        # + last season's full backtest
+    info = backtest.info_weights(bt["records"] + backtest.prior_records("nhl"))
     rms.setdefault("cover", rms.get("win", 0.1))
     avg = nhl.side(R, "_", "_", False)
     pw = lambda h, a, **kw: float((lambda s: (s["home"] > s["away"]).mean())(nhl.simulate(h, a, R, en, n=sims, seed=seed, **kw)))
@@ -209,7 +211,7 @@ def run_hockey(game_id: str, sims: int = 50000, seed: int = 2026, out: str | Non
     if "over" in S:
         po = S["over"][0]
         bets += [(f"Over {tl}", po, nv_o, err["total"]), (f"Under {tl}", 1 - po, None if nv_o is None else 1 - nv_o, err["total"])]
-    dec = [(nm, pm, pk, e, report.decision(pm, pk, e)) for nm, pm, pk, e in bets]
+    dec = [(nm, pm, pk, d["err_used"], d) for nm, pm, pk, e in bets for d in [report.decision(pm, pk, e, info[report.market_of(nm)]["b_lo"])]]
     L, w = [], None
     w = L.append
     w(f"# {away} at {home}: {sims:,}-simulation NHL model")
