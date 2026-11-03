@@ -461,7 +461,28 @@ def reb_credit(games: list[dict], before: str) -> float:
     return float(min(1.0, reb / miss)) if miss else 0.93
 
 
-def player_profiles(lg: str, games: list[dict], team: str, before: str, out_names: set | None = None, recent: int = 5) -> dict:
+PLAYER_PRIOR_MIN = None   # minutes of last-season per-minute rates in each player's prior (None: team average, as before)
+PLAYER_SHOCK = 0.0        # per-player per-game volume shock (log SD) used by the browser player layer
+
+
+def season_player_totals(lg: str, games: list[dict], before: str = "2099-01-01") -> dict:
+    """Each player's season totals across all his teams: {pid: {min, fgm, fga, tpm, tpa, ftm, fta, ast, oreb, dreb, tov}}."""
+    out = {}
+    for g in games:
+        if not (g["final"] and g["date"] < before):
+            continue
+        for rows in _box_cached(lg, g["id"]).values():
+            for r in rows:
+                if r["dnp"] or r["min"] <= 0:
+                    continue
+                o = out.setdefault(r["id"], defaultdict(float))
+                for k in ("min", "fgm", "fga", "tpm", "tpa", "ftm", "fta", "ast", "oreb", "dreb", "tov"):
+                    o[k] += r[k]
+    return out
+
+
+def player_profiles(lg: str, games: list[dict], team: str, before: str, out_names: set | None = None, recent: int = 5,
+                    prior_tot: dict | None = None, prior_min: float | None = None) -> dict:
     """Rotation for one team from this season's box scores before `before`: projected minutes (recency-weighted
     over the last `recent` team games, 0 when a player sat), per-minute rates for 2PA, 3PA, FTA, assists, offensive
     and defensive rebounds and turnovers (shrunk toward the team's per-player average by 60 minutes), and 2P%, 3P%,
@@ -514,19 +535,35 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
         if a["name"].lower() in out_names or a["proj"] < 3:
             continue
         t = a["tot"]
-        rate = lambda k: (t[k] + K * per_player(k)) / (t["min"] + K)
+        pt = (prior_tot or {}).get(pid)
+        if prior_min and pt and pt["min"] >= 100:
+            # prior: the player's own last season (his usage and shooting), worth prior_min minutes
+            Kp = prior_min
+            pr = lambda k: pt[k] / pt["min"]
+            rate = lambda k: (t[k] + Kp * pr(k)) / (t["min"] + Kp)
+            fga2 = (t["fga"] - t["tpa"] + Kp * (pr("fga") - pr("tpa"))) / (t["min"] + Kp)
+            c2, c3, cf = min(pt["fga"] - pt["tpa"], 150.0), min(pt["tpa"], 150.0), min(pt["fta"], 100.0)
+            p2 = (t["fgm"] - t["tpm"] + c2 * (pt["fgm"] - pt["tpm"]) / max(pt["fga"] - pt["tpa"], 1) + 10 * tp2) / (t["fga"] - t["tpa"] + c2 + 10)
+            p3 = (t["tpm"] + c3 * pt["tpm"] / max(pt["tpa"], 1) + 15 * tp3) / (t["tpa"] + c3 + 15)
+            ftp = (t["ftm"] + cf * pt["ftm"] / max(pt["fta"], 1) + 10 * tft) / (t["fta"] + cf + 10)
+            src = "last season"
+        else:
+            rate = lambda k: (t[k] + K * per_player(k)) / (t["min"] + K)
+            fga2 = (t["fga"] - t["tpa"] + K * (per_player("fga") - per_player("tpa"))) / (t["min"] + K)
+            p2 = (t["fgm"] - t["tpm"] + 40 * tp2) / (t["fga"] - t["tpa"] + 40)
+            p3 = (t["tpm"] + 50 * tp3) / (t["tpa"] + 50)
+            ftp = (t["ftm"] + 25 * tft) / (t["fta"] + 25)
+            src = "team average"
         players.append({"id": pid, "name": a["name"], "pos": a["pos"], "min": a["proj"], "min_sd": float(max(3.0, np.std(a["mins"]) if len(a["mins"]) > 1 else 5.0)),
                         "games": len(a["mins"]), "starter": a["starter"], "returning": a["returning"],
-                        "fga2": (t["fga"] - t["tpa"] + K * (per_player("fga") - per_player("tpa"))) / (t["min"] + K), "fga3": rate("tpa"),
-                        "fta": rate("fta"), "ast": rate("ast"), "oreb": rate("oreb"), "dreb": rate("dreb"), "tov": rate("tov"),
-                        "p2": (t["fgm"] - t["tpm"] + 40 * tp2) / (t["fga"] - t["tpa"] + 40), "p3": (t["tpm"] + 50 * tp3) / (t["tpa"] + 50),
-                        "ftp": (t["ftm"] + 25 * tft) / (t["fta"] + 25)})
+                        "fga2": fga2, "fga3": rate("tpa"), "fta": rate("fta"), "ast": rate("ast"), "oreb": rate("oreb"), "dreb": rate("dreb"),
+                        "tov": rate("tov"), "p2": p2, "p3": p3, "ftp": ftp, "prior": src})
     tot = sum(p["min"] for p in players)
     if tot > 0:
         for p in players:
             p["min"] = float(min(42.0, p["min"] * 240.0 / tot))
     players.sort(key=lambda p: -p["min"])
-    return {"players": players, "games": len(boxes), "ast_rate": T["ast"] / max(T["fgm"], 1)}
+    return {"players": players, "games": len(boxes), "ast_rate": T["ast"] / max(T["fgm"], 1), "shock": PLAYER_SHOCK}
 
 
 def player_backtest(lg: str, games: list[dict], before: str, min_prior: int = 3) -> dict:
