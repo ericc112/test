@@ -87,9 +87,9 @@ Brier score; lower is better. CI is the 95% bootstrap interval of model minus ma
 | | total | 0.2700 | 0.2670 | 0.2499 | +0.0092 to +0.0253 |
 | NHL 2025-26, 936 games | winner | 0.2447 | 0.2451 | 0.2439 | −0.0024 to +0.0048 |
 | | total | 0.2501 | 0.2504 | 0.2485 | −0.0008 to +0.0044 |
-| NFL 2025, weeks 3–18, 240 games | winner | 0.2317 | (running) | 0.2158 | |
-| | spread | 0.2753 | (running) | 0.2487 | |
-| | total | 0.2540 | (running) | 0.2503 | |
+| NFL 2025, weeks 3–18, 240 games | winner | 0.2317 | 0.2317 | 0.2158 | +0.0014 to +0.0316 |
+| | spread | 0.2753 | 0.2754 | 0.2487 | +0.0096 to +0.0447 |
+| | total | 0.2540 | 0.2545 | 0.2503 | −0.0068 to +0.0154 |
 | NBA 2026-27 to date, 59 games | winner | 0.2265 | 0.2261 | 0.1943 | |
 | NHL 2026-27 to date, 126 games | winner | 0.2366 | 0.2360 | 0.2296 | |
 | NFL 2026, weeks 4–8, 72 games | winner | 0.2373 | 0.2367 | 0.2232 | |
@@ -106,13 +106,13 @@ Log loss tells the same story; for example NBA winners went 0.6089 → 0.6084 ag
 
 | Bucket | NBA 2025-26 games / stated / hit | NHL 2025-26 games / stated / hit | NFL 2025 games / stated / hit |
 |---|---|---|---|
-| 50–55 | 222 / 52.7% / 53.6% | 396 / 52.4% / 50.0% | (running) |
-| 55–60 | 195 / 57.5% / **64.6%** | 311 / 57.4% / 54.0% | (running) |
-| 60–65 | 181 / 62.5% / **69.6%** | 156 / 61.9% / 67.3% | (running) |
-| 65–70 | 142 / 67.4% / **73.9%** | 46 / 67.0% / 56.5% | (running) |
-| 70+ | 234 / 75.8% / **81.6%** | 27 / 72.8% / 70.4% | (running) |
+| 50–55 | 222 / 52.7% / 53.6% | 396 / 52.4% / 50.0% | 44 / 52.5% / 47.7% |
+| 55–60 | 195 / 57.5% / **64.6%** | 311 / 57.4% / 54.0% | 44 / 57.3% / 54.5% |
+| 60–65 | 181 / 62.5% / **69.6%** | 156 / 61.9% / 67.3% | 37 / 62.1% / 54.1% |
+| 65–70 | 142 / 67.4% / **73.9%** | 46 / 67.0% / 56.5% | 31 / 67.5% / 71.0% |
+| 70+ | 234 / 75.8% / **81.6%** | 27 / 72.8% / 70.4% | 83 / 77.4% / **71.1%** |
 
-NBA is underconfident in every bucket. Recalibration was tested and **not** applied, because it never helped a later period:
+NBA is underconfident in every bucket. NFL is overconfident at the top (favourites it gives 77% won 71%), and NHL is roughly calibrated. Recalibration was tested and **not** applied, because it never helped a later period:
 - *NBA, Platt scaling fitted on November–January 2025-26:* February–April Brier 0.1948, against 0.1912 raw (worse; CI of the difference +0.002 to +0.005).
 - *NBA, fitted on all of 2025-26:* this season 0.2276 against 0.2261 raw (no gain).
 - *NHL:* 0.2419 vs 0.2412 on the second half of 2025-26, and 0.2423 vs 0.2360 this season (worse).
@@ -126,7 +126,7 @@ weight is the share of the model's disagreement that is real (1 = face value, 0 
 |---|---|---|---|
 | NBA 2025-26 + 2026-27 (1,033 games) | −0.07 ± 0.21 | −0.04 ± 0.16 | +0.09 ± 0.14 |
 | NHL 2025-26 + 2026-27 (1,062 games) | +0.27 ± 0.34 | — | −0.10 ± 0.38 |
-| NFL 2025 (240 games, before) | −0.17 ± 0.29 | −0.24 ± 0.23 | +0.09 ± 0.41 |
+| NFL 2025 (240 games) | −0.17 ± 0.29 | −0.25 ± 0.23 | +0.06 ± 0.40 |
 
 **PLAY rule, before (page error terms):**
 - *NBA, 2025-26 (974 games):*
