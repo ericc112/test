@@ -976,9 +976,15 @@ onmessage = (e) => {
         const sorted = Float32Array.from(col).sort(); med[f2] = sorted[n >> 1]; sd[f2] = Math.sqrt(Math.max(s2 / n - (s1 / n) ** 2, 1e-6)); }
       let otAll = 0; for (let k = 0; k < n; k++) otAll += OT[k];
       const otUsual = otAll / n > 0.5 ? 1 : 0;                              // ends the usual way (regulation, almost always)
+      // Candidates: every run within the score window (NBA +-2 points a team) around the most common score. Among them,
+      // the run where EVERY rotation player is closest to his normal game: each player's points count in full (rebounds
+      // and assists at half), not diluted by the number of players, so no star can have a freak night in the pick
+      // (before this, a run with Brown at 2 points in 37 minutes could be picked because the halftime score dominated).
       let pick = -1, pd = Infinity, ties = 0;
-      for (let k = 0; k < n; k++) { if (H[k] !== bh || A[k] !== ba) continue; ties++;
-        let d = OT[k] !== otUsual ? 100 : 0; for (let f2 = 0; f2 < F; f2++) { const z = (X[k * F + f2] - med[f2]) / sd[f2]; d += f2 < 2 ? 2 * z * z : z * z / Math.max(NP, 1) * 2; }
+      for (let k = 0; k < n; k++) {
+        const dh = H[k] - bh, da = A[k] - ba; if (Math.abs(dh) > kern || Math.abs(da) > kern) continue; ties++;
+        let d = (OT[k] !== otUsual ? 100 : 0) + 0.5 * (dh * dh + da * da);
+        for (let f2 = 0; f2 < F; f2++) { const z = (X[k * F + f2] - med[f2]) / sd[f2]; d += f2 < 2 ? z * z : ((f2 - 2) % 3 === 0 ? 1 : 0.5) * z * z; }
         if (d < pd) { pd = d; pick = k; } }
       // 3) replay that run with the full log
       seed(base + pick); const log = [], tk2 = nba ? nbaTracker(m.cfg.pl, m.cfg.R.reb_credit) : null;
@@ -987,8 +993,10 @@ onmessage = (e) => {
       const top = [...cnt.entries()].sort((x, y) => y[1] - x[1]).slice(0, 5).map(([key, c]) => [Math.floor(key / 1000), key % 1000, c]);
       const smed = (arr) => Float32Array.from(arr).sort()[n >> 1];
       postMessage({ id: m.id, kind: "watch", log, final: [r[0], r[1]], mins: tk2 ? tk2.T.map((t) => Array.from(t.m)) : null,
-        likely: { n, index: pick, score: [bh, ba], exact: cnt.get(bestKey) || 0, near: bestD, kern, sameScoreRuns: ties, replayOk: r[0] === bh && r[1] === ba,
-          pHome: hw / n, otShare: ot / n, half: [X[pick * F], X[pick * F + 1]], medHalf: [med[0], med[1]], medFinal: [smed(H), smed(A)], top } });
+        likely: { n, index: pick, score: [H[pick], A[pick]], mode: [bh, ba], exact: cnt.get(bestKey) || 0, near: bestD, kern, sameScoreRuns: ties,
+          replayOk: r[0] === H[pick] && r[1] === A[pick],
+          pHome: hw / n, otShare: ot / n, half: [X[pick * F], X[pick * F + 1]], medHalf: [med[0], med[1]], medFinal: [smed(H), smed(A)], top,
+        maxZ: (() => { let mz = 0; for (let f2 = 2; f2 < F; f2 += 3) mz = Math.max(mz, Math.abs((X[pick * F + f2] - med[f2]) / sd[f2])); return mz; })() } });
     };
     step();
   } else if (m.cmd === "eng_watch") {
@@ -2199,10 +2207,12 @@ function bcWp(e) {
 function likelyCaption(L, g, k) {
   const sc = (h, a) => `${g.away} ${a}–${h} ${g.home}`, pct = (x) => (100 * x).toFixed(x < 0.01 ? 2 : 1) + "%";
   const lab = k === "nhl" ? "after two periods" : "at halftime", bt = (E.likely_bt || {})[k];
+  const md = L.mode || L.score;
   return `Most likely game of ${L.n.toLocaleString()} runs: ${sc(L.score[0], L.score[1])}. ` +
-    (L.kern ? `That score, give or take ${L.kern} points a team, came up in ${L.near.toLocaleString()} runs, exactly in ${L.exact} (${pct(L.exact / L.n)}). `
+    (L.kern ? `The most common final score was ${sc(md[0], md[1])}: within ${L.kern} points a team of it in ${L.near.toLocaleString()} runs, exactly in ${L.exact} (${pct(L.exact / L.n)}). `
             : `It was the most common final score, in ${L.exact.toLocaleString()} runs (${pct(L.exact / L.n)}). `) +
-    `Of those, this is the run closest to the typical game: ${L.half[1]}–${L.half[0]} ${lab} (median ${L.medHalf[1]}–${L.medHalf[0]})${k === "nba" ? ", every rotation player near his median line" : ""}. ` +
+    `Of those runs, this is the one closest to a typical game: ${L.half[1]}–${L.half[0]} ${lab} (median ${L.medHalf[1]}–${L.medHalf[0]})` +
+    (k === "nba" && L.maxZ != null ? `, and every rotation player near his normal line (the furthest is ${L.maxZ.toFixed(1)} standard deviations from his median points)` : "") + `. ` +
     `${g.home} won ${pct(L.pHome)} of all runs. ` +
     (bt && bt.likely ? `Backtest on ${bt.games} finished games it never saw: it picked the winner ${pct(bt.likely.winner_right)} of the time (one random simulated game: ${pct(bt.random.winner_right)}; the betting favourite: ${pct(bt.market.winner_right)}), ` +
       `missed the final margin by ${bt.likely.margin_mae.toFixed(1)} on average (random game ${bt.random.margin_mae.toFixed(1)}, closing spread ${bt.market.margin_mae.toFixed(1)}) and hit the exact score ${pct(bt.likely.exact_score)} of the time. ` : "") +
