@@ -145,6 +145,26 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
 .td-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px }
 .td-item { display: flex; justify-content: space-between; gap: 8px; border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; font-size: .84rem; background: var(--surface-2) }
 .note { font-size: .84rem; color: var(--muted); max-width: 75ch }
+.pl-cell b { display: block; font-variant-numeric: tabular-nums } .pl-cell small { color: var(--muted); font-family: var(--font-data); font-size: .72rem; white-space: nowrap }
+#nbaPlTbl { min-width: 560px } #nbaSrcTbl { min-width: 620px } .pl-name { min-width: 150px; text-align: left; font-family: var(--font-body); font-weight: 600 } .pl-name small { color: var(--muted); margin-left: 4px } .flag { display: inline-block; font-size: .68rem; padding: 0 5px; border-radius: 4px; margin-left: 4px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap }
+.flag.w { border-color: var(--warn); color: var(--warn) }
+:root { --pt2: #1baf7a; --pt3: #6250d6; --ptf: #eda100 }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --pt2: #199e70; --pt3: #9085e9; --ptf: #c98500 } }
+:root[data-theme="dark"] { --pt2: #199e70; --pt3: #9085e9; --ptf: #c98500 }
+.src { display: grid; gap: 6px } .src-row { display: grid; grid-template-columns: minmax(90px, 160px) minmax(0, 1fr) 3.4em; gap: 8px; align-items: center; font-size: .85rem }
+.src-row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap } .src-row .v { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-data); font-size: .8rem }
+@media (max-width: 600px) { .src-row { grid-template-columns: 104px minmax(0, 1fr) 3em } }
+.src-bar { display: flex; gap: 2px; height: 14px } .src-bar i { display: block; height: 100%; min-width: 0 } .src-bar i:first-child { border-radius: 4px 0 0 4px } .src-bar i:last-child { border-radius: 0 4px 4px 0 }
+.src-bar i:only-child { border-radius: 4px } .src-team .src-bar { height: 20px }
+.pt2 { background: var(--pt2) } .pt3 { background: var(--pt3) } .ptf { background: var(--ptf) }
+.src-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .8rem; color: var(--muted) } .src-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px }
+.tip { position: fixed; z-index: 50; pointer-events: none; background: var(--ink); color: var(--surface); font-size: .78rem; padding: 6px 8px; border-radius: 6px; max-width: 260px; box-shadow: 0 4px 14px rgba(0,0,0,.25) }
+.line-out { font-family: var(--font-data); font-size: .85rem; grid-column: 1 / -1 } .field.wide { grid-column: span 2 }
+.bc-box { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; font-size: .76rem }
+@media (max-width: 600px) { .bc-box { grid-template-columns: minmax(0, 1fr) } } .bc-box > div { min-width: 0; overflow: hidden }
+.bc-box table { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; font-family: var(--font-data) } .bc-box th:first-child { width: 46% } .bc-box th, .bc-box td { padding: 2px 4px; text-align: right; color: #dfe7ee; border-bottom: 1px solid #26323e }
+.bc-box th { color: #9fb0c0; font-weight: 600; background: transparent; position: static; text-transform: none; letter-spacing: 0; cursor: default } .bc-box td:first-child, .bc-box th:first-child { text-align: left; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-body) }
+.bc-box caption { text-align: left; font-family: var(--font-display); font-weight: 700; color: #eef3f7; padding-bottom: 2px; letter-spacing: .03em }
 .warnbox { border-left: 3px solid var(--warn); padding: 8px 12px; background: color-mix(in srgb, var(--warn) 10%, transparent); border-radius: 0 8px 8px 0; font-size: .88rem }
 .honest table { min-width: 560px }
 @media (prefers-reduced-motion: reduce) { .bar i { transition: none } }
@@ -153,7 +173,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
 table.dec, #factorTbl { min-width: 600px }
 #qbRow { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) }
 /* broadcast view: a deliberately dark, single-theme frame (a stadium screen), colours set explicitly */
-.bcast { background: #0b1016; color: #eef3f7; border-radius: 12px; padding: 10px; display: grid; gap: 6px; min-width: 0 }
+.bcast { background: #0b1016; color: #eef3f7; border-radius: 12px; padding: 10px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0 }
 #bcCanvas { width: 100%; height: auto; aspect-ratio: 16 / 9; background: #0b1016; border-radius: 8px }
 .bc-top { display: flex; justify-content: space-between; gap: 10px; font-size: .8rem; min-height: 2.4em }
 .bc-ql { display: grid; gap: 1px; min-width: 0 } .bc-ql.r { text-align: right } .bc-ql b { font-family: var(--font-display); font-size: .95rem; letter-spacing: .03em; text-transform: uppercase }
@@ -273,6 +293,7 @@ table.dec, #factorTbl { min-width: 600px }
           <div class="row bc-ctrl"><span class="bc-lab">Speed</span><div class="seg" id="bcSpeed" role="group" aria-label="Playback speed">
             <button data-sp="1" aria-pressed="true">1×</button><button data-sp="2" aria-pressed="false">2×</button><button data-sp="4" aria-pressed="false">4×</button><button data-sp="10" aria-pressed="false">10×</button></div>
             <button class="btn" id="bcPause">Pause</button><button class="btn" id="bcNew">New game</button><span class="bc-note" id="bcNote"></span></div>
+          <div class="bc-box" id="bcBox" hidden></div>
         </div>
         <div class="live-grid">
           <div class="ticker">
@@ -297,6 +318,30 @@ table.dec, #factorTbl { min-width: 600px }
         <div class="tbl-wrap"><table id="propTbl"><thead></thead><tbody></tbody></table></div>
         <div><span class="label">Anytime touchdown, simulated (fair odds)</span><div class="td-list" id="tdList" style="margin-top:6px"></div></div>
         <div class="warnbox">These are model numbers, not picks. In the kit, a pick is named only after <span class="num">python3 -m edge verify ID</span> passes. The NFL feed has DraftKings lines but no prices, so nothing here is labelled above Medium.</div>
+      </section>
+
+      <section class="panel" id="nbaPl" aria-label="NBA player projections" hidden>
+        <div class="row"><h2>Player projections</h2><span class="spacer"></span><span class="note" id="nbaPlNote"></span></div>
+        <div class="split">
+          <div><span class="label">Removed (injury report Out or Doubtful)</span><ul class="plain" id="nbaOut"></ul></div>
+          <div><span class="label">Day-to-day or questionable: kept in, check before tip-off</span><ul class="plain" id="nbaQ"></ul></div>
+        </div>
+        <div class="row"><div class="seg" role="group" aria-label="Team" id="nbaTeamSeg"></div><span class="note">Average per simulated game; underneath, the range of the middle 80% of games (10th to 90th percentile).</span></div>
+        <div class="tbl-wrap"><table id="nbaPlTbl"><thead></thead><tbody></tbody></table></div>
+        <h3>Where the points come from</h3>
+        <div class="src-legend"><span><i class="pt2"></i>2-pointers</span><span><i class="pt3"></i>3-pointers</span><span><i class="ptf"></i>Free throws</span></div>
+        <div class="src" id="nbaSrc"></div>
+        <div class="tbl-wrap"><table id="nbaSrcTbl"><thead></thead><tbody></tbody></table></div>
+        <p class="note" id="nbaSrcNote"></p>
+        <h3>Check a prop line</h3>
+        <div class="inputs" id="nbaLine">
+          <label class="field wide"><span class="label">Player</span><select id="nlP"></select></label>
+          <label class="field"><span class="label">Stat</span><select id="nlS"><option value="0">Points</option><option value="1">Rebounds</option><option value="2">Assists</option><option value="3">3-pointers made</option><option value="4">Pts + Reb + Ast</option></select></label>
+          <label class="field"><span class="label">Line</span><input id="nlL" type="number" step="0.5" inputmode="decimal"></label>
+          <div class="line-out" id="nlOut" aria-live="polite"></div>
+        </div>
+        <p class="note" id="nbaBt"></p>
+        <div class="warnbox">These are model numbers, not picks. In the kit, a pick is named only after <span class="num">python3 -m edge verify ID</span> passes. The data feed has no NBA player prop lines, so nothing here is compared with a book.</div>
       </section>
 
       <section class="panel honest" aria-label="How accurate is this">
@@ -690,8 +735,71 @@ function nflPlayGame(C, st, log) {
   return [score[0], score[1], wentOT ? 1 : 0];
 }
 
+// ---------- NBA player layer: who shot, rebounded, assisted, turned it over ----------
+// Drawn after the possession engine has decided what happened (made or missed, which team got the rebound), so team
+// results are untouched. Shares follow each player's minutes in this simulated game times his per-minute rates
+// (this season's box scores, shrunk toward the team). Who shares the floor with whom is not modelled.
+const NB = { pts: 0, f2m: 1, f2a: 2, f3m: 3, f3a: 4, ftm: 5, fta: 6, orb: 7, drb: 8, ast: 9, tov: 10, min: 11, astd: 12, cre: 13 }, NBN = 14;
+const NBH = [["pts", 80], ["reb", 30], ["ast", 25], ["tpm", 15], ["pra", 120]], NBHW = 270;
+function nbaTracker(PL, rc) {
+  const T = PL.map((pr) => {
+    const ps = pr.players || [], n = ps.length, z = () => new Float64Array(n);
+    const m3 = ps.reduce((s, p) => s + p.min * p.fga3 * p.p3, 0), mAll = ps.reduce((s, p) => s + p.min * (p.fga2 * p.p2 + p.fga3 * p.p3), 0);
+    // assisted share: team AST/FGM split so made 3s are assisted more often than 2s (about 1.28x the team rate)
+    const f3 = mAll > 0 ? m3 / mAll : 0.33, r = pr.ast_rate || 0.62, a3 = Math.min(0.95, 1.28 * r);
+    const a2 = Math.min(0.95, Math.max(0.2, (r - f3 * a3) / Math.max(1 - f3, 0.1)));
+    return { ps, n, a2, a3, m: z(), w2m: z(), w2x: z(), w3m: z(), w3x: z(), wft: z(), wa: z(), wo: z(), wd: z(), wt: z(), tmp: z(),
+             cur: new Float64Array(n * NBN), sum: new Float64Array(n * NBN), hist: new Int32Array(n * NBHW), team: 0 };
+  });
+  return { T, rc: rc || 0.93, sims: 0 };
+}
+function nbPick(w, n, excl) {
+  let s = 0; for (let i = 0; i < n; i++) if (i !== excl) s += w[i]; if (!(s > 0)) return -1;
+  let u = rnd() * s; for (let i = 0; i < n; i++) { if (i === excl) continue; u -= w[i]; if (u <= 0) return i; }
+  for (let i = n - 1; i >= 0; i--) if (i !== excl && w[i] > 0) return i; return -1;
+}
+function nbBegin(tk) {
+  for (const t of tk.T) {
+    let tot = 0;
+    for (let i = 0; i < t.n; i++) { const p = t.ps[i]; t.m[i] = Math.max(0, Math.min(48, p.min + normal() * p.min_sd)); tot += t.m[i]; }
+    const sc = tot > 0 ? 240 / tot : 0; t.cur.fill(0);
+    for (let i = 0; i < t.n; i++) {
+      const p = t.ps[i], m = Math.min(48, t.m[i] * sc); t.m[i] = m;
+      t.w2m[i] = m * p.fga2 * p.p2; t.w2x[i] = m * p.fga2 * (1 - p.p2); t.w3m[i] = m * p.fga3 * p.p3; t.w3x[i] = m * p.fga3 * (1 - p.p3);
+      t.wft[i] = m * p.fta; t.wa[i] = m * p.ast; t.wo[i] = m * p.oreb; t.wd[i] = m * p.dreb; t.wt[i] = m * p.tov; t.cur[i * NBN + NB.min] = m;
+    }
+  }
+}
+function nbFT(tk, o, made, tries) {
+  const t = tk.T[o]; for (let i = 0; i < t.n; i++) { const f = t.ps[i].ftp; t.tmp[i] = t.wft[i] * Math.pow(f, made) * Math.pow(1 - f, tries - made); }
+  const i = nbPick(t.tmp, t.n, -1); if (i >= 0) { const b = i * NBN; t.cur[b + NB.fta] += tries; t.cur[b + NB.ftm] += made; t.cur[b + NB.pts] += made; } return i;
+}
+function nbFG(tk, o, is3, made, and1) {
+  const t = tk.T[o], s = nbPick(is3 ? (made ? t.w3m : t.w3x) : (made ? t.w2m : t.w2x), t.n, -1); if (s < 0) return [-1, -1];
+  const b = s * NBN; let a = -1;
+  if (is3) { t.cur[b + NB.f3a]++; if (made) t.cur[b + NB.f3m]++; } else { t.cur[b + NB.f2a]++; if (made) t.cur[b + NB.f2m]++; }
+  if (made) {
+    const v = is3 ? 3 : 2; t.cur[b + NB.pts] += v; if (and1) { t.cur[b + NB.pts]++; t.cur[b + NB.ftm]++; t.cur[b + NB.fta]++; }
+    if (rnd() < (is3 ? t.a3 : t.a2)) { a = nbPick(t.wa, t.n, s); if (a >= 0) { t.cur[a * NBN + NB.ast]++; t.cur[a * NBN + NB.cre] += v; t.cur[b + NB.astd] += v; } }
+  }
+  return [s, a];
+}
+function nbReb(tk, side, off) { if (rnd() >= tk.rc) return -1; const t = tk.T[side], i = nbPick(off ? t.wo : t.wd, t.n, -1); if (i >= 0) t.cur[i * NBN + (off ? NB.orb : NB.drb)]++; return i; }
+function nbTov(tk, o) { const t = tk.T[o], i = nbPick(t.wt, t.n, -1); if (i >= 0) t.cur[i * NBN + NB.tov]++; return i; }
+function nbEnd(tk, score) {
+  tk.sims++;
+  tk.T.forEach((t, side) => {
+    t.team += score[side];
+    for (let i = 0; i < t.n; i++) {
+      const b = i * NBN, c = t.cur; for (let k = 0; k < NBN; k++) t.sum[b + k] += c[b + k];
+      const reb = c[b + NB.orb] + c[b + NB.drb], v = [c[b + NB.pts], reb, c[b + NB.ast], c[b + NB.f3m], c[b + NB.pts] + reb + c[b + NB.ast]];
+      let off = i * NBHW; for (let h = 0; h < NBH.length; h++) { t.hist[off + Math.min(NBH[h][1] - 1, v[h])]++; off += NBH[h][1]; }
+    }
+  });
+}
+
 // NBA: every possession. C = {R, home, away, minutes, shotClock, env}; st = {sh, sa, clock, poss, ot}
-function nbaPossGame(C, st, log) {
+function nbaPossGame(C, st, log, tk) {
   const R = C.R, S = [C.home, C.away], minutes = C.minutes || 48, shotClock = C.shotClock || 24, env = C.env !== false;
   const pace0 = R.pace + (S[0].pace_off + S[1].pace_off) / 2;
   const paceG = pace0 * (env ? Math.exp(normal() * R.sd_pace / Math.max(pace0, 1)) : 1);
@@ -700,20 +808,23 @@ function nbaPossGame(C, st, log) {
   const L3 = S.map((s) => lgt(s.p3) + (env ? normal() * R.sd_p3 : 0) / (s.p3 * (1 - s.p3)));
   const score = [st ? st.sh : 0, st ? st.sa : 0];
   let clock = st ? st.clock : minutes * 60, poss = st && st.poss != null ? st.poss : (rnd() < 0.5 ? 1 : 0), ot = st && st.ot ? st.ot : 0, np = 0;
+  if (tk) nbBegin(tk);
   for (;;) {
     const o = poss, d = 1 - o, c = clock, diff = score[o] - score[d], late = c <= 60;
     const foul = late && diff >= 3 && diff <= 8 && c > 2, hold = c <= shotClock && diff > 0 && !foul, need3 = late && diff === -3;
     let dur = foul ? 2 + 4 * rnd() : hold ? c : gamma(4) * spp / 4, pts = 0;
     const seq = log ? [] : null;
-    if (foul) { const a = rnd() < S[o].ftp, b = rnd() < S[o].ftp; pts += a + b; if (seq) seq.push({ k: "foul" }, { k: "ft", m: [a, b] }); }
+    if (foul) { const a = rnd() < S[o].ftp, b = rnd() < S[o].ftp, w = tk ? nbFT(tk, o, a + b, 2) : -1; pts += a + b; if (seq) seq.push({ k: "foul" }, { k: "ft", m: [a, b], who: w }); }
     else if (hold) { if (seq) seq.push({ k: "hold" }); }
     else {
-      if (rnd() < S[o].to) { if (seq) seq.push({ k: "to" }); }
-      else if (!need3 && rnd() < S[o].ft_rate) { const a = rnd() < S[o].ftp, b = rnd() < S[o].ftp; pts += a + b; if (seq) seq.push({ k: "ft", m: [a, b] }); }
+      if (rnd() < S[o].to) { const w = tk ? nbTov(tk, o) : -1; if (seq) seq.push({ k: "to", who: w }); }
+      else if (!need3 && rnd() < S[o].ft_rate) { const a = rnd() < S[o].ftp, b = rnd() < S[o].ftp, w = tk ? nbFT(tk, o, a + b, 2) : -1; pts += a + b; if (seq) seq.push({ k: "ft", m: [a, b], who: w }); }
       else for (let att = 0; att < 3; att++) {
         const is3 = need3 || rnd() < S[o].three;
-        if (rnd() < sgm(is3 ? L3[o] : L2[o])) { pts += is3 ? 3 : 2; let a1 = false; if (rnd() < R.and1 && rnd() < S[o].ftp) { pts += 1; a1 = true; } if (seq) seq.push({ k: "shot", three: is3, made: true, and1: a1 }); break; }
-        const orb = rnd() < S[o].orb; if (seq) seq.push({ k: "shot", three: is3, made: false, orb });
+        if (rnd() < sgm(is3 ? L3[o] : L2[o])) { pts += is3 ? 3 : 2; let a1 = false; if (rnd() < R.and1 && rnd() < S[o].ftp) { pts += 1; a1 = true; }
+          const wa = tk ? nbFG(tk, o, is3, true, a1) : null; if (seq) seq.push({ k: "shot", three: is3, made: true, and1: a1, who: wa ? wa[0] : -1, ast: wa ? wa[1] : -1 }); break; }
+        const orb = rnd() < S[o].orb, wm = tk ? nbFG(tk, o, is3, false, false) : null, rb = tk ? nbReb(tk, orb ? o : d, orb) : -1;
+        if (seq) seq.push({ k: "shot", three: is3, made: false, orb, who: wm ? wm[0] : -1, rb });
         if (orb) { dur += 5; continue; } break;
       }
     }
@@ -721,6 +832,7 @@ function nbaPossGame(C, st, log) {
     if (log) log.push({ clock, poss, ot, sh: score[0], sa: score[1], pts, off: o, foul, seq, preClock: c, t: ot ? 1 : 1 - clock / (minutes * 60) });
     if (clock <= 0) { if (score[0] !== score[1] || ot >= 8) { if (score[0] === score[1]) score[0]++; break; } clock = 300; ot++; poss = rnd() < 0.5 ? 1 : 0; }
   }
+  if (tk) nbEnd(tk, score);
   return [score[0], score[1], ot > 0 ? 1 : 0, np];
 }
 
@@ -761,7 +873,7 @@ function nhlEventGame(C, st, log) {
 const ENGINES = { nflpbp: nflPlayGame, nbaposs: nbaPossGame, nhlev: nhlEventGame };
 
 // ---------- message loop ----------
-let current = 0;
+let current = 0, plCurrent = 0;
 onmessage = (e) => {
   const m = e.data;
   if (m.cmd === "nfl" || m.cmd === "run" || (m.cmd === "eng" && m.track)) current = m.id;        // a new run supersedes the old one; other asks don't
@@ -795,8 +907,21 @@ onmessage = (e) => {
     };
     step();
   } else if (m.cmd === "eng_watch") {
-    const log = [], r = ENGINES[m.engine](m.cfg, null, log);
-    postMessage({ id: m.id, kind: "watch", log, final: [r[0], r[1]] });
+    const tk = m.engine === "nbaposs" && m.cfg.pl ? nbaTracker(m.cfg.pl, m.cfg.R.reb_credit) : null;
+    const log = [], r = ENGINES[m.engine](m.cfg, null, log, tk);
+    postMessage({ id: m.id, kind: "watch", log, final: [r[0], r[1]], mins: tk ? tk.T.map((t) => Array.from(t.m)) : null });
+  } else if (m.cmd === "nba_players") {
+    // 50,000 games with the player layer on: per-player distributions and where each team's points come from
+    const tk = nbaTracker(m.cfg.pl, m.cfg.R.reb_credit), n = m.n, cur0 = current; plCurrent = m.id; let k = 0;
+    const step = () => {
+      if (plCurrent !== m.id || current !== cur0) return;
+      const end = Math.min(n, k + 2500);
+      for (; k < end; k++) nbaPossGame(m.cfg, null, null, tk);
+      if (k < n) { postMessage({ id: m.id, kind: "progress", k }); setTimeout(step, 0); return; }
+      postMessage({ id: m.id, kind: "done", sims: tk.sims, teams: tk.T.map((t) => ({ team: t.team / tk.sims, a2: t.a2, a3: t.a3,
+        players: t.ps.map((p, i) => ({ name: p.name, mean: Array.from(t.sum.slice(i * NBN, (i + 1) * NBN), (x) => x / tk.sims), hist: Array.from(t.hist.slice(i * NBHW, (i + 1) * NBHW)) })) })) });
+    };
+    step();
   } else if (m.cmd === "watch") {
     const out = [0, 0, 0, 0], log = []; simOne(m.model, m.p, { f: 1, sh: 0, sa: 0, half: 0 }, out, log);
     postMessage({ id: m.id, kind: "watch", log, final: [out[0], out[1]] });
@@ -1261,7 +1386,8 @@ const engOn = () => state.useNew && engAvail();
 function engCfg(over) {
   const k = engLeague(), g = game();
   if (k === "nfl") { const G = E.nfl.games[g.id]; return { M: E.nfl.M, home: G.qb.home[state.qb.home] || G.qb.home[0], away: G.qb.away[state.qb.away] || G.qb.away[0], hfa: E.nfl.M.hfa, wind: 0, ...(over || {}) }; }
-  if (k === "nba") { const s = E.nba.sides[g.id]; return { R: E.nba.R, home: s.home, away: s.away, minutes: 48, shotClock: 24, ...(over || {}) }; }
+  if (k === "nba") { const s = E.nba.sides[g.id]; return { R: E.nba.R, home: s.home, away: s.away, minutes: 48, shotClock: 24,
+    pl: s.players && s.players.home.players.length && s.players.away.players.length ? [s.players.home, s.players.away] : null, ...(over || {}) }; }
   const s = E.nhl.sides[g.id]; return { R: E.nhl.R, en: E.nhl.en, home: s.home, away: s.away, ...(over || {}) };
 }
 function engNote(k) {
@@ -1287,7 +1413,7 @@ function renderEngineRow() {
   } else qbr.hidden = true;
 }
 function runSim() {
-  renderEngineRow();
+  renderEngineRow(); $("nbaPl").hidden = true; state.nbaRes = null; state.nbaRun = (state.nbaRun || 0) + 1;
   if (!engOn()) { $("decisionPanel").hidden = true; return runSimOld(); }
   const m = model(), p = params(), k = engLeague();
   state.summary = null; state.runId++; const my = state.runId;
@@ -1296,9 +1422,95 @@ function runSim() {
   ask({ cmd: "eng", engine: ENG[k].key, cfg: engCfg(), p, n: N, pace: state.pace, track: true }, (msg) => {
     if (my !== state.runId) return;
     onProgress(msg.agg, p, m);
-    if (msg.kind === "done") { $("runBtn").disabled = false; renderDecision(msg.agg, p); if (k === "nfl") runPropsAfter(p); }
+    if (msg.kind === "done") { $("runBtn").disabled = false; renderDecision(msg.agg, p); if (k === "nfl") runPropsAfter(p); if (k === "nba") runNbaPlayers(); }
   });
 }
+// ===== NBA player layer: projections from the same 50,000 simulated games =====
+const NBI = { pts: 0, f2m: 1, f2a: 2, f3m: 3, f3a: 4, ftm: 5, fta: 6, orb: 7, drb: 8, ast: 9, tov: 10, min: 11, astd: 12, cre: 13 };
+const NBHM = [["PTS", 80], ["REB", 30], ["AST", 25], ["3PM", 15], ["PRA", 120]];
+state.nbaTeam = "home";
+function nbHist(pl, h) { let off = 0; for (let j = 0; j < h; j++) off += NBHM[j][1]; return pl.hist.slice(off, off + NBHM[h][1]); }
+function hq(hist, q) { const n = hist.reduce((a, b) => a + b, 0); let c = 0; for (let i = 0; i < hist.length; i++) { c += hist[i]; if (c >= q * n) return i; } return hist.length - 1; }
+function hMean(hist) { let n = 0, s = 0; hist.forEach((c, i) => { n += c; s += c * i; }); return n ? s / n : 0; }
+const lastName = (nm) => { const p = String(nm || "").split(" "); return p.length > 1 && /^(Jr\.?|Sr\.?|II|III|IV)$/i.test(p[p.length - 1]) ? p[p.length - 2] : p[p.length - 1]; };
+function nbaSide() { const g = game(); return E.nba && E.nba.sides && g ? E.nba.sides[g.id] : null; }
+function nbaFlags(pr, p, side) {
+  const g = game(), inj = (nbaSide().players.injuries || []).find((i) => i.team === g[side] && i.name === p.name), f = [];
+  if (inj) f.push(`<span class="flag w" title="${esc(inj.status + (inj.detail ? ": " + inj.detail : ""))}">${esc(inj.status)}</span>`);
+  if (p.returning) f.push(`<span class="flag w" title="Sat the last game injured; projected at 90% of his season minutes">returning</span>`);
+  if (p.games < 3) f.push(`<span class="flag" title="Fewer than 3 games with this team: rates lean on the team average">${p.games} gm</span>`);
+  return f.join("");
+}
+function runNbaPlayers() {
+  const cfg = engCfg(); if (!cfg.pl) return;
+  const run = state.nbaRun, sd = nbaSide(), g = game();
+  const inj = sd.players.injuries || [], gone = inj.filter((i) => /^(out|doubtful)$/i.test(i.status || "")), q = inj.filter((i) => !/^(out|doubtful)$/i.test(i.status || ""));
+  $("nbaOut").innerHTML = gone.length ? gone.map((i) => `<li>${esc(i.team)} · ${esc(i.name)} <span class="note">${esc(i.status)}${i.detail ? ", " + esc(i.detail) : ""}</span></li>`).join("") : "<li>None listed</li>";
+  $("nbaQ").innerHTML = q.length ? q.map((i) => `<li>${esc(i.team)} · ${esc(i.name)} <span class="note">${esc(i.status)}${i.detail ? ", " + esc(i.detail) : ""}</span></li>`).join("") : "<li>None listed</li>";
+  $("nbaPl").hidden = false; $("nbaPlNote").textContent = "Simulating players…";
+  ask({ cmd: "nba_players", cfg, n: N }, (msg) => {
+    if (run !== state.nbaRun) return;
+    if (msg.kind === "progress") { $("nbaPlNote").textContent = `Simulating players… ${msg.k.toLocaleString()} of ${N.toLocaleString()}`; return; }
+    state.nbaRes = msg; $("nbaPlNote").textContent = `${msg.sims.toLocaleString()} simulated games · rotation from ${sd.players.home.games} ${g.home} and ${sd.players.away.games} ${g.away} box scores`;
+    renderNbaPlayers();
+  });
+}
+function renderNbaPlayers() {
+  const R = state.nbaRes; if (!R) return;
+  const g = game(), sd = nbaSide(), side = state.nbaTeam, ti = side === "home" ? 0 : 1, T = R.teams[ti], prof = sd.players[side].players;
+  $("nbaTeamSeg").innerHTML = ["away", "home"].map((s) => `<button data-s="${s}" aria-pressed="${s === side}">${esc(g[s])}</button>`).join("");
+  $("nbaTeamSeg").querySelectorAll("button").forEach((b) => b.onclick = () => { state.nbaTeam = b.dataset.s; renderNbaPlayers(); });
+  const rows = T.players.map((pl, i) => ({ pl, p: prof[i], i })).sort((a, b) => b.pl.mean[NBI.pts] - a.pl.mean[NBI.pts]);
+  const cell = (pl, h, dp) => { const hs = nbHist(pl, h); return `<td class="pl-cell"><b>${hMean(hs).toFixed(dp)}</b><small>${hq(hs, 0.1)}–${hq(hs, 0.9)}</small></td>`; };
+  $("nbaPlTbl").querySelector("thead").innerHTML = `<tr><th class="l">Player</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>3PM</th><th>PRA</th></tr>`;
+  $("nbaPlTbl").querySelector("tbody").innerHTML = rows.map(({ pl, p }) => `<tr><td class="pl-name">${esc(p.name)}<small>${esc(p.pos)}</small>${nbaFlags(sd.players[side], p, side)}</td>
+    <td class="pl-cell"><b>${pl.mean[NBI.min].toFixed(1)}</b><small>${p.starter ? "starter" : "bench"}</small></td>${cell(pl, 0, 1)}${cell(pl, 1, 1)}${cell(pl, 2, 1)}${cell(pl, 3, 1)}${cell(pl, 4, 1)}</tr>`).join("");
+  // where the points come from
+  const part = (m) => [2 * m[NBI.f2m], 3 * m[NBI.f3m], m[NBI.ftm]];
+  const tot = rows.reduce((a, { pl }) => { const v = part(pl.mean); return [a[0] + v[0], a[1] + v[1], a[2] + v[2]]; }, [0, 0, 0]), team = tot[0] + tot[1] + tot[2];
+  const maxP = Math.max(...rows.map(({ pl }) => pl.mean[NBI.pts]), 1);
+  const bar = (v, scale) => `<div class="src-bar">${[["pt2", v[0]], ["pt3", v[1]], ["ptf", v[2]]].filter(([, x]) => x > 0.05).map(([c, x]) => `<i class="${c}" style="width:${(100 * x / scale).toFixed(2)}%"></i>`).join("")}</div>`;
+  const tipTxt = (nm, v, m) => `${nm}: ${(v[0] + v[1] + v[2]).toFixed(1)} pts · 2-pointers ${v[0].toFixed(1)} (${m[NBI.f2m].toFixed(1)} of ${m[NBI.f2a].toFixed(1)}) · 3-pointers ${v[1].toFixed(1)} (${m[NBI.f3m].toFixed(1)} of ${m[NBI.f3a].toFixed(1)}) · free throws ${v[2].toFixed(1)} (${m[NBI.ftm].toFixed(1)} of ${m[NBI.fta].toFixed(1)})`;
+  const tm = rows.reduce((a, { pl }) => a.map((x, k) => x + pl.mean[k]), new Array(14).fill(0));
+  $("nbaSrc").innerHTML = `<div class="src-row src-team" data-tip="${esc(tipTxt(g[side] + " team", tot, tm))}"><span class="nm"><b>${esc(g[side])} team</b></span>${bar(tot, team)}<span class="v">${team.toFixed(1)}</span></div>` +
+    rows.filter(({ pl }) => pl.mean[NBI.pts] >= 0.5).map(({ pl, p }) => { const v = part(pl.mean); return `<div class="src-row" data-tip="${esc(tipTxt(p.name, v, pl.mean))}"><span class="nm">${esc(p.name)}</span>${bar(v, maxP)}<span class="v">${pl.mean[NBI.pts].toFixed(1)}</span></div>`; }).join("");
+  const fmt = (a, b) => `${a.toFixed(1)}/${b.toFixed(1)}`;
+  $("nbaSrcTbl").querySelector("thead").innerHTML = `<tr><th class="l">Player</th><th title="Points from 2-pointers (made/attempted)">2PT</th><th title="Points from 3-pointers (made/attempted)">3PT</th><th title="Points from free throws (made/attempted)">FT</th><th>Total</th><th title="Share of the team's points">Share</th><th title="Share of his field-goal points that were assisted">Assisted</th><th title="Points scored on shots he assisted">Ast pts</th></tr>`;
+  $("nbaSrcTbl").querySelector("tbody").innerHTML = rows.map(({ pl, p }) => { const m = pl.mean, v = part(m), fg = v[0] + v[1];
+    return `<tr><td class="l name">${esc(p.name)}</td><td class="num">${v[0].toFixed(1)} <span class="note">(${fmt(m[NBI.f2m], m[NBI.f2a])})</span></td><td class="num">${v[1].toFixed(1)} <span class="note">(${fmt(m[NBI.f3m], m[NBI.f3a])})</span></td>
+      <td class="num">${v[2].toFixed(1)} <span class="note">(${fmt(m[NBI.ftm], m[NBI.fta])})</span></td><td class="num">${m[NBI.pts].toFixed(1)}</td><td class="num">${(100 * m[NBI.pts] / Math.max(team, 1)).toFixed(0)}%</td>
+      <td class="num">${fg > 0 ? (100 * m[NBI.astd] / fg).toFixed(0) + "%" : "—"}</td><td class="num">${m[NBI.cre].toFixed(1)}</td></tr>`; }).join("") +
+    `<tr><td class="l name">${esc(g[side])} team</td><td class="num">${tot[0].toFixed(1)}</td><td class="num">${tot[1].toFixed(1)}</td><td class="num">${tot[2].toFixed(1)}</td><td class="num"><b>${team.toFixed(1)}</b></td><td class="num">100%</td>
+      <td class="num">${(100 * tm[NBI.astd] / Math.max(tot[0] + tot[1], 1)).toFixed(0)}%</td><td class="num">${tm[NBI.cre].toFixed(1)}</td></tr>`;
+  const reb = tm[NBI.orb] + tm[NBI.drb];
+  $("nbaSrcNote").textContent = `${g[side]} averages ${team.toFixed(1)} points in these games: ${(100 * tot[0] / team).toFixed(0)}% from 2-pointers, ${(100 * tot[1] / team).toFixed(0)}% from 3-pointers, ${(100 * tot[2] / team).toFixed(0)}% from free throws. ` +
+    `${(100 * T.a3).toFixed(0)}% of made 3s and ${(100 * T.a2).toFixed(0)}% of made 2s are assisted (split from this season's team rate of ${(100 * nbaSide().players[side].ast_rate).toFixed(0)}% of field goals). ` +
+    `Players are credited with ${reb.toFixed(1)} rebounds a game: ${(100 * E.nba.R.reb_credit).toFixed(1)}% of missed shots, the share that ends as a player rebound in this season's box scores (the rest are team rebounds).`;
+  // line checker
+  const sel = $("nlP"), prev = sel.value;
+  sel.innerHTML = ["away", "home"].map((s, si) => `<optgroup label="${esc(g[s])}">${sd.players[s].players.map((p, i) => `<option value="${s === "home" ? 0 : 1}:${i}">${esc(p.name)}</option>`).join("")}</optgroup>`).join("");
+  if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev; else sel.value = `${ti}:${rows[0].i}`;
+  nbaLine(true);
+  const bt = E.nba.players_bt;
+  $("nbaBt").textContent = bt && bt.pts ? `Backtest, ${bt.n.toLocaleString()} player-games this season (each projected only from earlier games, with who sat out known): points missed by ${bt.pts.mae.toFixed(1)} on average (a plain season average: ${bt.pts.base_mae.toFixed(1)}), rebounds ${bt.reb.mae.toFixed(1)} (${bt.reb.base_mae.toFixed(1)}), assists ${bt.ast.mae.toFixed(1)} (${bt.ast.base_mae.toFixed(1)}). So far these projections are no more accurate than a season average; the value here is the full distribution and how it ties to the team simulation, not sharper means.` : "";
+}
+function nbaLine(reset) {
+  const R = state.nbaRes; if (!R) return;
+  const [ti, i] = $("nlP").value.split(":").map(Number), h = Number($("nlS").value), pl = R.teams[ti].players[i], hs = nbHist(pl, h);
+  if (reset || $("nlL").value === "") $("nlL").value = (Math.floor(hMean(hs)) + 0.5).toFixed(1);
+  const L = Number($("nlL").value), n = hs.reduce((a, b) => a + b, 0);
+  let ov = 0, un = 0; hs.forEach((c, k) => { if (k > L) ov += c; else if (k < L) un += c; });
+  const po = ov / n, pu = un / n, fair = (q) => q <= 0 || q >= 1 ? "—" : q >= 0.5 ? `${Math.round(-100 * q / (1 - q))}` : `+${Math.round(100 * (1 - q) / q)}`;
+  $("nlOut").innerHTML = `${esc(pl.name)} ${NBHM[h][0]} ${L}: over <b>${fmtPct(po)}</b> (fair ${fair(po)}) · under <b>${fmtPct(pu)}</b> (fair ${fair(pu)})${po + pu < 0.999 ? ` · push ${fmtPct(1 - po - pu)}` : ""} · average ${hMean(hs).toFixed(1)}, median ${hq(hs, 0.5)}`;
+}
+["nlP", "nlS"].forEach((id) => $(id).addEventListener("change", () => nbaLine(true)));
+$("nlL").addEventListener("input", () => nbaLine(false));
+// hover tooltip for the points bars
+const tipEl = document.createElement("div"); tipEl.className = "tip"; tipEl.hidden = true; document.body.appendChild(tipEl);
+$("nbaSrc").addEventListener("pointermove", (e) => { const r = e.target.closest("[data-tip]"); if (!r) { tipEl.hidden = true; return; }
+  tipEl.textContent = r.dataset.tip; tipEl.hidden = false; const x = Math.min(e.clientX + 12, innerWidth - tipEl.offsetWidth - 8); tipEl.style.left = x + "px"; tipEl.style.top = (e.clientY + 14) + "px"; });
+$("nbaSrc").addEventListener("pointerleave", () => { tipEl.hidden = true; });
+
 function runPropsAfter(p) {
   const g = game(), nf = g.nfl; if (!nf) return;
   const cfg = JSON.parse(JSON.stringify({ ...nf, consts: D.consts, agg: p, pace: false }));
@@ -1430,7 +1642,8 @@ $("watchBtn").onclick = () => {
     let ev = msg.log;
     if (k === "nfl") ev = ev.filter((e, i) => e.td || e.fg || e.safety || e.pick6 || e.to || i % 5 === 4 || e.done);
     else if (k === "nba") ev = ev.filter((e, i) => i % 8 === 7 || (e.t > 0.96 && e.pts > 0) || e.ot);
-    state.watch = { ev, i: 0, paused: false, timer: null, kind: k };
+    const pcf = k === "nba" ? engCfg().pl : null;
+    state.watch = { ev, i: 0, paused: false, timer: null, kind: k, pnames: pcf ? pcf.map((t) => t.players.map((p) => p.name)) : null };
     $("pauseBtn").disabled = false; $("tA").textContent = 0; $("tH").textContent = 0; $("tClock").textContent = "start";
     engRemain(null, k === "nfl" ? 5000 : 20000).then((a) => { state.timeline.push({ t: 0, p: a.hw / Math.max(a.hw + a.aw, 1) }); drawTime(); tilesFor(a, state.p, model(), $("liveTiles")); nextEngEvent(); });
   });
@@ -1438,7 +1651,9 @@ $("watchBtn").onclick = () => {
 function engEventText(k, e, g) {
   if (k === "nfl") { const tm = e.off === 0 ? g.home : g.away;
     return e.td ? `${tm} touchdown` : e.fg ? `${tm} field goal` : e.safety ? `Safety` : e.pick6 ? `Pick-six` : e.to ? `${tm} turnover` : ""; }
-  if (k === "nba") return e.pts ? `${e.off === 0 ? g.home : g.away} ${e.pts}${e.foul ? " (free throws)" : ""}` : "";
+  if (k === "nba") { if (!e.pts) return ""; const tm = e.off === 0 ? g.home : g.away, nm = (i) => pName(state.watch && state.watch.pnames, e.off, i), sc = (e.seq || []).filter((x) => (x.k === "shot" && x.made) || (x.k === "ft" && x.m.some(Boolean))).pop();
+    if (sc && nm(sc.who)) return sc.k === "ft" ? `${tm} ${e.pts}: ${nm(sc.who)} free throws` : `${tm} ${e.pts}: ${nm(sc.who)} ${sc.three ? "3-pointer" : "2-pointer"}${sc.and1 ? " and one" : ""}${nm(sc.ast) ? ` (${nm(sc.ast)} assist)` : ""}`;
+    return `${tm} ${e.pts}${e.foul ? " (free throws)" : ""}`; }
   return e.marker ? "" : e.ot ? (e.so ? "Shootout winner" : "Overtime goal") : `${e.team === 0 ? g.home : g.away} goal${e.pp ? " (power play)" : ""}${e.en ? " (empty net)" : ""}`;
 }
 async function nextEngEvent() {
@@ -1670,17 +1885,34 @@ function nbaAnim(e, idx) {
     else if (s.k === "shot") { const sp = s.three ? pick(30 + s.j) : spots[5 + Math.floor(r(40 + s.j) * 3)], su = hu - dir * sp[0], sv = sp[1];
       if (k < 0.75) { const q = k / 0.75; bu = lerp(su, hu, q); bv = lerp(sv, 25, q); bz = Math.sin(Math.PI * q) * (s.three ? 9 : 6) + q * 10; }
       else { bu = hu - dir * (s.made ? 0 : 3 * (k - 0.75) * 4); bv = 25 + (s.made ? 0 : (r(50 + s.j) - 0.5) * 8 * (k - 0.75) * 4); bz = s.made ? 10 - (k - 0.75) * 40 : 10 - (k - 0.75) * 30; }
-      txt = k > 0.8 ? (s.made ? (s.three ? "+3" : "+2") + (s.and1 ? " AND ONE" : "") : s.orb ? "OFFENSIVE REBOUND" : "MISS") : ""; }
+      const who = nbaPName(o, s.who, true), ast = nbaPName(o, s.ast, true), rb = nbaPName(s.orb ? o : 1 - o, s.rb, true);
+      txt = k > 0.8 ? (s.made ? (s.three ? "+3" : "+2") + (s.and1 ? " AND ONE" : "") + (who ? " " + who : "") + (ast ? " · AST " + ast : "")
+        : (s.orb ? "OFF. REBOUND" : rb ? "REBOUND" : "MISS") + (rb ? " " + rb : who && !s.orb ? " · " + who : "")) : who && k > 0.15 ? who : ""; }
     else if (s.k === "ft") { const fu = hu - dir * 15, q = (k * 2) % 1, which = k < 0.5 ? 0 : 1; bu = lerp(fu, hu, q); bv = 25; bz = Math.sin(Math.PI * q) * 5 + q * 10;
-      txt = `FREE THROWS ${s.m.filter(Boolean).length}/2`; }
-    else if (s.k === "to") { const a = hpos(Math.max(0, s.j - 1)); bu = lerp(a[0], defP[holders[s.j]][0], k); bv = lerp(a[1], defP[holders[s.j]][1], k); txt = "TURNOVER"; }
+      txt = `FREE THROWS ${s.m.filter(Boolean).length}/2` + (nbaPName(o, s.who, true) ? " · " + nbaPName(o, s.who, true) : ""); }
+    else if (s.k === "to") { const a = hpos(Math.max(0, s.j - 1)); bu = lerp(a[0], defP[holders[s.j]][0], k); bv = lerp(a[1], defP[holders[s.j]][1], k); txt = "TURNOVER" + (nbaPName(o, s.who, true) ? " · " + nbaPName(o, s.who, true) : ""); }
     else if (s.k === "foul") { const a = hpos(s.j); bu = a[0]; bv = a[1]; txt = "FOUL — SENT TO THE LINE"; }
     else { const a = hpos(s.j); bu = a[0] + Math.sin(k * 30) * 0.3; bv = a[1]; txt = "RUNNING OUT THE CLOCK"; }
     ballAt(ctx, bu, bv, Math.max(0, bz), "#e8701a", 0.55);
     if (txt) label(ctx, txt, Math.max(14, Math.min(80, hu - dir * 14)), 44, txt.startsWith("+") ? "#ffd166" : "#ffffff", 0.9);
   }, after() {
     const st = BC.stats[o]; (e.seq || []).forEach((x) => { if (x.k === "shot") { st.fga++; if (x.made) st.fgm++; if (x.three) { st.tpa++; if (x.made) st.tpm++; } if (x.and1) { st.fta++; st.ftm++; } }
-      if (x.k === "ft") { st.fta += 2; st.ftm += x.m.filter(Boolean).length; } if (x.k === "to") st.to++; }); } };
+      if (x.k === "ft") { st.fta += 2; st.ftm += x.m.filter(Boolean).length; } if (x.k === "to") st.to++; });
+    const B = BC.pbox; if (B) (e.seq || []).forEach((x) => {
+      const add = (side, i, f, v) => { if (i != null && i >= 0 && B[side][i]) B[side][i][f] += v; };
+      if (x.k === "shot") { if (x.made) { add(o, x.who, "pts", (x.three ? 3 : 2) + (x.and1 ? 1 : 0)); add(o, x.ast, "ast", 1); } else add(x.orb ? o : 1 - o, x.rb, "reb", 1); }
+      if (x.k === "ft") add(o, x.who, "pts", x.m.filter(Boolean).length); });
+    bcBox(); } };
+}
+function pName(pl, side, i, caps) { if (!pl || i == null || i < 0 || !pl[side] || !pl[side][i]) return ""; const n = lastName(pl[side][i]); return caps ? n.toUpperCase() : n; }
+const nbaPName = (side, i, caps) => pName(BC.pnames, side, i, caps);
+function bcBox() {
+  const el = $("bcBox"); if (!BC.pbox || BC.sport !== "nba") { el.hidden = true; return; }
+  el.hidden = false; const g = BC.g;
+  el.innerHTML = [1, 0].map((side) => { const rows = BC.pbox[side].map((r, i) => ({ ...r, nm: BC.pnames[side][i], mn: BC.mins ? BC.mins[side][i] : null })).filter((r) => r.mn == null || r.mn > 0.5)
+    .sort((a, b) => b.pts - a.pts || b.reb - a.reb);
+    return `<div><table><caption>${esc(side === 0 ? g.home : g.away)}</caption><thead><tr><th>Player</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th></tr></thead><tbody>${rows.map((r) =>
+      `<tr><td>${esc(r.nm)}</td><td>${r.mn == null ? "—" : Math.round(r.mn)}</td><td>${r.pts}</td><td>${r.reb}</td><td>${r.ast}</td></tr>`).join("")}</tbody></table></div>`; }).join("");
 }
 
 // ---------- NHL ----------
@@ -1761,6 +1993,7 @@ function bcState(e) {
 }
 const ordinal = (n) => ["1ST", "2ND", "3RD", "4TH"][n - 1] || `${n}TH`;
 function bcBug(final) {
+  if (!BC.sport) return;
   const g = BC.g, C = BC.colors, s = BC.s || { sh: 0, sa: 0 };
   let per = "", sit = "", qL = "", qR = "";
   if (BC.sport === "nfl") {
@@ -1772,7 +2005,9 @@ function bcBug(final) {
   } else if (BC.sport === "nba") {
     const ot = s.ot || 0, cl = s.clock != null ? s.clock : 2880, q = ot ? `OT${ot > 1 ? ot : ""}` : `Q${Math.min(4, 4 - Math.floor((cl - 0.001) / 720))}`, qc = ot ? cl : cl - 720 * Math.floor((cl - 0.001) / 720);
     per = `${q} ${Math.floor(Math.max(qc, 0) / 60)}:${String(Math.floor(Math.max(qc, 0) % 60)).padStart(2, "0")}`;
-    const tl = (side) => { const x = BC.stats[side]; return `<b>${esc(side === 0 ? g.home : g.away)}</b><span>FG ${x.fgm}/${x.fga} · 3P ${x.tpm}/${x.tpa} · FT ${x.ftm}/${x.fta} · TO ${x.to}</span>`; };
+    const lead = (side) => { if (!BC.pbox) return ""; const b = BC.pbox[side], top = (f) => b.reduce((m, r, i) => r[f] > (m < 0 ? -1 : b[m][f]) ? i : m, -1);
+      const ip = top("pts"); return ip >= 0 && b[ip].pts > 0 ? `<span>${esc(lastName(BC.pnames[side][ip]))} ${b[ip].pts} pts · ${esc(lastName(BC.pnames[side][top("reb")]))} ${b[top("reb")].reb} reb · ${esc(lastName(BC.pnames[side][top("ast")]))} ${b[top("ast")].ast} ast</span>` : ""; };
+    const tl = (side) => { const x = BC.stats[side]; return `<b>${esc(side === 0 ? g.home : g.away)}</b><span>FG ${x.fgm}/${x.fga} · 3P ${x.tpm}/${x.tpa} · FT ${x.ftm}/${x.fta} · TO ${x.to}</span>${lead(side)}`; };
     qL = tl(1); qR = tl(0);
   } else {
     const tk = Math.min(BC.tick, 360), p = Math.min(3, Math.floor(tk / 120) + 1), left = tk >= 360 ? 0 : 1200 - (tk - (p - 1) * 120) * 10;
@@ -1812,17 +2047,19 @@ function bcStart() {
   if (k === "nfl") { const cf = engCfg(); BC.qbn = [cf.home.name, cf.away.name]; BC.cam.u = BC.cam.tu = 60; BC.cam.w = BC.cam.tw = 64; }
   else if (k === "nba") { BC.cam.u = BC.cam.tu = 47; BC.cam.w = BC.cam.tw = 50; }
   else nhlSetup();
+  const pcf = k === "nba" ? engCfg().pl : null;
+  BC.pnames = pcf ? pcf.map((t) => t.players.map((p) => p.name)) : null; BC.pbox = pcf ? pcf.map((t) => t.players.map(() => ({ pts: 0, reb: 0, ast: 0 }))) : null; BC.mins = null; bcBox();
   $("bcast").hidden = false; $("bcPause").textContent = "Pause"; $("bcNote").textContent = "Simulating a game…";
   state.timeline = []; state.p = params(); drawTime(); bcBug();
   ask({ cmd: "eng_watch", engine: ENG[k].key, cfg: engCfg() }, (msg) => {
     if (run !== BC.run) return;
-    BC.ev = k === "nfl" ? nflPrepare(msg.log) : msg.log; BC.final = msg.final; BC.on = true;
+    BC.ev = k === "nfl" ? nflPrepare(msg.log) : msg.log; BC.final = msg.final; BC.on = true; BC.mins = msg.mins || null; bcBox();
     $("bcNote").textContent = "Playing one simulated game. The win probability updates as it goes.";
     BC.wpBusy = false; bcWp(k === "nfl" ? { sh: 0, sa: 0, half: 1, clock: 1800, poss: null, done: false, t: 0, yl: 75, down: 1, togo: 10, tos: [3, 3] } : k === "nba" ? { sh: 0, sa: 0, clock: 2880, poss: null, ot: 0, t: 0 } : { sh: 0, sa: 0, tick: 0, t: 0 });
     if (!BC.raf) BC.raf = requestAnimationFrame(bcLoop);
   });
 }
-function bcStop() { BC.on = false; BC.sport = null; $("bcast").hidden = true; }
+function bcStop() { BC.on = false; BC.sport = null; BC.run++; BC.wpBusy = false; $("bcast").hidden = true; $("bcBox").hidden = true; }
 document.querySelectorAll("#bcSpeed button").forEach((b) => b.onclick = () => { BC.speed = Number(b.dataset.sp);
   document.querySelectorAll("#bcSpeed button").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); });
 $("bcPause").onclick = () => { BC.paused = !BC.paused; $("bcPause").textContent = BC.paused ? "Resume" : "Pause"; };

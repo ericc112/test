@@ -73,6 +73,9 @@ def _game_card(ev: dict, summary: dict) -> dict:
            "home_color": t["home"]["team"].get("color"), "away_color": t["away"]["team"].get("color"),
            "home_alt": t["home"]["team"].get("alternateColor"), "away_alt": t["away"]["team"].get("alternateColor"),
            "venue": ((c.get("venue") or {}).get("fullName")), **market(summary)}
+    out["injuries"] = [{"team": t["team"].get("abbreviation"), "name": i["athlete"]["displayName"], "status": i.get("status"),
+                        "detail": " ".join(x for x in ((i.get("details") or {}).get("type"), (i.get("details") or {}).get("detail")) if x and x != "Not Specified")}
+                       for t in summary.get("injuries", []) or [] for i in t.get("injuries", []) or []]
     w = (summary.get("gameInfo") or {}).get("weather") or {}
     if w.get("temperature") is not None:
         out["weather"] = f"{w['temperature']}°F" + (f", {w['displayValue']}" if w.get("displayValue") else "")
@@ -259,11 +262,23 @@ def engines(data: dict) -> dict:
         sides[g["id"]] = {"home": {k: round(v, 4) for k, v in gnba.side(R, g["home"], g["away"], True).items()},
                           "away": {k: round(v, 4) for k, v in gnba.side(R, g["away"], g["home"], False).items()},
                           "games": [R["teams"].get(g["home"], {}).get("games", 0), R["teams"].get(g["away"], {}).get("games", 0)]}
+    for g in nba_games:                                   # player layer: rotation, per-minute rates, injury report
+        inj = [i for i in g.get("injuries", []) if i["team"] in (g["home"], g["away"])]
+        gone = lambda team: {i["name"] for i in inj if i["team"] == team and (i["status"] or "").lower() in ("out", "doubtful")}
+        pl = {}
+        for side in ("home", "away"):
+            pr = gnba.player_profiles("nba", G, g[side], g["start"][:10], gone(g[side]))
+            pr["players"] = [{k: round(v, 4) if isinstance(v, float) else v for k, v in p.items()} for p in pr["players"]]
+            pr["ast_rate"] = round(pr["ast_rate"], 4)
+            pl[side] = pr
+        pl["injuries"] = inj
+        sides[g["id"]]["players"] = pl
     out["nba"] = {"R": {"pace": R["league"]["pace"], "sd_pace": R["sd_pace"], "sd_p2": R["sd_p2"], "sd_p3": R["sd_p3"], "dur_scale": R["dur_scale"],
-                        "and1": R["and1"], "home_scale": R["home_scale"], "ppg": R["ppg_target"], "home_margin": R["home_margin"], "n_games": R["n_games"],
+                        "and1": R["and1"], "home_scale": R["home_scale"], "reb_credit": round(gnba.reb_credit(G, today.isoformat()), 4), "ppg": R["ppg_target"], "home_margin": R["home_margin"], "n_games": R["n_games"],
                         "avg": {k: round(v, 4) for k, v in gnba.side(R, "_", "_", False).items()},
                         "avg_home": {k: round(v, 4) for k, v in gnba.side(R, "_", "_", True).items()}},
-                  "sides": sides, "backtest": _bt("nba", lambda: gnba.backtest(G, 48, 24, n=6000))}
+                  "sides": sides, "backtest": _bt("nba", lambda: gnba.backtest(G, 48, 24, n=6000)),
+                  "players_bt": _bt("nba_players", lambda: {"metrics": gnba.player_backtest("nba", G, today.isoformat())})}
     # ---- NHL event clock
     nhl_games = next(lg for lg in data["leagues"] if lg["key"] == "nhl")["games"]
     G = gnhl.season_games(f"{y}1005", yday)

@@ -180,6 +180,68 @@ class Basketball(unittest.TestCase):
         self.assertTrue(all(p["clock"] <= 60 for g in s["trace"] for p in g if p["foul"]))
 
 
+class BasketballPlayers(unittest.TestCase):
+    """Player layer: rotation and per-minute rates from box scores, with no look-ahead."""
+
+    @staticmethod
+    def _summary(gid, rows):
+        lab = ["MIN", "PTS", "FG", "3PT", "FT", "OREB", "DREB", "AST", "TO"]
+        ath = [{"athlete": {"id": str(i), "displayName": n, "position": {"abbreviation": "G"}}, "starter": i < 5,
+                "didNotPlay": m == 0, "reason": "" if m else r, "stats": [] if m == 0 else [str(m), str(p), "%d-%d" % (fgm, fga), "%d-%d" % (tpm, tpa), "%d-%d" % (ftm, fta), "1", "3", str(a), "1"]}
+               for i, (n, m, p, fgm, fga, tpm, tpa, ftm, fta, a, r) in enumerate(rows)]
+        return {"boxscore": {"players": [{"team": {"abbreviation": "AAA"}, "statistics": [{"labels": lab, "athletes": ath}]}]}}
+
+    def setUp(self):
+        import json
+        import tempfile
+        from gamesim import nba
+        self.nba, self.tmp, self.old = nba, tempfile.TemporaryDirectory(), data.CACHE
+        data.CACHE = self.tmp.name
+        star = ("Star", 36, 30, 10, 20, 4, 9, 6, 7, 6, "")
+        bench = [("P%d" % k, 24, 10, 4, 9, 1, 3, 1, 2, 2, "") for k in range(1, 9)]
+        hurt = ("P8", 0, 0, 0, 0, 0, 0, 0, 0, 0, "LEFT ANKLE SPRAIN")
+        self.games = []
+        for d, rows in (("2026-10-20", [star] + bench), ("2026-10-22", [star] + bench), ("2026-10-24", [star] + bench[:7] + [hurt]),
+                        ("2026-10-26", [("Star", 40, 60, 25, 30, 6, 8, 4, 4, 9, "")] + bench)):   # the future game must not leak
+            gid = d.replace("-", "")
+            self.games.append({"id": gid, "date": d, "final": True, "home": "AAA", "away": "BBB"})
+            with open(os.path.join(self.tmp.name, f"nba_sum_{gid}.json"), "w") as f:
+                json.dump(self._summary(gid, rows), f)
+
+    def tearDown(self):
+        data.CACHE = self.old
+        self.tmp.cleanup()
+
+    def test_minutes_sum_and_no_lookahead(self):
+        pr = self.nba.player_profiles("nba", self.games, "AAA", "2026-10-25")
+        self.assertEqual(pr["games"], 3)
+        self.assertAlmostEqual(sum(p["min"] for p in pr["players"]), 240.0, delta=0.5)
+        star = next(p for p in pr["players"] if p["name"] == "Star")
+        made = 2 * star["fga2"] * star["p2"] + 3 * star["fga3"] * star["p3"] + star["fta"] * star["ftp"]
+        self.assertLess(made * 36, 34)                     # 30 a game before; the 60-point game comes later
+        self.assertTrue(0.3 < star["p2"] < 0.7)
+
+    def test_out_players_removed_and_shrinkage(self):
+        pr = self.nba.player_profiles("nba", self.games, "AAA", "2026-10-25", {"Star"})
+        self.assertNotIn("Star", [p["name"] for p in pr["players"]])
+        self.assertAlmostEqual(sum(p["min"] for p in pr["players"]), 240.0, delta=0.5)
+        full = self.nba.player_profiles("nba", self.games, "AAA", "2026-10-25")
+        star = next(p for p in full["players"] if p["name"] == "Star")
+        raw3 = 12 / 27                                     # 3PT% in his own games, shrunk toward the team's
+        self.assertLess(abs(star["p3"] - 0.33), abs(raw3 - 0.33) + 1e-9)
+
+    def test_injured_last_game_is_returning(self):
+        pr = self.nba.player_profiles("nba", self.games, "AAA", "2026-10-25")
+        names = {p["name"]: p for p in pr["players"]}
+        self.assertTrue(names["P8"]["returning"])          # sat the last game injured, not listed Out now
+        self.assertGreater(names["P8"]["min"], 15)
+
+    def test_rebound_credit(self):
+        g = [{"final": True, "date": "2026-10-20", "box": {"home": {"fga": 90, "fgm": 42, "orb": 10, "drb": 34}, "away": {"fga": 88, "fgm": 40, "orb": 11, "drb": 33}}}]
+        self.assertAlmostEqual(self.nba.reb_credit(g, "2026-10-21"), 88 / 96)
+        self.assertEqual(self.nba.reb_credit(g, "2026-10-20"), 0.93)
+
+
 class Hockey(unittest.TestCase):
     R = {"league": {"shots": 26.0, "fin": 0.095, "ppo": 3.0, "ppc": 0.2, "sv": 0.89, "shg_per_pp": 0.027, "ot_decided": 0.6, "so_home": 0.5},
          "teams": {}, "goalies": {}, "sd_fin": 0.05, "goal_scale": 1.25, "home_mult": 1.03}
