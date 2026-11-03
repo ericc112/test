@@ -43,7 +43,8 @@ def _pick(rng, pools: dict, codes: np.ndarray, default: np.ndarray) -> np.ndarra
     return out
 
 
-def simulate(game: dict, model: dict, n: int = 50000, seed: int = 2026, hfa: bool = True, env: bool = True) -> dict:
+def simulate(game: dict, model: dict, n: int = 50000, seed: int = 2026, hfa: bool = True, env: bool = True,
+             trace: int = 0) -> dict:
     """game: {"home": {...}, "away": {...}, "fg_wind_logit": float}; each side has off_epa, off_sr, def_epa, def_sr,
     pace_ratio and qb_delta (EPA/play added to the offense). Returns final scores and game details per simulation."""
     rng = np.random.default_rng(seed)
@@ -76,11 +77,16 @@ def simulate(game: dict, model: dict, n: int = 50000, seed: int = 2026, hfa: boo
     drives = np.zeros(n, dtype=np.int64)
     went_ot = np.zeros(n, dtype=bool)
     first_score = np.full(n, -1)
+    log = [[] for _ in range(trace)]          # optional drive-by-drive record of the first `trace` games
+    stats = {"iterations": 0, "drives": 0}
 
     for _ in range(80):
         a = np.flatnonzero(~done)
         if a.size == 0:
             break
+        stats["iterations"] += 1
+        stats["drives"] += int(a.size)
+        pre = {"half": half[a].copy(), "clock": clock[a].copy(), "yl": yl[a].copy(), "score": score[a].copy()} if trace else None
         o, d = poss[a], 1 - poss[a]
         diff = score[a, o] - score[a, d]
         qtr = np.where(half[a] == 1, np.where(clock[a] > 900, 1, 2), np.where(half[a] == 2, np.where(clock[a] > 900, 3, 4), 5))
@@ -141,6 +147,15 @@ def simulate(game: dict, model: dict, n: int = 50000, seed: int = 2026, hfa: boo
         scored = (pts_off > 0) | (pts_def > 0)
         fs = (first_score[a] < 0) & scored
         first_score[a[fs]] = np.where(pts_off[fs] > 0, o[fs], d[fs])
+        if trace:
+            names = ["TD", "FG try", "Punt", "Turnover", "Downs", "Safety", "End of half / kneel"]
+            for j in np.flatnonzero(a < trace):
+                g = int(a[j])
+                log[g].append({"half": int(pre["half"][j]), "clock": float(pre["clock"][j]), "off": int(o[j]), "start_yl": float(pre["yl"][j]),
+                               "p_td": float(P[j, TD]), "result": names[int(cls[j])], "fg_dist": float(dist[j]) if cls[j] == FG else None,
+                               "fg_made": bool(made[j]) if cls[j] == FG else None, "conv": int(conv[j]) if cls[j] == TD else None,
+                               "def_td": bool(def_td[j]), "secs": float(dur[j]), "pts_off": int(pts_off[j]), "pts_def": int(pts_def[j]),
+                               "score_after": (int(score[g, 0]), int(score[g, 1]))})
         clock[a] -= dur
         poss[a] = new_poss
         yl[a] = np.clip(new_yl, 1, 99)
@@ -171,7 +186,8 @@ def simulate(game: dict, model: dict, n: int = 50000, seed: int = 2026, hfa: boo
         yl[t] = _pick(rng, kick_pool, np.zeros(t.size, int), model["kick"])
         done[h3] = True                                  # overtime clock ran out: a tie stands
 
-    return {"home": score[:, 0], "away": score[:, 1], "ot": went_ot, "drives": drives, "first_score": first_score}
+    return {"home": score[:, 0], "away": score[:, 1], "ot": went_ot, "drives": drives, "first_score": first_score,
+            "trace": log, "stats": stats}
 
 
 def summary(sim: dict, spread_home: float | None = None, total: float | None = None) -> dict:
