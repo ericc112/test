@@ -7,7 +7,7 @@ backtest vs closing no-vig lines, error bars (MC + structural from the backtest 
 | # | Sport | Unit | Source | Status |
 |---|---|---|---|---|
 | 1 | NFL | play (call, sack/INT/complete, yards, penalties, clock, timeouts, 4th-down decisions, special teams) | nflverse pbp | done: `gamesim/nfl_pbp.py`, default engine. 147 snaps/game (real 147), 3rd-down 40.3% (40.1), RZ TD 56.8% (58.8). Backtest wk 4-8: win Brier 0.237 vs market 0.223 (drive engine 0.234) |
-| 2 | NBA | possession (TO, 2/3PT, fouls/FTs, OREB, late fouling, OT) | ESPN box scores / pbp | todo |
+| 2 | NBA | possession (TO, 2/3PT, fouls/FTs, OREB, late fouling, OT) | ESPN box scores | done: `gamesim/nba.py` + `sports.py`. Calibrated to league pace/scoring/home margin. Backtest (59 early-season games): win Brier 0.227 vs market 0.194. No player layer yet |
 | 3 | NHL | event clock (shot attempts, goals, penalties, empty net, 3v3 OT, shootout) | NHL API pbp | todo |
 | 4 | MLB | plate appearance, base-out Markov chain | MLB Stats API | todo (offseason: backtest on 2026) |
 | 5 | Soccer | minute-by-minute chances/goals, score effects, red cards | ESPN match stats | todo |

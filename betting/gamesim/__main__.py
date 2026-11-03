@@ -22,7 +22,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="gamesim")
-    ap.add_argument("--game", default="2026_09_JAX_BAL", help="nflverse game_id")
+    ap.add_argument("--game", default="2026_09_JAX_BAL", help="nflverse game_id (NFL) or ESPN event id (other sports)")
+    ap.add_argument("--sport", default="nfl", choices=("nfl", "nba", "ncaab"))
     ap.add_argument("--sims", type=int, default=50000)
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--qb-home", help="override the projected home starter (name as on the depth chart)")
@@ -32,6 +33,11 @@ def main(argv=None):
     ap.add_argument("--out")
     a = ap.parse_args(argv)
     t0 = time.time()
+    if a.sport != "nfl":
+        from . import sports
+        txt = sports.run_basketball(a.sport, a.game, a.sims, a.seed, a.out)
+        print(txt)
+        return
 
     sched = data.schedule()
     row = next(g for g in sched if g["game_id"] == a.game)

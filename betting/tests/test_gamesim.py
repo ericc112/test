@@ -152,5 +152,33 @@ class PlayByPlay(unittest.TestCase):
         self.assertGreater(float((s["home"] > s["away"]).mean()), 0.6)
 
 
+class Basketball(unittest.TestCase):
+    R = {"league": {"to": 0.15, "three": 0.42, "p2": 0.54, "p3": 0.35, "ft_rate": 0.12, "ftp": 0.78, "orb": 0.27, "pace": 100.0},
+         "teams": {}, "sd_p2": 0.01, "sd_p3": 0.01, "sd_pace": 4.0, "and1": 0.08, "dur_scale": 0.96}
+
+    def test_possessions_and_scoring(self):
+        from gamesim import nba
+        avg = nba.side(self.R, "_", "_", False)
+        s = nba.simulate(avg, dict(avg), self.R, 48, n=20000, seed=1)
+        self.assertTrue(190 <= s["possessions"].mean() <= 215)            # ~100 a team
+        self.assertTrue(95 <= s["home"].mean() <= 125)
+        self.assertFalse(np.any(s["home"] == s["away"]))                   # overtime until someone wins
+        self.assertLess(abs(float((s["home"] > s["away"]).mean()) - 0.5), 0.02)
+
+    def test_better_shooting_wins(self):
+        from gamesim import nba
+        avg = nba.side(self.R, "_", "_", False)
+        s = nba.simulate({**avg, "p3": 0.40, "p2": 0.57}, dict(avg), self.R, 48, n=20000, seed=2)
+        self.assertGreater(float((s["home"] > s["away"]).mean()), 0.65)
+
+    def test_late_fouling_happens(self):
+        from gamesim import nba
+        avg = nba.side(self.R, "_", "_", False)
+        s = nba.simulate(avg, dict(avg), self.R, 48, n=3000, seed=3, trace=300)
+        fouls = sum(p["foul"] for g in s["trace"] for p in g)
+        self.assertGreater(fouls, 0)
+        self.assertTrue(all(p["clock"] <= 60 for g in s["trace"] for p in g if p["foul"]))
+
+
 if __name__ == "__main__":
     unittest.main()
