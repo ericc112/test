@@ -152,6 +152,22 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
 .pill.PASS { background: color-mix(in srgb, var(--muted) 16%, transparent); color: var(--muted) }
 table.dec, #factorTbl { min-width: 600px }
 #qbRow { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) }
+/* broadcast view: a deliberately dark, single-theme frame (a stadium screen), colours set explicitly */
+.bcast { background: #0b1016; color: #eef3f7; border-radius: 12px; padding: 10px; display: grid; gap: 6px; min-width: 0 }
+#bcCanvas { width: 100%; height: auto; aspect-ratio: 16 / 9; background: #0b1016; border-radius: 8px }
+.bc-top { display: flex; justify-content: space-between; gap: 10px; font-size: .8rem; min-height: 2.4em }
+.bc-ql { display: grid; gap: 1px; min-width: 0 } .bc-ql.r { text-align: right } .bc-ql b { font-family: var(--font-display); font-size: .95rem; letter-spacing: .03em; text-transform: uppercase }
+.bc-ql span { font-family: var(--font-data); color: #b7c3cf; font-size: .74rem }
+.bc-bug { display: flex; flex-wrap: wrap; align-items: stretch; gap: 0; border-radius: 6px; overflow: hidden; font-family: var(--font-display); font-weight: 700; background: #151d27 }
+.bc-team { padding: 4px 10px; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.5); min-width: 52px }
+.bc-sc { padding: 4px 12px; background: #0f151c; font-variant-numeric: tabular-nums; font-size: 1.05rem }
+.bc-per, .bc-sit, .bc-wpt { padding: 4px 10px; color: #dfe7ee; font-family: var(--font-data); font-size: .8rem; display: flex; align-items: center }
+.bc-sit { color: #ffd166 } .bc-wpt { margin-left: auto; color: #b7c3cf }
+.bc-wp { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: #222 } .bc-wp i { display: block; height: 100%; transition: width .4s ease }
+.bc-ctrl .seg { border-color: #33404d } .bc-ctrl .seg button { color: #eef3f7 } .bc-ctrl .seg button[aria-pressed="true"] { background: #eef3f7; color: #0b1016 }
+.bc-ctrl .btn { background: #18222d; border-color: #33404d; color: #eef3f7 } .bc-lab { font-size: .72rem; color: #9fb0c0; text-transform: uppercase; letter-spacing: .08em }
+.bc-note { font-size: .78rem; color: #9fb0c0 }
+@media (prefers-reduced-motion: reduce) { .bc-wp i { transition: none } }
 </style>
 
 <div class="wrap">
@@ -248,6 +264,15 @@ table.dec, #factorTbl { min-width: 600px }
           <button class="btn" id="watchBtn">Watch a simulated game</button>
           <button class="btn" id="pauseBtn" disabled>Pause</button>
           <button class="btn" id="clearBtn">Clear timeline</button>
+        </div>
+        <div class="bcast" id="bcast" hidden>
+          <div class="bc-top"><span class="bc-ql" id="bcL"></span><span class="bc-ql r" id="bcR"></span></div>
+          <canvas id="bcCanvas" aria-label="Animated simulated game"></canvas>
+          <div class="bc-bug" id="bcBug"></div>
+          <div class="bc-wp" aria-hidden="true"><i id="bcWpA"></i><i id="bcWpH"></i></div>
+          <div class="row bc-ctrl"><span class="bc-lab">Speed</span><div class="seg" id="bcSpeed" role="group" aria-label="Playback speed">
+            <button data-sp="1" aria-pressed="true">1×</button><button data-sp="2" aria-pressed="false">2×</button><button data-sp="4" aria-pressed="false">4×</button><button data-sp="10" aria-pressed="false">10×</button></div>
+            <button class="btn" id="bcPause">Pause</button><button class="btn" id="bcNew">New game</button><span class="bc-note" id="bcNote"></span></div>
         </div>
         <div class="live-grid">
           <div class="ticker">
@@ -604,6 +629,7 @@ function nflPlayGame(C, st, log) {
     const o = poss, d = 1 - o, diff = score[o] - score[d], hs = clock;
     const qtr = half === 1 ? (hs > 900 ? 1 : 2) : half === 2 ? (hs > 900 ? 3 : 4) : 5;
     const tp = nflTempo(qtr, hs, diff); plays++;
+    const pre = log ? { yl, down, togo, poss: o, half, clock: hs, sh: score[0], sa: score[1] } : null; let pres = null;
     const kneel = (qtr >= 4 && diff > 0 && down <= 3 && hs <= 42 * (4 - down) - 38 * tos[d]) || (qtr === 2 && hs <= 40 && yl >= 60 && diff >= 0);
     let act = 0;                                                       // 0 run, 1 pass, 2 punt, 3 FG, 4 kneel
     if (down === 4 && !kneel) { const ch = softPick(M.W4, fourthX(yl, togo, diff, qtr, hs)); act = ch === 1 ? 2 : ch === 2 ? 3 : 0; }
@@ -618,6 +644,7 @@ function nflPlayGame(C, st, log) {
       if (rnd() < M.fum_run) { turnover = true; newTo = 100 - (yl - gain); }
     } else if (act === 1 && !penal) {
       const r = softPick(M.Wp, passX(down, togo, yl, tp), [S[o].comp + 0.5 * M.yard_sd * z[o], 0, S[o].int, S[o].sack]);
+      pres = ["comp", "inc", "int", "sack"][r];
       if (r === 0) { gain = nflGain(pickArr(M.comp[key] || M.comp["13"]), yl, S[o].ypc_mult * ym[o] * hb[o]); cat = 1; if (rnd() < M.fum_comp) { turnover = true; newTo = 100 - (yl - gain); } }
       else if (r === 1) cat = 2;
       else if (r === 3) { gain = pickArr(M.sack); cat = 4; }
@@ -657,7 +684,7 @@ function nflPlayGame(C, st, log) {
       else if (half === 2) { if (score[0] !== score[1]) done = true; else { half = 3; clock = 600; wentOT = true; tos = [2, 2]; kickoffTo(rnd() < 0.5 ? 1 : 0, false); } }
       else done = true;
     }
-    if (log) log.push({ half, clock: Math.max(clock, 0), poss, yl, down, togo, tos: tos.slice(), sh: score[0], sa: score[1], off: o, td, fg: made, safety, pick6,
+    if (log) log.push({ half, clock: Math.max(clock, 0), poss, yl, down, togo, tos: tos.slice(), sh: score[0], sa: score[1], off: o, td, fg: made, safety, pick6, pre, pr: pres, pen: penal, offp, conv: td ? conv : null, cat,
       to: turnover, act, gain, done, t: half === 3 ? 1 : Math.min(1, (half - 1) * 0.5 + (1800 - Math.max(clock, 0)) / 3600) });
   }
   return [score[0], score[1], wentOT ? 1 : 0];
@@ -677,18 +704,21 @@ function nbaPossGame(C, st, log) {
     const o = poss, d = 1 - o, c = clock, diff = score[o] - score[d], late = c <= 60;
     const foul = late && diff >= 3 && diff <= 8 && c > 2, hold = c <= shotClock && diff > 0 && !foul, need3 = late && diff === -3;
     let dur = foul ? 2 + 4 * rnd() : hold ? c : gamma(4) * spp / 4, pts = 0;
-    if (foul) pts += (rnd() < S[o].ftp) + (rnd() < S[o].ftp);
-    else if (!hold) {
-      if (rnd() < S[o].to) { /* turnover */ }
-      else if (!need3 && rnd() < S[o].ft_rate) pts += (rnd() < S[o].ftp) + (rnd() < S[o].ftp);
+    const seq = log ? [] : null;
+    if (foul) { const a = rnd() < S[o].ftp, b = rnd() < S[o].ftp; pts += a + b; if (seq) seq.push({ k: "foul" }, { k: "ft", m: [a, b] }); }
+    else if (hold) { if (seq) seq.push({ k: "hold" }); }
+    else {
+      if (rnd() < S[o].to) { if (seq) seq.push({ k: "to" }); }
+      else if (!need3 && rnd() < S[o].ft_rate) { const a = rnd() < S[o].ftp, b = rnd() < S[o].ftp; pts += a + b; if (seq) seq.push({ k: "ft", m: [a, b] }); }
       else for (let att = 0; att < 3; att++) {
         const is3 = need3 || rnd() < S[o].three;
-        if (rnd() < sgm(is3 ? L3[o] : L2[o])) { pts += is3 ? 3 : 2; if (rnd() < R.and1 && rnd() < S[o].ftp) pts += 1; break; }
-        if (rnd() < S[o].orb) { dur += 5; continue; } break;
+        if (rnd() < sgm(is3 ? L3[o] : L2[o])) { pts += is3 ? 3 : 2; let a1 = false; if (rnd() < R.and1 && rnd() < S[o].ftp) { pts += 1; a1 = true; } if (seq) seq.push({ k: "shot", three: is3, made: true, and1: a1 }); break; }
+        const orb = rnd() < S[o].orb; if (seq) seq.push({ k: "shot", three: is3, made: false, orb });
+        if (orb) { dur += 5; continue; } break;
       }
     }
     dur = Math.min(dur, c); score[o] += pts; clock = c - dur; np++; poss = d;
-    if (log) log.push({ clock, poss, ot, sh: score[0], sa: score[1], pts, off: o, foul, t: ot ? 1 : 1 - clock / (minutes * 60) });
+    if (log) log.push({ clock, poss, ot, sh: score[0], sa: score[1], pts, off: o, foul, seq, preClock: c, t: ot ? 1 : 1 - clock / (minutes * 60) });
     if (clock <= 0) { if (score[0] !== score[1] || ot >= 8) { if (score[0] === score[1]) score[0]++; break; } clock = 300; ot++; poss = rnd() < 0.5 ? 1 : 0; }
   }
   return [score[0], score[1], ot > 0 ? 1 : 0, np];
@@ -702,15 +732,19 @@ function nhlEventGame(C, st, log) {
   const sh = [0, 1].map(() => env ? Math.exp(normal() * R.sd_fin) : 1);
   const enF = en.for_per_min * 10 / 60, enA = en.against_per_min * 10 / 60;
   const score = [st ? st.sh : 0, st ? st.sa : 0], pp = st && st.pp ? st.pp.slice() : [0, 0];
+  let lastPull = [false, false];
   for (let k = st ? st.tick : 0; k < T; k++) {
     const left = (T - k) * 10;
-    if (pp[0] === 0 && pp[1] === 0) { if (rnd() < pen[0]) pp[1] = 12; else if (rnd() < pen[1]) pp[0] = 12; }
+    if (pp[0] === 0 && pp[1] === 0) { if (rnd() < pen[0]) { pp[1] = 12; if (log) log.push({ tick: k, pen: 0, sh: score[0], sa: score[1], t: k / T }); }
+      else if (rnd() < pen[1]) { pp[0] = 12; if (log) log.push({ tick: k, pen: 1, sh: score[0], sa: score[1], t: k / T }); } }
     const diff = score[0] - score[1];
     const pullH = (diff === -1 && left <= 120) || (diff === -2 && left <= 180), pullA = (diff === 1 && left <= 120) || (diff === 2 && left <= 180);
+    if (log && (pullH !== lastPull[0] || pullA !== lastPull[1])) { lastPull = [pullH, pullA]; log.push({ tick: k, pull: [pullH, pullA], sh: score[0], sa: score[1], t: k / T }); }
     for (let i = 0; i < 2; i++) {
       const j = 1 - i, onPP = pp[i] > 0, onPK = pp[j] > 0, pi = i === 0 ? pullH : pullA, pj = i === 0 ? pullA : pullH;
       let h = onPP ? pph[i] : (onPK ? shg : ev[i] * sh[i]); if (pi) h = Math.max(h, enF); if (pj) h = enA;
       if (rnd() < h) { score[i]++; if (onPP) pp[i] = 0; if (log) log.push({ tick: k + 1, team: i, pp: onPP, en: pj, sh: score[0], sa: score[1], t: (k + 1) / T }); }
+      else if (log && !pj && rnd() < Math.max(0, S[i].shots / 360 * (onPP ? 1.8 : onPK ? 0.35 : 1) - h)) log.push({ tick: k + 1, team: i, shot: true, sh: score[0], sa: score[1], t: (k + 1) / T });
     }
     pp[0] = Math.max(pp[0] - 1, 0); pp[1] = Math.max(pp[1] - 1, 0);
     if (log && (k + 1) % 30 === 0) log.push({ tick: k + 1, sh: score[0], sa: score[1], t: (k + 1) / T, marker: true, pp: false });
@@ -1202,7 +1236,7 @@ function renderHonest() {
 }
 
 // ---------- wiring ----------
-function selectGame() { state.qb = { home: 0, away: 0 }; state.inputs = {}; state.timeline = []; stopWatch(); $("tLog").innerHTML = ""; $("liveTiles").innerHTML = ""; $("tA").textContent = "—"; $("tH").textContent = "—"; $("tClock").textContent = "pre-game";
+function selectGame() { state.qb = { home: 0, away: 0 }; if (typeof bcStop === "function") bcStop(); state.inputs = {}; state.timeline = []; stopWatch(); $("tLog").innerHTML = ""; $("liveTiles").innerHTML = ""; $("tA").textContent = "—"; $("tH").textContent = "—"; $("tClock").textContent = "pre-game";
   renderMatchup(); drawTime(); runSim(); }
 $("runBtn").onclick = runSim;
 $("resetBtn").onclick = () => { state.inputs = {}; renderMatchup(); runSim(); };
@@ -1388,6 +1422,7 @@ $("liveBtn").onclick = async () => {
   state.timeline.push({ t: L.t, p: agg.hw / Math.max(agg.hw + agg.aw, 1) }); state.timeline.sort((a, b) => a.t - b.t); drawTime();
 };
 $("watchBtn").onclick = () => {
+  if (engOn()) return bcStart();
   if (!engOn()) return watchOld();
   stopWatch(); state.p = params(); state.timeline = []; $("tLog").innerHTML = "";
   const k = engLeague(), g = game();
@@ -1434,6 +1469,364 @@ function renderEngineBacktests() {
   return h + "</tbody></table></div>";
 }
 $("factorBtn").onclick = factorTable;
+
+// ===== Broadcast view: one simulated game, animated event by event from the engine log =====
+const BC = { on: false, sport: null, ev: [], i: 0, cur: null, speed: 1, paused: false, cam: { u: 60, w: 64, tu: 60, tw: 64 }, raf: 0, lastTs: 0,
+  wp: null, wpBusy: false, wpN: 0, banner: null, tick: 0, nhl: null, run: 0 };
+const RM = (() => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { return false; } })();
+const DIM = { nfl: [120, 53.3], nba: [94, 50], nhl: [200, 85] };
+const hexc = (c, f) => c && /^[0-9a-f]{6}$/i.test(c) ? "#" + c : f;
+const ease = (x) => x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x);
+const lerp = (a, b, t) => a + (b - a) * t;
+const seg = (t, a, b) => ease((t - a) / (b - a));
+function srand(n) { let x = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }   // deterministic per event
+function bcColors(g) { let h = hexc(g.home_color, "#2f6fd0"), a = hexc(g.away_color, "#d4572a");
+  const lum = (c) => { const n = parseInt(c.slice(1), 16); return 0.3 * (n >> 16) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255); };
+  if (Math.abs(lum(h) - lum(a)) < 25) a = hexc(g.away_alt, "#e8e8e8"); return { home: h, away: a }; }
+
+// ---------- projection: a tilted surface, far side narrower ----------
+function proj(u, v, z) {
+  const W = BC.cw, H = BC.ch, Wd = DIM[BC.sport][1], t = v / Wd, s = 1 - 0.3 * t;
+  const y = lerp(H * 0.9, H * 0.12, t) - (z || 0) * (W * 0.5 / BC.cam.w) * s;
+  return [W / 2 + (u - BC.cam.u) * (W * 0.5 / BC.cam.w) * s, y, s];
+}
+function quad(ctx, u0, v0, u1, v1, fill) { const a = proj(u0, v0), b = proj(u1, v0), c = proj(u1, v1), d = proj(u0, v1);
+  ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); }
+function line(ctx, u0, v0, u1, v1, col, w) { const a = proj(u0, v0), b = proj(u1, v1); ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+function ring(ctx, cu, cv, r, col, w, a0 = 0, a1 = Math.PI * 2, fill) { ctx.beginPath();
+  for (let i = 0; i <= 40; i++) { const a = a0 + (a1 - a0) * i / 40, p = proj(cu + r * Math.cos(a), cv + r * Math.sin(a)); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); }
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (col) { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke(); } }
+function dot(ctx, u, v, col, r = 0.9, edge = "#ffffff") { const p = proj(u, v), rr = Math.max(2.5, r * (BC.cw * 0.5 / BC.cam.w) * p[2]);
+  ctx.beginPath(); ctx.arc(p[0], p[1], rr, 0, 7); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = Math.max(1, rr * 0.28); ctx.strokeStyle = edge; ctx.stroke(); }
+function ballAt(ctx, u, v, z, col, r) { const g = proj(u, v), p = proj(u, v, z), rr = Math.max(2.5, r * (BC.cw * 0.5 / BC.cam.w) * p[2]);
+  if (z > 0.2) { ctx.beginPath(); ctx.ellipse(g[0], g[1], rr, rr * 0.45, 0, 0, 7); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fill(); }
+  ctx.beginPath(); ctx.arc(p[0], p[1], rr, 0, 7); ctx.fillStyle = col; ctx.fill(); ctx.strokeStyle = "#111"; ctx.lineWidth = 1; ctx.stroke(); }
+function label(ctx, text, u, v, col = "#ffffff", size = 1) { const p = proj(u, v, 3); ctx.font = `800 ${Math.round(16 * size)}px ${tok("--font-display") || "sans-serif"}`;
+  ctx.textAlign = "center"; ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,.65)"; ctx.strokeText(text, p[0], p[1]); ctx.fillStyle = col; ctx.fillText(text, p[0], p[1]); ctx.textAlign = "left"; }
+
+// ---------- surfaces ----------
+function drawField(ctx) {
+  const C = BC.colors, half = BC.half || 1, leftTeam = half === 2 ? 1 : 0;    // home defends the left end in the first half
+  quad(ctx, -4, -3, 124, 56.3, "#20502c");
+  for (let u = 10; u < 110; u += 5) quad(ctx, u, 0, u + 5, 53.3, (u / 5) % 2 ? "#2f7a3c" : "#2b7037");
+  quad(ctx, 0, 0, 10, 53.3, leftTeam === 0 ? C.home : C.away); quad(ctx, 110, 0, 120, 53.3, leftTeam === 0 ? C.away : C.home);
+  for (let u = 10; u <= 110; u += 5) line(ctx, u, 0, u, 53.3, "rgba(255,255,255,.75)", u === 10 || u === 110 ? 3 : 1.2);
+  line(ctx, 0, 0, 120, 0, "#fff", 2); line(ctx, 0, 53.3, 120, 53.3, "#fff", 2); line(ctx, 0, 0, 0, 53.3, "#fff", 2); line(ctx, 120, 0, 120, 53.3, "#fff", 2);
+  for (let u = 11; u < 110; u++) { line(ctx, u, 23.4, u, 24.2, "rgba(255,255,255,.55)", 1); line(ctx, u, 29.1, u, 29.9, "rgba(255,255,255,.55)", 1); }
+  ctx.font = `700 ${Math.round(BC.cw / 46)}px ${tok("--font-display") || "sans-serif"}`; ctx.fillStyle = "rgba(255,255,255,.8)"; ctx.textAlign = "center";
+  for (let u = 20; u <= 100; u += 10) { const n = String(u <= 60 ? u - 10 : 110 - u); [9, 44].forEach((v) => { const p = proj(u, v); ctx.fillText(n, p[0], p[1]); }); }
+  const abbr = (side) => side === 0 ? BC.g.home : BC.g.away;
+  ctx.fillStyle = "rgba(255,255,255,.85)"; [[5, leftTeam], [115, 1 - leftTeam]].forEach(([u, t]) => { const p = proj(u, 26.6); ctx.fillText(abbr(t), p[0], p[1]); });
+  ctx.textAlign = "left";
+  [0, 120].forEach((u) => { const a = proj(u, 23.9), b = proj(u, 29.4), at = proj(u, 23.9, 7), bt = proj(u, 29.4, 7);
+    ctx.strokeStyle = "#f1c40f"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(at[0], at[1]); ctx.moveTo(b[0], b[1]); ctx.lineTo(bt[0], bt[1]);
+    const ca = proj(u, 23.9, 3), cb = proj(u, 29.4, 3); ctx.moveTo(ca[0], ca[1]); ctx.lineTo(cb[0], cb[1]); ctx.stroke(); });
+}
+function drawCourt(ctx) {
+  quad(ctx, -4, -3, 98, 53, "#3a2b1d"); quad(ctx, 0, 0, 94, 50, "#c99a62");
+  for (let u = 0; u < 94; u += 4) quad(ctx, u, 0, u + 2, 50, "rgba(120,70,30,.08)");
+  const W = "rgba(255,255,255,.9)", C = BC.colors;
+  quad(ctx, 0, 17, 19, 33, hexc(null, C.home) + "55"); quad(ctx, 75, 17, 94, 33, C.away + "55");
+  [[0, 0, 94, 0], [94, 0, 94, 50], [94, 50, 0, 50], [0, 50, 0, 0], [47, 0, 47, 50], [0, 17, 19, 17], [19, 17, 19, 33], [19, 33, 0, 33], [94, 17, 75, 17], [75, 17, 75, 33], [75, 33, 94, 33]]
+    .forEach(([a, b, c, d]) => line(ctx, a, b, c, d, W, 2));
+  ring(ctx, 47, 25, 6, W, 2); ring(ctx, 19, 25, 6, W, 1.5, -Math.PI / 2, Math.PI / 2); ring(ctx, 75, 25, 6, W, 1.5, Math.PI / 2, 3 * Math.PI / 2);
+  [[5.25, 1], [88.75, -1]].forEach(([hu, d]) => {
+    const base = d > 0 ? 0 : 94, A = Math.asin(22 / 23.75);              // corner threes run from the baseline to the arc
+    line(ctx, base, 3, hu + d * 23.75 * Math.cos(A), 3, W, 2); line(ctx, base, 47, hu + d * 23.75 * Math.cos(A), 47, W, 2);
+    ring(ctx, hu, 25, 23.75, W, 2, d > 0 ? -A : Math.PI - A, d > 0 ? A : Math.PI + A);
+    ring(ctx, hu, 25, 0.75, "#e85d1a", 2.5); });
+}
+function drawRink(ctx) {
+  quad(ctx, -6, -4, 206, 89, "#1d2733");
+  ctx.beginPath(); const R = 28, pts = [];
+  for (let i = 0; i <= 12; i++) { const a = Math.PI + Math.PI / 2 * i / 12; pts.push([R + R * Math.cos(a), R + R * Math.sin(a)]); }
+  for (let i = 0; i <= 12; i++) { const a = -Math.PI / 2 + Math.PI / 2 * i / 12; pts.push([200 - R + R * Math.cos(a), R + R * Math.sin(a)]); }
+  for (let i = 0; i <= 12; i++) { const a = Math.PI / 2 * i / 12; pts.push([200 - R + R * Math.cos(a), 85 - R + R * Math.sin(a)]); }
+  for (let i = 0; i <= 12; i++) { const a = Math.PI / 2 + Math.PI / 2 * i / 12; pts.push([R + R * Math.cos(a), 85 - R + R * Math.sin(a)]); }
+  pts.forEach(([u, v], i) => { const p = proj(u, v); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); }); ctx.closePath();
+  ctx.fillStyle = "#eef4f8"; ctx.fill(); ctx.strokeStyle = "#ffcf3f"; ctx.lineWidth = 3; ctx.stroke();
+  line(ctx, 100, 0, 100, 85, "#d33", 4); line(ctx, 75, 0, 75, 85, "#2a5bd7", 4); line(ctx, 125, 0, 125, 85, "#2a5bd7", 4);
+  line(ctx, 11, 4, 11, 81, "#d33", 1.5); line(ctx, 189, 4, 189, 81, "#d33", 1.5);
+  ring(ctx, 100, 42.5, 15, "#2a5bd7", 1.5);
+  [[31, 20.5], [31, 64.5], [169, 20.5], [169, 64.5]].forEach(([u, v]) => ring(ctx, u, v, 15, "#d33", 1.5));
+  [[11, 1], [189, -1]].forEach(([u, d]) => { ring(ctx, u, 42.5, 6, "#d33", 1.5, d > 0 ? -Math.PI / 2 : Math.PI / 2, d > 0 ? Math.PI / 2 : 3 * Math.PI / 2, "rgba(80,150,230,.35)");
+    quad(ctx, u - d * 3.3, 39.5, u, 45.5, "rgba(200,40,40,.55)"); });
+}
+
+// ---------- NFL ----------
+const homeDir = (half) => half === 2 ? -1 : 1;                     // +1: attacking toward u = 110
+const nflDir = (off, half) => off === 0 ? homeDir(half) : -homeDir(half);
+const nflU = (off, yl, half) => nflDir(off, half) > 0 ? 110 - yl : 10 + yl;
+function nflForm(los, dir, vc) {
+  const O = [[-0.8, 0], [-0.8, 1.6], [-0.8, -1.6], [-0.8, 3.2], [-0.8, -3.2], [-4, 0], [-7, 1.5], [-0.8, 5.2], [-0.8, -20], [-0.8, 20], [-1.6, -12]].map(([du, dv]) => [los + du * dir, vc + dv]);
+  const D = [[1.2, 1.2], [1.2, -1.2], [1.2, 3.8], [1.2, -3.8], [5, 0], [5, 6], [5, -6], [7, -19], [7, 19], [13, -8], [13, 8]].map(([du, dv]) => [los + du * dir, vc + dv]);
+  return { O, D };
+}
+function nflPrepare(log) {
+  const out = []; let prev = null;
+  log.forEach((e) => { const needKick = !prev || prev.td || prev.fg || prev.safety || prev.pick6 || prev.half !== e.pre.half;
+    if (needKick) out.push({ kind: "kick", recv: e.pre.poss, yl: e.pre.yl, half: e.pre.half, pre: e.pre }); out.push(e); prev = e; });
+  return out;
+}
+function nflAnim(e, idx) {
+  const C = BC.colors, col = (side) => side === 0 ? C.home : C.away, r = (k) => srand(idx * 7 + k);
+  if (e.kind === "kick") {
+    const kick = 1 - e.recv, dir = nflDir(kick, e.half), u0 = nflU(kick, 65, e.half), land = nflU(e.recv, 97, e.half), end = nflU(e.recv, e.yl, e.half);
+    BC.half = e.half; BC.cam.tu = 60; BC.cam.tw = 64;
+    return { dur: 2000, draw(ctx, t) {
+      const fu = t < 0.55 ? lerp(u0, land, seg(t, 0, 0.55)) : lerp(land, end, seg(t, 0.55, 1)), z = t < 0.55 ? Math.sin(Math.PI * t / 0.55) * 18 : 0;
+      for (let i = 0; i < 11; i++) { dot(ctx, lerp(u0, end - dir * 6, seg(t, 0, 1)) + (i % 2 ? 1 : -1) * 0.5, 3 + i * 4.7, col(kick)); dot(ctx, lerp(land + dir * 18, end - dir * 2, seg(t, 0.3, 1)), 3 + i * 4.7, col(e.recv)); }
+      dot(ctx, fu, 26.6, col(e.recv), 1.1); ballAt(ctx, fu, 26.6, z, "#7a4a1c", 0.55); if (t > 0.1) label(ctx, "KICKOFF", 60, 48, "#fff", 0.9); },
+      after() {} };
+  }
+  const p = e.pre, o = p.poss, dir = nflDir(o, p.half), los = nflU(o, p.yl, p.half), vc = 26.6, F = nflForm(los, dir, vc), endU = los + e.gain * dir;
+  const fd = nflU(o, Math.max(p.yl - p.togo, 0), p.half);
+  BC.half = p.half; BC.los = los; BC.fd = p.togo >= p.yl ? null : fd;
+  const wide = e.act === 2 || e.act === 3;
+  BC.cam.tu = wide ? 60 : Math.max(26, Math.min(94, los + 9 * dir)); BC.cam.tw = wide ? 64 : 30;
+  const recv = Math.floor(r(1) * 3), rcvIdx = [8, 9, 7][recv], rv = F.O[rcvIdx][1];
+  const drawTeams = (offPos, defPos) => { defPos.forEach(([u, v]) => dot(ctx_, u, v, col(1 - o))); offPos.forEach(([u, v]) => dot(ctx_, u, v, col(o))); };
+  let ctx_;
+  const text = e.pen ? `FLAG · ${e.offp ? "OFFENSE" : "DEFENSE"} ${Math.abs(e.gain)} YDS` : e.act === 4 ? "KNEEL" : e.act === 2 ? "PUNT" : e.act === 3 ? (e.fg ? "FIELD GOAL IS GOOD" : "FIELD GOAL NO GOOD")
+    : e.pr === "inc" ? "INCOMPLETE" : e.pr === "int" ? (e.pick6 ? "PICK-SIX" : "INTERCEPTED") : e.pr === "sack" ? `SACK ${e.gain}` : e.to ? "FUMBLE — TURNOVER"
+    : e.td ? "" : e.act === 0 || e.pr === "comp" ? `${e.gain >= 0 ? "+" : ""}${e.gain}${e.pr === "comp" ? " CATCH" : " RUN"}` : "";
+  const banner = e.td ? { text: `TOUCHDOWN ${o === 0 ? BC.g.home : BC.g.away}`, sub: e.conv === 2 ? "Two-point try good" : e.conv === 1 ? "Extra point good" : "Conversion no good", col: col(o) }
+    : e.safety ? { text: "SAFETY", col: col(1 - o) } : e.pick6 ? { text: `PICK-SIX ${o === 0 ? BC.g.away : BC.g.home}`, col: col(1 - o) } : null;
+  const dur = (e.pen ? 1300 : e.act === 4 ? 900 : e.act === 2 ? 2200 : e.act === 3 ? 2000 : e.act === 1 ? 2100 : 1700) + (banner ? 1400 : 0);
+  const playEnd = banner ? (dur - 1400) / dur : 1;
+  return { dur, banner, draw(ctx, T) {
+    ctx_ = ctx; const t = Math.min(1, T / playEnd);
+    if (BC.fd != null && !wide) line(ctx, BC.fd, 0, BC.fd, 53.3, "#f2c230", 3);
+    line(ctx, los, 0, los, 53.3, "#3d7bff", 3);
+    let off = F.O.map((x) => x.slice()), def = F.D.map((x) => x.slice()), bu = los, bv = vc, bz = 0;
+    if (e.pen) { drawTeams(off, def); const fu = lerp(los - 6 * dir, los + 2 * dir, seg(t, 0.2, 0.6)); ballAt(ctx, fu, 40, Math.sin(Math.PI * seg(t, 0.2, 0.6)) * 4, "#f5d90a", 0.45); }
+    else if (e.act === 0) {                          // run
+      const carrier = 6, side = r(2) < 0.5 ? -1 : 1;
+      const cu = t < 0.2 ? lerp(F.O[6][0], los - 3 * dir, seg(t, 0, 0.2)) : lerp(los - 3 * dir, endU, seg(t, 0.2, 1)), cv = t < 0.2 ? vc + 1 : lerp(vc + 1, vc + side * (2 + r(3) * 6), seg(t, 0.2, 1));
+      off[carrier] = [cu, cv]; for (let i = 0; i < 5; i++) off[i][0] += dir * 1.5 * seg(t, 0, 0.5);
+      def = def.map(([u, v], i) => [lerp(u, cu + dir * (i < 4 ? 0.8 : 1.5), seg(t, 0.15, 1) * (i < 7 ? 0.8 : 0.55)), lerp(v, cv, seg(t, 0.2, 1) * 0.6)]);
+      bu = t < 0.18 ? F.O[5][0] : cu; bv = t < 0.18 ? vc : cv; drawTeams(off, def);
+    } else if (e.act === 1) {                        // pass
+      const qbU = lerp(F.O[5][0], los - 7 * dir, seg(t, 0, 0.3)), qv = vc; off[5] = [qbU, qv];
+      const air = e.pr === "comp" ? (e.gain <= 0 ? e.gain - 1 : Math.max(1, Math.round(e.gain * (0.45 + 0.4 * r(4))))) : 8 + Math.round(r(5) * 10);
+      const cu = los + air * dir, cvv = lerp(rv, vc + (rv - vc) * 0.45, r(6));
+      off[rcvIdx] = [lerp(F.O[rcvIdx][0], cu, seg(t, 0, 0.62)), lerp(rv, cvv, seg(t, 0.1, 0.62))];
+      if (e.pr === "sack") { off[5] = [lerp(qbU, endU, seg(t, 0.35, 0.8)), qv]; def[0] = [lerp(F.D[0][0], off[5][0] + dir * 0.6, seg(t, 0.1, 0.8)), lerp(F.D[0][1], qv, seg(t, 0.1, 0.8))]; bu = off[5][0]; bv = qv; }
+      else {
+        if (e.pr === "comp" && t > 0.65) off[rcvIdx] = [lerp(cu, endU, seg(t, 0.65, 1)), cvv];
+        const ci = 7 + (rv < vc ? 0 : 1); def[ci] = [lerp(F.D[ci][0], cu + dir * (e.pr === "int" ? 0 : 1.2), seg(t, 0, 0.66)), lerp(F.D[ci][1], cvv, seg(t, 0, 0.66))];
+        if (e.pr === "int" && t > 0.66) def[ci] = [lerp(cu, cu - dir * 8, seg(t, 0.66, 1)), cvv];
+        if (t < 0.36) { bu = qbU; bv = qv; } else if (t < 0.64) { const k = seg(t, 0.36, 0.64); bu = lerp(qbU, cu, k); bv = lerp(qv, cvv, k); bz = Math.sin(Math.PI * k) * (4 + Math.abs(air) * 0.25); }
+        else { bu = e.pr === "comp" ? off[rcvIdx][0] : e.pr === "int" ? def[ci][0] : cu + dir * 2; bv = cvv; }
+      }
+      drawTeams(off, def);
+    } else if (e.act === 2) {                        // punt
+      const pu = los - 14 * dir, land = nflU(e.poss, e.yl, e.half); off[5] = [pu, vc];
+      off = off.map(([u, v], i) => i === 5 ? [u, v] : [lerp(u, land - dir * 6, seg(t, 0.25, 1)), v]);
+      def = def.map(([u, v], i) => i === 10 ? [lerp(land + dir * 8, land, seg(t, 0, 0.8)), vc] : [lerp(u, land + dir * 4, seg(t, 0.25, 1) * 0.7), v]);
+      const k = seg(t, 0.12, 0.8); bu = t < 0.12 ? pu : lerp(pu, land, k); bz = t < 0.12 ? 0 : Math.sin(Math.PI * k) * 22; drawTeams(off, def);
+    } else if (e.act === 3) {                        // field goal
+      const hu = los - 7 * dir, post = dir > 0 ? 120 : 0; drawTeams(off, def); const k = seg(t, 0.15, 0.85);
+      bu = t < 0.15 ? hu : lerp(hu, post, k); bv = e.fg ? vc : lerp(vc, vc + (r(7) < 0.5 ? -5 : 5), k); bz = t < 0.15 ? 0 : Math.sin(Math.PI * k * 0.8) * 16 + k * 6;
+    } else { drawTeams(off, def); bu = los - 1 * dir; }
+    ballAt(ctx, bu, bv, bz, "#7a4a1c", 0.5);
+    if (text && t > 0.62) label(ctx, text, Math.max(14, Math.min(106, endU)), 47, e.to || e.pr === "int" || e.pr === "sack" ? "#ffd166" : "#ffffff", 0.95);
+    if (banner && T > playEnd) bcBanner(ctx, banner, seg(T, playEnd, playEnd + 0.15));
+  }, after() {
+    const s = BC.stats[o];
+    if (e.act === 1 && !e.pen && e.pr && e.pr !== "sack") { s.att++; if (e.pr === "comp") { s.comp++; s.yds += e.gain; if (e.td) s.td++; } if (e.pr === "int") s.int++; }
+    if (e.act === 0 && !e.pen) { s.ryds += e.gain; if (e.td) s.rtd++; }
+  } };
+}
+function bcBanner(ctx, b, a) {
+  const W = BC.cw, H = BC.ch; ctx.globalAlpha = Math.min(1, a * 1.4);
+  ctx.fillStyle = b.col || "#111"; ctx.fillRect(0, H * 0.36, W, H * 0.2);
+  ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.font = `800 ${Math.round(W / 16)}px ${tok("--font-display") || "sans-serif"}`; ctx.fillText(b.text, W / 2, H * 0.47);
+  if (b.sub) { ctx.font = `600 ${Math.round(W / 44)}px ${tok("--font-body") || "sans-serif"}`; ctx.fillText(b.sub, W / 2, H * 0.53); }
+  ctx.textAlign = "left"; ctx.globalAlpha = 1;
+}
+
+// ---------- NBA ----------
+function nbaAnim(e, idx) {
+  const C = BC.colors, o = e.off, r = (k) => srand(idx * 11 + k), half2 = e.ot === 0 && e.preClock <= 1440;
+  const dir = (o === 0 ? 1 : -1) * (half2 ? -1 : 1), hu = dir > 0 ? 88.75 : 5.25;
+  BC.cam.tu = lerp(47, hu, 0.25); BC.cam.tw = 50;
+  const spots = [[23, 25], [19, 9], [19, 41], [3, 4], [3, 46], [12, 18], [12, 32], [6, 25]];
+  const pick = (k) => spots[Math.floor(r(k) * 5)];
+  const offP = [0, 1, 2, 3, 4].map((i) => [hu - dir * spots[i][0], spots[i][1]]);
+  const defP = offP.map(([u, v]) => [lerp(u, hu, 0.3), lerp(v, 25, 0.25)]);
+  const steps = [{ k: "pass" }, { k: "pass" }, ...(e.seq || [])];
+  const dur = 260 * 2 + (e.seq || []).reduce((s, x) => s + (x.k === "shot" ? 800 : x.k === "ft" ? 1100 : x.k === "hold" ? 900 : 550), 0) + (e.pts >= 3 ? 250 : 0);
+  let tAcc = 0; const sched = steps.map((s, j) => { const d = s.k === "pass" ? 260 : s.k === "shot" ? 800 : s.k === "ft" ? 1100 : s.k === "hold" ? 900 : 550; const x = { ...s, a: tAcc / dur, b: (tAcc + d) / dur, j }; tAcc += d; return x; });
+  let holder = Math.floor(r(1) * 5);
+  const holders = sched.map((s, j) => { if (s.k === "pass") holder = (holder + 1 + Math.floor(r(20 + j) * 4)) % 5; return holder; });
+  return { dur, draw(ctx, t) {
+    defP.forEach(([u, v], i) => dot(ctx, u + Math.sin(t * 6 + i) * 0.6, v, C[o === 0 ? "away" : "home"], 1.1));
+    offP.forEach(([u, v], i) => dot(ctx, u + Math.cos(t * 5 + i) * 0.5, v, C[o === 0 ? "home" : "away"], 1.1));
+    let s = sched.find((x) => t >= x.a && t < x.b) || sched[sched.length - 1]; const k = seg(t, s.a, s.b);
+    const hpos = (j) => offP[holders[j]];
+    let bu, bv, bz = 0, txt = "";
+    if (s.k === "pass") { const a = s.j ? hpos(s.j - 1) : hpos(0), b = hpos(s.j); bu = lerp(a[0], b[0], k); bv = lerp(a[1], b[1], k); bz = Math.sin(Math.PI * k) * 2; }
+    else if (s.k === "shot") { const sp = s.three ? pick(30 + s.j) : spots[5 + Math.floor(r(40 + s.j) * 3)], su = hu - dir * sp[0], sv = sp[1];
+      if (k < 0.75) { const q = k / 0.75; bu = lerp(su, hu, q); bv = lerp(sv, 25, q); bz = Math.sin(Math.PI * q) * (s.three ? 9 : 6) + q * 10; }
+      else { bu = hu - dir * (s.made ? 0 : 3 * (k - 0.75) * 4); bv = 25 + (s.made ? 0 : (r(50 + s.j) - 0.5) * 8 * (k - 0.75) * 4); bz = s.made ? 10 - (k - 0.75) * 40 : 10 - (k - 0.75) * 30; }
+      txt = k > 0.8 ? (s.made ? (s.three ? "+3" : "+2") + (s.and1 ? " AND ONE" : "") : s.orb ? "OFFENSIVE REBOUND" : "MISS") : ""; }
+    else if (s.k === "ft") { const fu = hu - dir * 15, q = (k * 2) % 1, which = k < 0.5 ? 0 : 1; bu = lerp(fu, hu, q); bv = 25; bz = Math.sin(Math.PI * q) * 5 + q * 10;
+      txt = `FREE THROWS ${s.m.filter(Boolean).length}/2`; }
+    else if (s.k === "to") { const a = hpos(Math.max(0, s.j - 1)); bu = lerp(a[0], defP[holders[s.j]][0], k); bv = lerp(a[1], defP[holders[s.j]][1], k); txt = "TURNOVER"; }
+    else if (s.k === "foul") { const a = hpos(s.j); bu = a[0]; bv = a[1]; txt = "FOUL — SENT TO THE LINE"; }
+    else { const a = hpos(s.j); bu = a[0] + Math.sin(k * 30) * 0.3; bv = a[1]; txt = "RUNNING OUT THE CLOCK"; }
+    ballAt(ctx, bu, bv, Math.max(0, bz), "#e8701a", 0.55);
+    if (txt) label(ctx, txt, Math.max(14, Math.min(80, hu - dir * 14)), 44, txt.startsWith("+") ? "#ffd166" : "#ffffff", 0.9);
+  }, after() {
+    const st = BC.stats[o]; (e.seq || []).forEach((x) => { if (x.k === "shot") { st.fga++; if (x.made) st.fgm++; if (x.three) { st.tpa++; if (x.made) st.tpm++; } if (x.and1) { st.fta++; st.ftm++; } }
+      if (x.k === "ft") { st.fta += 2; st.ftm += x.m.filter(Boolean).length; } if (x.k === "to") st.to++; }); } };
+}
+
+// ---------- NHL ----------
+function nhlSetup() {
+  BC.cam.u = BC.cam.tu = 100; BC.cam.w = BC.cam.tw = 104; BC.tick = 0;
+  BC.nhl = { pp: [0, 0], pull: [false, false], sog: [0, 0], puck: [100, 42.5], carrier: [0, 2] };
+}
+function nhlDir(team, tick) { const per = Math.min(2, Math.floor(tick / 120)); return (team === 0 ? 1 : -1) * (per === 1 ? -1 : 1); }
+function nhlSkaters(t, team, tick) {
+  const d = nhlDir(team, tick), base = [[30, 20], [30, 65], [18, 42], [-10, 30], [-10, 55]];
+  const shift = Math.sin(t / 1600 + team) * 18;
+  return base.map(([du, v], i) => [100 + d * (du + shift) + Math.sin(t / 700 + i * 1.7 + team) * 6, v + Math.cos(t / 900 + i) * 7]);
+}
+function nhlGoalie(team, tick) { const d = nhlDir(team, tick); return [d > 0 ? 14 : 186, 42.5]; }
+function nhlAmbient(ctx, now) {
+  const N = BC.nhl, C = BC.colors, tick = BC.tick;
+  [0, 1].forEach((tm) => { const n = tick >= 360 ? 3 : 5 - (N.pp[1 - tm] > 0 ? 1 : 0);
+    nhlSkaters(now, tm, tick).slice(0, n).forEach(([u, v]) => dot(ctx, u, v, tm === 0 ? C.home : C.away, 1.7));
+    if (!N.pull[tm]) { const g = nhlGoalie(tm, tick); dot(ctx, g[0], g[1], tm === 0 ? C.home : C.away, 2.1, "#ffd166"); } });
+  const sk = nhlSkaters(now, N.carrier[0], tick)[N.carrier[1]]; N.puck = [lerp(N.puck[0], sk[0] + 2, 0.08), lerp(N.puck[1], sk[1], 0.08)];
+  ballAt(ctx, N.puck[0], N.puck[1], 0, "#111", 0.9);
+  if (Math.floor(now / 1400) !== N.lastSwap) { N.lastSwap = Math.floor(now / 1400); N.carrier = [srand(N.lastSwap) < 0.5 ? 0 : 1, Math.floor(srand(N.lastSwap + 3) * 5)]; }
+}
+function nhlAnim(e, idx) {
+  const C = BC.colors, N = BC.nhl;
+  if (e.marker) return { dur: 1, draw() {}, after() {} };
+  if (e.pull) return { dur: 900, draw(ctx, t) { label(ctx, "GOALIE PULLED · EXTRA ATTACKER", 100, 75, "#ffd166", 0.9); }, after() { N.pull = e.pull.slice(); } };
+  if (e.pen != null) { const ppTeam = 1 - e.pen; return { dur: 1300, draw(ctx, t) { label(ctx, `PENALTY · ${ppTeam === 0 ? BC.g.home : BC.g.away} POWER PLAY`, 100, 75, "#ffd166", 0.95); }, after() { N.pp[ppTeam] = e.tick + 12; } }; }
+  if (e.ot) return { dur: 2600, banner: { text: e.so ? "SHOOTOUT WINNER" : "OVERTIME WINNER", sub: `${e.team === 0 ? BC.g.home : BC.g.away} takes it`, col: e.team === 0 ? C.home : C.away },
+    draw(ctx, t) { if (t > 0.2) bcBanner(ctx, this.banner, seg(t, 0.2, 0.4)); }, after() {} };
+  const tm = e.team, d = nhlDir(tm, e.tick), net = d > 0 ? 189 : 11, su = net - d * (12 + srand(idx) * 30), sv = 18 + srand(idx + 1) * 49;
+  const goal = !e.shot;
+  return { dur: goal ? 2600 : 900, banner: goal ? { text: `GOAL ${tm === 0 ? BC.g.home : BC.g.away}`, sub: e.pp ? "Power-play goal" : e.en ? "Empty-net goal" : "Even strength", col: tm === 0 ? C.home : C.away } : null,
+    draw(ctx, t) { const k = seg(t, 0, goal ? 0.3 : 0.6); N.puck = [lerp(su, net + (goal ? d * 1.5 : -d * 2), k), lerp(sv, 42.5 + (goal ? 0 : (srand(idx + 2) - 0.5) * 6), k)];
+      dot(ctx, su, sv, tm === 0 ? C.home : C.away, 1.8);
+      if (!goal && t > 0.6) label(ctx, "SAVE", net - d * 10, 60, "#ffffff", 0.9);
+      if (goal && t > 0.3) bcBanner(ctx, this.banner, seg(t, 0.3, 0.45)); },
+    after() { N.sog[tm]++; N.carrier = [1 - tm, 2]; N.puck = [100, 42.5]; } };
+}
+
+// ---------- loop, score bug, win probability ----------
+function bcResize() { const c = $("bcCanvas"), r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  if (c.width !== Math.round(r.width * dpr) || c.height !== Math.round(r.height * dpr)) { c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr); }
+  const ctx = c.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); BC.cw = r.width; BC.ch = r.height; return ctx; }
+function bcDraw(now) {
+  const ctx = bcResize(); BC.cam.u = lerp(BC.cam.u, BC.cam.tu, RM ? 1 : 0.08); BC.cam.w = lerp(BC.cam.w, BC.cam.tw, RM ? 1 : 0.06);
+  ctx.fillStyle = "#0b1016"; ctx.fillRect(0, 0, BC.cw, BC.ch);
+  if (BC.sport === "nfl") drawField(ctx); else if (BC.sport === "nba") drawCourt(ctx); else { drawRink(ctx); nhlAmbient(ctx, now); }
+  if (BC.cur) BC.cur.draw(ctx, BC.cur.p);
+  if (!BC.on && BC.final) bcBanner(ctx, { text: "FINAL", sub: `${BC.g.away} ${BC.final[1]} · ${BC.g.home} ${BC.final[0]}`, col: "#111" }, 1);
+}
+function bcLoop(now) {
+  BC.raf = requestAnimationFrame(bcLoop);
+  const dt = BC.lastTs ? Math.min(100, now - BC.lastTs) : 16; BC.lastTs = now;
+  if (BC.on && !BC.paused) {
+    if (BC.sport === "nhl" && !BC.cur) {          // the clock runs between events
+      const nx = BC.ev[BC.i];
+      const target = nx ? Math.min(nx.tick, 360) : 360;
+      BC.tick = Math.min(target, BC.tick + dt * BC.speed / 110);
+      bcBug();
+      if (!nx && BC.tick >= 360) { bcFinish(); }
+    }
+    if (BC.on && !BC.cur && BC.i < BC.ev.length && (BC.sport !== "nhl" || BC.tick >= Math.min(BC.ev[BC.i].tick, 360) - 1e-6)) {
+      const e = BC.ev[BC.i]; BC.cur = (BC.sport === "nfl" ? nflAnim : BC.sport === "nba" ? nbaAnim : nhlAnim)(e, BC.i); BC.cur.p = 0; BC.cur.e = e;
+    }
+    if (BC.cur) {
+      BC.cur.p += RM ? 1 : dt * BC.speed / BC.cur.dur;
+      if (BC.cur.p >= 1) { const e = BC.cur.e; BC.cur.after(); BC.cur = null; BC.i++; bcState(e); bcBug(); bcWp(e); }
+    } else if (BC.sport !== "nhl" && BC.i >= BC.ev.length) bcFinish();
+  }
+  if (BC.sport) bcDraw(now);
+}
+function bcFinish() { if (!BC.on) return; BC.on = false; $("bcNote").textContent = "Final. Press New game for another simulation."; bcBug(true); }
+function bcState(e) {
+  if (BC.sport === "nfl") { if (e.kind === "kick") return; BC.s = { sh: e.sh, sa: e.sa, half: e.half, clock: e.clock, poss: e.poss, yl: e.yl, down: e.down, togo: e.togo, done: e.done }; }
+  else if (BC.sport === "nba") BC.s = { sh: e.sh, sa: e.sa, clock: e.clock, ot: e.ot, poss: e.poss };
+  else { BC.s = { sh: e.sh, sa: e.sa }; if (e.tick != null) BC.tick = Math.max(BC.tick, Math.min(e.tick, 360)); }
+}
+const ordinal = (n) => ["1ST", "2ND", "3RD", "4TH"][n - 1] || `${n}TH`;
+function bcBug(final) {
+  const g = BC.g, C = BC.colors, s = BC.s || { sh: 0, sa: 0 };
+  let per = "", sit = "", qL = "", qR = "";
+  if (BC.sport === "nfl") {
+    const half = s.half || 1, cl = s.clock != null ? s.clock : 1800, q = half === 3 ? "OT" : `Q${half === 1 ? (cl > 900 ? 1 : 2) : (cl > 900 ? 3 : 4)}`;
+    const qc = half === 3 ? cl : (cl > 900 ? cl - 900 : cl); per = `${q} ${Math.floor(qc / 60)}:${String(Math.floor(qc % 60)).padStart(2, "0")}`;
+    sit = s.down ? `${ordinal(s.down)} & ${s.togo >= s.yl ? "GOAL" : Math.round(s.togo)}` : "";
+    const ql = (side) => { const x = BC.stats[side], nm = BC.qbn[side]; return `<b>${esc(nm)}</b><span>${x.comp}/${x.att} · ${x.yds} yds · ${x.td} TD · ${x.int} INT</span>`; };
+    qL = ql(1); qR = ql(0);
+  } else if (BC.sport === "nba") {
+    const ot = s.ot || 0, cl = s.clock != null ? s.clock : 2880, q = ot ? `OT${ot > 1 ? ot : ""}` : `Q${Math.min(4, 4 - Math.floor((cl - 0.001) / 720))}`, qc = ot ? cl : cl - 720 * Math.floor((cl - 0.001) / 720);
+    per = `${q} ${Math.floor(Math.max(qc, 0) / 60)}:${String(Math.floor(Math.max(qc, 0) % 60)).padStart(2, "0")}`;
+    const tl = (side) => { const x = BC.stats[side]; return `<b>${esc(side === 0 ? g.home : g.away)}</b><span>FG ${x.fgm}/${x.fga} · 3P ${x.tpm}/${x.tpa} · FT ${x.ftm}/${x.fta} · TO ${x.to}</span>`; };
+    qL = tl(1); qR = tl(0);
+  } else {
+    const tk = Math.min(BC.tick, 360), p = Math.min(3, Math.floor(tk / 120) + 1), left = tk >= 360 ? 0 : 1200 - (tk - (p - 1) * 120) * 10;
+    per = tk >= 360 && BC.ev.length && !BC.on ? "FINAL" : `P${p} ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, "0")}`;
+    const N = BC.nhl, pp = [0, 1].map((i) => { const sec = Math.max(0, Math.round((N.pp[i] - tk) * 10)); return N.pp[i] > tk ? `PP ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}` : ""; });
+    sit = (pp[0] ? `${g.home} ${pp[0]}` : pp[1] ? `${g.away} ${pp[1]}` : "") + (N.pull[0] || N.pull[1] ? " · EMPTY NET" : "");
+    const tl = (side) => `<b>${esc(side === 0 ? g.home : g.away)}</b><span>${N.sog[side]} shots on goal</span>`;
+    qL = tl(1); qR = tl(0);
+  }
+  if (final) per = "FINAL";
+  $("bcL").innerHTML = qL; $("bcR").innerHTML = qR;
+  const wp = BC.wp;
+  $("bcBug").innerHTML = `<span class="bc-team" style="background:${C.away}">${esc(g.away)}</span><span class="bc-sc">${s.sa}</span>
+    <span class="bc-team" style="background:${C.home}">${esc(g.home)}</span><span class="bc-sc">${s.sh}</span>
+    <span class="bc-per">${per}</span><span class="bc-sit">${esc(sit)}</span>
+    <span class="bc-wpt">${wp == null ? "win prob…" : `${esc(g.home)} ${Math.round(100 * wp)}%`}</span>`;
+  $("bcWpA").style.width = wp == null ? "50%" : `${100 * (1 - wp)}%`; $("bcWpH").style.width = wp == null ? "50%" : `${100 * wp}%`;
+  $("bcWpA").style.background = C.away; $("bcWpH").style.background = C.home;
+}
+function bcWp(e) {
+  if (BC.wpBusy || e.kind === "kick") return; const k = BC.sport;
+  let st, t;
+  if (k === "nfl") { if (e.done) { BC.wp = e.sh > e.sa ? 1 : e.sh < e.sa ? 0 : 0.5; return; } st = { sh: e.sh, sa: e.sa, half: e.half, clock: e.clock, poss: e.poss, yl: e.yl, down: e.down, togo: e.togo, tos: e.tos }; t = e.t; }
+  else if (k === "nba") { st = { sh: e.sh, sa: e.sa, clock: e.clock, poss: e.poss, ot: e.ot }; t = e.t; }
+  else { if (e.ot) { BC.wp = e.sh > e.sa ? 1 : 0; return; } st = { sh: e.sh, sa: e.sa, tick: Math.min(e.tick, 360), pp: [0, 0] }; t = e.t; }
+  const n = k === "nfl" ? 3000 : k === "nba" ? 8000 : 15000, run = BC.run; BC.wpBusy = true;
+  ask2({ cmd: "eng", engine: ENG[k].key, cfg: engCfg(), p: state.p || params(), n, st, whole: true }).then((r) => {
+    BC.wpBusy = false; if (run !== BC.run) return; const a = r.agg; BC.wp = a.hw / Math.max(a.hw + a.aw, 1); BC.wpN = n;
+    state.timeline.push({ t: Math.min(t, 1), p: BC.wp }); drawTime(); bcBug(!BC.on && BC.i >= BC.ev.length);
+    $("bcNote").textContent = `Win probability re-simulated from each new game state (${n.toLocaleString()} runs of the rest of the game).`;
+  });
+}
+function bcStart() {
+  const k = engLeague(), g = game(); BC.run++; const run = BC.run;
+  BC.sport = k; BC.g = g; BC.colors = bcColors(g); BC.i = 0; BC.cur = null; BC.paused = false; BC.wp = null; BC.s = { sh: 0, sa: 0 }; BC.final = null; BC.half = 1;
+  BC.stats = [0, 1].map(() => ({ att: 0, comp: 0, yds: 0, td: 0, int: 0, ryds: 0, rtd: 0, fga: 0, fgm: 0, tpa: 0, tpm: 0, fta: 0, ftm: 0, to: 0 }));
+  if (k === "nfl") { const cf = engCfg(); BC.qbn = [cf.home.name, cf.away.name]; BC.cam.u = BC.cam.tu = 60; BC.cam.w = BC.cam.tw = 64; }
+  else if (k === "nba") { BC.cam.u = BC.cam.tu = 47; BC.cam.w = BC.cam.tw = 50; }
+  else nhlSetup();
+  $("bcast").hidden = false; $("bcPause").textContent = "Pause"; $("bcNote").textContent = "Simulating a game…";
+  state.timeline = []; state.p = params(); drawTime(); bcBug();
+  ask({ cmd: "eng_watch", engine: ENG[k].key, cfg: engCfg() }, (msg) => {
+    if (run !== BC.run) return;
+    BC.ev = k === "nfl" ? nflPrepare(msg.log) : msg.log; BC.final = msg.final; BC.on = true;
+    $("bcNote").textContent = "Playing one simulated game. The win probability updates as it goes.";
+    BC.wpBusy = false; bcWp(k === "nfl" ? { sh: 0, sa: 0, half: 1, clock: 1800, poss: null, done: false, t: 0, yl: 75, down: 1, togo: 10, tos: [3, 3] } : k === "nba" ? { sh: 0, sa: 0, clock: 2880, poss: null, ot: 0, t: 0 } : { sh: 0, sa: 0, tick: 0, t: 0 });
+    if (!BC.raf) BC.raf = requestAnimationFrame(bcLoop);
+  });
+}
+function bcStop() { BC.on = false; BC.sport = null; $("bcast").hidden = true; }
+document.querySelectorAll("#bcSpeed button").forEach((b) => b.onclick = () => { BC.speed = Number(b.dataset.sp);
+  document.querySelectorAll("#bcSpeed button").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); });
+$("bcPause").onclick = () => { BC.paused = !BC.paused; $("bcPause").textContent = BC.paused ? "Resume" : "Pause"; };
+$("bcNew").onclick = () => bcStart();
 
 $("pulled").textContent = D.pulled ? `Lines and injuries as of ${new Date(D.pulled).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "No data file loaded: use Any game (custom).";
 renderRail(); renderHonest();

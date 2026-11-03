@@ -70,6 +70,8 @@ def _game_card(ev: dict, summary: dict) -> dict:
     out = {"id": ev["id"], "start": ev["date"], "status": c["status"]["type"]["name"].replace("STATUS_", "").lower(),
            "home": t["home"]["team"].get("abbreviation", "HOME"), "away": t["away"]["team"].get("abbreviation", "AWAY"),
            "home_name": t["home"]["team"].get("displayName"), "away_name": t["away"]["team"].get("displayName"),
+           "home_color": t["home"]["team"].get("color"), "away_color": t["away"]["team"].get("color"),
+           "home_alt": t["home"]["team"].get("alternateColor"), "away_alt": t["away"]["team"].get("alternateColor"),
            "venue": ((c.get("venue") or {}).get("fullName")), **market(summary)}
     w = (summary.get("gameInfo") or {}).get("weather") or {}
     if w.get("temperature") is not None:
