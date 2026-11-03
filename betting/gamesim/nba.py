@@ -466,6 +466,11 @@ def reb_credit(games: list[dict], before: str) -> float:
 # is 0.250); over/under calls 71 -> 69 of 143, no better: the book's lean got 51 of 96 to the model's 40.
 # Fair test on the Nov 2 starters (same lines, who sat known): starters' minutes off by 5.5 -> 4.8, points MAE
 # 5.36 -> 5.11, Brier 0.273 -> 0.259 (book 0.249), over/under calls 66 -> 67 of 143.
+# Garbage time (browser player layer): starters hand 70% of their role to the bench once a 4th-quarter lead reaches
+# a + b x minutes left. Fitted 2026-11-03 on pre-Nov 2 games to real starters' minutes by final margin (2,566 team-games
+# 2025-27): simulated -1.5/-2.5/-3.5/-4.6 minutes at 15-20/20-25/25-30/30+ points vs real -1.6/-2.7/-3.7/-4.6.
+PLAYER_GARBAGE = {"a": 12.0, "b": 1.5, "g": 0.3}
+PLAYER_RATE_DECAY = None      # per-game decay of the weight on older games in a player's rates (None: equal weights)
 MINUTES_WHEN_PLAYING = True   # chance he plays x minutes when he plays (see player_profiles)
 PLAYER_PRIOR_MIN = 100.0  # minutes of the player's own last-season per-minute rates in his prior (else team average)
 PLAYER_SHOCK = 0.30       # per-player per-game role swing (log SD): ~20% of results outside the 10-90% range (was 29%); retuned after the minutes fix
@@ -513,14 +518,18 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
         return {"players": [], "games": 0, "ast_rate": 0.6}
     T = defaultdict(float)
     acc = {}
-    for _, rows in boxes:
+    for j, (_, rows) in enumerate(boxes):
+        wj = PLAYER_RATE_DECAY ** (len(boxes) - 1 - j) if PLAYER_RATE_DECAY else 1.0   # recent games count more
         for r in rows:
             for k in ("min", "fgm", "fga", "tpm", "tpa", "ftm", "fta", "oreb", "dreb", "ast", "tov"):
                 T[k] += r[k]
-            a = acc.setdefault(r["id"], {"name": r["name"], "pos": r["pos"], "tot": defaultdict(float), "mins": [], "starter": False})
+            a = acc.setdefault(r["id"], {"name": r["name"], "pos": r["pos"], "tot": defaultdict(float), "mins": [], "starter": False,
+                                         "pts_raw": 0.0, "reb_raw": 0.0, "ast_raw": 0.0})
+            if not r["dnp"] and r["min"] > 0:
+                a["pts_raw"] += r["pts"]; a["reb_raw"] += r["oreb"] + r["dreb"]; a["ast_raw"] += r["ast"]
             if not r["dnp"]:
                 for k in ("min", "fgm", "fga", "tpm", "tpa", "ftm", "fta", "oreb", "dreb", "ast", "tov"):
-                    a["tot"][k] += r[k]
+                    a["tot"][k] += wj * r[k]
                 a["mins"].append(r["min"])
     last = boxes[-recent:]
     for pid, a in acc.items():
@@ -586,7 +595,11 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
             p3 = (t["tpm"] + 50 * tp3) / (t["tpa"] + 50)
             ftp = (t["ftm"] + 25 * tft) / (t["fta"] + 25)
             src = "team average"
+        gp = max(len(a["mins"]), 1)
+        season = {"gp": len(a["mins"]), "min": float(np.mean(a["mins"])) if a["mins"] else 0.0,
+                  "pts": a["pts_raw"] / gp, "reb": a["reb_raw"] / gp, "ast": a["ast_raw"] / gp}
         players.append({"id": pid, "name": a["name"], "pos": a["pos"], "min": a["proj"], "min_sd": float(max(3.0, np.std(a["mins"]) if len(a["mins"]) > 1 else 5.0)),
+                        "season": {k: (round(v, 2) if isinstance(v, float) else v) for k, v in season.items()},
                         "games": len(a["mins"]), "starter": a["starter"], "returning": a["returning"],
                         "fga2": fga2, "fga3": rate("tpa"), "fta": rate("fta"), "ast": rate("ast"), "oreb": rate("oreb"), "dreb": rate("dreb"),
                         "tov": rate("tov"), "p2": p2, "p3": p3, "ftp": ftp, "prior": src})
@@ -595,7 +608,7 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
         for p in players:
             p["min"] = float(min(42.0, p["min"] * 240.0 / tot))
     players.sort(key=lambda p: -p["min"])
-    return {"players": players, "games": len(boxes), "ast_rate": T["ast"] / max(T["fgm"], 1), "shock": PLAYER_SHOCK}
+    return {"players": players, "games": len(boxes), "ast_rate": T["ast"] / max(T["fgm"], 1), "shock": PLAYER_SHOCK, "garbage": PLAYER_GARBAGE}
 
 
 def player_backtest(lg: str, games: list[dict], before: str, min_prior: int = 3, prior_tot: dict | None = None) -> dict:
@@ -854,3 +867,43 @@ def with_prior(H: dict, A: dict, R: dict, ctx: dict | None, home: str, away: str
     for t, s in ((home, sh), (away, sa)):
         prior[t]["shift"] = s
     return H2, A2, prior
+
+
+
+def dk_player_lines(lg: str, gid: str, tip: str | None = None) -> dict:
+    """DraftKings points / rebounds / assists lines for one game from ESPN's propBets feed: {pid: {stat: {line, over,
+    under, updated}}}. Lines changed after tip-off are replaced by the opening line. The feed doesn't label which price is
+    the over (lesson L2): the pair is matched to the milestone price ("N+") where one exists, else sides stay unknown.
+    Empty when DraftKings hasn't posted yet (404)."""
+    import urllib.request
+    u = f"https://sports.core.api.espn.com/v2/sports/basketball/leagues/{'nba' if lg == 'nba' else lg}/events/{gid}/competitions/{gid}/odds/100/propBets?limit=1000"
+    try:
+        items = json.load(urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}), timeout=30)).get("items", [])
+    except Exception:
+        return {}
+    TY = {"Total Points": "pts", "Total Assists": "ast", "Total Rebounds": "reb"}
+    MS = {"Points Milestones": "pts", "Assists Milestones": "ast", "Rebounds Milestones": "reb"}
+    raw, ms = {}, {}
+    for i in items:
+        if not i.get("athlete"):
+            continue
+        pid = i["athlete"]["$ref"].split("/athletes/")[1].split("?")[0]
+        late = bool(tip) and (i.get("lastUpdated") or "") >= tip[:16]
+        tgt = ((i.get("open") if late else i.get("current")) or i.get("current") or {}).get("target") or {}
+        price = (i.get("odds") or {}).get("american") or {}
+        am = price.get("open") if late else price.get("value")
+        nm = i["type"]["name"]
+        if nm in TY and tgt.get("value") is not None:
+            raw.setdefault((pid, TY[nm]), {"line": tgt["value"], "prices": [], "updated": i.get("lastUpdated")})["prices"].append(am)
+        elif nm in MS and tgt.get("value") is not None:
+            ms[(pid, MS[nm], int(tgt["value"]))] = am
+    f = lambda a: data.f(str(a).replace("+", ""), 0.0)
+    out = {}
+    for (pid, st), L in raw.items():
+        d = {"line": L["line"], "updated": L["updated"], "over": None, "under": None}
+        m = ms.get((pid, st, int(L["line"] + 0.5)))
+        if m and len(L["prices"]) == 2:
+            o = min(range(2), key=lambda j: abs(f(L["prices"][j]) - f(m)))
+            d["over"], d["under"] = L["prices"][o], L["prices"][1 - o]
+        out.setdefault(pid, {})[st] = d
+    return out

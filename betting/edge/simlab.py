@@ -302,6 +302,8 @@ def engines(data: dict) -> dict:
             pr["ast_rate"] = round(pr["ast_rate"], 4)
             pl[side] = pr
         pl["injuries"] = inj
+        pl["lines"] = gnba.dk_player_lines("nba", g["id"], g["start"])       # DraftKings player lines, once posted
+        pl["lines_pulled"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
         sides[g["id"]]["players"] = pl
     out["nba"] = {"R": {"pace": R["league"]["pace"], "sd_pace": R["sd_pace"], "sd_p2": R["sd_p2"], "sd_p3": R["sd_p3"], "dur_scale": R["dur_scale"],
                         "and1": R["and1"], "home_scale": R["home_scale"], "reb_credit": round(gnba.reb_credit(G, cut), 4), "ppg": R["ppg_target"], "home_margin": R["home_margin"], "n_games": R["n_games"],

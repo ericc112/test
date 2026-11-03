@@ -159,7 +159,9 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
 .pt2 { background: var(--pt2) } .pt3 { background: var(--pt3) } .ptf { background: var(--ptf) }
 .src-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .8rem; color: var(--muted) } .src-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px }
 .tip { position: fixed; z-index: 50; pointer-events: none; background: var(--ink); color: var(--surface); font-size: .78rem; padding: 6px 8px; border-radius: 6px; max-width: 260px; box-shadow: 0 4px 14px rgba(0,0,0,.25) }
-.line-out { font-family: var(--font-data); font-size: .85rem; grid-column: 1 / -1 } .field.wide { grid-column: span 2 }
+.line-out { font-family: var(--font-data); font-size: .85rem; grid-column: 1 / -1 }
+.card-wrap { display: grid; gap: 8px; font-size: .86rem } .card-wrap table { min-width: 560px } .card-wrap .k { color: var(--muted) }
+.card-wrap ul { margin: 0; padding-left: 18px; display: grid; gap: 3px } .field.wide { grid-column: span 2 }
 .bc-box { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; font-size: .76rem }
 @media (max-width: 600px) { .bc-box { grid-template-columns: minmax(0, 1fr) } } .bc-box > div { min-width: 0; overflow: hidden }
 .bc-box table { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; font-family: var(--font-data) } .bc-box th:first-child { width: 46% } .bc-box th, .bc-box td { padding: 2px 4px; text-align: right; color: #dfe7ee; border-bottom: 1px solid #26323e }
@@ -327,7 +329,7 @@ table.dec, #factorTbl { min-width: 600px }
           <div><span class="label">Removed (injury report Out or Doubtful)</span><ul class="plain" id="nbaOut"></ul></div>
           <div><span class="label">Day-to-day or questionable: kept in, check before tip-off</span><ul class="plain" id="nbaQ"></ul></div>
         </div>
-        <div class="row"><div class="seg" role="group" aria-label="Team" id="nbaTeamSeg"></div><span class="note">Average per simulated game; underneath, the range of the middle 80% of games (10th to 90th percentile).</span></div>
+        <div class="row"><div class="seg" role="group" aria-label="Team" id="nbaTeamSeg"></div><span class="note">Average per simulated game; underneath, the median and the middle half of games (25th to 75th percentile).</span></div>
         <div class="tbl-wrap"><table id="nbaPlTbl"><thead></thead><tbody></tbody></table></div>
         <p class="note" id="nbaCal"></p>
         <h3>Where the points come from</h3>
@@ -335,13 +337,14 @@ table.dec, #factorTbl { min-width: 600px }
         <div class="src" id="nbaSrc"></div>
         <div class="tbl-wrap"><table id="nbaSrcTbl"><thead></thead><tbody></tbody></table></div>
         <p class="note" id="nbaSrcNote"></p>
-        <h3>Check a prop line</h3>
+        <h3>Projection card</h3>
         <div class="inputs" id="nbaLine">
           <label class="field wide"><span class="label">Player</span><select id="nlP"></select></label>
           <label class="field"><span class="label">Stat</span><select id="nlS"><option value="0">Points</option><option value="1">Rebounds</option><option value="2">Assists</option><option value="3">3-pointers made</option><option value="4">Pts + Reb + Ast</option></select></label>
           <label class="field"><span class="label">Line</span><input id="nlL" type="number" step="0.5" inputmode="decimal"></label>
           <div class="line-out" id="nlOut" aria-live="polite"></div>
         </div>
+        <div id="nbaCard" class="card-wrap"></div>
         <p class="note" id="nlCal"></p>
         <p class="note" id="nbaBt"></p>
         <div class="warnbox">These are model numbers, not picks. In the kit, a pick is named only after <span class="num">python3 -m edge verify ID</span> passes. The data feed has no NBA player prop lines, so nothing here is compared with a book.</div>
@@ -743,7 +746,7 @@ function nflPlayGame(C, st, log, _tk, cap) {
 // results are untouched. Shares follow each player's minutes in this simulated game times his per-minute rates
 // (this season's box scores, shrunk toward the team). Who shares the floor with whom is not modelled.
 const NB = { pts: 0, f2m: 1, f2a: 2, f3m: 3, f3a: 4, ftm: 5, fta: 6, orb: 7, drb: 8, ast: 9, tov: 10, min: 11, astd: 12, cre: 13 }, NBN = 14;
-const NBH = [["pts", 80], ["reb", 30], ["ast", 25], ["tpm", 15], ["pra", 120]], NBHW = 270;
+const NBH = [["pts", 80], ["reb", 30], ["ast", 25], ["tpm", 15], ["pra", 120], ["min", 54]], NBHW = 324;
 function nbaTracker(PL, rc) {
   const T = PL.map((pr) => {
     const ps = pr.players || [], n = ps.length, z = () => new Float64Array(n);
@@ -754,7 +757,20 @@ function nbaTracker(PL, rc) {
     return { ps, n, a2, a3, sig: pr.shock || 0, m: z(), w2m: z(), w2x: z(), w3m: z(), w3x: z(), wft: z(), wa: z(), wo: z(), wd: z(), wt: z(), tmp: z(),
              cur: new Float64Array(n * NBN), sum: new Float64Array(n * NBN), hist: new Int32Array(n * NBHW), team: 0 };
   });
-  return { T, rc: rc || 0.93, sims: 0 };
+  // garbage time: when a 4th-quarter lead passes a + b x minutes left, each team's top five hand most of their role
+  // (share g) to the bench; fitted to real starters' minutes by final margin
+  const gt = (PL[0] && PL[0].garbage) || null;
+  T.forEach((t) => { const ord = t.ps.map((p, j) => j).sort((x, y) => t.ps[y].min - t.ps[x].min); t.core = new Uint8Array(t.n); ord.slice(0, 5).forEach((j) => { t.core[j] = 1; });
+    t.base = {}; ["w2m", "w2x", "w3m", "w3x", "wft", "wa", "wo", "wd", "wt"].forEach((k) => { t.base[k] = new Float64Array(t.n); }); t.bf = 1; });
+  return { T, rc: rc || 0.93, sims: 0, gt, garb: false, gsec: 0 };
+}
+function nbGarbage(tk, on) {
+  tk.garb = on;
+  for (const t of tk.T) {
+    let core = 0, all = 0; for (let i = 0; i < t.n; i++) { all += t.m[i]; if (t.core[i]) core += t.m[i]; }
+    const g = tk.gt.g, b = on ? Math.max(1, (all - g * core) / Math.max(all - core, 1e-6)) : 1; t.bf = b;
+    for (const k in t.base) { const w = t[k], bw = t.base[k]; for (let i = 0; i < t.n; i++) w[i] = on ? bw[i] * (t.core[i] ? g : b) : bw[i]; }
+  }
 }
 function nbPick(w, n, excl) {
   let s = 0; for (let i = 0; i < n; i++) if (i !== excl) s += w[i]; if (!(s > 0)) return -1;
@@ -773,7 +789,9 @@ function nbBegin(tk) {
       t.w2m[i] = vs * m * p.fga2 * p.p2; t.w2x[i] = vs * m * p.fga2 * (1 - p.p2); t.w3m[i] = vs * m * p.fga3 * p.p3; t.w3x[i] = vs * m * p.fga3 * (1 - p.p3);
       t.wft[i] = vs * m * p.fta; t.wa[i] = va * m * p.ast; t.wo[i] = vr * m * p.oreb; t.wd[i] = vr * m * p.dreb; t.wt[i] = m * p.tov; t.cur[i * NBN + NB.min] = m;
     }
+    if (t.base) for (const k in t.base) t.base[k].set(t[k]);
   }
+  tk.garb = false; tk.gsec = 0;
 }
 function nbFT(tk, o, made, tries) {
   const t = tk.T[o]; for (let i = 0; i < t.n; i++) { const f = t.ps[i].ftp; t.tmp[i] = t.wft[i] * Math.pow(f, made) * Math.pow(1 - f, tries - made); }
@@ -793,11 +811,15 @@ function nbReb(tk, side, off) { if (rnd() >= tk.rc) return -1; const t = tk.T[si
 function nbTov(tk, o) { const t = tk.T[o], i = nbPick(t.wt, t.n, -1); if (i >= 0) t.cur[i * NBN + NB.tov]++; return i; }
 function nbEnd(tk, score) {
   tk.sims++;
+  if (tk.gt && tk.gsec > 0) {                      // minutes lost to garbage time move from the top five to the bench
+    const gf = Math.min(1, tk.gsec / 2880);
+    for (const t of tk.T) for (let i = 0; i < t.n; i++) t.cur[i * NBN + NB.min] = t.m[i] * (1 - gf + gf * (t.core[i] ? tk.gt.g : t.bf));
+  }
   tk.T.forEach((t, side) => {
     t.team += score[side];
     for (let i = 0; i < t.n; i++) {
       const b = i * NBN, c = t.cur; for (let k = 0; k < NBN; k++) t.sum[b + k] += c[b + k];
-      const reb = c[b + NB.orb] + c[b + NB.drb], v = [c[b + NB.pts], reb, c[b + NB.ast], c[b + NB.f3m], c[b + NB.pts] + reb + c[b + NB.ast]];
+      const reb = c[b + NB.orb] + c[b + NB.drb], v = [c[b + NB.pts], reb, c[b + NB.ast], c[b + NB.f3m], c[b + NB.pts] + reb + c[b + NB.ast], Math.round(c[b + NB.min])];
       let off = i * NBHW; for (let h = 0; h < NBH.length; h++) { t.hist[off + Math.min(NBH[h][1] - 1, v[h])]++; off += NBH[h][1]; }
     }
   });
@@ -818,6 +840,7 @@ function nbaPossGame(C, st, log, tk, cap) {
     const o = poss, d = 1 - o, c = clock, diff = score[o] - score[d], late = c <= 60;
     const foul = late && c > 2 && ((diff >= 3 && diff <= 8) || (diff >= 1 && diff <= 2 && c <= shotClock)), hold = c <= shotClock && diff > 0 && !foul, need3 = late && diff === -3;
     let dur = foul ? 2 + 4 * rnd() : hold ? c : gamma(4) * spp / 4, pts = 0;
+    if (tk && tk.gt) { const on = !ot && c <= 720 && Math.abs(score[0] - score[1]) >= tk.gt.a + tk.gt.b * c / 60; if (on !== tk.garb) nbGarbage(tk, on); }
     const seq = log ? [] : null;
     if (foul) { const a = rnd() < S[o].ftp, b = rnd() < S[o].ftp, w = tk ? nbFT(tk, o, a + b, 2) : -1; pts += a + b; if (seq) seq.push({ k: "foul" }, { k: "ft", m: [a, b], who: w }); }
     else if (hold) { if (seq) seq.push({ k: "hold" }); }
@@ -834,6 +857,7 @@ function nbaPossGame(C, st, log, tk, cap) {
       }
     }
     dur = Math.min(dur, c); score[o] += pts; clock = c - dur; np++; poss = d;
+    if (tk && tk.garb) tk.gsec += dur;
     if (cap && !cap.half && !ot && clock <= minutes * 30) cap.half = [score[0], score[1]];
     if (log) log.push({ clock, poss, ot, sh: score[0], sa: score[1], pts, off: o, foul, seq, preClock: c, t: ot ? 1 : 1 - clock / (minutes * 60) });
     if (clock <= 0) { if (score[0] !== score[1] || ot >= 8) { if (score[0] === score[1]) score[0]++; break; } clock = 300; ot++; poss = rnd() < 0.5 ? 1 : 0; }
@@ -1495,7 +1519,7 @@ function runSim() {
 }
 // ===== NBA player layer: projections from the same 50,000 simulated games =====
 const NBI = { pts: 0, f2m: 1, f2a: 2, f3m: 3, f3a: 4, ftm: 5, fta: 6, orb: 7, drb: 8, ast: 9, tov: 10, min: 11, astd: 12, cre: 13 };
-const NBHM = [["PTS", 80], ["REB", 30], ["AST", 25], ["3PM", 15], ["PRA", 120]];
+const NBHM = [["PTS", 80], ["REB", 30], ["AST", 25], ["3PM", 15], ["PRA", 120], ["MIN", 54]];
 state.nbaTeam = "home";
 function nbHist(pl, h) { let off = 0; for (let j = 0; j < h; j++) off += NBHM[j][1]; return pl.hist.slice(off, off + NBHM[h][1]); }
 function hq(hist, q) { const n = hist.reduce((a, b) => a + b, 0); let c = 0; for (let i = 0; i < hist.length; i++) { c += hist[i]; if (c >= q * n) return i; } return hist.length - 1; }
@@ -1529,10 +1553,10 @@ function renderNbaPlayers() {
   $("nbaTeamSeg").innerHTML = ["away", "home"].map((s) => `<button data-s="${s}" aria-pressed="${s === side}">${esc(g[s])}</button>`).join("");
   $("nbaTeamSeg").querySelectorAll("button").forEach((b) => b.onclick = () => { state.nbaTeam = b.dataset.s; renderNbaPlayers(); });
   const rows = T.players.map((pl, i) => ({ pl, p: prof[i], i })).sort((a, b) => b.pl.mean[NBI.pts] - a.pl.mean[NBI.pts]);
-  const cell = (pl, h, dp) => { const hs = nbHist(pl, h); return `<td class="pl-cell"><b>${hMean(hs).toFixed(dp)}</b><small>${hq(hs, 0.1)}–${hq(hs, 0.9)}</small></td>`; };
+  const cell = (pl, h, dp) => { const hs = nbHist(pl, h); return `<td class="pl-cell"><b>${hMean(hs).toFixed(dp)}</b><small>med ${hq(hs, 0.5)} · ${hq(hs, 0.25)}–${hq(hs, 0.75)}</small></td>`; };
   $("nbaPlTbl").querySelector("thead").innerHTML = `<tr><th class="l">Player</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th><th>3PM</th><th>PRA</th></tr>`;
   $("nbaPlTbl").querySelector("tbody").innerHTML = rows.map(({ pl, p }) => `<tr><td class="pl-name">${esc(p.name)}<small>${esc(p.pos)}</small>${nbaFlags(sd.players[side], p, side)}</td>
-    <td class="pl-cell"><b>${pl.mean[NBI.min].toFixed(1)}</b><small>${p.starter ? "starter" : "bench"}</small></td>${cell(pl, 0, 1)}${cell(pl, 1, 1)}${cell(pl, 2, 1)}${cell(pl, 3, 1)}${cell(pl, 4, 1)}</tr>`).join("");
+    <td class="pl-cell"><b>${pl.mean[NBI.min].toFixed(1)}</b><small>${hq(nbHist(pl, 5), 0.25)}–${hq(nbHist(pl, 5), 0.75)} · ${p.starter ? "starter" : "bench"}</small></td>${cell(pl, 0, 1)}${cell(pl, 1, 1)}${cell(pl, 2, 1)}${cell(pl, 3, 1)}${cell(pl, 4, 1)}</tr>`).join("");
   // where the points come from
   const part = (m) => [2 * m[NBI.f2m], 3 * m[NBI.f3m], m[NBI.ftm]];
   const tot = rows.reduce((a, { pl }) => { const v = part(pl.mean); return [a[0] + v[0], a[1] + v[1], a[2] + v[2]]; }, [0, 0, 0]), team = tot[0] + tot[1] + tot[2];
@@ -1570,11 +1594,49 @@ function renderNbaPlayers() {
 function nbaLine(reset) {
   const R = state.nbaRes; if (!R) return;
   const [ti, i] = $("nlP").value.split(":").map(Number), h = Number($("nlS").value), pl = R.teams[ti].players[i], hs = nbHist(pl, h);
-  if (reset || $("nlL").value === "") $("nlL").value = (Math.floor(hMean(hs)) + 0.5).toFixed(1);
+  const pid = nbaSide().players[ti === 0 ? "home" : "away"].players[i].id, lk = ["pts", "reb", "ast"][h];
+  const dkL = lk ? ((((nbaSide().players.lines || {})[pid] || {})[lk]) || {}).line : null;
+  if (reset || $("nlL").value === "") $("nlL").value = dkL != null ? dkL : (Math.floor(hMean(hs)) + 0.5).toFixed(1);   // DraftKings' line when posted
   const L = Number($("nlL").value), n = hs.reduce((a, b) => a + b, 0);
   let ov = 0, un = 0; hs.forEach((c, k) => { if (k > L) ov += c; else if (k < L) un += c; });
   const po = ov / n, pu = un / n, fair = (q) => q <= 0 || q >= 1 ? "—" : q >= 0.5 ? `${Math.round(-100 * q / (1 - q))}` : `+${Math.round(100 * (1 - q) / q)}`;
+  nbaCard();
   $("nlOut").innerHTML = `${esc(pl.name)} ${NBHM[h][0]} ${L}: over <b>${fmtPct(po)}</b> (fair ${fair(po)}) · under <b>${fmtPct(pu)}</b> (fair ${fair(pu)})${po + pu < 0.999 ? ` · push ${fmtPct(1 - po - pu)}` : ""} · average ${hMean(hs).toFixed(1)}, median ${hq(hs, 0.5)}`;
+}
+// The projection card: everything for one player, every number from the simulation, the profile or the backtest.
+function nbaCard() {
+  const R = state.nbaRes; if (!R) return;
+  const [ti, i] = $("nlP").value.split(":").map(Number), side = ti === 0 ? "home" : "away", g = game(), sd = nbaSide();
+  const pl = R.teams[ti].players[i], p = sd.players[side].players[i], lines = (sd.players.lines || {})[p.id] || {}, bt = E.nba.players_bt || {};
+  const se = p.season || {}, mh = nbHist(pl, 5), simMin = hMean(mh), n = mh.reduce((a, b) => a + b, 0);
+  const rows = [["Points", 0, "pts", (m) => m * (2 * p.fga2 * p.p2 + 3 * p.fga3 * p.p3 + p.fta * p.ftp)], ["Rebounds", 1, "reb", (m) => m * (p.oreb + p.dreb)], ["Assists", 2, "ast", (m) => m * p.ast]];
+  const nv = (o, u) => { const q = (a) => { a = Number(String(a).replace("+", "")); return a > 0 ? 100 / (a + 100) : -a / (-a + 100); }; return o != null && u != null ? q(o) / (q(o) + q(u)) : null; };
+  const pct = (x) => x == null ? "—" : (100 * x).toFixed(0) + "%";
+  let movers = [], recon = [];
+  const body = rows.map(([lab, h, k, formula]) => {
+    const hs = nbHist(pl, h), mean = hMean(hs), Lx = lines[k], Lv = Lx ? Lx.line : null;
+    let ov = null, un = null; if (Lv != null) { ov = 0; un = 0; hs.forEach((c, x) => { if (x > Lv) ov += c; else if (x < Lv) un += c; }); ov /= n; un /= n; }
+    const mk = Lx ? nv(Lx.over, Lx.under) : null, err = (bt[k] || {}).mae;
+    const f = formula(simMin), diff = mean / Math.max(f, 0.01) - 1;
+    if (Math.abs(diff) > 0.10) recon.push(`${lab.toLowerCase()} ${diff > 0 ? "+" : ""}${(100 * diff).toFixed(0)}% (${{
+      pts: "his share of this game's simulated scoring: pace, the opponent's defence, teammates out, garbage time",
+      reb: "missed shots available in this game (both teams' shooting) and the share of them that end as a player rebound",
+      ast: "assists only come on teammates' made baskets in the simulation, at the team's assist rate, so the opponent's defence and his teammates' shooting set the pool" }[k]})`);
+    if (se.min > 0 && se.gp) { const sRate = se[k] / se.min, fRate = formula(1);
+      movers.push([lab, [["minutes", (simMin - se.min) * sRate], ["per-minute rate (last-season prior, shrinkage)", (fRate - sRate) * simMin], ["this game (pace, opponent, teammates out, garbage time)", mean - f]]]); }
+    return `<tr><td class="l name">${lab}</td><td>${mean.toFixed(1)}</td><td>${hq(hs, 0.5)}</td><td>${hq(hs, 0.25)}–${hq(hs, 0.75)}</td>
+      <td>${Lv == null ? "no line yet" : Lv}</td><td>${pct(ov)}</td><td>${pct(un)}</td><td>${mk == null ? "—" : pct(mk)}</td><td>${err == null ? "—" : "±" + err.toFixed(1)}</td>
+      <td>${se.gp ? se[k].toFixed(1) : "—"}</td></tr>`; }).join("");
+  const top = movers.length ? movers[0][1].slice().sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])) : [];
+  let lo = 0; mh.forEach((c, x) => { if (x <= simMin - 6) lo += c; });
+  const ptsRate = (2 * p.fga2 * p.p2 + 3 * p.fga3 * p.p3 + p.fta * p.ftp);
+  const upd = Object.values(lines).map((x) => x.updated).filter(Boolean).sort().pop();
+  $("nbaCard").innerHTML = `<div><span class="k">Minutes</span> <b>${simMin.toFixed(1)}</b> (25th–75th ${hq(mh, 0.25)}–${hq(mh, 0.75)}) · season ${se.min ? se.min.toFixed(1) : "—"} in ${se.gp || 0} games · ${p.starter ? "started his last game" : "came off the bench last game"}${p.returning ? " · back from injury: 90% of his minutes" : ""}</div>
+    <div class="tbl-wrap"><table><thead><tr><th class="l">Stat</th><th>Mean</th><th>Median</th><th>25th–75th</th><th>DraftKings line</th><th>Over</th><th>Under</th><th>Book's no-vig over</th><th>Error bar (avg miss)</th><th>Season avg</th></tr></thead><tbody>${body}</tbody></table></div>
+    <div class="note">${Object.keys(lines).length ? `DraftKings via ESPN, line as of ${esc(upd || sd.players.lines_pulled)} (data pulled ${esc(sd.players.lines_pulled)}).` : `No DraftKings line for this game in the data yet (they're posted on game day); type a line above to price one.`}
+      Error bars are the average miss of these projections on this season's games (${(bt.n || 0).toLocaleString()} player-games). ${recon.length ? `Formula (minutes × his rates) and simulation differ by more than 10% on ${recon.join("; ")}.` : `Formula (minutes × his rates) and simulation agree within 10% on all three.`}</div>
+    ${top.length ? `<div><span class="k">What moved his points most vs his season average (${se.pts.toFixed(1)})</span><ul>${top.map(([nm, v]) => `<li>${nm}: ${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}</li>`).join("")}</ul></div>` : ""}
+    <div><span class="k">Biggest risk</span> minutes: in ${pct(lo / n)} of simulated games he played 6+ fewer than projected (foul trouble, a blowout, a knock); each lost minute costs about ${ptsRate.toFixed(2)} points. Not modelled: confirmed lineups, minutes restrictions, rest days, on/off splits, tracking data (potential assists, rebound chances).</div>`;
 }
 ["nlP", "nlS"].forEach((id) => $(id).addEventListener("change", () => nbaLine(true)));
 $("nlL").addEventListener("input", () => nbaLine(false));
