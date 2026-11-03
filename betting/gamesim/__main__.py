@@ -293,7 +293,7 @@ def render(a, row, dk, ctx, model, inp, starters, S, p_h, mc_w, err_w, err_c, er
     w(f"- **Verdict, error widened for the missing input (the one that counts):** " + ("; ".join(f"{d[0]} **{d[4]['verdict']}**" for d in final)) + ".")
     w(f"- **Biggest uncertainty:** {home}'s starting QB. The three depth-chart QBs move {home}'s win probability "
       f"from {pct(min(x['p_home'] for x in scen if x['team'] == home))} to {pct(max(x['p_home'] for x in scen if x['team'] == home))}. "
-      (f"The market's move from {home} {news['open']['spread_home']:+g} to {spread_home:+g} says it knows more about that than the model does."
+      + (f"The market's move from {home} {news['open']['spread_home']:+g} to {spread_home:+g} says it knows more about that than the model does."
          if news.get("open") else "The market may know more about it than the model does."))
     w("- No locks and no promised returns. This is a probability with its error bar.")
     return "\n".join(L) + "\n"
