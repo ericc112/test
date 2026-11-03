@@ -124,7 +124,7 @@ def espn_game(espn_id: str) -> dict:
     s = _json(f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event={espn_id}", f"espn_{espn_id}.json", 900)
     pc = (s.get("pickcenter") or [{}])[0]
     h, a = pc.get("homeTeamOdds") or {}, pc.get("awayTeamOdds") or {}
-    num = lambda x: None if x in (None, "") else float(str(x).replace("+", ""))
+    num = lambda x: f(str(x).replace("+", ""), None) if x not in (None, "") else None
     sp = pc.get("spread")
     if sp is not None and (h.get("favorite") is True and sp > 0 or h.get("favorite") is False and sp < 0):
         sp = -sp

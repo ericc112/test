@@ -69,7 +69,7 @@ def parse(s: dict) -> dict | None:
     g["team_ids"] = {sd[x["team"]["abbreviation"]]: x["team"]["id"] for x in s.get("boxscore", {}).get("teams", [])}
     pc = (s.get("pickcenter") or [{}])[0]
     h, a = pc.get("homeTeamOdds") or {}, pc.get("awayTeamOdds") or {}
-    num = lambda x: None if x in (None, "") else float(str(x).replace("+", ""))
+    num = lambda x: data.f(str(x).replace("+", ""), None) if x not in (None, "") else None
     opn = lambda grp, sd_, k: num(((((pc.get(grp) or {}).get(sd_) or {}).get("open") or {}).get(k) or "").replace("o", "").replace("u", "") or None)
     g["line"] = {"ml_home": num(h.get("moneyLine")), "ml_away": num(a.get("moneyLine")), "total": pc.get("overUnder"),
                  "over_odds": num(pc.get("overOdds")), "under_odds": num(pc.get("underOdds")), "spread_home": -1.5 if (h.get("favorite")) else 1.5,
