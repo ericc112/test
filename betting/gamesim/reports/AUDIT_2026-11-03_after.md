@@ -160,3 +160,49 @@ m1 RNG reseed, m2 the 48-minute cap, m3 the 8-overtime tie-break, m4 NHL dispers
 5. **NHL and NBA home edge.** Shrink in-season home margins toward last season's instead of using one or the other (m8; the NHL 2025-26 note).
 6. **League scoring level.** Recency-weight it so totals follow in-season drift (NBA totals bias +4.2).
 7. **Blend with the market.** If the model is used at all, use it as a small correction to the closing line, with the weight estimated out of sample. Today that weight is about 0, which is the same conclusion as the verdict.
+
+## Applied after review: NBA availability (proposal 2)
+
+The user asked for the proposal most likely to matter in real life.
+
+**Method** (`gamesim.nba`: `player_values`, `availability_shift`, `INJURY_BETA`):
+- *Player value:* Game Score per minute above the team's bench level, shrunk by 200 minutes, times his minutes when he plays.
+- *Tonight's shift:* value × (out tonight − share of the rating games he missed). A player who sat half the games is half priced in, so nothing is counted twice.
+- *Scale:* fitted on 2025-26 Nov–Jan (682 games): **0.50 ± 0.10** margin points per Game Score point (full season: 0.53 ± 0.07).
+- *Where it applies:* to the offense, via one logit step on make rates. In the backtest, availability is "who sat" from the box score. Live, it is the injury report's Out/Doubtful list plus players gone from the roster.
+
+**Held-out test, 2025-26 Feb–Apr (501 games never used in the fit):**
+
+| | Without | With | 95% CI of change | Market |
+|---|---|---|---|---|
+| Winner Brier | 0.1912 | **0.1807** | −0.0162 to −0.0053 | 0.1645 |
+| Spread Brier | 0.2636 | **0.2563** | −0.0145 to −0.0003 | 0.2500 |
+| Total Brier | 0.2641 | 0.2664 | −0.0053 to +0.0101 (no change) | 0.2498 |
+| Winner log loss | 0.5692 | 0.5432 | | 0.5002 |
+| Margin RMSE (ratings-only fit check) | 15.20 | 14.65 | | 14.13 (residual vs the close) |
+
+**Whole season and current season:**
+- *Whole 2025-26 season:* winner Brier 0.2096 → 0.2030 (market 0.1948), spread 0.2608 → 0.2551.
+- *2026-27 to date (59 games):* 0.2261 → 0.2234 (not significant).
+- *Gap to the market:* the winner gap on the held-out games shrinks from +0.027 to +0.016, but the market is still better.
+- *Disagreement with the market:* its weight is still about 0 (winners −0.09 ± 0.26), so the PLAY rule still passes everything.
+
+## Added after review: the most likely game
+
+"Watch a simulated game" now plays the most representative of the 50,000 runs:
+1. **Score:** the most common final score (NBA smoothed over ±2 points a team).
+2. **Run:** among those runs, the one closest to the typical path (halftime score, every NBA rotation player's line, usual overtime outcome).
+3. **Replay:** that run is replayed exactly from its own seed.
+
+Backtest on finished games it never saw (`likely_bt.py`):
+
+| | NBA, 501 games (2025-26 Feb–Apr) | NHL, 441 games (2025-26 Feb–Apr) | NFL, 73 games (2026 wk 4–8) |
+|---|---|---|---|
+| Winner right: most likely game / one random game / betting favourite | **75.0%** / 59.1% / 75.2% | **55.3%** / 51.9% / 56.9% | **60.3%** / 42.5% / 64.4% |
+| Margin MAE: most likely / random / closing spread | **11.9** / 17.9 / 11.0 | **2.18** / 3.01 / 2.24* | **9.2** / 13.2 / 9.0 |
+| Total MAE: most likely / random / closing total | **15.6** / 22.9 / 14.4 | **1.94** / 2.65 / 1.87 | **9.9** / 17.4 / 10.4 |
+| Exact final score hit | 0.6% | 6.1% | 1.4% |
+
+\*The NHL "spread" is a ±1.5 puck line, not a margin estimate.
+
+The most likely game is far closer to reality than a random simulated game and about as close as the closing line, but not better.
