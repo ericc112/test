@@ -1,4 +1,12 @@
-# gamesim: one NFL game, 50,000 times
+# gamesim: one game, 50,000 times
+
+| Sport | Command | Engine (natural unit) | Out-of-sample backtest vs closing market (Brier, winner) |
+|---|---|---|---|
+| NFL | `python3 -m gamesim --game 2026_09_JAX_BAL` | every snap (`nfl_pbp.py`); `--engine drive` for the drive model | 0.237 vs 0.223 (72 games) |
+| NBA | `python3 -m gamesim --sport nba --game <ESPN id>` | every possession (`nba.py`) | 0.227 vs 0.194 (59 games) |
+| NHL | `python3 -m gamesim --sport nhl --game <ESPN id>` | 10-second event clock (`nhl.py`) | 0.237 vs 0.230 (126 games) |
+
+No engine beats the closing market, and each report says so. Status and what's next: `PLAN.md`.
 
 ```bash
 cd betting

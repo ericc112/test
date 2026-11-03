@@ -180,5 +180,33 @@ class Basketball(unittest.TestCase):
         self.assertTrue(all(p["clock"] <= 60 for g in s["trace"] for p in g if p["foul"]))
 
 
+class Hockey(unittest.TestCase):
+    R = {"league": {"shots": 26.0, "fin": 0.095, "ppo": 3.0, "ppc": 0.2, "sv": 0.89, "shg_per_pp": 0.027, "ot_decided": 0.6, "so_home": 0.5},
+         "teams": {}, "goalies": {}, "sd_fin": 0.05, "goal_scale": 1.25, "home_mult": 1.03}
+    EN = {"for_per_min": 0.14, "against_per_min": 0.34}
+
+    def test_goals_overtime_and_shootout(self):
+        from gamesim import nhl
+        avg = nhl.side(self.R, "_", "_", False)
+        s = nhl.simulate(avg, dict(avg), self.R, self.EN, n=20000, seed=1)
+        self.assertTrue(2.6 <= (s["home"].mean() + s["away"].mean()) / 2 <= 3.8)
+        self.assertFalse(np.any(s["home"] == s["away"]))                       # OT, then a shootout, always decides it
+        self.assertTrue(0.12 <= s["ot"].mean() <= 0.3)
+
+    def test_empty_net_makes_three_goal_margins_common(self):
+        from gamesim import nhl
+        avg = nhl.side(self.R, "_", "_", False)
+        s = nhl.simulate(avg, dict(avg), self.R, self.EN, n=20000, seed=2)
+        m = np.abs(s["home"] - s["away"])
+        self.assertGreater(float((m == 3).mean()), float((m == 2).mean()) * 0.9)   # real NHL: 3-goal margins outnumber 2-goal ones
+
+    def test_hot_goalie_lowers_goals_against(self):
+        from gamesim import nhl
+        R = {**self.R, "goalies": {"g1": {"sv": 0.93}}}
+        good = nhl.side(R, "_", "_", True, "g1")       # home attack facing a .930 goalie
+        s = nhl.simulate(good, nhl.side(R, "_", "_", False), R, self.EN, n=20000, seed=3)
+        self.assertLess(s["home"].mean(), s["away"].mean())
+
+
 if __name__ == "__main__":
     unittest.main()

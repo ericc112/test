@@ -152,3 +152,120 @@ def run_basketball(lg: str, game_id: str, sims: int = 50000, seed: int = 2026, o
     with open(path_out, "w") as f:
         f.write(txt)
     return txt
+
+
+def run_hockey(game_id: str, sims: int = 50000, seed: int = 2026, out: str | None = None) -> str:
+    from . import nhl
+    yesterday = (dt.date.today() - dt.timedelta(days=1)).strftime("%Y%m%d")
+    y = dt.date.today().year if dt.date.today().month >= 9 else dt.date.today().year - 1
+    games = nhl.season_games(f"{y}1005", yesterday)
+    en = nhl.empty_net_rates(f"{y}1005", yesterday, max_games=120)
+    target = nhl.parse(nhl.data._json(f"https://site.api.espn.com/apis/site/v2/sports/{nhl.PATH}/summary?event={game_id}", f"nhl_sum_{game_id}.json", 900))
+    day = target["date"][:10]
+    R = nhl.calibrate(nhl.ratings(games, day), en)
+    home, away, ln = target["home"], target["away"], target["line"]
+    gh, ga = R["starters"].get(home, {}), R["starters"].get(away, {})          # projected: each team's most recent starter
+    H = nhl.side(R, home, away, True, ga.get("id"))
+    A = nhl.side(R, away, home, False, gh.get("id"))
+    t0 = dt.datetime.now()
+    sim = nhl.simulate(H, A, R, en, n=sims, seed=seed)
+    t_sim = (dt.datetime.now() - t0).total_seconds()
+    sp, tl = ln["spread_home"], ln["total"]
+    S = engine.summary(sim, sp, tl)
+    bt = nhl.backtest(games, en, n=6000)
+    M = bt["metrics"]
+    rms = {k: M[k]["rms_vs_market"] for k in M}
+    rms.setdefault("cover", rms.get("win", 0.1))
+    avg = nhl.side(R, "_", "_", False)
+    pw = lambda h, a, **kw: float((lambda s: (s["home"] > s["away"]).mean())(nhl.simulate(h, a, R, en, n=sims, seed=seed, **kw)))
+    base = pw(avg, dict(avg), home_ice=False)
+    full = float((sim["home"] > sim["away"]).mean())
+    no_g = pw(nhl.side(R, home, away, True), nhl.side(R, away, home, False))
+    factors = [("Neutral baseline (two average teams, no home ice)", base, 0.0)]
+    for nm, v in (("Team ratings (shots for/against, finishing, power plays drawn and converted)",
+                   pw(nhl.side(R, home, away, True), nhl.side(R, away, home, False), home_ice=False)),
+                  ("Home ice (calibrated to last season's home margin)", pw(avg, dict(avg)))):
+        factors.append((nm, v, v - base))
+    factors += [("Projected goalies (vs league-average save %)", full, full - no_g),
+                ("Finishing luck variance (vs none)", full, full - pw(H, A, env=False)),
+                ("Rest / back-to-back (no fitted coefficient)", base, 0.0), ("Skater injuries (no player layer)", base, 0.0),
+                ("ALL FACTORS (full model)", full, full - base)]
+    p_h = S["home_win"][0]
+    nv_h = no_vig(ln["ml_home"], ln["ml_away"])
+    nv_c = no_vig(ln["spread_home_odds"], ln["spread_away_odds"])
+    nv_o = no_vig(ln["over_odds"], ln["under_odds"])
+    tot = sim["home"] + sim["away"]
+    news = {"win": 0.0, "cover": 0.0, "total": 0.0}
+    if ln.get("ml_home_open") is not None and ln.get("ml_away_open") is not None and nv_h is not None:
+        news["win"] = news["cover"] = abs(nv_h - no_vig(ln["ml_home_open"], ln["ml_away_open"])) / 2
+    if ln.get("total_open") is not None and tl is not None:
+        news["total"] = abs(float(np.mean(tot > tl)) - float(np.mean(tot > ln["total_open"]))) / 2
+    key = {"win": "home_win", "cover": "home_cover", "total": "over"}
+    err = {k: report.total_error(S[key[k]][1], rms.get(k, 0.1), news[k]) for k in key if key[k] in S}
+    bets = [(f"{home} moneyline", p_h, nv_h, err["win"]), (f"{away} moneyline", 1 - p_h, None if nv_h is None else 1 - nv_h, err["win"])]
+    if "home_cover" in S and nv_c is not None:
+        pc = S["home_cover"][0]
+        bets += [(f"{home} {sp:+g} (puck line)", pc, nv_c, err["cover"]), (f"{away} {-sp:+g} (puck line)", 1 - pc, 1 - nv_c, err["cover"])]
+    if "over" in S:
+        po = S["over"][0]
+        bets += [(f"Over {tl}", po, nv_o, err["total"]), (f"Under {tl}", 1 - po, None if nv_o is None else 1 - nv_o, err["total"])]
+    dec = [(nm, pm, pk, e, report.decision(pm, pk, e)) for nm, pm, pk, e in bets]
+    L, w = [], None
+    w = L.append
+    w(f"# {away} at {home}: {sims:,}-simulation NHL model")
+    w(f"\n{target['date'][:16].replace('T', ' ')}Z. Seed {seed}. Engine: **event clock in 10-second ticks** ({sim['stats']['ticks']:,} ticks, "
+      f"{sim['stats']['iterations']} vectorised steps, {t_sim:.1f} s).")
+    if ln["ml_home"] is not None:
+        w(f"\n**Market ({ln['provider']} via ESPN):** {home} {ln['ml_home']:+.0f} / {away} {ln['ml_away']:+.0f}; puck line {home} {sp:+g}; total {tl}"
+          + (f". Opened {home} {ln['ml_home_open']:+.0f}" if ln.get("ml_home_open") is not None else "") + (f", {ln['total_open']}" if ln.get("total_open") is not None else "") + ".")
+    w(f"\n## 1. Inputs\n\nRatings from this season's games before {day} ({R['n_games']} games, ESPN box scores), opponent-adjusted, each stat shrunk "
+      f"by an empirical-Bayes prior: shots {R['lam']['shots']:.0f} games, finishing {R['lam']['fin']:.0f}, power plays drawn {R['lam']['ppo']:.0f}, "
+      f"power-play % {R['lam']['ppc']:.0f}. Finishing and power-play % are mostly luck this early, so they sit near the league.\n")
+    w("| Attack | Shots/60 | EV finishing × opposing goalie | PP chances | PP conversion | Faces goalie (PROJECTED) | Goalie Sv% (shrunk) |")
+    w("|---|---|---|---|---|---|---|")
+    for t, x, g in ((away, A, gh), (home, H, ga)):
+        sv = R["goalies"].get(g.get("id"), {}).get("sv")
+        w(f"| {t} | {x['shots']:.1f} | {x['fin']:.4f} | {x['ppo']:.2f} | {x['ppc']:.3f} | {g.get('name', 'unknown')} | {'n/a' if sv is None else f'{sv:.3f}'} |")
+    w(f"\nGoalies are projected as each team's most recent starter, since no confirmed starters are published in the data. "
+      f"Save % is shrunk with {nhl.GOALIE_K:.0f} shots of league average ({R['league']['sv']:.3f}). Empty net: "
+      f"{en['for_per_min']:.3f} goals/min for and {en['against_per_min']:.3f} against with the goalie pulled ({en['minutes']:.0f} pulled minutes in "
+      f"{en['games']} games, {en['source']}). Home ice: ×{R['home_mult']:.3f} on even-strength scoring, calibrated to {R['home_prior']['margin']:+.3f} "
+      f"goals a game ({R['home_prior']['source']}, {R['home_prior']['games']} home games; flagged as last season's data; this season so far "
+      f"{R['home_margin']:+.3f}). League {R['gpg']:.2f} goals a team; OT decided in overtime {pct(R['league']['ot_decided'])}, home shootout win {pct(R['league']['so_home'])}.")
+    w("\n**Not modelled (flagged):** skater injuries and line combinations, rest and back-to-backs, score effects other than pulling the goalie.")
+    w(f"\n## 2. Results ({sims:,} simulations)\n\n| | {away} | {home} |\n|---|---|---|")
+    w(f"| Win probability (incl. OT/shootout) | {pct(1 - p_h)} ± {100 * S['home_win'][1]:.2f} (MC) ± {100 * err['win']:.1f} (total) | "
+      f"{pct(p_h)} ± {100 * S['home_win'][1]:.2f} (MC) ± {100 * err['win']:.1f} (total) |")
+    w(f"| Fair moneyline | {fair_american(1 - p_h)} | {fair_american(p_h)} |\n| Average goals | {S['away_mean']:.2f} | {S['home_mean']:.2f} |")
+    w(f"\nOvertime {pct(S['ot'][0])}, shootout {pct(float(sim['shootout'].mean()))}. Total mean {S['total_mean']:.2f}, median {S['total_median']:.0f}, sd {S['total_sd']:.2f}.")
+    if "home_cover" in S:
+        w(f" {home} {sp:+g}: {pct(S['home_cover'][0])} ± {100 * err['cover']:.1f}.")
+    if "over" in S:
+        w(f" Over {tl}: {pct(S['over'][0])} ± {100 * err['total']:.1f}.")
+    w("\nTop 10 margins: " + ", ".join(f"{m:+d} ({pct(p)})" for m, p in S["top_margins"]))
+    w(f"\nTop 10 final scores ({home}–{away}): " + ", ".join(f"{h}–{a2} ({pct(p, 1)})" for h, a2, p in S["top_scores"]))
+    w("\n## 3. Market comparison and decision rule\n\nPLAY only if edge ≥ 2 points and edge − 1.5 × total error > 0. Total error = √(MC² + backtest RMS gap² + "
+      "(half the line move)²); there's no player layer, so any move is unexplained.\n")
+    w("| Bet | Model | No-vig market | Edge | Total error | Edge − 1.5 × error | Verdict |\n|---|---|---|---|---|---|---|")
+    for nm, pm, pk, e, d in dec:
+        w(f"| {nm} | {pct(pm)} | {pct(pk)} | {pts(d['edge'])} | ±{100 * e:.1f} pts | {pts(d['margin'])} | **{d['verdict']}** |")
+    w(f"\n## 4. Factor table\n\nHome win probability, each factor added alone to a neutral matchup (same seed).\n\n| Factor | {home} win | vs neutral |\n|---|---|---|")
+    for nm, v, d in factors:
+        w(f"| {nm} | {pct(v)} | {pts(d)} |")
+    w("\n## 5. Validation (out of sample)\n\nEvery game this season where both teams had 4+ earlier games, simulated from earlier games only with the "
+      "actual starting goalies, against the closing no-vig lines.\n")
+    w("| Market | Games | Brier: model | Brier: market | Log loss: model | Log loss: market | RMS gap |\n|---|---|---|---|---|---|---|")
+    for k, v in M.items():
+        w(f"| {k} | {v['n']} | {v['brier_model']:.4f} | {v['brier_market']:.4f} | {v['logloss_model']:.4f} | {v['logloss_market']:.4f} | {pct(v['rms_vs_market'])} |")
+    best = max(dec, key=lambda d: d[4]["edge"] if d[4]["edge"] is not None else -9)
+    w(f"\n## 6. Summary\n\n- **Headline:** {home} {pct(p_h)} to win (±{100 * err['win']:.1f}), fair {fair_american(p_h)}; no-vig market {pct(nv_h)}.")
+    w(f"- **Largest edge:** {best[0]} {pts(best[4]['edge'])}, margin after the error rule {pts(best[4]['margin'])}.")
+    w("- **Verdict:** " + "; ".join(f"{d[0]} **{d[4]['verdict']}**" for d in dec) + ".")
+    w("- **Biggest uncertainty:** the starting goalies are projected, not confirmed. Early-season ratings are thin, and the model trails the market in the backtest.")
+    w("- No locks and no promised returns.")
+    txt = "\n".join(L) + "\n"
+    path_out = out or os.path.join(HERE, "reports", f"nhl_{game_id}.md")
+    os.makedirs(os.path.dirname(path_out), exist_ok=True)
+    with open(path_out, "w") as f:
+        f.write(txt)
+    return txt
