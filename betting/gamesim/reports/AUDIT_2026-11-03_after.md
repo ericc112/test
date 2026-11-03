@@ -256,3 +256,31 @@ The most likely game is far closer to reality than a random simulated game and a
 **Verdict:**
 - The projections and ranges are more accurate, so both fixes are switched on (`PLAYER_PRIOR_MIN`, `PLAYER_SHOCK`).
 - The over/under calls did **not** improve and remain at coin-flip level. The book's lines are better, and the page says so.
+
+## Applied after review: player minutes (why the points projections were off)
+
+**What was wrong:**
+- Shot share and efficiency per minute were roughly right; minutes were not. A game a player missed counted as 0 minutes in his recent average. Players who sit tonight are already removed through the injury report, so this double-counted the absence.
+- Then 13–14 players were scaled to 240 minutes, which cut starters too.
+- Examples, projected vs played: Curry 19 vs 33, Sengun 20 vs 38, Markkanen 20 vs 31, Ty Jerome 22 vs 37.
+
+**Fix (`MINUTES_WHEN_PLAYING`):**
+- Expected minutes = chance he plays × recency-weighted minutes when he plays.
+- The chance counts coach's-decision benchings in the last 5 games; injured or off-roster games don't count either way.
+- A player on none of the last 3 box scores gets no minutes.
+- The role swing was retuned on pre-Nov 2 games: 0.30 puts about 20% of points, rebounds and assists outside the range (0.35 had been tuned before the minutes fix).
+
+**Fair test, the same 143 Nov 2 starters and DraftKings lines (who sat known in both runs, prior and swing 0.35 in both):**
+
+| | Old minutes | New minutes |
+|---|---|---|
+| Starters' minutes off by | 5.5 | 4.8 |
+| Off by 8+ minutes | 23% | 17% |
+| Points MAE | 5.36 | 5.11 (the line: 4.83) |
+| Brier | 0.273 | 0.259 (coin 0.250, the book 0.249) |
+| Over/under calls right | 66 of 143 | 67 of 143 |
+| On priced lines: model right / book's lean right | 44 / 51 | 46 / 51 |
+
+**Season, after all three player fixes (1,232 player-games):** points MAE 4.62, against 4.83 for a season average (originally 4.80 vs 4.85). Outside the 10–90% range: points 18.9%, rebounds 17.3%, assists 22.7%.
+
+**Verdict:** switched on. Projections, minutes and probabilities are better. Over/under calls are still a coin flip; the book's lines are better.

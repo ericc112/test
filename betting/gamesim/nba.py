@@ -464,9 +464,11 @@ def reb_credit(games: list[dict], before: str) -> float:
 # Player layer, fair-tested 2026-11-03: tuned on 2026-27 games before Nov 2, judged on the Nov 2 starters' DraftKings
 # points lines. Projection MAE 5.31 -> 5.23, stars' gap to the line -2.4 -> -1.2, Brier 0.278 -> 0.275 (a coin flip
 # is 0.250); over/under calls 71 -> 69 of 143, no better: the book's lean got 51 of 96 to the model's 40.
-MINUTES_WHEN_PLAYING = False  # chance he plays x minutes when he plays (see player_profiles); off until its fair test decides
+# Fair test on the Nov 2 starters (same lines, who sat known): starters' minutes off by 5.5 -> 4.8, points MAE
+# 5.36 -> 5.11, Brier 0.273 -> 0.259 (book 0.249), over/under calls 66 -> 67 of 143.
+MINUTES_WHEN_PLAYING = True   # chance he plays x minutes when he plays (see player_profiles)
 PLAYER_PRIOR_MIN = 100.0  # minutes of the player's own last-season per-minute rates in his prior (else team average)
-PLAYER_SHOCK = 0.35       # per-player per-game role swing (log SD): 10-90% ranges hold ~20% of results (was 29%)
+PLAYER_SHOCK = 0.30       # per-player per-game role swing (log SD): ~20% of results outside the 10-90% range (was 29%); retuned after the minutes fix
 
 
 def season_player_totals(lg: str, games: list[dict], before: str = "2099-01-01") -> dict:
@@ -547,6 +549,8 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
             rate = float(np.mean(avail)) if avail else 0.0
             a["play_rate"] = rate
             a["proj"] = rate * float(np.dot(wp, played) / sum(wp)) if played else 0.0
+            if not any(any(r["id"] == pid for r in rows) for _, rows in boxes[-3:]):
+                a["proj"] = 0.0                      # not on any of the last 3 box scores: not with the team now
         a["starter"] = any(r["id"] == pid and r["starter"] for r in last[-1][1])
         lr = next((r for r in last[-1][1] if r["id"] == pid), None)
         hurt = bool(lr and lr["dnp"] and lr["reason"] and "COACH" not in lr["reason"].upper())
