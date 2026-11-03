@@ -304,6 +304,8 @@ def engines(data: dict) -> dict:
                   "players_bt": _bt("nba_players", lambda: {"metrics": gnba.player_backtest("nba", G, cut)}),
                   # calibration of the browser player layer on finished games (written by the audit's pl_check.js run)
                   "players_cal": _json_or_none(os.path.join(gs_data.CACHE, "bt_nba_players_cal.json"))}
+    # the "most likely game" backtest (written by the audit's likely_bt.py): accuracy of the most common simulated score
+    out["likely_bt"] = {k: (_json_or_none(os.path.join(gs_data.CACHE, f"bt_likely_{k}.json")) or {}).get("summary") for k in ("nba", "nhl", "nfl")}
     # ---- NHL event clock
     nhl_games = next(lg for lg in data["leagues"] if lg["key"] == "nhl")["games"]
     G = gnhl.season_games(f"{y}1005", yday)

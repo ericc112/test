@@ -186,7 +186,7 @@ table.dec, #factorTbl { min-width: 600px }
 .bc-wp { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: #222 } .bc-wp i { display: block; height: 100%; transition: width .4s ease }
 .bc-ctrl .seg { border-color: #33404d } .bc-ctrl .seg button { color: #eef3f7 } .bc-ctrl .seg button[aria-pressed="true"] { background: #eef3f7; color: #0b1016 }
 .bc-ctrl .btn { background: #18222d; border-color: #33404d; color: #eef3f7 } .bc-lab { font-size: .72rem; color: #9fb0c0; text-transform: uppercase; letter-spacing: .08em }
-.bc-note { font-size: .78rem; color: #9fb0c0 }
+.bc-note { font-size: .78rem; color: #9fb0c0 } .bc-likely { margin: 0; line-height: 1.45; color: #cfd9e2 }
 @media (prefers-reduced-motion: reduce) { .bc-wp i { transition: none } }
 </style>
 
@@ -292,7 +292,8 @@ table.dec, #factorTbl { min-width: 600px }
           <div class="bc-wp" aria-hidden="true"><i id="bcWpA"></i><i id="bcWpH"></i></div>
           <div class="row bc-ctrl"><span class="bc-lab">Speed</span><div class="seg" id="bcSpeed" role="group" aria-label="Playback speed">
             <button data-sp="1" aria-pressed="true">1×</button><button data-sp="2" aria-pressed="false">2×</button><button data-sp="4" aria-pressed="false">4×</button><button data-sp="10" aria-pressed="false">10×</button></div>
-            <button class="btn" id="bcPause">Pause</button><button class="btn" id="bcNew">New game</button><span class="bc-note" id="bcNote"></span></div>
+            <button class="btn" id="bcPause">Pause</button><button class="btn" id="bcLikelyBtn">Most likely game</button><button class="btn" id="bcNew">Random game</button><span class="bc-note" id="bcNote"></span></div>
+          <p class="bc-note bc-likely" id="bcLikely" hidden></p>
           <div class="bc-box" id="bcBox" hidden></div>
         </div>
         <div class="live-grid">
@@ -359,7 +360,7 @@ table.dec, #factorTbl { min-width: 600px }
 // ---------- random numbers (xoshiro128**) ----------
 const S = new Uint32Array(4);
 function rotl(x, k) { return ((x << k) | (x >>> (32 - k))) >>> 0; }
-function seed(x) { x = (x >>> 0) || 1; for (let i = 0; i < 4; i++) { x = (x + 0x9E3779B9) >>> 0; let z = x; z = Math.imul(z ^ (z >>> 16), 0x85ebca6b); z = Math.imul(z ^ (z >>> 13), 0xc2b2ae35); S[i] = (z ^ (z >>> 16)) >>> 0; } }
+function seed(x) { spare = null; x = (x >>> 0) || 1; for (let i = 0; i < 4; i++) { x = (x + 0x9E3779B9) >>> 0; let z = x; z = Math.imul(z ^ (z >>> 16), 0x85ebca6b); z = Math.imul(z ^ (z >>> 13), 0xc2b2ae35); S[i] = (z ^ (z >>> 16)) >>> 0; } }
 function rnd() { const r = Math.imul(rotl(Math.imul(S[1], 5) >>> 0, 7), 9) >>> 0; const t = (S[1] << 9) >>> 0;
   S[2] ^= S[0]; S[3] ^= S[1]; S[1] ^= S[2]; S[0] ^= S[3]; S[2] ^= t; S[3] = rotl(S[3], 11); return r / 4294967296; }
 let spare = null;
@@ -660,7 +661,7 @@ function nflGain(g0, yl, mult) {
 }
 
 // NFL: every snap. C = {M, home, away, hfa, wind, env}; st = optional live state; log = optional array of states after each snap
-function nflPlayGame(C, st, log) {
+function nflPlayGame(C, st, log, _tk, cap) {
   const M = C.M, S = [C.home, C.away], env = C.env !== false;
   const z = env ? [normal(), normal()] : [0, 0];
   const ym = z.map((v) => Math.exp(M.yard_sd * v - M.yard_sd * M.yard_sd / 2));
@@ -727,7 +728,7 @@ function nflPlayGame(C, st, log) {
     if (half === 3) { if (flip || scO || pick6 || safety) otPoss[o]++; if (otPoss[0] >= 1 && otPoss[1] >= 1 && score[0] !== score[1]) done = true; }
     if (act === 4 && qtr >= 4) done = true;
     if (!done && clock <= 0) {
-      if (half === 1) { half = 2; clock = 1800; tos = [3, 3]; kickoffTo(1 - recv1, false); }
+      if (half === 1) { if (cap) cap.half = [score[0], score[1]]; half = 2; clock = 1800; tos = [3, 3]; kickoffTo(1 - recv1, false); }
       else if (half === 2) { if (score[0] !== score[1]) done = true; else { half = 3; clock = 600; wentOT = true; tos = [2, 2]; kickoffTo(rnd() < 0.5 ? 1 : 0, false); } }
       else done = true;
     }
@@ -801,7 +802,7 @@ function nbEnd(tk, score) {
 }
 
 // NBA: every possession. C = {R, home, away, minutes, shotClock, env}; st = {sh, sa, clock, poss, ot}
-function nbaPossGame(C, st, log, tk) {
+function nbaPossGame(C, st, log, tk, cap) {
   const R = C.R, S = [C.home, C.away], minutes = C.minutes || 48, shotClock = C.shotClock || 24, env = C.env !== false;
   const pace0 = R.pace + (S[0].pace_off + S[1].pace_off) / 2;
   const paceG = pace0 * (env ? Math.exp(normal() * R.sd_pace / Math.max(pace0, 1)) : 1);
@@ -831,6 +832,7 @@ function nbaPossGame(C, st, log, tk) {
       }
     }
     dur = Math.min(dur, c); score[o] += pts; clock = c - dur; np++; poss = d;
+    if (cap && !cap.half && !ot && clock <= minutes * 30) cap.half = [score[0], score[1]];
     if (log) log.push({ clock, poss, ot, sh: score[0], sa: score[1], pts, off: o, foul, seq, preClock: c, t: ot ? 1 : 1 - clock / (minutes * 60) });
     if (clock <= 0) { if (score[0] !== score[1] || ot >= 8) { if (score[0] === score[1]) score[0]++; break; } clock = 300; ot++; poss = rnd() < 0.5 ? 1 : 0; }
   }
@@ -839,7 +841,7 @@ function nbaPossGame(C, st, log, tk) {
 }
 
 // NHL: 10-second ticks. C = {R, en, home, away, env, homeIce}; st = {sh, sa, tick, pp}
-function nhlEventGame(C, st, log) {
+function nhlEventGame(C, st, log, _tk, cap) {
   const R = C.R, S = [C.home, C.away], en = C.en, env = C.env !== false, T = 360;
   const ev = S.map((s) => s.shots * 0.88 * s.fin / 360 * R.goal_scale); if (C.homeIce !== false) ev[0] *= R.home_mult;
   const pen = [S[1].ppo / 360, S[0].ppo / 360], pph = S.map((s) => -Math.log(1 - s.ppc) / 12), shg = R.shg_per_pp / 12;
@@ -858,9 +860,10 @@ function nhlEventGame(C, st, log) {
       const j = 1 - i, onPP = pp[i] > 0, onPK = pp[j] > 0, pi = i === 0 ? pullH : pullA, pj = i === 0 ? pullA : pullH;
       let h = onPP ? pph[i] : (onPK ? shg : ev[i] * sh[i]); if (pi) h = Math.max(h, enF); if (pj) h = enA;
       if (rnd() < h) { score[i]++; if (onPP) pp[i] = 0; if (log) log.push({ tick: k + 1, team: i, pp: onPP, en: pj, sh: score[0], sa: score[1], t: (k + 1) / T }); }
-      else if (log && !pj && rnd() < Math.max(0, S[i].shots / 360 * (onPP ? 1.8 : onPK ? 0.35 : 1) - h)) log.push({ tick: k + 1, team: i, shot: true, sh: score[0], sa: score[1], t: (k + 1) / T });
+      else if (log && !pj && Math.random() < Math.max(0, S[i].shots / 360 * (onPP ? 1.8 : onPK ? 0.35 : 1) - h)) log.push({ tick: k + 1, team: i, shot: true, sh: score[0], sa: score[1], t: (k + 1) / T });
     }
     pp[0] = Math.max(pp[0] - 1, 0); pp[1] = Math.max(pp[1] - 1, 0);
+    if (cap && k + 1 === 240) cap.half = [score[0], score[1]];
     if (log && (k + 1) % 30 === 0) log.push({ tick: k + 1, sh: score[0], sa: score[1], t: (k + 1) / T, marker: true, pp: false });
   }
   let ot = 0;
@@ -875,7 +878,7 @@ function nhlEventGame(C, st, log) {
 const ENGINES = { nflpbp: nflPlayGame, nbaposs: nbaPossGame, nhlev: nhlEventGame };
 
 // ---------- message loop ----------
-let current = 0, plCurrent = 0;
+let current = 0, plCurrent = 0, likelyCurrent = 0;
 onmessage = (e) => {
   const m = e.data;
   if (m.cmd === "nfl" || m.cmd === "run" || (m.cmd === "eng" && m.track)) current = m.id;        // a new run supersedes the old one; other asks don't
@@ -906,6 +909,60 @@ onmessage = (e) => {
       g.conv.push([k, g.hw / Math.max(g.hw + g.aw, 1)]);
       postMessage({ id: m.id, kind: k < n ? "progress" : "done", agg: g });
       if (k < n) setTimeout(step, delay);
+    };
+    step();
+  } else if (m.cmd === "eng_likely") {
+    // The most likely game out of n runs: the most common final score (NBA: smoothed over +-2 points, since an exact
+    // basketball score comes up only a few dozen times in 50,000), then, among the runs that ended exactly that way,
+    // the one closest to the typical path (halftime score; NBA: every rotation player's points, rebounds, assists).
+    // Each run has its own seed, so the chosen run is replayed exactly with the play-by-play log.
+    const fn = ENGINES[m.engine], n = m.n, base = ((m.seed || 97) * 100003) >>> 0, nba = m.engine === "nbaposs" && m.cfg.pl;
+    const tk = nba ? nbaTracker(m.cfg.pl, m.cfg.R.reb_credit) : null;
+    const pidx = nba ? tk.T.map((t) => t.ps.map((p, j) => j).filter((j) => t.ps[j].min >= 12)) : [[], []];
+    const NP = pidx[0].length + pidx[1].length, F = 2 + 3 * NP;                  // features: halftime h, a + player lines
+    const H = new Int16Array(n), A = new Int16Array(n), OT = new Uint8Array(n), X = new Float32Array(n * F);
+    likelyCurrent = m.id; let i = 0;
+    const step = () => {
+      if (likelyCurrent !== m.id) return;                                   // a newer search replaced this one
+      const end = Math.min(n, i + 2500);
+      for (; i < end; i++) {
+        seed(base + i); const cap = {};
+        const r = fn(m.cfg, null, null, tk, cap);
+        H[i] = r[0]; A[i] = r[1]; OT[i] = r[2] ? 1 : 0;
+        const o = i * F; X[o] = cap.half ? cap.half[0] : r[0] / 2; X[o + 1] = cap.half ? cap.half[1] : r[1] / 2;
+        let f = o + 2;
+        if (nba) tk.T.forEach((t, si) => pidx[si].forEach((j) => { const c = t.cur, b2 = j * NBN; X[f++] = c[b2 + NB.pts]; X[f++] = c[b2 + NB.orb] + c[b2 + NB.drb]; X[f++] = c[b2 + NB.ast]; }));
+      }
+      if (i < n) { postMessage({ id: m.id, kind: "progress", k: i }); setTimeout(step, 0); return; }
+      // 1) most common final score
+      const cnt = new Map(); for (let k = 0; k < n; k++) { const key = H[k] * 1000 + A[k]; cnt.set(key, (cnt.get(key) || 0) + 1); }
+      const kern = m.engine === "nbaposs" ? 2 : 0;
+      let bestKey = -1, bestD = -1;
+      for (const [key] of cnt) {
+        const h = Math.floor(key / 1000), a2 = key % 1000; let d = 0;
+        for (let dh = -kern; dh <= kern; dh++) for (let da = -kern; da <= kern; da++) d += cnt.get((h + dh) * 1000 + a2 + da) || 0;
+        if (d > bestD || (d === bestD && (cnt.get(key) || 0) > (cnt.get(bestKey) || 0))) { bestD = d; bestKey = key; }
+      }
+      const bh = Math.floor(bestKey / 1000), ba = bestKey % 1000;
+      // 2) typical path: standardized distance to the median of every feature, over all n runs
+      const med = new Float64Array(F), sd = new Float64Array(F), col = new Float32Array(n);
+      for (let f2 = 0; f2 < F; f2++) { let s1 = 0, s2 = 0; for (let k = 0; k < n; k++) { const v = X[k * F + f2]; col[k] = v; s1 += v; s2 += v * v; }
+        const sorted = Float32Array.from(col).sort(); med[f2] = sorted[n >> 1]; sd[f2] = Math.sqrt(Math.max(s2 / n - (s1 / n) ** 2, 1e-6)); }
+      let otAll = 0; for (let k = 0; k < n; k++) otAll += OT[k];
+      const otUsual = otAll / n > 0.5 ? 1 : 0;                              // ends the usual way (regulation, almost always)
+      let pick = -1, pd = Infinity, ties = 0;
+      for (let k = 0; k < n; k++) { if (H[k] !== bh || A[k] !== ba) continue; ties++;
+        let d = OT[k] !== otUsual ? 100 : 0; for (let f2 = 0; f2 < F; f2++) { const z = (X[k * F + f2] - med[f2]) / sd[f2]; d += f2 < 2 ? 2 * z * z : z * z / Math.max(NP, 1) * 2; }
+        if (d < pd) { pd = d; pick = k; } }
+      // 3) replay that run with the full log
+      seed(base + pick); const log = [], tk2 = nba ? nbaTracker(m.cfg.pl, m.cfg.R.reb_credit) : null;
+      const r = fn(m.cfg, null, log, tk2, {});
+      let hw = 0, ot = 0; for (let k = 0; k < n; k++) { if (H[k] > A[k]) hw++; ot += OT[k]; }
+      const top = [...cnt.entries()].sort((x, y) => y[1] - x[1]).slice(0, 5).map(([key, c]) => [Math.floor(key / 1000), key % 1000, c]);
+      const smed = (arr) => Float32Array.from(arr).sort()[n >> 1];
+      postMessage({ id: m.id, kind: "watch", log, final: [r[0], r[1]], mins: tk2 ? tk2.T.map((t) => Array.from(t.m)) : null,
+        likely: { n, index: pick, score: [bh, ba], exact: cnt.get(bestKey) || 0, near: bestD, kern, sameScoreRuns: ties, replayOk: r[0] === bh && r[1] === ba,
+          pHome: hw / n, otShare: ot / n, half: [X[pick * F], X[pick * F + 1]], medHalf: [med[0], med[1]], medFinal: [smed(H), smed(A)], top } });
     };
     step();
   } else if (m.cmd === "eng_watch") {
@@ -1658,7 +1715,7 @@ $("liveBtn").onclick = async () => {
   state.timeline.push({ t: L.t, p: agg.hw / Math.max(agg.hw + agg.aw, 1) }); state.timeline.sort((a, b) => a.t - b.t); drawTime();
 };
 $("watchBtn").onclick = () => {
-  if (engOn()) return bcStart();
+  if (engOn()) return bcStart("likely");
   if (!engOn()) return watchOld();
   stopWatch(); state.p = params(); state.timeline = []; $("tLog").innerHTML = "";
   const k = engLeague(), g = game();
@@ -2013,7 +2070,7 @@ function bcLoop(now) {
   }
   if (BC.sport) bcDraw(now);
 }
-function bcFinish() { if (!BC.on) return; BC.on = false; $("bcNote").textContent = "Final. Press New game for another simulation."; bcBug(true); }
+function bcFinish() { if (!BC.on) return; BC.on = false; $("bcNote").textContent = "Final. Press Most likely game or Random game to play another."; bcBug(true); }
 function bcState(e) {
   if (BC.sport === "nfl") { if (e.kind === "kick") return; BC.s = { sh: e.sh, sa: e.sa, half: e.half, clock: e.clock, poss: e.poss, yl: e.yl, down: e.down, togo: e.togo, done: e.done }; }
   else if (BC.sport === "nba") BC.s = { sh: e.sh, sa: e.sa, clock: e.clock, ot: e.ot, poss: e.poss };
@@ -2069,8 +2126,23 @@ function bcWp(e) {
     $("bcNote").textContent = `Win probability re-simulated from each new game state (${n.toLocaleString()} runs of the rest of the game).`;
   });
 }
-function bcStart() {
-  const k = engLeague(), g = game(); BC.run++; const run = BC.run;
+// The most likely game: every one of the 50,000 runs is data. The most common final score, then the run closest to
+// the typical path; the worker replays that exact run. It is the centre of the simulations, not a forecast.
+function likelyCaption(L, g, k) {
+  const sc = (h, a) => `${g.away} ${a}–${h} ${g.home}`, pct = (x) => (100 * x).toFixed(x < 0.01 ? 2 : 1) + "%";
+  const lab = k === "nhl" ? "after two periods" : "at halftime", bt = (E.likely_bt || {})[k];
+  return `Most likely game of ${L.n.toLocaleString()} runs: ${sc(L.score[0], L.score[1])}. ` +
+    (L.kern ? `That score, give or take ${L.kern} points a team, came up in ${L.near.toLocaleString()} runs, exactly in ${L.exact} (${pct(L.exact / L.n)}). `
+            : `It was the most common final score, in ${L.exact.toLocaleString()} runs (${pct(L.exact / L.n)}). `) +
+    `Of those, this is the run closest to the typical game: ${L.half[1]}–${L.half[0]} ${lab} (median ${L.medHalf[1]}–${L.medHalf[0]})${k === "nba" ? ", every rotation player near his median line" : ""}. ` +
+    `${g.home} won ${pct(L.pHome)} of all runs. ` +
+    (bt && bt.likely ? `Backtest on ${bt.games} finished games it never saw: it picked the winner ${pct(bt.likely.winner_right)} of the time (one random simulated game: ${pct(bt.random.winner_right)}; the betting favourite: ${pct(bt.market.winner_right)}), ` +
+      `missed the final margin by ${bt.likely.margin_mae.toFixed(1)} on average (random game ${bt.random.margin_mae.toFixed(1)}, closing spread ${bt.market.margin_mae.toFixed(1)}) and hit the exact score ${pct(bt.likely.exact_score)} of the time. ` : "") +
+    `It is the most representative game in the simulations, not a forecast that this exact game will happen.`;
+}
+function bcStart(mode) {
+  const k = engLeague(), g = game(); BC.run++; const run = BC.run; const likely = mode !== "random";
+  $("bcLikely").hidden = true;
   BC.sport = k; BC.g = g; BC.colors = bcColors(g); BC.i = 0; BC.cur = null; BC.paused = false; BC.wp = null; BC.s = { sh: 0, sa: 0 }; BC.final = null; BC.half = 1;
   BC.stats = [0, 1].map(() => ({ att: 0, comp: 0, yds: 0, td: 0, int: 0, ryds: 0, rtd: 0, fga: 0, fgm: 0, tpa: 0, tpm: 0, fta: 0, ftm: 0, to: 0 }));
   if (k === "nfl") { const cf = engCfg(); BC.qbn = [cf.home.name, cf.away.name]; BC.cam.u = BC.cam.tu = 60; BC.cam.w = BC.cam.tw = 64; }
@@ -2080,10 +2152,14 @@ function bcStart() {
   BC.pnames = pcf ? pcf.map((t) => t.players.map((p) => p.name)) : null; BC.pbox = pcf ? pcf.map((t) => t.players.map(() => ({ pts: 0, reb: 0, ast: 0 }))) : null; BC.mins = null; bcBox();
   $("bcast").hidden = false; $("bcPause").textContent = "Pause"; $("bcNote").textContent = "Simulating a game…";
   state.timeline = []; state.p = params(); drawTime(); bcBug();
-  ask({ cmd: "eng_watch", engine: ENG[k].key, cfg: engCfg() }, (msg) => {
+  if (likely) $("bcNote").textContent = `Finding the most likely game in ${N.toLocaleString()} runs…`;
+  const gseed = [...String(g.id || g.home + g.away)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 9973;
+  ask(likely ? { cmd: "eng_likely", engine: ENG[k].key, cfg: engCfg(), n: N, seed: gseed + 1 } : { cmd: "eng_watch", engine: ENG[k].key, cfg: engCfg() }, (msg) => {
     if (run !== BC.run) return;
+    if (msg.kind === "progress") { $("bcNote").textContent = `Finding the most likely game: ${msg.k.toLocaleString()} of ${N.toLocaleString()} runs…`; return; }
     BC.ev = k === "nfl" ? nflPrepare(msg.log) : msg.log; BC.final = msg.final; BC.on = true; BC.mins = msg.mins || null; bcBox();
-    $("bcNote").textContent = "Playing one simulated game. The win probability updates as it goes.";
+    if (msg.likely) { $("bcLikely").textContent = likelyCaption(msg.likely, g, k); $("bcLikely").hidden = false; }
+    $("bcNote").textContent = likely ? "Playing the most likely game. The win probability updates as it goes." : "Playing one random simulated game. The win probability updates as it goes.";
     BC.wpBusy = false; bcWp(k === "nfl" ? { sh: 0, sa: 0, half: 1, clock: 1800, poss: null, done: false, t: 0, yl: 75, down: 1, togo: 10, tos: [3, 3] } : k === "nba" ? { sh: 0, sa: 0, clock: 2880, poss: null, ot: 0, t: 0 } : { sh: 0, sa: 0, tick: 0, t: 0 });
     if (!BC.raf) BC.raf = requestAnimationFrame(bcLoop);
   });
@@ -2092,7 +2168,8 @@ function bcStop() { BC.on = false; BC.sport = null; BC.run++; BC.wpBusy = false;
 document.querySelectorAll("#bcSpeed button").forEach((b) => b.onclick = () => { BC.speed = Number(b.dataset.sp);
   document.querySelectorAll("#bcSpeed button").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); });
 $("bcPause").onclick = () => { BC.paused = !BC.paused; $("bcPause").textContent = BC.paused ? "Resume" : "Pause"; };
-$("bcNew").onclick = () => bcStart();
+$("bcNew").onclick = () => bcStart("random");
+$("bcLikelyBtn").onclick = () => bcStart("likely");
 
 $("pulled").textContent = D.pulled ? `Lines and injuries as of ${new Date(D.pulled).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "No data file loaded: use Any game (custom).";
 renderRail(); renderHonest();
