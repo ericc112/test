@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-13",
+  "updated": "2026-11-03",
   "blend_prior": {
     "intercept": 0.0,
     "w_model": 0.45,
@@ -8,13 +8,13 @@
     "w_hist": 0.15
   },
   "blend": {
-    "intercept": 0.0252,
-    "w_model": 0.465,
-    "w_market": 0.4276,
-    "w_hist": 0.0852
+    "intercept": 0.0461,
+    "w_model": 0.4496,
+    "w_market": 0.4135,
+    "w_hist": 0.0705
   },
   "blend_fit": {
-    "n_fit": 30
+    "n_fit": 31
   },
   "model_bias_logit": {
     "mlb:batter_hits:over": -0.145,
@@ -28,11 +28,17 @@
   },
   "model_bias_source": "2026-10-12 NLCS/ALCS hitter scan: model ran +3.6 pts (hits), +2.0 (singles), -1.2 (walks) vs DraftKings no-vig across all hitters. Re-measure each scan. | 2026-10-12 H+R+RBI 1.5 scan: model ran -7.6 pts vs DK no-vig across 18 hitters (run-environment scaling too strong).",
   "outcome_bias_logit": {
-    "cs2:cs_kills_m12:under": -0.095,
-    "cs2:cs_headshots_m12:under": 0.015,
-    "mlb:batter_hrr:under": -0.072
+    "mlb:pitcher_outs:over": 0.007,
+    "cs2:cs_kills_m12:under": -0.4,
+    "cs2:cs_headshots_m12:over": -0.292,
+    "cs2:cs_headshots_m12:under": -0.055,
+    "mlb:batter_hrr:under": -0.076,
+    "cs2:cs_kills_m12:over": -0.128,
+    "cfb:rec_yds:over": 0.073
   },
-  "avoid_segments": [],
+  "avoid_segments": [
+    "cs2:cs_kills_m12:under"
+  ],
   "gates": {
     "high": 0.65,
     "medium": 0.58,
@@ -47,6 +53,7 @@
   },
   "hist_weight_scale_note": "Postseason only (LESSONS L17): playoff hooks are quicker than regular-season history implies. Reset to {} on opening day.",
   "cap_medium_segments": {
+    "cs2:cs_kills_m12:under": "3 losses tagged 'model bias'; hit 35% vs 59% predicted over 20",
     "mlb:batter_hrr:under": "3 losses tagged 'model bias'; hit 50% vs 57% predicted over 12"
   },
   "rule_flags": [

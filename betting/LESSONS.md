@@ -28,6 +28,7 @@ Each lesson came from a real mistake or near-miss. Before publishing a number, c
 | L22 | H+R+RBI unders lost on late bullpen innings: Ramirez 5 of 6 off the bullpen, Adell 3 of 3 (2-RBI double in the 9th), Turang and Hamilton earlier | The hitter model treats late relief innings as average; postseason middle relief and blowout arms gave up most of the damage | Segment is capped at Medium by `edge learn` (50% vs 57% predicted over 12); no H+R+RBI unders in hit-rate entries until it recovers |
 | L23 | Cuzz U10.5 (LoL maps 1-3 kills) was labelled High with history "80% of 40"; counted by series it was 13 of 20 (65%), which drops it to Medium | History was counted per game (or from simulated blocks), not at the unit the prop settles on | Count history at the prop's own unit: series totals for "maps 1-3" props, maps 1-2 totals for CS2, games for single-game props. Never per-game rows for a multi-game prop |
 | L24 | In one night: Cuzz and Tangyuan published as High on per-game history, a model number mistyped into a blend (0.78 for 0.728), malbsMd U32 recommended when PrizePicks only offered the over, labels left stale after the weights changed | Picks went out on a single pass, with numbers copied by hand and nothing re-derived | Every pick passes `edge verify` before it is named: recompute, recount from raw data at the prop's unit, re-price on current odds, line offered, lesson rules, correlation. NOT VERIFIED means not published |
+| L25 | CS2 maps 1-2 kill unders hit 7 of 20 (35%) against 59% predicted over 2026-10-12/13. One overtime map (Ancient, 30 rounds) sank six unders at once; three losses were tagged `model bias` | The model treats overtime as rare, and it leans on kill-per-round rates that run low for players who are good in close maps | The segment is on the AVOID list and capped at Medium. No CS2 kill unders until the model prices P(overtime) × 6+ extra rounds explicitly and a fresh 20-bet sample lands within 5 pts of prediction |
 
 ## Every loss gets a post-mortem
 `python -m edge grade` writes one for each new loss, and `python -m edge review` covers any that were missed. That includes passes, Low legs and user entries, not just High picks. Each post-mortem pulls the box score or play-by-play, finds which input failed (volume, rate, price, script), links legs that lost on the same game script, and suggests a tag. Confirm it with `python -m edge tag ID "tag" --lesson "what to change"`. The readable log is `POSTMORTEMS.md`.
@@ -47,3 +48,11 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 - 2 losses in mlb:pitcher_outs:over share the cause 'opportunity': write a checklist rule for it in the table above.
 - 2 losses in cs2:cs_kills_m12:under share the cause 'model bias': write a checklist rule for it in the table above.
 - 3 losses in mlb:batter_hrr:under share the cause 'model bias': write a checklist rule for it in the table above.
+
+### Auto-learned 2026-11-03
+- Segment cs2:cs_kills_m12:under: results run below our probabilities; now auto-adjusting -0.40 logit.
+- Segment cs2:cs_headshots_m12:over: results run below our probabilities; now auto-adjusting -0.29 logit.
+- Segment cs2:cs_kills_m12:under added to AVOID list: hit rate >8 pts under prediction over 20+ bets.
+
+### Auto-learned 2026-11-03
+- Segment cs2:cs_kills_m12:under capped at Medium (no High legs) until results recover: 3 losses tagged 'model bias'; hit 35% vs 59% predicted over 20.

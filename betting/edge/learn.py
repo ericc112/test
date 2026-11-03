@@ -212,8 +212,10 @@ def find_caps(rows: list[dict], min_losses: int = 3) -> dict:
 
 # ---------------------------------------------------------------- report + update
 def report(rows: list[dict], pms: dict | None = None) -> str:
-    g = graded(rows)
-    lines = [f"Bets logged: {len(rows)} | graded: {len(g)} | pending: {sum(r.get('status') == 'pending' for r in rows)}"]
+    g_all = graded(rows)
+    g = [r for r in g_all if _f(r.get("p_final")) is not None]   # unpriced rows can't be calibrated
+    lines = [f"Bets logged: {len(rows)} | graded: {len(g_all)} | pending: {sum(r.get('status') == 'pending' for r in rows)}"
+             + (f" | {len(g_all) - len(g)} graded without a probability (left out below)" if len(g) < len(g_all) else "")]
     if not g:
         return "\n".join(lines + ["Nothing graded yet: run `python -m edge grade` after games finish."])
     ps = [_f(r["p_final"]) for r in g]
