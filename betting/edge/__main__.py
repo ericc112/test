@@ -494,6 +494,10 @@ def _nba_picks(args):
             "neutral: any reason against it drops the leg, so the list can hold fewer than five. One run is a single draw, so the order comes from the "
             "calibrated probability, one leg per game. The reasons make the list consistent, not more accurate: in the fair test they added no "
             "information beyond the price (LESSONS L27).", ""]
+    drop = ctx.get("likely_dropped") or []
+    lsec.append(f"Dropped for a reason against them: {len(drop)}" + (": " + "; ".join(
+        f"{d['player']} {d['side']} {d['line']} {d['stat']} ({d['p']:.0%}; against: {', '.join(d['against'])})" for d in drop) if drop else "") + "")
+    lsec.append("")
     report = ("\n".join(head) + "\n## Top 5 by the model\n\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n" + "\n".join(hsec) + "\n"
               + "\n\n".join(hblocks) + "\n" + "\n".join(lsec) + "\n" + "\n\n".join(lblocks) + "\n\n" + NR.markdown(track, clv_s, tilt_s) + "\n" + "\n".join(shsec) + "\n")
     out = args.out or os.path.join(HERE, "data", "picks", f"{today}-nba.md")
@@ -506,7 +510,7 @@ def _nba_picks(args):
           "track": {"graded": track["graded"], "holdout": track["holdout"], "labels": track["labels"], "published": track["published"],
                     "skill_holdout": track["skill_holdout"]},
           "clv": {k: v for k, v in clv_s.items() if k != "rows"}, "tilt": tilt_s,
-          "bias": {N.LABEL[k]: round(v["bias_logit"], 2) for k, v in bias.items()}, "entry": entry, **page,
+          "bias": {N.LABEL[k]: round(v["bias_logit"], 2) for k, v in bias.items()}, "entry": entry, "likely_dropped": ctx.get("likely_dropped") or [], **page,
           "next": [N.page_row(r, "", [], None) for r in rest]}
     with open(os.path.splitext(out)[0] + ".json", "w") as f:
         json.dump(pg, f, default=float)

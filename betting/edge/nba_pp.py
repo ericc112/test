@@ -657,13 +657,17 @@ def likely_order(rows: list[dict], ctx: dict, likely: dict, top: int = 5) -> lis
     rank = {"High": 0, "Medium": 1, "Low": 2}
     cand.sort(key=lambda r: (rank.get(r["confidence"], 3), -r["p_final"], -r["z_gap"]))
     seen, out = set(), []
+    ctx["likely_dropped"] = []          # legs that ranked high enough but had a reason against them (for the report)
     for r in cand:
         if r["script"] in seen:
             continue
         _likely_context(r, ctx)
         r["reasons"] = likely_reasons(r)
-        if any(x["verdict"] == "against" for x in r["reasons"]):
-            continue                        # every reason must point the same way as the pick (or be neutral)
+        against = [x["name"] for x in r["reasons"] if x["verdict"] == "against"]
+        if against:                         # every reason must point the same way as the pick (or be neutral)
+            ctx.setdefault("likely_dropped", []).append({"player": r["player"], "team": r["team"], "side": r["side"], "line": r["line"],
+                                                         "stat": LABEL[r["stat_key"]], "p": round(r["p_final"], 3), "against": against})
+            continue
         seen.add(r["script"])
         out.append(r)
         if len(out) == top:
