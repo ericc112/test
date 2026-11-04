@@ -29,6 +29,11 @@ changed. Design changes are listed as proposals at the end and were **not** appl
 
 No locks, no guarantees: the honest result is that the closing line is the better forecast in every sport tested.
 
+**Update, Nov 4: score effects and player ratings added to the NBA model** (section at the end).
+- *Margin spread:* fixed. Two average teams now have a 14.3-point margin SD (was 16.8).
+- *Underconfidence:* 2–5 points per bucket, down from about 6.
+- *Gap to the market:* on held-out games the winner Brier gap halves, from +0.016 to +0.008. The market is still better, and the model's disagreement with it still carries no information.
+
 ## Fixes (each with before → after)
 
 | ID | Fix | Before | After |
@@ -335,3 +340,56 @@ The most likely game is far closer to reality than a random simulated game and a
 | Assists | 4.4 (simulated 3.7) | 3–6 | 5.5 | 31% | 8 |
 
 With six teammates out, his real usage rose far beyond the model's proportional redistribution: shot share 23.9% → 25.8%, minutes 32.6 → 36.2 before scaling. This is the on/off gap named in F6.
+
+## Applied after review: score effects and team strength from player ratings (Nov 4)
+
+The user asked for three improvements used by stronger public models. Each was tuned on earlier games, judged on games it never saw, and kept only if it helped.
+
+**1. Pre-tip refresh.** A scheduled task regenerates the page data at 5:37 pm and 8:37 pm ET every day, picking up the injury report, DraftKings player lines and last night's results, then republishes the page.
+
+**2. Score effects** (`simulate`, `COMEBACK_SD = 14.0`):
+- *Method:* a team ahead of its expected margin path eases off and one behind pushes. This is a logit shift on make rates, proportional to how far the score is from that path, so the mean margin doesn't move.
+- *Fit:* κ is set so two average teams have a 14-point margin SD, matching the real residual against the closing spread (14.05–14.17). It comes out at κ ≈ 0.037–0.039; the browser engine uses the same term.
+- *Effect on two average teams:* margin SD 16.8 → 14.3 (browser) and 17.2 → 14.5 (Python, 2025-26 inputs). The total is unchanged because the and-one rate is refitted.
+- *Why it matters:* the 16.8-point spread was the main reason every winner probability was too timid.
+
+**3. Team strength from player ratings** (`PlayerRatings`, `with_player_ratings`, `PLAYER_RATING_W = 0.59`):
+- *Ratings:* a game-level ridge regression of the final margin on who played, with each team's players weighted by their share of its minutes. Each player's effect is shrunk toward a Game Score prior. It is fitted on every game before the cutoff: this season plus the last two at full weight.
+- *Tonight's margin:* the expected lineup at its projected minutes. The model's margin then moves 59% of the way to this number (total unchanged).
+- *What it adds:* a player's value carries across teams and seasons, and it sees what a box score misses once a player has enough games.
+- *Tuning (2025-26 Nov–Jan only):* a 14-point grid of shrinkage (5–80 games) and last-season weight (0.25–1.0). Every setting gave a blended margin RMSE of 14.15–14.20, so the gain doesn't hinge on the choice. Picked: 20 games and weight 1.0; the blend weight of 0.59 was fitted on the same games.
+
+**Fair test, real simulations, same games** (before = the availability model above):
+
+| | Before | Player ratings | Both (kept) | 95% CI, both − before | Market |
+|---|---|---|---|---|---|
+| **2025-26 Feb–Apr, 501 held-out games** | | | | | |
+| Winner Brier | 0.1807 | 0.1780 | **0.1727** | −0.0112 to −0.0047 | 0.1645 |
+| Winner log loss | 0.5432 | 0.5378 | **0.5235** | | 0.5002 |
+| Spread Brier | 0.2563 | 0.2548 | 0.2563 | −0.0039 to +0.0038 (no change) | 0.2500 |
+| Total Brier | 0.2664 | 0.2665 | 0.2664 | no change | 0.2498 |
+| Margin RMSE | 14.65 | 14.53 | 14.54 | | 14.17 |
+| **2026-27 to date, 59 games** | | | | | |
+| Winner Brier | 0.2234 | 0.2033 | **0.1999** | −0.0405 to −0.0064 | 0.1943 |
+| Spread Brier | 0.2542 | 0.2453 | 0.2450 | −0.028 to +0.009 | 0.2497 |
+| Margin RMSE | 14.23 | 13.49 | 13.49 | | 13.38 |
+
+- *Score effects on their own:* better for winners (Feb–Apr 0.1807 → 0.1761, CI −0.0063 to −0.0029) but **worse for spreads** (0.2563 → 0.2587, CI +0.0012 to +0.0037). On top of player ratings they still help winners (0.1780 → 0.1727) and cost spreads a little (0.2548 → 0.2563). Against the original model, spreads come out level.
+- *Why spreads get worse:* a sharper, more realistic margin distribution turns the model's disagreement with the spread into more confident calls, and that disagreement carries no information.
+- *Whole 2025-26 season:* winner Brier 0.2030 → 0.1987 (market 0.1948). Winners picked right: 687 → 684 of 974 (market favourite 676). The gain is in how confident the model is, not in which side it picks.
+- *Monday Nov 2 alone:* 12 → 11 of 15 winners (market favourite 10). One game flipped, which is noise at 15 games.
+
+**Calibration of winners, 2025-26 (model favourite's stated probability vs how often it won):**
+
+| Bucket | Before: said / won | After: said / won | Market said (after's games) |
+|---|---|---|---|
+| 50–60% | 54.9 / 62.2 | 55.0 / 59.4 | 56.6 |
+| 60–70% | 64.5 / 67.2 | 65.0 / 67.7 | 67.5 |
+| 70–80% | 74.3 / 83.1 | 74.7 / 80.0 | 78.2 |
+| 80%+ | 84.1 / 89.0 | 85.2 / 87.0 | 86.7 |
+
+**Against the market:**
+- *Gap:* on the held-out games the winner Brier gap halves, from +0.016 to +0.008, but the market is still better.
+- *Disagreement with the line:* its weight is still about 0 (winners +0.07 ± 0.28, spreads −0.02 ± 0.24, totals −0.08 ± 0.15). The PLAY rule still passes every game.
+
+**Not re-measured on the new engine:** the most-likely-game backtest and the player-layer calibration. Fewer simulated blowouts mean slightly fewer garbage-time minutes for starters. The garbage-time rule was fitted on minutes by final margin, so it should carry over.

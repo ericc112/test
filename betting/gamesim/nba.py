@@ -290,7 +290,11 @@ def simulate(home: dict, away: dict, R: dict, minutes: int = 48, n: int = 50000,
     return {"home": score[:, 0], "away": score[:, 1], "ot": ot > 0, "possessions": nposs, "trace": log, "stats": stats}
 
 
-COMEBACK_SD = None   # target margin SD for two average teams (score effects); None = off (independent possessions)
+# Score effects: target margin SD for two average teams (None = off: independent possessions). Without them two
+# average teams had a 16.8-point margin SD against ~14 in real games (the residual vs the closing spread), which made
+# every winner probability too timid. Fair test (2025-26 Feb-Apr, 501 held-out games, with player ratings on): winner
+# Brier 0.1780 -> 0.1727 (CI -0.0069 to -0.0037), spreads slightly worse (0.2548 -> 0.2563), totals unchanged.
+COMEBACK_SD = 14.0
 
 
 def pace_resid_sd(G: list[dict], before: str, minutes: int, folds: int = 5) -> float | None:
@@ -808,8 +812,11 @@ def absent_tonight(lg: str, games: list[dict], team: str, before: str, out_names
 
 
 # ------------------------------------------------------------------ team strength from player ratings
-# Weight on the player-rating margin against the team-rating model's (None: off). Set from the fair test below.
-PLAYER_RATING_W = None
+# Weight on the player-rating margin against the team-rating model's (None: off). Fitted on 2025-26 Nov-Jan only
+# (473 games, regression of the result on the gap). Held out (real simulations, availability on, no score effects):
+# 2025-26 Feb-Apr winner Brier 0.1807 -> 0.1780, margin RMSE 14.65 -> 14.53; 2026-27 to date 0.2234 -> 0.2033
+# (CI -0.038 to -0.003), margin RMSE 14.23 -> 13.49. LAM and DELTA were picked on the Nov-Jan games from a 14-point grid.
+PLAYER_RATING_W = 0.59
 PLAYER_RATING_LAM = 20.0     # ridge: each player's effect is shrunk toward his box-score prior by this many games
 PLAYER_RATING_DELTA = 1.0    # weight on last season's games (the season before that: squared)
 PLAYER_RATING_KMIN = 300.0   # minutes of new-player Game Score rate in each player's box-score prior
