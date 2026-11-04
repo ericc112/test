@@ -72,6 +72,7 @@ def log_pp(rows: list[dict], action: dict | None = None, refresh: bool = False) 
                      "proj": "" if r.get("proj") is None else round(r["proj"], 1),
                      "opp_proj": "" if r.get("opp_proj") is None else r["opp_proj"], "notes": f"edge pp; {r['notes']}"})
         seen[k] = str(nid)
+        by_id[str(nid)] = bets[-1]
         out.append((str(nid), True))
         nid += 1
     L.write_bets(bets)
@@ -127,7 +128,8 @@ def main(argv=None):
     npk.add_argument("--match", help="only games whose teams contain this text")
     npk.add_argument("--no-log", action="store_true", help="don't log to bets.csv (default: log the picks, every Medium+ leg and each game's best leg)")
     npk.add_argument("--no-verify", action="store_true")
-    npk.add_argument("--out", help="write the report here (default data/picks/DATE-nba.md)")
+    npk.add_argument("--out", help="write the report here (default data/picks/DATE-nba.md; a .json beside it)")
+    npk.add_argument("--page", help="also write the picks for the Sim Lab page here (picks.js)")
     nf = sub.add_parser("nfl", help="NFL game simulator (ESPN box scores + DraftKings lines)")
     nf.add_argument("--event", help="ESPN event id (see --week)")
     nf.add_argument("--week", type=int, help="list a week's games with event ids and DraftKings lines")
@@ -349,7 +351,8 @@ def main(argv=None):
 
 
 def _nba_picks(args):
-    """Price tonight's NBA PrizePicks board, keep the best legs (one per game), back-check each, write the report."""
+    """Price tonight's NBA PrizePicks board, keep the best legs (one per game) by the model and, for comparison, by
+    history alone, back-check each, write the report (markdown) and the page data (JSON + picks.js)."""
     import gzip
     import json
     import os
@@ -371,37 +374,47 @@ def _nba_picks(args):
     with gzip.open(os.path.join(HERE, "data", "nba_boards", f"{today}.json.gz"), "wt") as f:     # the full priced board
         json.dump([{k: v for k, v in r.items() if k not in ("research", "dk")} for r in ok], f, default=float)
     picks = N.pick_order(ok, args.top)
+    hist = N.history_order(ok, args.top)
+    for r in hist:
+        r["notes"] = "history-only list; " + r["notes"]
     ids = {}
     if not args.no_log:
         best_game = {}
         for r in sorted([r for r in ok if r["odds_type"] == "standard"], key=lambda r: -r["p_final"]):
             best_game.setdefault(r["script"], r)
         keep = {id(r) for r in picks} | {id(r) for r in best_game.values()} | {id(r) for r in ok if r["odds_type"] == "standard" and r["confidence"] in ("High", "Medium")}
-        logrows = [r for r in ok if id(r) in keep]
+        logrows = [r for r in ok if id(r) in keep] + hist
         pick_ids = {id(r) for r in picks}
         act = {id(r): (("lean" if r["confidence"] in ("High", "Medium") and not r.get("newcomer") else "pass") if id(r) in pick_ids else "pass")
-               for r in logrows}          # only the published picks are leans; the rest are logged for calibration
+               for r in logrows}          # only the model's published picks can be leans; the rest are logged for calibration
         for r, (bid, _) in zip(logrows, log_pp(logrows, act, refresh=True)):
             ids[id(r)] = bid
-        print(f"Logged {len(logrows)} leg(s) to bets.csv (picks, every Medium+ leg, each game's best leg); full board in data/nba_boards/{today}.json.gz")
+        print(f"Logged {len(logrows)} leg(s) to bets.csv (model picks, history-only picks, every Medium+ leg, each game's best leg); "
+              f"full board in data/nba_boards/{today}.json.gz")
     adj = load_adjustments()
     bets = L.read_bets()
-    blocks = []
-    for r in picks:
-        ver, warns = "not checked", []
-        if not args.no_verify and id(r) in ids:
-            row = next(b for b in bets if b["id"] == ids[id(r)])
-            rep = V.verify(row, bets, adj)
-            ver = rep.verdict
-            warns = [f"{n}: {d}" for st, n, d in rep.checks if st != "PASS"]
-            print(rep.text())
-        if id(r) in ids:
-            r["bet_id"] = f"#{ids[id(r)]} "
-        blocks.append(N.write_up(r, ver, warns))
+
+    def check(r):
+        if args.no_verify or id(r) not in ids:
+            return "not checked", []
+        row = next(b for b in bets if b["id"] == ids[id(r)])
+        rep = V.verify(row, bets, adj)
+        print(rep.text())
+        return rep.verdict, [f"{n}: {d}" for st, n, d in rep.checks if st != "PASS"]
+
+    blocks, hblocks, page = [], [], {"model": [], "history": []}
+    for lst, out, key, writer in ((picks, blocks, "model", N.write_up), (hist, hblocks, "history", N.history_write_up)):
+        for r in lst:
+            ver, warns = check(r)
+            if id(r) in ids:
+                r["bet_id"] = f"#{ids[id(r)]} "
+            out.append(writer(r, ver, warns))
+            page[key].append(N.page_row(r, ver, warns, ids.get(id(r))))
     bias = N.model_market_bias(ok)
     n_std = sum(r["odds_type"] == "standard" for r in ok)
+    pulled = next((r.get("pulled") for r in ok if r.get("pulled")), "")
     head = [f"# NBA PrizePicks: best {len(picks)} legs, {today}",
-            f"Board pulled {rows[0].get('pulled', '') if rows else ''} · {len(ok)} props priced ({n_std} standard) across {len({r['script'] for r in ok})} games · "
+            f"Board pulled {pulled} · {len(ok)} props priced ({n_std} standard) across {len({r['script'] for r in ok})} games · "
             f"{args.n:,} simulations per game · not priced: {len(rows) - len(ok)}",
             "",
             "Ranked by calibrated probability (model + DraftKings + this season, blended as `edge prob`), High before Medium, "
@@ -414,23 +427,35 @@ def _nba_picks(args):
                     + ", ".join(f"{N.LABEL[k]} {v['bias_logit']:+.2f} (n {v['n']})" for k, v in sorted(bias.items())))
         head.append("")
     high = [r for r in picks if N.verdict(r).startswith("ENTRY")]
-    if len(high) >= 2:
-        head.append(f"**Best 2-leg entry:** {high[0]['player']} {high[0]['side']} {high[0]['line']} + {high[1]['player']} {high[1]['side']} {high[1]['line']} "
-                    f"-> P(both) {high[0]['p_final'] * high[1]['p_final']:.1%} (2-pick power pays 3x; break-even 33.3%)")
-    else:
-        head.append("**No 2-leg entry clears the High gate tonight (65%+, one leg per game). Sitting out beats forcing it.**")
+    entry = (f"{high[0]['player']} {high[0]['side']} {high[0]['line']} + {high[1]['player']} {high[1]['side']} {high[1]['line']} -> "
+             f"P(both) {high[0]['p_final'] * high[1]['p_final']:.1%}") if len(high) >= 2 else None
+    head.append(f"**Best 2-leg entry:** {entry} (2-pick power pays 3x; break-even 33.3%)" if entry else
+                "**No 2-leg entry clears the High gate tonight (65%+, one leg per game). Sitting out beats forcing it.**")
     head.append("")
     rest = [r for r in N.pick_order(ok, args.top + 10)[args.top:]]
-    tail = ["", "## Next best", "| p | conf | player | stat | side | line | model | DK | history |", "|---|---|---|---|---|---|---|---|---|"]
     fm = lambda v: "-" if v is None else f"{v:.0%}"
+    tail = ["", "## Next best (model)", "| p | conf | player | stat | side | line | model | DK | history |", "|---|---|---|---|---|---|---|---|---|"]
     tail += [f"| {r['p_final']:.1%} | {r['confidence']} | {r['player']} ({r['team']}) | {N.LABEL[r['stat_key']]} | {r['side']} | {r['line']} | {fm(r['p_model'])} | {fm(r['p_market'])} | {fm(r['p_hist'])} ({r['hist_n']}) |" for r in rest]
-    report = "\n".join(head) + "\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n"
+    hsec = ["", "## Top 5 by history only (the hit-rate method, for comparison)",
+            "Ranked by this season's record at the line (5+ games), then the last 5, then head-to-head; one leg per game. "
+            "Tested on 2,330 DraftKings lines this season, these counts carried no information beyond the book's price, and players "
+            "over in 80–100% of their last 5 went over 39% of the time against 50% priced (LESSONS L27). Each leg shows what the model "
+            "and DraftKings say about the same side; both lists are saved daily so their records can be compared.", ""]
+    report = "\n".join(head) + "\n## Top 5 by the model\n\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n" + "\n".join(hsec) + "\n" + "\n\n".join(hblocks) + "\n"
     out = args.out or os.path.join(HERE, "data", "picks", f"{today}-nba.md")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
         f.write(report)
+    pg = {"date": today, "pulled": pulled, "games": len({r["script"] for r in ok}), "props": len(ok), "n_sims": args.n,
+          "bias": {N.LABEL[k]: round(v["bias_logit"], 2) for k, v in bias.items()}, "entry": entry, **page,
+          "next": [N.page_row(r, "", [], None) for r in rest]}
+    with open(os.path.splitext(out)[0] + ".json", "w") as f:
+        json.dump(pg, f, default=float)
+    if args.page:
+        with open(args.page, "w") as f:
+            f.write("window.SIMLAB_PICKS = " + json.dumps(pg, default=float, separators=(",", ":")) + ";\n")
     print("\n" + report)
-    print(f"Report: {out}")
+    print(f"Report: {out}" + (f" | page data: {args.page}" if args.page else ""))
 
 
 def _nfl(args):

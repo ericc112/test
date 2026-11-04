@@ -537,6 +537,30 @@ def season_player_totals(lg: str, games: list[dict], before: str = "2099-01-01")
     return out
 
 
+# How the 240 minutes are shared when the rotation's projected minutes don't add up to 240: each player gets
+# c x minutes^MINUTES_ALPHA (capped at 42), c set so the team sums to 240. 1.0 = everyone scaled by the same factor;
+# above 1 the bench absorbs a surplus, below 1 the top of the rotation gives more back. Fair test on box scores
+# (players who played, raw projection = chance x minutes when playing): with 1.0 the five biggest projections ran
+# +2.1 to +2.6 minutes over what they played; 0.8 was best on 2025-26 Nov-Jan (MAE 4.80 -> 4.70) and held out on
+# Feb-Apr (5.05 -> 4.89) and 2026-27 (4.71 -> 4.53). Bench-first (above 1) was worse everywhere.
+MINUTES_ALPHA = 0.8
+
+
+def allocate_minutes(raw: list[float], alpha: float | None = None, total: float = 240.0, cap: float = 42.0) -> list[float]:
+    a = MINUTES_ALPHA if alpha is None else alpha
+    w = [max(m, 0.0) ** a for m in raw]
+    if not sum(w):
+        return [0.0 for _ in raw]
+    lo, hi = 0.0, 10.0 * total / sum(w)
+    for _ in range(60):
+        c = (lo + hi) / 2
+        if sum(min(cap, c * x) for x in w) < total:
+            lo = c
+        else:
+            hi = c
+    return [float(min(cap, (lo + hi) / 2 * x)) for x in w]
+
+
 def player_profiles(lg: str, games: list[dict], team: str, before: str, out_names: set | None = None, recent: int = 5,
                     prior_tot: dict | None = None, prior_min: float | None = -1.0, rate_mult: dict | None = None) -> dict:
     """Rotation for one team from this season's box scores before `before`: projected minutes (recency-weighted
@@ -653,10 +677,12 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
                         "oreb": rate("oreb") * f_reb, "dreb": rate("dreb") * f_reb,
                         "tov": rate("tov"), "p2": p2, "p3": p3, "ftp": ftp, "prior": src,
                         "h2h": {k: round(v, 4) for k, v in (("pts", f_pts), ("reb", f_reb), ("ast", f_ast), ("tpm", f_tpm))} if m_ else None})
-    tot = sum(p["min"] for p in players)
-    if tot > 0:
-        for p in players:
-            p["min"] = float(min(42.0, p["min"] * 240.0 / tot))
+    for p in players:
+        p["min_raw"] = p["min"]
+    if players:
+        alloc = allocate_minutes([p["min"] for p in players])
+        for p, m in zip(players, alloc):
+            p["min"] = m
     players.sort(key=lambda p: -p["min"])
     return {"players": players, "games": len(boxes), "ast_rate": T["ast"] / max(T["fgm"], 1), "shock": PLAYER_SHOCK, "garbage": PLAYER_GARBAGE}
 

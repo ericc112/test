@@ -307,6 +307,75 @@ def pick_order(rows: list[dict], top: int = 5) -> list[dict]:
     return out
 
 
+def history_order(rows: list[dict], top: int = 5, min_games: int = 5) -> list[dict]:
+    """The hit-rate method, for comparison: the side each standard line has cleared more often this season (5+ games),
+    ranked by that season hit rate, then the last 5, then head-to-head, then sample size; one leg per game. Each leg
+    carries what the model, DraftKings and the blend say about that same side (LESSONS L27: history alone has shown no
+    information beyond the price)."""
+    from .blend import final_probability
+    cand = []
+    for r in rows:
+        if "error" in r or r.get("odds_type") != "standard" or not r.get("research"):
+            continue
+        rs = r["research"]
+        o, u, n = rs["season"]
+        if n < min_games:
+            continue
+        side = "over" if o >= u or r.get("over_only") else "under"
+        if side == "under" and r.get("over_only"):
+            continue
+        k = 0 if side == "over" else 1
+        rate = lambda t: t[k] / t[2] if t[2] else 0.0
+        same = side == r["side"]
+        flip = lambda v: None if v is None else (v if same else 1 - v)
+        pm, pk, ph = flip(r["p_model"]), flip(r["p_market"]), (o if side == "over" else u) / max(o + u, 1)
+        e = final_probability(pm, pk, ph, f"nba:{r['stat_key']}:{side}", o + u)
+        conf = "Low" if r.get("newcomer") else e.confidence
+        cand.append({**r, "side": side, "p_model": pm, "p_market": pk, "p_hist": ph, "hist_n": o + u, "p_final": e.p, "confidence": conf,
+                     "hist_rank": (rate(rs["season"]), rate(rs["last5"]), rate(rs["h2h"]), n), "method": "history"})
+    cand.sort(key=lambda r: tuple(-x for x in r["hist_rank"]))
+    seen, out = set(), []
+    for r in cand:
+        if r["script"] in seen:
+            continue
+        seen.add(r["script"])
+        out.append(r)
+        if len(out) == top:
+            break
+    return out
+
+
+def history_write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
+    rs, st, line = r["research"], r["stat_key"], r["line"]
+    f = lambda v: "-" if v is None else f"{v:.0%}"
+    k = 0 if r["side"] == "over" else 1
+    cnt = lambda t: f"{t[k]}/{t[2]}" if t[2] else "-"
+    lines = [f"### {r.get('bet_id', '')}{r['player']} ({r['team']}) {r['side'].upper()} {line} {LABEL[st]} — {r['game']}",
+             f"**History: {cnt(rs['season'])} this season, {cnt(rs['last5'])} last 5, {cnt(rs['h2h'])} vs {r['opp_espn']}**"
+             + (f" · per 36 {rs['per36']:.1f}" + (f" (vs {r['opp_espn']} {rs['h2h_per36']:.1f})" if rs.get("h2h_per36") is not None else "") if rs.get("per36") is not None else ""),
+             f"- Season average {rs['season_avg']:.1f}; last 5: {', '.join(str(int(x)) for x in rs['last_games'])}" if rs.get("season_avg") is not None else "",
+             f"- What the model says about this side: simulation {f(r['p_model'])}, DraftKings {f(r['p_market'])}, blended **{r['p_final']:.1%} {r['confidence']}** · {verdict(r)}"
+             + (f" · back-check: **{verified}**" if verified else "")]
+    if warns:
+        lines.append("- Back-check warnings: " + "; ".join(warns))
+    return "\n".join(x for x in lines if x)
+
+
+def page_row(r: dict, verified: str, warns: list, bet_id: str | None) -> dict:
+    """One pick for the Sim Lab page (picks.js)."""
+    rs = r.get("research") or {}
+    rnd = lambda v, k=3: None if v is None else round(float(v), k)
+    return {"id": bet_id, "player": r["player"], "team": r["team"], "game": r["game"], "opp": r.get("opp_espn"), "stat": LABEL[r["stat_key"]],
+            "side": r["side"], "line": r["line"], "p": rnd(r["p_final"], 4), "conf": r["confidence"], "verdict": verdict(r),
+            "model": rnd(r["p_model"]), "market": rnd(r["p_market"]), "hist": rnd(r["p_hist"]), "hist_n": r["hist_n"],
+            "median": r.get("proj"), "mean": rnd(r.get("sim_mean"), 1), "q25": r.get("q25"), "q75": r.get("q75"), "minutes": r.get("opp_proj"),
+            "dk": None if not r.get("dk") else {"line": r["dk"]["line"], "over": r["dk"].get("over"), "under": r["dk"].get("under")},
+            "season": rs.get("season"), "last5": rs.get("last5"), "h2h": rs.get("h2h"), "per36": rnd(rs.get("per36"), 1),
+            "h2h_per36": rnd(rs.get("h2h_per36"), 1), "season_avg": rnd(rs.get("season_avg"), 1), "last_games": rs.get("last_games"),
+            "h2h_games": rs.get("h2h_games"), "opp_allows": rs.get("opp_allows"), "flags": "role unconfirmed" in (r.get("notes") or ""),
+            "verified": verified, "warns": warns, "start": r.get("start")}
+
+
 def verdict(r: dict) -> str:
     be = BREAK_EVEN["2-pick power"]
     if r["confidence"] == "High" and r["p_final"] >= 0.65 and r["p_final"] >= be + 0.02 and not r.get("newcomer"):

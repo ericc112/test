@@ -163,6 +163,13 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
 .card-wrap { display: grid; gap: 8px; font-size: .86rem } .card-wrap table { min-width: 560px } .card-wrap .k { color: var(--muted) }
 .card-wrap ul { margin: 0; padding-left: 18px; display: grid; gap: 3px } .field.wide { grid-column: span 2 }
 .rs-hit { color: var(--good); font-weight: 600 } .rs-miss { color: var(--bad); font-weight: 600 }
+.picks { margin: 12px 0 } .picks > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px }
+.picks > summary::-webkit-details-marker { display: none } .pk-title { margin: 0; font-family: var(--font-display); font-size: 1.25rem }
+.pk-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px } .pk-cols h3 { margin: 0 0 8px }
+.pk-list { display: grid; gap: 8px } .pk { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); padding: 10px 12px; display: grid; gap: 4px; font-size: .86rem; min-width: 0 }
+.pk-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px } .pk-h b { font-size: .98rem } .pk-p { font-family: var(--font-data); font-size: 1.15rem; font-weight: 700 }
+.pk .k { color: var(--muted) } .pk-warn { color: var(--warn); font-size: .8rem } .pill.High { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink) }
+.pill.ok { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good) } .pill.no { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad) }
 .rs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px }
 .rs-grid > div { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px }
 .rs-grid b { font-family: var(--font-data); font-size: 1.05rem } .card-wrap table.rs-log { min-width: 0 }
@@ -206,6 +213,16 @@ table.dec, #factorTbl { min-width: 600px }
   </header>
 
   <nav class="rail" id="rail" aria-label="Leagues"></nav>
+
+  <details class="panel picks" id="picksPanel" hidden open>
+    <summary><h2 class="pk-title">Tonight's NBA PrizePicks top 5</h2><span class="note" id="pkMeta"></span></summary>
+    <div class="note" id="pkEntry"></div>
+    <div class="pk-cols">
+      <div><h3>By the model <span class="note">(50,000-run simulation + DraftKings + this season)</span></h3><div class="pk-list" id="pkModel"></div></div>
+      <div><h3>By history only <span class="note">(this season's record at the line, then last 5, then head-to-head)</span></h3><div class="pk-list" id="pkHist"></div></div>
+    </div>
+    <div class="note" id="pkNote"></div>
+  </details>
 
   <div class="layout">
     <div class="games" id="games" role="list"></div>
@@ -1038,9 +1055,44 @@ onmessage = (e) => {
 };
 </script>
 <script src="data.js"></script>
+<script src="picks.js"></script>
 <script>
 "use strict";
 const D = window.SIMLAB || { leagues: [], pulled: null };
+// Tonight's NBA PrizePicks top 5, by the model and by history only (written by `python -m edge nba-picks --page picks.js`)
+function renderPicks() {
+  const P = window.SIMLAB_PICKS, el = $("picksPanel"); if (!P || !el) return;
+  el.hidden = false;
+  const pc = (v) => v == null ? "—" : Math.round(100 * v) + "%";
+  const cnt = (t, side) => t && t[2] ? `${side === "under" ? t[1] : t[0]}/${t[2]}` : "—";
+  const ver = (v) => !v ? "" : `<span class="pill ${/NOT/.test(v) ? "no" : "ok"}">${esc(v)}</span>`;
+  $("pkMeta").textContent = `${P.date} · ${P.games} games · ${Number(P.props).toLocaleString()} props priced · ${Number(P.n_sims).toLocaleString()} runs per game · board ${P.pulled || ""}`;
+  $("pkEntry").innerHTML = P.entry ? `<b>Best 2-leg entry:</b> ${esc(P.entry)}` : "<b>No 2-leg entry clears the High gate tonight</b> (65%+ with a sportsbook price, one leg per game). The lists below are leans and passes, not bets: sitting out beats forcing it.";
+  const research = (r) => {
+    const parts = [`<span class="k">This season</span> ${cnt(r.season, r.side)} ${r.side} at ${r.line}${r.season_avg != null ? ` (avg ${r.season_avg})` : ""}`,
+      `<span class="k">Last 5</span> ${cnt(r.last5, r.side)}${r.last_games ? ` (${r.last_games.map((x) => Math.round(x)).join(", ")})` : ""}`,
+      `<span class="k">vs ${esc(r.opp)}</span> ${r.h2h && r.h2h[2] ? `${cnt(r.h2h, r.side)} (${r.h2h_games.slice().reverse().map((g) => `${Math.round(g[1])} in ${Math.round(g[2])}m`).join(", ")})` : "no meetings"}`];
+    if (r.per36 != null) parts.push(`<span class="k">Per 36</span> ${r.per36}${r.h2h_per36 != null ? ` (vs ${esc(r.opp)} ${r.h2h_per36})` : ""}`);
+    if (r.opp_allows) parts.push(`<span class="k">${esc(r.opp)} allows</span> ${r.opp_allows.per_game.toFixed(1)} a game, rank ${r.opp_allows.rank}/${r.opp_allows.teams}`);
+    return parts.join(" · ");
+  };
+  const card = (r, hist) => `<div class="pk">
+    <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)}</span></div>
+    <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
+    ${hist ? `<div><span class="k">History</span> <b>${cnt(r.season, r.side)}</b> this season · <b>${cnt(r.last5, r.side)}</b> last 5 · <b>${r.h2h && r.h2h[2] ? cnt(r.h2h, r.side) : "—"}</b> vs ${esc(r.opp)}</div>` : ""}
+    <div><span class="k">Sources</span> simulation ${pc(r.model)} · DraftKings ${pc(r.market)}${r.dk ? ` (${r.dk.line} at ${esc(r.dk.over || "?")}/${esc(r.dk.under || "?")})` : " (not posted)"} · this season ${pc(r.hist)} (${r.hist_n})</div>
+    <div><span class="k">Simulation</span> median ${r.median} (25–75th ${r.q25}–${r.q75}), mean ${r.mean}, ${r.minutes} min</div>
+    <div>${research(r)}</div>
+    <div class="note">${esc(r.verdict)}</div>
+    ${r.warns && r.warns.length ? `<div class="pk-warn">${r.warns.map(esc).join("; ")}</div>` : ""}
+  </div>`;
+  $("pkModel").innerHTML = (P.model || []).map((r) => card(r, false)).join("") || `<div class="note">No legs priced.</div>`;
+  $("pkHist").innerHTML = (P.history || []).map((r) => card(r, true)).join("") || `<div class="note">No legs with 5+ games.</div>`;
+  const bias = Object.entries(P.bias || {}).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ");
+  $("pkNote").innerHTML = `Model list: ranked by the calibrated probability (simulation, DraftKings no-vig and this season blended like <span class="num">edge prob</span>), High before Medium, standard lines, one leg per game. Only High legs at 65%+ go in entries, two legs max (PrizePicks break-even per leg: 2-pick power 57.7%, 5/6-pick flex 54.2%). ` +
+    (bias ? `Tonight the simulation ran below DraftKings on every stat (logit gap: ${esc(bias)}); that tilt is measured each scan and taken out before blending. ` : "") +
+    `History list: the hit-rate method, shown for comparison. On 2,330 DraftKings lines this season, hit rates and streaks carried no information beyond the book's price, and players over in 80–100% of their last 5 went over 39% of the time against 50% priced. Both lists are logged and graded, so their records can be compared. Every pick passed <span class="num">edge verify</span> when this was written (status shown); warnings must be checked on screen. Model numbers, not locks: the player model has not beaten DraftKings out of sample.`;
+}
 const N = 50000;
 const $ = (id) => document.getElementById(id);
 const fmtPct = (p) => p == null || isNaN(p) ? "—" : (100 * p).toFixed(1) + "%";
@@ -2318,6 +2370,6 @@ $("bcNew").onclick = () => bcStart("random");
 $("bcLikelyBtn").onclick = () => bcStart("likely");
 
 $("pulled").textContent = D.pulled ? `Lines and injuries as of ${new Date(D.pulled).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "No data file loaded: use Any game (custom).";
-renderRail(); renderHonest();
+renderRail(); renderHonest(); renderPicks();
 if (D.leagues.length && D.leagues[0].games.length) { renderGames(); selectGame(); } else openCustom();
 </script>
