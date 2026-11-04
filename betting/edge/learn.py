@@ -212,7 +212,7 @@ def find_avoid_segments(rows: list[dict], min_n: int = AVOID_MIN) -> list[str]:
     return sorted(bad)
 
 
-def fit_sport_blends(rows: list[dict], adj: dict, today: str) -> dict:
+def fit_sport_blends(rows: list[dict], adj: dict, today: str, log_path: str | None = None) -> dict:
     """Per-sport blends: refit only with MIN_REFIT+ graded legs of that sport (holdout excluded), and only if the last
     refit is REFIT_DAYS old. Otherwise the sport keeps its prior (data/adjustments.json -> blend_by_sport)."""
     out = dict(adj.get("blend_by_sport", {}))
@@ -227,7 +227,7 @@ def fit_sport_blends(rows: list[dict], adj: dict, today: str) -> dict:
         prior = out.get(sport) or adj["blend_prior"]
         fit = fit_blend(S, {**adj, "blend": {k: prior[k] for k in ("intercept", "w_model", "w_market", "w_hist")}}, min_n=MIN_REFIT)
         dates = sorted(r.get("date", "") for r in fitting(S))
-        log_change("blend", sport, out.get(sport), {k: fit[k] for k in ("intercept", "w_model", "w_market", "w_hist")}, (dates[0], dates[-1]), n)
+        log_change("blend", sport, out.get(sport), {k: fit[k] for k in ("intercept", "w_model", "w_market", "w_hist")}, (dates[0], dates[-1]), n, log_path)
         out[sport] = {k: fit[k] for k in ("intercept", "w_model", "w_market", "w_hist")} | {"se": fit.get("se")}
         meta[sport] = {"date": today, "n_fit": n, "window": [dates[0], dates[-1]]}
     return out, meta
@@ -343,20 +343,21 @@ def update(rows: list[dict] | None = None, adj_path: str = ADJ_PATH, lessons_pat
     # MIN_REFIT+ legs, monthly. The global blend stays the fallback for sports without their own.
     adj.setdefault("blend_prior", dict(DEFAULT_ADJ["blend"]))
     today_s = today or dt.date.today().isoformat()
-    adj["blend_by_sport"], adj["blend_by_sport_fit"] = fit_sport_blends(rows, adj, today_s)
+    log_path = os.path.join(os.path.dirname(os.path.abspath(adj_path)), "learn_log.jsonl")   # beside the adjustments it changes
+    adj["blend_by_sport"], adj["blend_by_sport_fit"] = fit_sport_blends(rows, adj, today_s, log_path)
     fr = fitting(rows)
     window = (min((r.get("date", "") for r in fr), default=""), max((r.get("date", "") for r in fr), default=""))
     adj["outcome_bias_logit"] = learn_segment_bias(rows, adj)
     for seg, v in adj["outcome_bias_logit"].items():
         if abs(v - old.get("outcome_bias_logit", {}).get(seg, 0.0)) >= 0.01:
-            log_change("outcome_bias", seg, old.get("outcome_bias_logit", {}).get(seg), v, window, len(fr))
+            log_change("outcome_bias", seg, old.get("outcome_bias_logit", {}).get(seg), v, window, len(fr), log_path)
     new_avoid = find_avoid_segments(rows)
     adj["avoid_segments"] = sorted(set(old.get("avoid_segments", [])) | set(new_avoid))
     for seg in set(new_avoid) - set(old.get("avoid_segments", [])):
-        log_change("avoid", seg, False, True, window, len(fr))
+        log_change("avoid", seg, False, True, window, len(fr), log_path)
     adj["cap_medium_segments"] = find_caps(rows)
     for seg in set(adj["cap_medium_segments"]) ^ set(old.get("cap_medium_segments", {})):
-        log_change("cap_medium", seg, seg in old.get("cap_medium_segments", {}), seg in adj["cap_medium_segments"], window, len(fr))
+        log_change("cap_medium", seg, seg in old.get("cap_medium_segments", {}), seg in adj["cap_medium_segments"], window, len(fr), log_path)
     adj["updated"] = today_s
 
     notes = []
