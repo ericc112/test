@@ -483,7 +483,7 @@ def _nba_picks(args):
     lsec = ["", "## Top 5 by the most likely game",
             "Each game's most likely simulated run (the most common final score of the runs, then the run closest to every rotation player's "
             "typical line: the game the broadcast plays). A leg is listed when that run's line is on the same side of the PrizePicks line as the "
-            "simulation's median and this season's record, ranked by the gap over his simulated spread, one leg per game. Usage, head-to-head and "
+            "simulation's median and this season's record; one run is a single draw, so the order comes from the calibrated probability, one leg per game. Usage, head-to-head and "
             "what the opponent allows by position are shown as context: in the fair test they added no information beyond the price (LESSONS L27).", ""]
     report = ("\n".join(head) + "\n## Top 5 by the model\n\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n" + "\n".join(hsec) + "\n"
               + "\n\n".join(hblocks) + "\n" + "\n".join(lsec) + "\n" + "\n\n".join(lblocks) + "\n\n" + NR.markdown(track, clv_s, tilt_s) + "\n" + "\n".join(shsec) + "\n")

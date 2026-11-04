@@ -610,7 +610,8 @@ def _season_usage(team: str, pid: str, before: str) -> float | None:
 def likely_order(rows: list[dict], ctx: dict, likely: dict, top: int = 5) -> list[dict]:
     """The most-likely-game list: each standard line compared with the player's line in that game's most likely
     simulated run. Kept only when the run's side agrees with the simulation's median (a one-run fluke is dropped) and
-    with this season's record at the line; ranked by the gap over his simulated spread; one leg per game. Each leg
+    with this season's record at the line; ranked by the calibrated probability for that side (High before Medium),
+    then the run's gap over his simulated spread; one leg per game. Each leg
     carries the blend's numbers for that side, the run's box line, the usage shift from teammates out, and what the
     opponent allows to his position."""
     from .blend import final_probability
@@ -648,7 +649,10 @@ def likely_order(rows: list[dict], ctx: dict, likely: dict, top: int = 5) -> lis
         cand.append({**r, "side": side, "p_model": pm, "p_market": pk, "p_hist": ph, "hist_n": o + u, "p_final": e.p,
                      "confidence": "Low" if r.get("newcomer") else e.confidence, "method": "likely", "z_gap": abs(gap) / spread,
                      "ml": {"score": L["score"], "home": g["home"], "away": g["away"], "line": me, "value": val, "gap": gap, "maxZ": L.get("maxZ")}})
-    cand.sort(key=lambda r: -r["z_gap"])
+    # one simulated run is a single draw: it only decides the side together with the median and this season;
+    # the order comes from the calibrated probability (ranking by the run's gap rewarded its most extreme lines)
+    rank = {"High": 0, "Medium": 1, "Low": 2}
+    cand.sort(key=lambda r: (rank.get(r["confidence"], 3), -r["p_final"], -r["z_gap"]))
     seen, out = set(), []
     for r in cand:
         if r["script"] in seen:
@@ -658,10 +662,13 @@ def likely_order(rows: list[dict], ctx: dict, likely: dict, top: int = 5) -> lis
         side_team = "home" if espn_abbr(r["team"]) == ctx["games"][r["event_id"]]["home"] else "away"
         prof = sd["players"][side_team]["players"]
         out_rows = [x for x in (sd.get("availability") or {}).get(side_team, {}).get("rows", []) if x.get("out_tonight")]
+        self_flag = any(find_player(r["player"], [{"name": x["name"]}]) for x in out_rows)
+        out_rows = [x for x in out_rows if not find_player(r["player"], [{"name": x["name"]}])]   # never his own name
         r["usage"] = {"tonight": _usage(prof, r["player_id"]), "season": _season_usage(espn_abbr(r["team"]), r["player_id"], ctx["games"][r["event_id"]]["start"]),
                       "out": [{"name": x["name"], "value": x["value"], "missed": x["missed_share"]} for x in out_rows],
                       "min_tonight": next((p["min"] for p in prof if p["id"] == r["player_id"]), None),
-                      "min_season": next(((p.get("season") or {}).get("min") for p in prof if p["id"] == r["player_id"]), None)}
+                      "min_season": next(((p.get("season") or {}).get("min") for p in prof if p["id"] == r["player_id"]), None),
+                      "self_absent": self_flag}
         pos = (r.get("research_pos") or next((p.get("research", {}).get("pos") for p in prof if p["id"] == r["player_id"]), None))
         oa = (sd.get("opp_allowed") or {}).get(side_team) or {}
         r["pos"] = pos
@@ -691,6 +698,8 @@ def likely_write_up(r: dict, verified: str = "", warns: list | None = None) -> s
         lines.append(f"- Usage: {us['tonight']:.0%} of the team's possessions tonight" + (f" vs {us['season']:.0%} in his games this season" if us.get("season") is not None else "")
                      + (f"; {us['min_tonight']:.0f} projected minutes vs {us['min_season']:.0f} this season" if us.get("min_tonight") and us.get("min_season") else "")
                      + (f". Out tonight: " + ", ".join(f"{o['name']} ({o['value']:+.1f} Game Score a game)" for o in us["out"]) if us.get("out") else ". No teammate out who played in the rating games."))
+    if us.get("self_absent"):
+        lines.append("- Availability: he's missing from his team's latest box score, so the team-strength check counts him as out while the rotation includes him. Confirm he plays.")
     if r.get("pos_allows"):
         pa = [f"{kk} {v['per_game']:.1f} a game to {r['pos']}s (rank {v['rank']}/30; league {v['league_per_game']:.1f})" for kk, v in r["pos_allows"].items() if v.get("per_game") is not None]
         if pa:
