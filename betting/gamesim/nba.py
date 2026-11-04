@@ -211,6 +211,10 @@ def simulate(home: dict, away: dict, R: dict, minutes: int = 48, n: int = 50000,
     score = np.zeros((n, 2), dtype=np.int64)
     clock = np.full(n, minutes * 60.0)
     poss_t = (rng.random(n) < 0.5).astype(np.int64)                 # jump ball
+    # score effects: a team ahead of its expected path eases off and one behind pushes, as a logit shift on make rates
+    # proportional to how far the game is from the expected margin at that point (the mean margin is unchanged)
+    kappa = R.get("comeback", 0.0)
+    mu = pace * (ppp_expected(home, and1) - ppp_expected(away, and1)) if kappa else 0.0
     done = np.zeros(n, dtype=bool)
     ot = np.zeros(n, dtype=np.int64)
     nposs = np.zeros(n, dtype=np.int64)
@@ -246,13 +250,19 @@ def simulate(home: dict, away: dict, R: dict, minutes: int = 48, n: int = 50000,
         pts += np.where(trip, (rng.random(k) < ftp[o]).astype(int) + (rng.random(k) < ftp[o]).astype(int), 0)
         fga = shoot & ~trip
         # shots with offensive rebounds continuing the possession (up to three attempts)
+        if kappa:
+            el = np.minimum(minutes * 60.0 - c, minutes * 60.0) / (minutes * 60.0)
+            dev = (score[a, 0] - score[a, 1]) - mu * np.where(ot[a] > 0, 1.0, el)
+            cb = -kappa * np.where(o == 0, dev, -dev) / 10.0
+        else:
+            cb = 0.0
         pending = fga.copy()
         extra_t = np.zeros(k)
         for attempt in range(3):
             if not pending.any():
                 break
             is3 = pending & (need3 | (rng.random(k) < p_3[o]))
-            made = pending & (rng.random(k) < np.where(is3, sg(L3[a, o]), sg(L2[a, o])))
+            made = pending & (rng.random(k) < np.where(is3, sg(L3[a, o] + cb), sg(L2[a, o] + cb)))
             pts += np.where(made, np.where(is3, 3, 2), 0)
             pts += (made & (rng.random(k) < and1) & (rng.random(k) < ftp[o])).astype(int)     # and-one
             miss = pending & ~made
@@ -278,6 +288,9 @@ def simulate(home: dict, away: dict, R: dict, minutes: int = 48, n: int = 50000,
         poss_t[t] = (rng.random(t.size) < 0.5).astype(np.int64)
         done[t[ot[t] > 8]] = True
     return {"home": score[:, 0], "away": score[:, 1], "ot": ot > 0, "possessions": nposs, "trace": log, "stats": stats}
+
+
+COMEBACK_SD = None   # target margin SD for two average teams (score effects); None = off (independent possessions)
 
 
 def pace_resid_sd(G: list[dict], before: str, minutes: int, folds: int = 5) -> float | None:
@@ -323,6 +336,19 @@ def calibrate(R: dict, games: list[dict], before: str, minutes: int, shot_clock:
     obs = pace_resid_sd(G, before, minutes)
     R["sd_pace_raw"], R["sd_pace_target"], R["sd_pace_intrinsic"] = R["sd_pace"], obs, intr
     R["sd_pace"] = float(np.sqrt(max(obs ** 2 - intr ** 2, 0.0))) if obs else R["sd_pace"]
+    # score effects: pull strength so two average teams' margin spread matches real games around the closing spread
+    # (residual SD 14.1 in 2025-26 and 2026-27; the market's own error is part of that, so 14.0)
+    R["comeback"] = 0.0
+    if COMEBACK_SD:
+        clo, chi = 0.0, 0.12
+        for _ in range(7):
+            R["comeback"] = (clo + chi) / 2
+            sc = simulate(avg, dict(avg), R, minutes, n=n, seed=4, shot_clock=shot_clock)
+            if float((sc["home"] - sc["away"]).std()) > COMEBACK_SD:
+                clo = R["comeback"]
+            else:
+                chi = R["comeback"]
+        R["comeback"] = (clo + chi) / 2
     lo, hi = 0.0, 0.4                       # extra free throws per made shot (and-ones, technicals, 3-shot fouls)
     for _ in range(9):
         R["and1"] = (lo + hi) / 2
@@ -392,8 +418,12 @@ def backtest(games: list[dict], minutes: int, shot_clock: int, min_games: int = 
     for g in games:
         if g["final"] and len(g["box"]) == 2 and g["line"]["ml_home"] is not None:
             by_day[data.us_day(g["date"])].append(g)          # US day: no same-evening games leak in
+    PR = None
+    if availability and minutes == 48 and PLAYER_RATING_W and by_day:
+        PR = PlayerRatings("nba", games, season_of(min(by_day)))
     for day in sorted(by_day):
         cut = data.cutoff(day)
+        prf = PR.fit(cut) if PR else None
         R = ratings(games, cut, minutes)
         if R["n_games"] < 20:
             continue
@@ -408,6 +438,10 @@ def backtest(games: list[dict], minutes: int, shot_clock: int, min_games: int = 
                 ctx = prior_context("nba", int(g["date"][:4]) if g["date"][5:7] >= "09" else int(g["date"][:4]) - 1) if PRIOR_K else None
                 box = _box_cached("nba", g["id"])          # the active roster at tip-off
                 H, A, _ = with_prior(H, A, R, ctx, g["home"], g["away"], {g[s_]: {r["id"] for r in box.get(g[s_], [])} for s_ in ("home", "away")})
+                if PR and prf["n_games"] >= 100:
+                    pm = PR.margin(prf, PR.lineup_played(g["id"], g["home"], cut), PR.lineup_played(g["id"], g["away"], cut), g["neutral"])
+                    det["players"] = {"margin": pm["margin"], "model": expected_margin(H, A, R)}
+                    H, A, det["players"]["shift"] = with_player_ratings(H, A, R, pm["margin"])
             else:
                 H, A, det = side(R, g["home"], g["away"], not g["neutral"]), side(R, g["away"], g["home"], False), None
             sim = simulate(H, A, R, minutes, n=n, seed=seed + len(recs), shot_clock=shot_clock)
@@ -423,7 +457,9 @@ def backtest(games: list[dict], minutes: int, shot_clock: int, min_games: int = 
                          "p_over": None if tl is None else float((h + a > tl).mean()), "mk_over": no_vig(ln["over_odds"], ln["under_odds"]),
                          "overed": None if tl is None or tot == tl else float(tot > tl), "sim_total": float((h + a).mean()), "total": tot,
                          "sim_margin": float((h - a).mean()), "margin": res,
-                         "avail_points": None if det is None else [det["home"]["points"], det["away"]["points"]]})
+                         "avail_points": None if det is None else [det["home"]["points"], det["away"]["points"]],
+                         "players_margin": None if not det or "players" not in det else det["players"]["margin"],
+                         "model_margin": None if not det or "players" not in det else det["players"]["model"]})
     return {"records": recs, "metrics": metrics(recs)}
 
 
@@ -769,6 +805,151 @@ def absent_tonight(lg: str, games: list[dict], team: str, before: str, out_names
     roster = {r["id"] for r in (_box_cached(lg, tg[-1]["id"]).get(team) or [])} if tg else set()
     names = {n.lower() for n in out_names}
     return {pid for pid, v in vals["players"].items() if v["name"].lower() in names or (roster and pid not in roster)}
+
+
+# ------------------------------------------------------------------ team strength from player ratings
+# Weight on the player-rating margin against the team-rating model's (None: off). Set from the fair test below.
+PLAYER_RATING_W = None
+PLAYER_RATING_LAM = 20.0     # ridge: each player's effect is shrunk toward his box-score prior by this many games
+PLAYER_RATING_DELTA = 1.0    # weight on last season's games (the season before that: squared)
+PLAYER_RATING_KMIN = 300.0   # minutes of new-player Game Score rate in each player's box-score prior
+
+
+def season_of(date: str) -> int:
+    """Season by its start year (Oct-Jun: the season that began in October)."""
+    return int(date[:4]) if date[5:7] >= "09" else int(date[:4]) - 1
+
+
+class PlayerRatings:
+    """Team strength from the players on the floor. A game-level ridge regression of the final margin on who played
+    (each team's players weighted by 5 x their share of its minutes, + home, - away):
+        margin = home edge + c x (box-score prior of the floor) + sum of player effects,
+    each player's box-score prior being his Game Score per 48 above the league (shrunk toward new-player level by
+    PLAYER_RATING_KMIN minutes) and his effect shrunk toward 0, i.e. toward that prior, by PLAYER_RATING_LAM games.
+    Fitted on every game before the cutoff: this season at full weight, last season at DELTA, the one before at
+    DELTA^2. It carries a player's value from team to team and from last season, and it sees what a box score misses
+    (defence, spacing) once a player has enough games. Tonight's margin: the expected lineup at its minutes."""
+
+    def __init__(self, lg: str, games: list[dict], year: int, lam: float | None = None, delta: float | None = None,
+                 prepared: list[dict] | None = None):
+        self.lg, self.year = lg, year
+        self.lam = PLAYER_RATING_LAM if lam is None else lam
+        self.delta = PLAYER_RATING_DELTA if delta is None else delta
+        self.games = prepared if prepared is not None else self._prepare(lg, games, year)
+        self.pids = sorted({p for g in self.games for p, *_ in g["rows"]})
+        self.ix = {p: i for i, p in enumerate(self.pids)}
+        self.hist = defaultdict(list)                   # (date, minutes) of every appearance, any team
+        for g in self.games:
+            for p, _, m, _ in g["rows"]:
+                self.hist[p].append((g["date"], m))
+        self._reset()
+
+    @staticmethod
+    def _prepare(lg: str, games: list[dict], year: int) -> list[dict]:
+        """One row per finished game with box scores: date, season, home flag, margin, and per player (id, signed
+        5 x minute share, minutes, Game Score). This season's games plus the two before."""
+        G = {g["id"]: g for g in games}
+        for yy in (year, year - 1):                     # LAST_SEASON[y] is the season before y
+            span = LAST_SEASON.get(yy) if lg == "nba" else None
+            if span:
+                for g in season_games(lg, *span):
+                    G.setdefault(g["id"], g)
+        out = []
+        for g in sorted(G.values(), key=lambda g: g["date"]):
+            if not g["final"] or season_of(g["date"]) > year:
+                continue
+            box = _box_cached(lg, g["id"])
+            sides = []
+            for s_, sg in (("home", 1.0), ("away", -1.0)):
+                rows = [r for r in box.get(g[s_], []) if not r["dnp"] and r["min"] > 0]
+                tot = sum(r["min"] for r in rows)
+                sides.append([(r["id"], sg * 5.0 * r["min"] / tot, r["min"], _gmsc(r)) for r in rows] if tot else [])
+            if not sides[0] or not sides[1]:
+                continue
+            out.append({"id": g["id"], "date": g["date"], "season": season_of(g["date"]), "h": 0.0 if g["neutral"] else 1.0,
+                        "y": g["score"]["home"] - g["score"]["away"], "rows": sides[0] + sides[1]})
+        return out
+
+    def _reset(self):
+        P = len(self.pids)
+        self.k, self.cut = 0, ""
+        self.Gm, self.gH, self.gy = np.zeros((P, P)), np.zeros(P), np.zeros(P)
+        self.HH = self.Hy = 0.0
+        self.MIN, self.GS = np.zeros(P), np.zeros(P)
+
+    def fit(self, before: str) -> dict:
+        """Ratings from games strictly before `before` (incremental when cutoffs only move forward)."""
+        if before < self.cut:
+            self._reset()
+        while self.k < len(self.games) and self.games[self.k]["date"] < before:
+            g = self.games[self.k]
+            w = self.delta ** (self.year - g["season"])
+            i = np.array([self.ix[p] for p, *_ in g["rows"]]); x = np.array([v for _, v, _, _ in g["rows"]])
+            self.Gm[np.ix_(i, i)] += w * np.outer(x, x)
+            np.add.at(self.gH, i, w * g["h"] * x); np.add.at(self.gy, i, w * g["y"] * x)
+            self.HH += w * g["h"] ** 2; self.Hy += w * g["h"] * g["y"]
+            np.add.at(self.MIN, i, w * np.array([m for *_, m, _ in g["rows"]]))
+            np.add.at(self.GS, i, w * np.array([s for *_, s in g["rows"]]))
+            self.k += 1
+        self.cut = before
+        P = len(self.pids)
+        if self.k < 100:
+            return {"n_games": self.k, "r": np.zeros(P), "h": 0.0, "c": 0.0}
+        small = (self.MIN > 0) & (self.MIN < 300)
+        gbar = self.GS.sum() / self.MIN.sum()
+        gnew = self.GS[small].sum() / max(self.MIN[small].sum(), 1.0) if small.any() else gbar
+        prior = 48.0 * ((self.GS + PLAYER_RATING_KMIN * gnew) / (self.MIN + PLAYER_RATING_KMIN) - gbar)
+        Gp = self.Gm @ prior
+        A = np.zeros((P + 2, P + 2)); b = np.zeros(P + 2)
+        A[0, 0], A[0, 1], A[0, 2:] = self.HH, self.gH @ prior, self.gH
+        A[1, 1], A[1, 2:] = prior @ Gp, Gp
+        A[2:, 2:] = self.Gm + self.lam * np.eye(P)
+        A = np.triu(A) + np.triu(A, 1).T + 1e-9 * np.eye(P + 2)
+        b[0], b[1], b[2:] = self.Hy, self.gy @ prior, self.gy
+        beta = np.linalg.solve(A, b)
+        return {"n_games": self.k, "h": float(beta[0]), "c": float(beta[1]), "r": beta[1] * prior + beta[2:],
+                "new_player": float(48.0 * (gnew - gbar) * beta[1])}
+
+    def minutes_when_playing(self, pid: str, before: str) -> float | None:
+        h = [m for d, m in self.hist.get(pid, []) if d < before][-10:]
+        if not h:
+            return None
+        w = 0.85 ** np.arange(len(h))[::-1]
+        return float((w * np.array(h)).sum() / w.sum())
+
+    def rating(self, fit: dict, pid: str) -> float:
+        i = self.ix.get(pid)
+        return float(fit["r"][i]) if i is not None else fit.get("new_player", 0.0)
+
+    def margin(self, fit: dict, home: dict, away: dict, neutral: bool = False) -> dict:
+        """Expected home margin from two lineups {player id: expected minutes} (each scaled to 240)."""
+        val = {}
+        for s_, L in (("home", home), ("away", away)):
+            tot = sum(L.values())
+            val[s_] = sum(5.0 * m / tot * self.rating(fit, p) for p, m in L.items()) if tot else 0.0
+        return {"margin": val["home"] - val["away"] + (0.0 if neutral else fit["h"]), "home": val["home"], "away": val["away"], "h": fit["h"]}
+
+    def lineup_played(self, gid: str, team: str, before: str) -> dict:
+        """Backtest lineup: the players who played (the availability convention), each at his minutes when playing
+        from earlier games (12 if none)."""
+        rows = [r for r in _box_cached(self.lg, gid).get(team, []) if not r["dnp"] and r["min"] > 0]
+        return {r["id"]: (self.minutes_when_playing(r["id"], before) or 12.0) for r in rows}
+
+
+def expected_margin(H: dict, A: dict, R: dict) -> float:
+    """The team-rating model's expected home margin from its two sides (possessions x points per possession)."""
+    pace = R["league"]["pace"] + (H.get("pace_off", 0.0) + A.get("pace_off", 0.0)) / 2
+    return pace * (ppp_expected(H, R.get("and1", 0.0)) - ppp_expected(A, R.get("and1", 0.0)))
+
+
+def with_player_ratings(H: dict, A: dict, R: dict, pr_margin: float | None, w: float | None = None) -> tuple:
+    """Move the model's margin w of the way to the player-rating margin (total unchanged). Returns (H, A, shift)."""
+    w = PLAYER_RATING_W if w is None else w
+    if not w or pr_margin is None:
+        return H, A, 0.0
+    d = w * (pr_margin - expected_margin(H, A, R))
+    H2, A2 = apply_prior(H, A, R, d, 0.0)
+    return H2, A2, d
 
 
 # ------------------------------------------------------------------ preseason prior: last season, moved with the players

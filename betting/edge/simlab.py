@@ -272,7 +272,11 @@ def engines(data: dict) -> dict:
     G = gnba.season_games("nba", f"{y}1018", yday)
     cut = gs_data.now_cutoff()               # every game of earlier US days, last night's included (UTC dates lag)
     R = gnba.calibrate(gnba.ratings(G, cut, 48), G, cut, 48, 24)
-    sides = {}
+    span0 = gnba.LAST_SEASON.get(y)                       # player layer prior: each player's own last season
+    PT = gnba.season_player_totals("nba", gnba.season_games("nba", *span0)) if span0 else None
+    PRt = gnba.PlayerRatings("nba", G, y) if gnba.PLAYER_RATING_W else None   # team strength from player ratings
+    prf = PRt.fit(cut) if PRt else None
+    sides, prof = {}, {}
     for g in nba_games:
         # availability: tonight's Out/Doubtful list (and players gone from the roster) priced into each offense
         inj = [i for i in g.get("injuries", []) if i["team"] in (g["home"], g["away"])]
@@ -282,7 +286,22 @@ def engines(data: dict) -> dict:
         # preseason prior: last season's strength moved with the players (fades as this season's games pile up)
         H, A, prior = gnba.with_prior(H, A, R, gnba.prior_context("nba", y) if gnba.PRIOR_K else None, g["home"], g["away"],
                                       {g[s_]: gnba.latest_roster("nba", G, g[s_], cut) for s_ in ("home", "away")})
+        # rotation tonight (also the player layer below): projected minutes, Out/Doubtful removed
+        prof[g["id"]] = {s_: gnba.player_profiles("nba", G, g[s_], gs_data.cutoff(gs_data.us_day(g["start"])), gone(g[s_]), prior_tot=PT)
+                         for s_ in ("home", "away")}
+        pr_det = None
+        if PRt and prf["n_games"] >= 100:
+            lu = {s_: {p["id"]: p["min"] for p in prof[g["id"]][s_]["players"]} for s_ in ("home", "away")}
+            pm = PRt.margin(prf, lu["home"], lu["away"], g.get("neutral", False))
+            model_m = gnba.expected_margin(H, A, R)
+            H, A, shift = gnba.with_player_ratings(H, A, R, pm["margin"])
+            top = lambda s_: sorted(({"name": p["name"], "min": round(p["min"], 1), "rating": round(PRt.rating(prf, p["id"]), 1)}
+                                     for p in prof[g["id"]][s_]["players"]), key=lambda r: -r["min"])[:8]
+            pr_det = {"players_margin": round(pm["margin"], 2), "model_margin": round(model_m, 2), "w": gnba.PLAYER_RATING_W,
+                      "shift": round(shift, 2), "home_edge": round(pm["h"], 2), "games_fitted": prf["n_games"],
+                      "lineups": {"home": top("home"), "away": top("away")}}
         sides[g["id"]] = {"home": {k: round(v, 4) for k, v in H.items()}, "away": {k: round(v, 4) for k, v in A.items()},
+                          "player_ratings": pr_det,
                           "prior": None if not prior else {t: {"net_last": round(v["net_last"], 2), "roster_delta": round(v["roster_delta"], 2),
                                                                 "shift": round(v["shift"], 2), "arrived": [n for n, _ in v["arrived"][:2]],
                                                                 "left": [n for n, _ in v["left"][:2]]} for t, v in prior.items()},
@@ -290,14 +309,11 @@ def engines(data: dict) -> dict:
                           "availability": {s_: {"points": round(det[s_]["points"], 2), "rows": det[s_]["rows"][:6]} for s_ in ("home", "away")},
                           "no_availability": {"home": {k: round(v, 4) for k, v in gnba.side(R, g["home"], g["away"], True).items()},
                                               "away": {k: round(v, 4) for k, v in gnba.side(R, g["away"], g["home"], False).items()}}}
-    span0 = gnba.LAST_SEASON.get(y)                       # player layer prior: each player's own last season
-    PT = gnba.season_player_totals("nba", gnba.season_games("nba", *span0)) if span0 else None
     for g in nba_games:                                   # player layer: rotation, per-minute rates, injury report
         inj = [i for i in g.get("injuries", []) if i["team"] in (g["home"], g["away"])]
-        gone = lambda team: {i["name"] for i in inj if i["team"] == team and (i["status"] or "").lower() in ("out", "doubtful")}
         pl = {}
         for side in ("home", "away"):
-            pr = gnba.player_profiles("nba", G, g[side], gs_data.cutoff(gs_data.us_day(g["start"])), gone(g[side]), prior_tot=PT)
+            pr = prof[g["id"]][side]
             pr["players"] = [{k: round(v, 4) if isinstance(v, float) else v for k, v in p.items()} for p in pr["players"]]
             pr["ast_rate"] = round(pr["ast_rate"], 4)
             pl[side] = pr
@@ -306,7 +322,7 @@ def engines(data: dict) -> dict:
         pl["lines_pulled"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
         sides[g["id"]]["players"] = pl
     out["nba"] = {"R": {"pace": R["league"]["pace"], "sd_pace": R["sd_pace"], "sd_p2": R["sd_p2"], "sd_p3": R["sd_p3"], "dur_scale": R["dur_scale"],
-                        "and1": R["and1"], "home_scale": R["home_scale"], "reb_credit": round(gnba.reb_credit(G, cut), 4), "ppg": R["ppg_target"], "home_margin": R["home_margin"], "n_games": R["n_games"],
+                        "and1": R["and1"], "home_scale": R["home_scale"], "comeback": R.get("comeback", 0.0), "reb_credit": round(gnba.reb_credit(G, cut), 4), "ppg": R["ppg_target"], "home_margin": R["home_margin"], "n_games": R["n_games"],
                         "avg": {k: round(v, 4) for k, v in gnba.side(R, "_", "_", False).items()},
                         "avg_home": {k: round(v, 4) for k, v in gnba.side(R, "_", "_", True).items()}},
                   "sides": sides, "backtest": _bt("nba", lambda: gnba.backtest(G, 48, 24, n=6000)), "backtest_prior": gbt.prior_metrics("nba"),

@@ -825,6 +825,11 @@ function nbEnd(tk, score) {
   });
 }
 
+// expected points per possession from one side's rates (the engine's structure, analytically), as in Python
+function nbPpp(s, and1) {
+  const pm = s.three * s.p3 + (1 - s.three) * s.p2, shot = s.three * s.p3 * 3 + (1 - s.three) * s.p2 * 2 + pm * and1 * s.ftp, miss = (1 - pm) * s.orb;
+  return (1 - s.to) * (s.ft_rate * 2 * s.ftp + (1 - s.ft_rate) * shot * (1 + miss + miss * miss));
+}
 // NBA: every possession. C = {R, home, away, minutes, shotClock, env}; st = {sh, sa, clock, poss, ot}
 function nbaPossGame(C, st, log, tk, cap) {
   const R = C.R, S = [C.home, C.away], minutes = C.minutes || 48, shotClock = C.shotClock || 24, env = C.env !== false;
@@ -835,6 +840,8 @@ function nbaPossGame(C, st, log, tk, cap) {
   const L3 = S.map((s) => lgt(s.p3) + (env ? normal() * R.sd_p3 : 0) / (s.p3 * (1 - s.p3)));
   const score = [st ? st.sh : 0, st ? st.sa : 0];
   let clock = st ? st.clock : minutes * 60, poss = st && st.poss != null ? st.poss : (rnd() < 0.5 ? 1 : 0), ot = st && st.ot ? st.ot : 0, np = 0;
+  // score effects: a team ahead of its expected path eases off, one behind pushes (logit shift on make rates)
+  const kap = R.comeback || 0, muG = kap ? pace0 * (nbPpp(S[0], R.and1 || 0) - nbPpp(S[1], R.and1 || 0)) : 0;
   if (tk) nbBegin(tk);
   for (;;) {
     const o = poss, d = 1 - o, c = clock, diff = score[o] - score[d], late = c <= 60;
@@ -849,7 +856,8 @@ function nbaPossGame(C, st, log, tk, cap) {
       else if (!need3 && rnd() < S[o].ft_rate) { const a = rnd() < S[o].ftp, b = rnd() < S[o].ftp, w = tk ? nbFT(tk, o, a + b, 2) : -1; pts += a + b; if (seq) seq.push({ k: "ft", m: [a, b], who: w }); }
       else for (let att = 0; att < 3; att++) {
         const is3 = need3 || rnd() < S[o].three;
-        if (rnd() < sgm(is3 ? L3[o] : L2[o])) { pts += is3 ? 3 : 2; let a1 = false; if (rnd() < R.and1 && rnd() < S[o].ftp) { pts += 1; a1 = true; }
+        let cb = 0; if (kap) { const dev = (score[0] - score[1]) - muG * (ot ? 1 : Math.min(minutes * 60 - c, minutes * 60) / (minutes * 60)); cb = -kap * (o === 0 ? dev : -dev) / 10; }
+        if (rnd() < sgm((is3 ? L3[o] : L2[o]) + cb)) { pts += is3 ? 3 : 2; let a1 = false; if (rnd() < R.and1 && rnd() < S[o].ftp) { pts += 1; a1 = true; }
           const wa = tk ? nbFG(tk, o, is3, true, a1) : null; if (seq) seq.push({ k: "shot", three: is3, made: true, and1: a1, who: wa ? wa[0] : -1, ast: wa ? wa[1] : -1 }); break; }
         const orb = rnd() < S[o].orb, wm = tk ? nbFG(tk, o, is3, false, false) : null, rb = tk ? nbReb(tk, orb ? o : d, orb) : -1;
         if (seq) seq.push({ k: "shot", three: is3, made: false, orb, who: wm ? wm[0] : -1, rb });
@@ -1489,8 +1497,11 @@ function engNote(k) {
     const one = (s) => { const a = av && av[s]; if (!a) return ""; const top = a.rows.filter((r) => Math.abs(r.shift) >= 0.2).slice(0, 3)
       .map((r) => `${r.name} ${r.out_tonight ? "out" : "back"}${r.missed_share > 0 ? ` (missed ${Math.round(100 * r.missed_share)}% so far)` : ""}`).join(", ");
       return `${g[s]} ${a.points >= 0 ? "+" : "−"}${Math.abs(a.points).toFixed(1)} pts${top ? ": " + top : ""}`; };
-    return `Every possession: turnovers, 2s and 3s, foul trips, offensive rebounds, late fouling, overtime. Ratings from ${E.nba.R.n_games} games this season; it doesn't use the line. ` +
-      (av ? `Availability, priced into team strength from tonight's injury report against who played in the games the ratings came from: ${one("away")}; ${one("home")}.` : ""); }
+    const pr = (E.nba.sides[game().id] || {}).player_ratings;
+    const sgn = (m) => m >= 0 ? `${g.home} by ${m.toFixed(1)}` : `${g.away} by ${(-m).toFixed(1)}`;
+    return `Every possession: turnovers, 2s and 3s, foul trips, offensive rebounds, late fouling, overtime${E.nba.R.comeback ? ", score effects (a team far ahead of its expected margin eases off, one far behind pushes)" : ""}. Ratings from ${E.nba.R.n_games} games this season; it doesn't use the line. ` +
+      (av ? `Availability, priced into team strength from tonight's injury report against who played in the games the ratings came from: ${one("away")}; ${one("home")}. ` : "") +
+      (pr ? `Player ratings (every player's value from ${pr.games_fitted.toLocaleString()} games this season and the last two, at tonight's projected minutes): ${sgn(pr.players_margin)}; team ratings: ${sgn(pr.model_margin)}. The sim moves ${Math.round(100 * pr.w)}% of the way to the players' number (${pr.shift >= 0 ? "+" : "−"}${Math.abs(pr.shift).toFixed(1)} for ${g.home}).` : ""); }
   const gs = (E.nhl.sides[game().id] || {}).goalies || {}, g = game();
   return `10-second clock: even-strength goals (shots × finishing × goalie), power plays, pulled goalies, 3-on-3 OT, shootout. ${E.nhl.R.n_games} games this season; it doesn't use the line. ` +
     `Goalies assumed: ${gs.away || "unknown"} (${g.away}) and ${gs.home || "unknown"} (${g.home}), each team's most recent starter, not a confirmed starter. Check the confirmed goalies before puck drop; the factor table shows how much the goalie moves the number.`;

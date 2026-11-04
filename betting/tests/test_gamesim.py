@@ -295,6 +295,61 @@ class Availability(unittest.TestCase):
         self.assertLess(s1["p3"], s0["p3"])
 
 
+class TeamFromPlayers(unittest.TestCase):
+    """Team strength from player ratings: the ridge recovers who is good, refits incrementally, and the blend moves
+    the margin by w x (players - model) without moving the total."""
+
+    @staticmethod
+    def league(n_games=400, seed=4):
+        rng = np.random.default_rng(seed)
+        true = {f"p{i}": v for i, v in enumerate(rng.normal(0, 4, 24))}
+        pids = sorted(true)
+        games = []
+        for j in range(n_games):
+            pick = rng.permutation(pids)[:16]
+            rows, y = [], 2.0
+            for side, sg in ((pick[:8], 1.0), (pick[8:], -1.0)):
+                mins = rng.uniform(5, 40, 8); mins *= 240 / mins.sum()
+                for p, m in zip(side, mins):
+                    rows.append((p, sg * 5 * m / 240, float(m), 10.0 * m / 36))   # equal Game Score rates: prior 0
+                    y += sg * 5 * m / 240 * true[p]
+            games.append({"id": str(j), "date": f"2025-{11 + j // 200:02d}-{1 + (j % 200) // 8:02d}T23:00Z", "season": 2025,
+                          "h": 1.0, "y": y + rng.normal(0, 3), "rows": rows})
+        return true, games
+
+    def test_recovers_player_effects_and_home_edge(self):
+        from gamesim import nba
+        true, games = self.league()
+        PR = nba.PlayerRatings("nba", [], 2025, lam=2.0, prepared=games)
+        f = PR.fit("2099-01-01")
+        est = np.array([PR.rating(f, p) for p in sorted(true)]); tru = np.array([true[p] for p in sorted(true)])
+        self.assertGreater(np.corrcoef(est, tru)[0, 1], 0.95)
+        self.assertAlmostEqual(f["h"], 2.0, delta=0.6)
+
+    def test_incremental_fit_equals_fresh_fit(self):
+        from gamesim import nba
+        _, games = self.league()
+        a = nba.PlayerRatings("nba", [], 2025, prepared=games)
+        a.fit("2025-11-15"); fa = a.fit("2025-12-10")
+        fb = nba.PlayerRatings("nba", [], 2025, prepared=games).fit("2025-12-10")
+        self.assertEqual(fa["n_games"], fb["n_games"])
+        self.assertTrue(np.allclose(fa["r"], fb["r"]))
+        self.assertLess(nba.PlayerRatings("nba", [], 2025, prepared=games).fit("2025-11-02")["n_games"], 100)   # no lookahead
+
+    def test_blend_moves_margin_not_total(self):
+        from gamesim import nba
+        R = dict(Basketball.R, league=dict(Basketball.R["league"]), teams={}, and1=0.08)
+        H0, A0 = nba.side(R, "_", "_", True), nba.side(R, "_", "_", False)
+        m0 = nba.expected_margin(H0, A0, R)
+        H1, A1, d = nba.with_player_ratings(H0, A0, R, m0 + 10.0, w=0.6)
+        self.assertAlmostEqual(d, 6.0, places=6)
+        self.assertAlmostEqual(nba.expected_margin(H1, A1, R) - m0, 6.0, delta=0.4)
+        pace = R["league"]["pace"]
+        tot = lambda H, A: pace * (nba.ppp_expected(H, 0.08) + nba.ppp_expected(A, 0.08))
+        self.assertAlmostEqual(tot(H1, A1), tot(H0, A0), delta=0.4)
+        self.assertEqual(nba.with_player_ratings(H0, A0, R, None, w=0.6)[2], 0.0)
+
+
 class SeasonPrior(unittest.TestCase):
     def test_prior_moves_margin_not_total(self):
         from gamesim import nba
