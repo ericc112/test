@@ -60,5 +60,7 @@
     "cs2:cs_kills_m12:under|model bias",
     "mlb:batter_hrr:under|model bias",
     "mlb:pitcher_outs:over|opportunity"
-  ]
+  ],
+  "blend_by_sport": {},
+  "blend_by_sport_fit": {}
 }
