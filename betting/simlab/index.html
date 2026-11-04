@@ -221,6 +221,7 @@ table.dec, #factorTbl { min-width: 600px }
       <div><h3>By the model <span class="note">(50,000-run simulation + DraftKings + this season)</span></h3><div class="pk-list" id="pkModel"></div></div>
       <div><h3>By history only <span class="note">(this season's record at the line, then last 5, then head-to-head)</span></h3><div class="pk-list" id="pkHist"></div></div>
     </div>
+    <div id="pkTrack"></div>
     <div class="note" id="pkNote"></div>
   </details>
 
@@ -1091,6 +1092,26 @@ function renderPicks() {
   </div>`;
   $("pkModel").innerHTML = (P.model || []).map((r) => card(r, false)).join("") || `<div class="note">No legs priced.</div>`;
   $("pkHist").innerHTML = (P.history || []).map((r) => card(r, true)).join("") || `<div class="note">No legs with 5+ games.</div>`;
+  // logic versions, track record, closing line value and tonight's tilt (written by nba-picks)
+  const pct1 = (v) => v == null ? "—" : (100 * v).toFixed(1) + "%";
+  const tr = P.track || {}, cl = P.clv || {}, tl = P.tilt || {};
+  const labRows = (tr.labels || []).map((x) => `<tr><td class="l">${esc(x.label)}</td><td>${x.legs}</td><td>${pct1(x.pred)}</td><td>${pct1(x.real)}</td><td>${(x.gap >= 0 ? "+" : "") + (100 * x.gap).toFixed(1)}</td></tr>`).join("");
+  const tiltRows = Object.entries(tl).sort().map(([st, v]) => `<tr><td class="l">${esc(st)}</td><td>${v.all == null ? "—" : v.all.toFixed(2)}</td><td>${v.top5 == null ? "—" : v.top5.toFixed(2)}</td><td>${v.bench == null ? "—" : v.bench.toFixed(2)}</td></tr>`).join("");
+  $("pkTrack").innerHTML = `<div class="pk-cols">
+    <div class="pk"><div class="pk-h"><b>Pricing logic</b></div>
+      <div><span class="k">Published</span> ${esc(P.model_version || "v1")}</div>
+      ${P.shadow_version ? `<div><span class="k">Shadow (scored nightly, not published)</span> ${esc(P.shadow_version)}</div><div class="note">The shadow replaces the published logic only after it beats it on 200+ graded legs or 14 days, on log loss and label calibration.</div>` : ""}
+    </div>
+    <div class="pk"><div class="pk-h"><b>Track record</b><span class="note">graded NBA legs</span></div>
+      ${tr.graded ? `<div class="tbl-wrap"><table class="rs-log"><thead><tr><th class="l">Label</th><th>Legs</th><th>Predicted</th><th>Realized</th><th>Gap</th></tr></thead><tbody>${labRows}</tbody></table></div>
+        <div class="note">${tr.graded} graded (${tr.holdout} on the Wednesday holdout, never fitted on).${tr.published && tr.published.n ? ` Published legs: ${tr.published.n}, predicted ${pct1(tr.published.pred)}, realized ${pct1(tr.published.hit)}.` : ""}</div>`
+        : `<div class="note">No NBA legs graded yet. This fills in as tonight's games settle; headline accuracy is reported on the Wednesday holdout.</div>`}
+      <div class="note"><b>Closing line value:</b> ${cl.with_clv ? `${cl.with_clv} of ${cl.legs} published legs, mean ${(cl.mean_clv >= 0 ? "+" : "") + (100 * cl.mean_clv).toFixed(1)} pts, beat the close ${Math.round(100 * cl.beat_close)}%` : `${cl.legs || 0} published legs, none with a DraftKings close yet`}.</div>
+    </div>
+    ${tiltRows ? `<div class="pk"><div class="pk-h"><b>Tonight's raw tilt</b><span class="note">simulation vs DraftKings, logit</span></div>
+      <div class="tbl-wrap"><table class="rs-log"><thead><tr><th class="l">Stat</th><th>All</th><th>Top five</th><th>Bench</th></tr></thead><tbody>${tiltRows}</tbody></table></div>
+      <div class="note">Past ±0.25 in a stat, no ENTRY leg in that stat until the cause is logged.</div></div>` : ""}
+  </div>`;
   const bias = Object.entries(P.bias || {}).map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`).join(", ");
   $("pkNote").innerHTML = `Model list: ranked by the calibrated probability (simulation, DraftKings no-vig and this season blended like <span class="num">edge prob</span>), High before Medium, standard lines, one leg per game. Only High legs at 65%+ go in entries, two legs max (PrizePicks break-even per leg: 2-pick power 57.7%, 5/6-pick flex 54.2%). ` +
     (bias ? `Tonight the simulation ran below DraftKings on every stat (logit gap: ${esc(bias)}); that tilt is measured each scan and taken out before blending. ` : "") +
