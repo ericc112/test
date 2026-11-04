@@ -74,8 +74,8 @@ def fitting(rows: list[dict]) -> list[dict]:
     return [r for r in graded(rows) if not is_holdout(r)]
 
 
-def log_change(kind: str, key: str, before, after, window: tuple, n: int, path: str = LEARN_LOG):
-    with open(path, "a") as f:
+def log_change(kind: str, key: str, before, after, window: tuple, n: int, path: str | None = None):
+    with open(path or LEARN_LOG, "a") as f:
         f.write(json.dumps({"at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"), "kind": kind, "key": key,
                             "before": before, "after": after, "window": list(window), "n": n}) + "\n")
 
