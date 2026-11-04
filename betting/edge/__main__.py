@@ -367,9 +367,19 @@ def _nba_picks(args):
         print("No NBA props on the PrizePicks board for the stats the simulation scores.")
         return
     print(f"Pricing {len(props)} NBA prop(s) ({sum(p['odds_type'] == 'standard' for p in props)} standard) with {args.n:,} runs per game...")
-    rows = N.price_nba(props, n=args.n)
+    from . import nba_model as NM
+    from . import nba_report as NR
+    from .nba_clv import clv as nba_clv
+    rows = N.price_nba(props, n=args.n)                       # the CURRENT logic: the only one published
     ok = [r for r in rows if "error" not in r]
     today = dt.date.today().isoformat()
+    shadow = NM.params("shadow")
+    rows_sh, ok_sh = [], []
+    if shadow:                                                # the SHADOW logic scores the same board, never published
+        print(f"Scoring the shadow logic ({NM.load()['shadow']['name']})...")
+        rows_sh = N.price_nba(props, n=args.n, logic={**shadow, "_version": NM.load()["shadow"]["version"]})
+        ok_sh = [r for r in rows_sh if "error" not in r]
+        print("Shadow log:", NM.log_shadow(rows, rows_sh, today))
     os.makedirs(os.path.join(HERE, "data", "nba_boards"), exist_ok=True)
     with gzip.open(os.path.join(HERE, "data", "nba_boards", f"{today}.json.gz"), "wt") as f:     # the full priced board
         json.dump([{k: v for k, v in r.items() if k not in ("research", "dk")} for r in ok], f, default=float)
@@ -385,8 +395,13 @@ def _nba_picks(args):
         keep = {id(r) for r in picks} | {id(r) for r in best_game.values()} | {id(r) for r in ok if r["odds_type"] == "standard" and r["confidence"] in ("High", "Medium")}
         logrows = [r for r in ok if id(r) in keep] + hist
         pick_ids = {id(r) for r in picks}
-        act = {id(r): (("lean" if r["confidence"] in ("High", "Medium") and not r.get("newcomer") else "pass") if id(r) in pick_ids else "pass")
-               for r in logrows}          # only the model's published picks can be leans; the rest are logged for calibration
+        def action(r):
+            if id(r) not in pick_ids or r.get("newcomer"):
+                return "pass"
+            if N.verdict(r).startswith("ENTRY"):
+                return "bet"          # an ENTRY leg: verify holds it to the tighter 2-pt tolerances (Fix 7)
+            return "lean" if r["confidence"] in ("High", "Medium") else "pass"
+        act = {id(r): action(r) for r in logrows}   # only the model's published picks can be bets or leans
         for r, (bid, _) in zip(logrows, log_pp(logrows, act, refresh=True)):
             ids[id(r)] = bid
         print(f"Logged {len(logrows)} leg(s) to bets.csv (model picks, history-only picks, every Medium+ leg, each game's best leg); "
@@ -441,12 +456,33 @@ def _nba_picks(args):
             "Tested on 2,330 DraftKings lines this season, these counts carried no information beyond the book's price, and players "
             "over in 80–100% of their last 5 went over 39% of the time against 50% priced (LESSONS L27). Each leg shows what the model "
             "and DraftKings say about the same side; both lists are saved daily so their records can be compared.", ""]
-    report = "\n".join(head) + "\n## Top 5 by the model\n\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n" + "\n".join(hsec) + "\n" + "\n\n".join(hblocks) + "\n"
+    track = NR.nightly(L.read_bets())
+    try:
+        clv_s = nba_clv()
+    except Exception as e:  # CLV needs earlier nights' files; never sink the report over it
+        clv_s = {"legs": 0, "error": str(e)[:80]}
+    tilt_s = NR.tilt_by_segment(ok)
+    shsec = []
+    if ok_sh:
+        sp = N.pick_order(ok_sh, args.top)
+        m = NM.load()
+        shsec = ["", f"## Shadow logic: {m['shadow']['name']} (scored, NOT published)",
+                 f"Current logic: {m['current']['name']}. The shadow is promoted only after it beats the current logic on "
+                 f"{NM.MIN_LEGS}+ graded legs or {NM.MIN_DAYS} days, on log loss and label calibration (python -m edge.nba_model report).", "",
+                 "| p | conf | player | stat | side | line | verdict |", "|---|---|---|---|---|---|---|"]
+        shsec += [f"| {r['p_final']:.1%} | {r['confidence']} | {r['player']} ({r['team']}) | {N.LABEL[r['stat_key']]} | {r['side']} | {r['line']} | {N.verdict(r)} |" for r in sp]
+    report = ("\n".join(head) + "\n## Top 5 by the model\n\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n" + "\n".join(hsec) + "\n"
+              + "\n\n".join(hblocks) + "\n\n" + NR.markdown(track, clv_s, tilt_s) + "\n" + "\n".join(shsec) + "\n")
     out = args.out or os.path.join(HERE, "data", "picks", f"{today}-nba.md")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
         f.write(report)
+    mm = NM.load()
     pg = {"date": today, "pulled": pulled, "games": len({r["script"] for r in ok}), "props": len(ok), "n_sims": args.n,
+          "model_version": mm["current"]["name"], "shadow_version": (mm.get("shadow") or {}).get("name"),
+          "track": {"graded": track["graded"], "holdout": track["holdout"], "labels": track["labels"], "published": track["published"],
+                    "skill_holdout": track["skill_holdout"]},
+          "clv": {k: v for k, v in clv_s.items() if k != "rows"}, "tilt": tilt_s,
           "bias": {N.LABEL[k]: round(v["bias_logit"], 2) for k, v in bias.items()}, "entry": entry, **page,
           "next": [N.page_row(r, "", [], None) for r in rest]}
     with open(os.path.splitext(out)[0] + ".json", "w") as f:

@@ -38,6 +38,10 @@ CACHE = os.path.join(HERE, ".cache", "pp")
 NODE_SCRIPT = os.path.join(HERE, "simlab", "props_sim.js")
 N_SIMS = 50000
 BREAK_EVEN = {"2-pick power": 0.577, "3-pick power": 0.585, "5/6-pick flex": 0.542}
+# Fix 6: the verdict uses each line type's own payout. Standard lines (MORE-ONLY standard overs pay the same) use the
+# 2-pick power break-even; goblins and demons pay a multiplier the partner API doesn't publish, so they can't be
+# ENTRY legs until the multiplier shown in the app is entered (None = unknown).
+BREAK_EVEN_BY_TYPE = {"standard": BREAK_EVEN["2-pick power"], "goblin": None, "demon": None}
 _MEMO: dict = {}
 
 
@@ -135,17 +139,34 @@ def run_sims(eng: dict, gids: list[str], n: int = N_SIMS, workers: int = 4) -> d
     return out
 
 
-def build(dates: set | None = None, gids: set | None = None, n: int = N_SIMS) -> dict:
+SIM_KNOBS = {"minutes_alpha": "MINUTES_ALPHA", "swing_rho": "SWING_RHO", "shock": "PLAYER_SHOCK", "prior_min": "PLAYER_PRIOR_MIN"}
+
+
+def build(dates: set | None = None, gids: set | None = None, n: int = N_SIMS, sim: dict | None = None) -> dict:
     """Tonight's NBA games (ESPN), the engine inputs (simlab.nba_engine) and the player distributions. Memoized per
-    process, so `edge verify` on several picks re-runs the engine once."""
+    process, so `edge verify` on several picks re-runs the engine once. `sim` overrides simulation settings (a
+    shadow logic's), restored afterwards."""
+    from gamesim import nba as gnba
+    sim = sim or {}
+    saved = {k: getattr(gnba, a) for k, a in SIM_KNOBS.items()}
+    for k, v in sim.items():
+        setattr(gnba, SIM_KNOBS[k], v)
+    try:
+        return _build(dates, gids, n, tuple(sorted(sim.items())))
+    finally:
+        for k, v in saved.items():
+            setattr(gnba, SIM_KNOBS[k], v)
+
+
+def _build(dates, gids, n, simkey) -> dict:
     from . import simlab
-    key = (tuple(sorted(dates or [])), tuple(sorted(gids or [])), n)
+    key = (tuple(sorted(dates or [])), tuple(sorted(gids or [])), n, simkey)
     if key in _MEMO:
         return _MEMO[key]
     if gids:              # the back-check right after pricing: reuse that run if it covers these games (< 15 min old)
         now = dt.datetime.now(dt.timezone.utc)
         for k, v in _MEMO.items():
-            if isinstance(v, dict) and "sims" in v and set(gids) <= set(v["sims"]) and k[2] == n and \
+            if isinstance(v, dict) and "sims" in v and set(gids) <= set(v["sims"]) and k[2] == n and k[3] == simkey and \
                     now - dt.datetime.strptime(v["pulled"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=dt.timezone.utc) < dt.timedelta(minutes=15):
                 return v
     today = dt.date.today()
@@ -155,9 +176,25 @@ def build(dates: set | None = None, gids: set | None = None, n: int = N_SIMS) ->
     if gids:
         games = [g for g in games if g["id"] in gids]
     eng = simlab.nba_engine(games, today) if games else {"sides": {}, "R": {}}
+    snapshot_dk(eng, games)
     sims = run_sims(eng, [g["id"] for g in games], n=n) if games else {}
     _MEMO[key] = {"games": {g["id"]: g for g in games}, "eng": eng, "sims": sims, "pulled": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")}
     return _MEMO[key]
+
+
+SNAP_DIR = os.path.join(HERE, "data", "nba_dk_snap")
+
+
+def snapshot_dk(eng: dict, games: list[dict]):
+    """Fix 4: every DraftKings pull is stamped and kept (data/nba_dk_snap/DATE.jsonl), so each published leg's
+    closing line can be read back for closing line value."""
+    now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+    os.makedirs(SNAP_DIR, exist_ok=True)
+    with open(os.path.join(SNAP_DIR, f"{dt.date.today().isoformat()}.jsonl"), "a") as f:
+        for g in games:
+            lines = ((eng["sides"].get(g["id"]) or {}).get("players") or {}).get("lines") or {}
+            if lines:
+                f.write(json.dumps({"at": now, "gid": g["id"], "start": g["start"], "lines": lines}) + "\n")
 
 
 def _us_date(iso: str) -> str:
@@ -199,13 +236,120 @@ def _sg(z: float) -> float:
     return float(1 / (1 + np.exp(-z)))
 
 
-def price_nba(props: list[dict], n: int = N_SIMS) -> list[dict]:
-    from .pp import _finish
+ENTRY_BREAK_EVEN = {2: 1 / 3, 3: 1 / 5}     # PrizePicks power: 2 legs pay 3x, 3 legs pay 5x (P(all hit) needed)
+
+
+def joint_probability(legs: list[dict], n: int = N_SIMS) -> dict:
+    """Fix 7: P(every leg hits) for a proposed entry. Legs in the same game come from the same simulated runs (their
+    correlation included); legs in different games multiply. Each leg: {event_id, player_id, stat, line, side, p}
+    where p is the leg's calibrated probability, used for the cross-game product."""
+    by_game = {}
+    for l in legs:
+        by_game.setdefault(str(l["event_id"]), []).append(l)
+    ctx = build(gids=set(by_game), n=n)
+    total, parts = 1.0, []
+    for gid, L in by_game.items():
+        if len(L) == 1:
+            total *= L[0]["p"]
+            parts.append({"game": gid, "legs": 1, "p": L[0]["p"], "how": "single leg: its calibrated probability"})
+            continue
+        s = ctx["eng"]["sides"][gid]
+        inp = {"id": gid, "sides": {"home": s["home"], "away": s["away"]}, "pl": [s["players"]["home"], s["players"]["away"]],
+               "legs": [{"pid": str(l["player_id"]), "stat": l["stat"], "line": float(l["line"]), "side": l["side"]} for l in L]}
+        os.makedirs(CACHE, exist_ok=True)
+        ip, op = os.path.join(CACHE, "joint_in.json"), os.path.join(CACHE, "joint_out.json")
+        with open(ip, "w") as f:
+            json.dump({"R": ctx["eng"]["R"], "n": n, "seed": 9100, "games": [inp]}, f)
+        if subprocess.run(["node", NODE_SCRIPT, ip, op]).returncode != 0:
+            raise RuntimeError("props_sim.js failed")
+        j = json.load(open(op))["games"][gid]["joint"]
+        # the simulation's joint rate, scaled by how far the calibrated legs sit from the raw simulated ones
+        raw_prod = float(np.prod(j["legs"])) or 1e-9
+        cal_prod = float(np.prod([l["p"] for l in L]))
+        pj = min(1.0, j["all"] * cal_prod / raw_prod)
+        total *= pj
+        parts.append({"game": gid, "legs": len(L), "p": pj, "sim_joint": j["all"], "sim_legs": j["legs"],
+                      "how": f"same-game joint from {n:,} runs (independence would say {raw_prod:.3f}, the runs say {j['all']:.3f})"})
+    be = ENTRY_BREAK_EVEN.get(len(legs))
+    return {"p_all": total, "break_even": be, "clears": be is not None and total > be, "parts": parts}
+
+
+def market_sides(h: list, dk_line: float, q_over: float, line: float) -> tuple[float, float]:
+    """Fix 6 (push consistency): the market's over and under at PrizePicks' line along the simulated shape, each
+    exclusive of a push, so the side probability is P(side) / (1 - P(push)) as for the model and history."""
+    a = np.asarray(h, float)
+    _, s = market_at(h, dk_line, q_over, dk_line)
+    if float(line).is_integer():
+        over = _surv(a, line + 0.5 - s); under = 1 - _surv(a, line - 0.5 - s)
+        return over / max(over + under, 1e-9), s
+    return _surv(a, line - s), s
+
+
+def _label(p: float, comps: dict, hist_n: int, segment: str, adj: dict, high_thin: dict | None) -> tuple[str, bool, float]:
+    """The confidence gates of blend.final_probability on a (possibly recalibrated) probability, plus Fix 5's
+    thin-history High rule when the logic enables it."""
+    vals = list(comps.values())
+    leaning = [v for v in vals if abs(v - 0.5) >= 0.01]
+    agree = bool(leaning) and (all(v > 0.5 for v in leaning) or all(v < 0.5 for v in leaning))
+    spread = max(vals) - min(vals) if vals else 0.0
+    g = adj["gates"]
+    if segment and any(segment.startswith(x) for x in adj["avoid_segments"]):
+        return "Avoid", agree, spread
+    high = (p >= g["high"] and agree and spread <= g["max_spread_high"] and len(comps) >= 2 and hist_n >= g["min_hist_n_high"]
+            and ("market" in comps or (hist_n >= g.get("no_market_min_hist_n", 20) and spread <= g.get("no_market_max_spread", 0.10))))
+    if not high and high_thin and p >= g["high"] and agree and "model" in comps and "market" in comps and hist_n < g["min_hist_n_high"]:
+        high = abs(comps["model"] - comps["market"]) <= high_thin.get("max_spread", 0.08)
+    if high:
+        cap = next((x for x in adj.get("cap_medium_segments", {}) if segment.startswith(x)), None)
+        return ("Medium" if cap else "High"), agree, spread
+    if p >= g["medium"] and agree and len(comps) >= 2:
+        return "Medium", agree, spread
+    return "Low", agree, spread
+
+
+def recompute(pm, pk, ph, hist_n: int, segment: str, logic: dict) -> tuple[float, str]:
+    """edge verify's recompute for an NBA leg: the blend, missing-market rule, cap and gates of the logic version
+    that priced it (Fix 7: verify checks truth under the right logic)."""
+    from .blend import final_probability
+    adj = _logic_adj(logic)
+    neutral = pk is None and logic.get("missing_market") == "neutral"
+    e = final_probability(pm, 0.5 if neutral else pk, ph, segment, hist_n, adj)
+    p = e.p
+    if logic.get("recal"):
+        p = float(_sg(logic["recal"]["a"] + logic["recal"]["b"] * _lg(p)))
+    if logic.get("cap"):
+        p = min(p, logic["cap"])
+    comps = {k: v for k, v in e.components.items() if not (neutral and k == "market")}
+    return round(p, 4), _label(p, comps, hist_n, segment, adj, logic.get("high_thin"))[0]
+
+
+def _logic_adj(logic: dict) -> dict:
+    from .blend import load_adjustments
+    adj = load_adjustments()
+    if logic.get("blend"):
+        adj["blend_by_sport"] = {**(adj.get("blend_by_sport") or {}), "nba": {k: logic["blend"][k] for k in ("intercept", "w_model", "w_market", "w_hist")}}
+    if logic.get("gates"):
+        adj["gates"] = {**adj["gates"], **logic["gates"]}
+    return adj
+
+
+TILT_CAUSES = os.path.join(HERE, "data", "nba_tilt_causes.json")
+TILT_MAX = 0.25        # Fix 7: tonight's raw simulation-vs-DraftKings gap beyond this blocks ENTRY legs in that stat
+
+
+def price_nba(props: list[dict], n: int = N_SIMS, logic: dict | None = None) -> list[dict]:
+    """Price the board under one pricing logic (edge/nba_model.py; None = the current published logic)."""
+    from .blend import final_probability
+    from . import nba_model
+    if logic is None:
+        logic = {**nba_model.params("current"), "_version": nba_model.load()["current"]["version"]}
+    logic = {**nba_model.V1, **logic}
+    adj = _logic_adj(logic)
     want = [p for p in props if p["stat"] in STATS]
     out = [{**p, "error": "stat not priced yet"} for p in props if p["stat"] not in STATS]
     if not want:
         return out
-    ctx = build({_us_date(p["start"]) for p in want if p.get("start")}, n=n)
+    ctx = build({_us_date(p["start"]) for p in want if p.get("start")}, n=n, sim=logic.get("sim"))
     by_pair = {frozenset((g["home"], g["away"])): g for g in ctx["games"].values()}
     staged = []
     for p in want:
@@ -222,6 +366,7 @@ def price_nba(props: list[dict], n: int = N_SIMS) -> list[dict]:
             inj = [i for i in sd["players"].get("injuries", []) if find_player(p["player"], [{"name": i["name"]}])]
             out.append({**p, "error": "listed " + inj[0]["status"].lower() if inj else "not in the projected rotation"})
             continue
+        top5 = pl["id"] in {x["id"] for x in sorted(prof, key=lambda x: -x["min"])[:5]}
         sim = ctx["sims"][g["id"]]["players"].get(pl["id"])
         stat, line = STATS[p["stat"]], float(p["line"])
         h = sim["hist"][stat]
@@ -234,27 +379,37 @@ def price_nba(props: list[dict], n: int = N_SIMS) -> list[dict]:
             if abs(dk["line"] - line) < 1e-9:
                 mk_over, mk_note = q, f"DraftKings {dk['line']} at {dk['over']}/{dk['under']} (no-vig over {q:.0%})"
             else:
-                mk_over, _ = market_at(h, dk["line"], q, line)
+                mk_over = market_sides(h, dk["line"], q, line)[0] if logic["push"] == "exclusive" else market_at(h, dk["line"], q, line)[0]
                 mk_note = f"DraftKings {dk['line']} at {dk['over']}/{dk['under']} (no-vig over {q:.0%}), carried to {line}: {mk_over:.0%}"
         elif dk:
             mk_note = f"DraftKings line {dk['line']} but its sides are unlabelled (L2): market not used"
-        staged.append((p, g, side, sd, pl, sim, stat, line, h, po, pu, ppush, dk, mk_over, mk_note))
-    # L7: the simulation's tilt against DraftKings across the whole board is bias, not edge. Measure it per stat on
-    # tonight's props that have a DraftKings price and take it out of the model before blending.
+        staged.append((p, g, side, sd, pl, sim, stat, line, h, po, pu, ppush, dk, mk_over, mk_note, top5))
+    # tonight's raw tilt per stat on main lines (L7 measurement; Fix 7 tilt monitor)
     gaps = {}
-    for (p, g, side, sd, pl, sim, stat, line, h, po, pu, ppush, dk, mk_over, mk_note) in staged:
-        # main lines only (DraftKings' own line within a point): alt lines read the market off the simulated tails,
-        # where logit gaps blow up
+    for (p, g, side, sd, pl, sim, stat, line, h, po, pu, ppush, dk, mk_over, mk_note, top5) in staged:
         if mk_over is not None and p.get("odds_type") == "standard" and abs(dk["line"] - line) <= 1.0 and 0 < po < 1 - ppush:
             gaps.setdefault(stat, []).append(_lg(po / max(1 - ppush, 1e-9)) - _lg(mk_over))
-    bias = {k: float(np.mean(v)) for k, v in gaps.items() if len(v) >= 10}
-    for (p, g, side, sd, pl, sim, stat, line, h, po, pu, ppush, dk, mk_over, mk_note) in staged:
-        b = bias.get(stat, 0.0)
+    tilt = {k: float(np.mean(v)) for k, v in gaps.items() if len(v) >= 10}
+    causes = json.load(open(TILT_CAUSES)) if os.path.exists(TILT_CAUSES) else {}
+    for (p, g, side, sd, pl, sim, stat, line, h, po, pu, ppush, dk, mk_over, mk_note, top5) in staged:
+        if logic["bias"] == "night_flat":
+            b = tilt.get(stat, 0.0)
+        elif logic["bias"] == "table":
+            t = (logic.get("bias_table") or {}).get(stat, {})
+            b = t.get("top5" if top5 else "bench", t.get("all", 0.0))
+        else:
+            b = 0.0
         if b and 0 < po < 1 - ppush:
             o = _sg(_lg(po / (1 - ppush)) - b) * (1 - ppush)
             po, pu = o, 1 - ppush - o
         opp = g["away"] if side == "home" else g["home"]
         rs = research(pl, stat, line, opp, (sd.get("opp_allowed") or {}).get(side))
+        if logic["history"] == "off":
+            ho = hu = 0
+        elif logic["history"] == "aware":
+            ho, hu = aware_counts(pl, stat, line)
+        else:
+            ho, hu = rs["season"][0], rs["season"][1]
         flags = []
         if pl.get("games", 0) < 5:
             flags.append(f"THIN SAMPLE: {pl.get('games', 0)} games with the team")
@@ -266,17 +421,72 @@ def price_nba(props: list[dict], n: int = N_SIMS) -> list[dict]:
         mh = sim["hist"]["min"]
         note = (", ".join(flags) + ", role unconfirmed (L5); " if flags else "") + \
             f"sim median {quantile(h, 0.5)} (mean {mean(h):.1f}, 25-75th {quantile(h, 0.25)}-{quantile(h, 0.75)}), minutes {mean(mh):.1f}; {mk_note}" + \
-            (f"; model de-biased {-b:+.2f} logit (tonight's simulation-vs-DraftKings gap on {LABEL[stat]}, n {len(gaps[stat])}, L7)" if b else "")
-        row = _finish(p, stat, "nba", po, pu, ppush, rs["season"][0], rs["season"][1], mk_over=mk_over, notes=note)
-        if flags and "confidence" in row:
-            row["confidence"] = "Low"     # unconfirmed role or minutes: never an entry leg (L5)
+            (f"; model de-biased {-b:+.2f} logit ({'tonight' if logic['bias'] == 'night_flat' else 'fitted ' + ('top5' if top5 else 'bench')} simulation-vs-DraftKings gap on {LABEL[stat]}, L7)" if b else "") + \
+            (f"; raw tilt {tilt[stat]:+.2f}" if stat in tilt else "") + f"; pulled {ctx['pulled']}; logic v{logic.get('_version', 1)}"
+        # side choice and blend (as pp._finish, under this logic's weights)
+        best = None
+        for sd_ in (["over"] if p["over_only"] else ["over", "under"]):
+            pm = (po if sd_ == "over" else pu) / max(1 - ppush, 1e-9)
+            pk = None if mk_over is None else (mk_over if sd_ == "over" else 1 - mk_over)
+            dec = ho + hu
+            ph = None if not dec else (ho if sd_ == "over" else hu) / dec
+            # Fix 2: with no DraftKings price, a market-dominant logic treats the market as no information (50%)
+            # instead of handing the model the market's weight
+            neutral = pk is None and logic.get("missing_market") == "neutral"
+            e = final_probability(pm, 0.5 if neutral else pk, ph, f"nba:{stat}:{sd_}", int(round(dec)), adj)
+            comps = {k: v for k, v in e.components.items() if not (neutral and k == "market")}
+            if best is None or e.p > best["p"]:
+                best = {"side": sd_, "p": e.p, "pm": pm, "pk": pk, "ph": ph, "dec": dec, "comps": comps}
+        p_uncal = best["p"]
+        se_logit = 0.0
+        if logic.get("recal"):
+            a_, b_ = logic["recal"]["a"], logic["recal"]["b"]
+            x = np.array([1.0, _lg(p_uncal)])
+            pf = _sg(a_ + b_ * _lg(p_uncal))
+            cov = np.array(logic["recal"].get("cov") or [[0, 0], [0, 0]])
+            se_logit = float(np.sqrt(max(x @ cov @ x, 0.0)))
+        else:
+            pf = p_uncal
+        if logic.get("cap"):
+            pf = min(pf, logic["cap"])        # Fix 3: the selected side's probability is capped (70%+ legs ran hot)
+        if logic.get("se_w") is not None:     # Fix 3: the blend's own uncertainty, from the model weight's
+            se_logit = (logic["se_w"] * abs(_lg(best["pm"]) - _lg(best["pk"]))) if best["pk"] is not None else 0.5
+        conf, agree, spread = _label(pf, best["comps"], int(round(best["dec"])), f"nba:{stat}:{best['side']}", adj, logic.get("high_thin"))
+        if flags:
+            conf = "Low"          # unconfirmed role or minutes: never an entry leg (L5)
+        se_p = float(pf * (1 - pf) * se_logit + np.sqrt(pf * (1 - pf) / ctx["sims"][g["id"]]["n"]))
+        be = BREAK_EVEN_BY_TYPE.get(p.get("odds_type"))
+        tilt_block = abs(tilt.get(stat, 0.0)) > TILT_MAX and stat not in causes
+        row = {**p, "side": best["side"], "p_final": round(pf, 4), "confidence": conf, "p_model": best["pm"], "p_market": best["pk"],
+               "p_hist": best["ph"], "hist_n": int(round(best["dec"])), "agree": agree, "market_key": stat, "sport": "nba",
+               "push": ppush, "notes": note, "p_uncal": p_uncal, "se_p": se_p, "break_even": be, "tilt_raw": tilt.get(stat),
+               "tilt_block": tilt_block, "entry_rule": logic["entry"]}
+        row["verdict_v"] = verdict(row)
         out.append({**row, "event_id": g["id"], "player_id": pl["id"], "proj": quantile(h, 0.5), "opp_proj": round(mean(mh), 1),
                     "script": f"nba:{g['id']}", "newcomer": bool(flags), "research": rs, "game": f"{g['away']} @ {g['home']}",
                     "opp_espn": opp, "sim_mean": mean(h), "q25": quantile(h, 0.25), "q75": quantile(h, 0.75), "dk": dk,
                     "h2h_factor": (pl.get("h2h") or {}).get(stat) if len(PARTS[stat]) == 1 else None, "stat_key": stat,
                     "p_home": ctx["sims"][g["id"]]["p_home"], "pulled": ctx["pulled"], "n_sims": ctx["sims"][g["id"]]["n"],
-                    "bias_logit": b, "bias_n": len(gaps.get(stat, [])), "p_model_raw": sides_at(h, line)[0 if row.get("side") == "over" else 1] / max(1 - ppush, 1e-9) if "side" in row else None})
+                    "bias_logit": b, "bias_n": len(gaps.get(stat, [])), "top5": top5,
+                    "p_model_raw": sides_at(h, line)[0 if best["side"] == "over" else 1] / max(1 - ppush, 1e-9)})
     return out
+
+
+def aware_counts(pl: dict, stat: str, line: float) -> tuple[float, float]:
+    """Fix 2: this season's games weighted by minutes played / projected minutes (capped at 1.5), dropping early
+    exits (under half his projection)."""
+    log = (pl.get("research") or {}).get("log") or []
+    pm = max(pl.get("min") or 0.0, 1.0)
+    o = u = 0.0
+    for r in log:
+        if r[3] < 0.5 * pm:
+            continue
+        v = sum(r[4 + i] for i in PARTS[stat]); w = min(r[3] / pm, 1.5)
+        if v > line:
+            o += w
+        elif v < line:
+            u += w
+    return o, u
 
 
 def model_market_bias(rows: list[dict]) -> dict:
@@ -365,7 +575,9 @@ def page_row(r: dict, verified: str, warns: list, bet_id: str | None) -> dict:
     """One pick for the Sim Lab page (picks.js)."""
     rs = r.get("research") or {}
     rnd = lambda v, k=3: None if v is None else round(float(v), k)
-    return {"id": bet_id, "player": r["player"], "team": r["team"], "game": r["game"], "opp": r.get("opp_espn"), "stat": LABEL[r["stat_key"]],
+    return {"id": bet_id, "event_id": r.get("event_id"), "player_id": r.get("player_id"), "stat_key": r["stat_key"],
+            "p_uncal": rnd(r.get("p_uncal"), 4), "se_p": rnd(r.get("se_p"), 4), "top5": r.get("top5"),
+            "player": r["player"], "team": r["team"], "game": r["game"], "opp": r.get("opp_espn"), "stat": LABEL[r["stat_key"]],
             "side": r["side"], "line": r["line"], "p": rnd(r["p_final"], 4), "conf": r["confidence"], "verdict": verdict(r),
             "model": rnd(r["p_model"]), "market": rnd(r["p_market"]), "hist": rnd(r["p_hist"]), "hist_n": r["hist_n"],
             "median": r.get("proj"), "mean": rnd(r.get("sim_mean"), 1), "q25": r.get("q25"), "q75": r.get("q75"), "minutes": r.get("opp_proj"),
@@ -377,9 +589,19 @@ def page_row(r: dict, verified: str, warns: list, bet_id: str | None) -> dict:
 
 
 def verdict(r: dict) -> str:
-    be = BREAK_EVEN["2-pick power"]
-    if r["confidence"] == "High" and r["p_final"] >= 0.65 and r["p_final"] >= be + 0.02 and not r.get("newcomer"):
-        return "ENTRY LEG (High, clears the 2-pick break-even by 2+ pts)"
+    """ENTRY LEG / LEAN / PASS. v1 rule ("flat2"): High, 65%+, break-even + 2 pts. Fix 3 rule ("se1"): High and
+    (recalibrated p - break-even) > 1 standard error of p. Either way: the line type's own break-even (goblins and
+    demons need their multiplier), no role flag, and no unexplained tilt in that stat tonight (Fix 7)."""
+    be = r.get("break_even", BREAK_EVEN["2-pick power"]) if "break_even" in r else BREAK_EVEN["2-pick power"]
+    if r["confidence"] == "High" and not r.get("newcomer"):
+        if be is None:
+            return "PASS for entries (payout multiplier unknown: enter the app's multiplier to price it)"
+        if r.get("tilt_block"):
+            return f"PASS for entries (tonight's {LABEL.get(r.get('stat_key'), '')} tilt {r.get('tilt_raw', 0):+.2f} logit is past the 0.25 limit, cause not logged)"
+        ok = (r["p_final"] - be > (r.get("se_p") or 0.0)) if r.get("entry_rule") == "se1" else (r["p_final"] >= 0.65 and r["p_final"] >= be + 0.02)
+        if ok:
+            return "ENTRY LEG (High, clears the 2-pick break-even" + (" by more than its standard error)" if r.get("entry_rule") == "se1" else " by 2+ pts)")
+        return "LEAN (High but not clear of the break-even)"
     if r["confidence"] == "Medium":
         return "LEAN (Medium: show, don't enter)"
     return "PASS (below the gate)"

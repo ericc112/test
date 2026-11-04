@@ -519,6 +519,7 @@ PLAYER_RATE_DECAY = None      # per-game decay of the weight on older games in a
 MINUTES_WHEN_PLAYING = True   # chance he plays x minutes when he plays (see player_profiles)
 PLAYER_PRIOR_MIN = 100.0  # minutes of the player's own last-season per-minute rates in his prior (else team average)
 PLAYER_SHOCK = 0.30       # per-player per-game role swing (log SD): ~20% of results outside the 10-90% range (was 29%); retuned after the minutes fix
+SWING_RHO = 0.0           # share of the role swing common to shots, boards and assists (Fix 6; 0 = independent, under test)
 
 
 def season_player_totals(lg: str, games: list[dict], before: str = "2099-01-01") -> dict:
@@ -544,6 +545,9 @@ def season_player_totals(lg: str, games: list[dict], before: str = "2099-01-01")
 # +2.1 to +2.6 minutes over what they played; 0.8 was best on 2025-26 Nov-Jan (MAE 4.80 -> 4.70) and held out on
 # Feb-Apr (5.05 -> 4.89) and 2026-27 (4.71 -> 4.53). Bench-first (above 1) was worse everywhere.
 MINUTES_ALPHA = 0.8
+# Scale on each player's game-to-game minutes spread in the simulation (1.0 = his observed SD, floor 3). Parameter
+# under test (Fix 1): the observed SD includes blowouts and in-game injuries the engine already produces.
+MIN_SD_SCALE = 1.0
 
 
 def allocate_minutes(raw: list[float], alpha: float | None = None, total: float = 240.0, cap: float = 42.0) -> list[float]:
@@ -669,7 +673,7 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
         gp = max(len(a["mins"]), 1)
         season = {"gp": len(a["mins"]), "min": float(np.mean(a["mins"])) if a["mins"] else 0.0,
                   "pts": a["pts_raw"] / gp, "reb": a["reb_raw"] / gp, "ast": a["ast_raw"] / gp}
-        players.append({"id": pid, "name": a["name"], "pos": a["pos"], "min": a["proj"], "min_sd": float(max(3.0, np.std(a["mins"]) if len(a["mins"]) > 1 else 5.0)),
+        players.append({"id": pid, "name": a["name"], "pos": a["pos"], "min": a["proj"], "min_sd": float(MIN_SD_SCALE * max(3.0, np.std(a["mins"]) if len(a["mins"]) > 1 else 5.0)),
                         "season": {k: (round(v, 2) if isinstance(v, float) else v) for k, v in season.items()},
                         "games": len(a["mins"]), "starter": a["starter"], "returning": a["returning"],
                         # head-to-head multipliers (nba_research.H2H_COEF): usage x pts factor, 3PA x 3PM factor
@@ -684,7 +688,8 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
         for p, m in zip(players, alloc):
             p["min"] = m
     players.sort(key=lambda p: -p["min"])
-    return {"players": players, "games": len(boxes), "ast_rate": T["ast"] / max(T["fgm"], 1), "shock": PLAYER_SHOCK, "garbage": PLAYER_GARBAGE}
+    return {"players": players, "games": len(boxes), "ast_rate": T["ast"] / max(T["fgm"], 1), "shock": PLAYER_SHOCK, "swing_rho": SWING_RHO,
+            "garbage": PLAYER_GARBAGE}
 
 
 def player_backtest(lg: str, games: list[dict], before: str, min_prior: int = 3, prior_tot: dict | None = None) -> dict:

@@ -17,6 +17,8 @@ or would have caught, a real mistake on 2026-10-12/13:
 from __future__ import annotations
 
 import datetime as dt
+import json
+import os
 import re
 from dataclasses import dataclass, field
 
@@ -25,6 +27,9 @@ from .blend import final_probability, load_adjustments
 TOL_P = 0.005      # recompute must match the logged number
 TOL_HIST = 0.05    # recount within 5 pts of the logged history
 TOL_MODEL = 0.04   # re-run model within 4 pts, else re-price before publishing
+TOL_ENTRY = 0.02   # Fix 7: an ENTRY leg (action "bet") must reprice and recount within 2 pts
+DRIFT_N, DRIFT_MAX = 50, 0.05   # trailing published NBA legs: predicted vs realized gap past 5 pts = WARN on new legs
+STALE_MIN = 60     # market data older than this inside the last hour before tip FAILS (re-price first)
 
 
 def _f(x):
@@ -62,6 +67,14 @@ def check_recompute(rep: Report, adj: dict):
         rep.add("FAIL", "recompute", "no model, market or history stored: nothing to check the number against")
         return
     e = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), adj)
+    if r.get("sport") == "nba":                  # NBA legs: rebuild under the logic version that priced them
+        from . import nba_model, nba_pp
+        mv = re.search(r"logic v(\d+)", r.get("notes") or "")
+        lg_ = nba_model.params_for(int(mv.group(1)) if mv else 1)
+        p_, c_ = nba_pp.recompute(pm, pk, ph, int(_f(r.get("hist_n")) or 0), r.get("segment", ""), lg_)
+        if "role unconfirmed" in (r.get("notes") or ""):
+            c_ = "Low"
+        e = type(e)(p=p_, confidence=c_, agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
     logged, conf = _f(r.get("p_final")), r.get("confidence")
     if (logged is None or abs(e.p - logged) > TOL_P or e.confidence != conf) and getattr(rep, "locked", False):
         rep.add("WARN", "recompute", f"today's weights give {e.p:.3f} {e.confidence}; logged {logged} {conf} (event under way: logged number stands)")
@@ -257,6 +270,8 @@ def check_nba(rep: Report, adj: dict):
     from gamesim import nba as gnba, nba_research as gres
     r = rep.row
     line, stat, side = float(r["line"]), r["market"], r["side"]
+    entry = r.get("action") == "bet"
+    tol_m, tol_h = (TOL_ENTRY, TOL_ENTRY) if entry else (TOL_MODEL, TOL_HIST)
     ctx = nba_pp.build(gids={str(r["event_id"])})
     g = ctx["games"].get(str(r["event_id"]))
     if not g or str(r["event_id"]) not in ctx["sims"]:
@@ -276,8 +291,9 @@ def check_nba(rep: Report, adj: dict):
     if ph is None and logged is None:
         rep.add("PASS", "recount", "no games this season: no history component")
     else:
-        bad = ph is None or logged is None or abs(ph - logged) > TOL_HIST or abs((o + u) - ln) > 1
-        rep.add("FAIL" if bad else "PASS", "recount", f"box scores recount to {o} over / {u} under at {line} in {len(vals)} games (logged {logged} over {ln})")
+        bad = ph is None or logged is None or abs(ph - logged) > tol_h or abs((o + u) - ln) > 1
+        rep.add("FAIL" if bad else "PASS", "recount", f"box scores recount to {o} over / {u} under at {line} in {len(vals)} games (logged {logged} over {ln})"
+                + (f"; ENTRY tolerance {tol_h:.0%}" if entry else ""))
     sim = ctx["sims"][str(r["event_id"])]["players"].get(str(r["player_id"]))
     if not sim:
         rep.add("WARN" if getattr(rep, "locked", False) else "FAIL", "reprice", f"{r['player']} is out of tonight's projected rotation now (injury report?)")
@@ -289,9 +305,22 @@ def check_nba(rep: Report, adj: dict):
         po, pu = o, 1 - pp_ - o
     pm = (po if side == "over" else pu) / max(1 - pp_, 1e-9)
     lm = _f(r.get("p_model"))
-    off = lm is None or abs(pm - lm) > TOL_MODEL
+    off = lm is None or abs(pm - lm) > tol_m
     rep.add("WARN" if off and getattr(rep, "locked", False) else "FAIL" if off else "PASS", "reprice",
-            f"simulation now {pm:.3f} (50,000 runs, current injury report), logged {lm}")
+            f"simulation now {pm:.3f} (50,000 runs, current injury report), logged {lm}" + (f"; ENTRY tolerance {tol_m:.0%}" if entry else ""))
+    # Fix 7: tilt monitor and stale market data
+    mt = re.search(r"raw tilt ([+-]\d+\.\d+)", r.get("notes") or "")
+    causes = json.load(open(nba_pp.TILT_CAUSES)) if os.path.exists(nba_pp.TILT_CAUSES) else {}
+    if mt and abs(float(mt.group(1))) > nba_pp.TILT_MAX and stat not in causes:
+        rep.add("FAIL" if entry else "WARN", "tilt", f"tonight's raw simulation-vs-DraftKings tilt on {stat} is {mt.group(1)} logit (limit "
+                f"{nba_pp.TILT_MAX}) with no cause logged in data/nba_tilt_causes.json" + (": no ENTRY leg in this stat" if entry else ""))
+    mp = re.search(r"pulled (\d{4}-\d\d-\d\dT\d\d:\d\dZ)", r.get("notes") or "")
+    if mp and g.get("start") and not getattr(rep, "locked", False):
+        now = dt.datetime.now(dt.timezone.utc)
+        tip = dt.datetime.fromisoformat(g["start"].replace("Z", "+00:00"))
+        age = (now - dt.datetime.fromisoformat(mp.group(1).replace("Z", "+00:00"))).total_seconds() / 60
+        if (tip - now).total_seconds() / 60 <= 60 and age > STALE_MIN:
+            rep.add("FAIL", "freshness", f"market and injury data pulled {age:.0f} min ago, inside the last hour before tip: re-price (edge verify --fix)")
     dk = ((ctx["eng"]["sides"][str(r["event_id"])]["players"].get("lines") or {}).get(str(r["player_id"])) or {}).get(stat)
     pk = None
     if dk and dk.get("over") and dk.get("under"):
@@ -311,6 +340,21 @@ def check_nba(rep: Report, adj: dict):
         rep.add("PASS", "fresh label", f"rebuilt {e.p:.3f} {e.confidence}; stays Low (role or minutes unconfirmed, L5)")
     else:
         rep.add("PASS" if e.confidence == conf else "FAIL", "fresh label", f"rebuilt from fresh data: {e.p:.3f} {e.confidence}" + ("" if e.confidence == conf else f" (logged {conf})"))
+
+
+def check_drift(rep: Report, rows: list[dict]):
+    """Fix 7: calibration drift on the trailing DRIFT_N published, graded legs of the same sport."""
+    r = rep.row
+    pub = [x for x in rows if x.get("sport") == r.get("sport") and x.get("action") in ("bet", "lean") and x.get("status") in ("won", "lost")
+           and _f(x.get("p_final")) is not None]
+    pub.sort(key=lambda x: (x.get("date", ""), int(x["id"]) if str(x.get("id", "")).isdigit() else 0))
+    tail = pub[-DRIFT_N:]
+    if len(tail) < DRIFT_N:
+        rep.add("PASS", "drift", f"{len(tail)} graded published {r.get('sport')} legs so far (drift check starts at {DRIFT_N})")
+        return
+    pred = sum(_f(x["p_final"]) for x in tail) / len(tail); real = sum(x["status"] == "won" for x in tail) / len(tail)
+    rep.add("WARN" if abs(pred - real) > DRIFT_MAX else "PASS", "drift",
+            f"last {DRIFT_N} published legs: predicted {pred:.1%}, realized {real:.1%}" + (" (calibration drift past 5 pts)" if abs(pred - real) > DRIFT_MAX else ""))
 
 
 def check_mlb_history(rep: Report):
@@ -361,6 +405,8 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
     check_recompute(rep, adj)
     check_rules(rep)
     check_correlation(rep, rows)
+    if row.get("sport") == "nba":
+        check_drift(rep, rows)
     if fetch:
         sport = row.get("sport")
         try:

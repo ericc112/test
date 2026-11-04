@@ -777,7 +777,7 @@ function nbaTracker(PL, rc) {
     // assisted share: team AST/FGM split so made 3s are assisted more often than 2s (about 1.28x the team rate)
     const f3 = mAll > 0 ? m3 / mAll : 0.33, r = pr.ast_rate || 0.62, a3 = Math.min(0.95, 1.28 * r);
     const a2 = Math.min(0.95, Math.max(0.2, (r - f3 * a3) / Math.max(1 - f3, 0.1)));
-    return { ps, n, a2, a3, sig: pr.shock || 0, m: z(), w2m: z(), w2x: z(), w3m: z(), w3x: z(), wft: z(), wa: z(), wo: z(), wd: z(), wt: z(), tmp: z(),
+    return { ps, n, a2, a3, sig: pr.shock || 0, rho: pr.swing_rho || 0, m: z(), w2m: z(), w2x: z(), w3m: z(), w3x: z(), wft: z(), wa: z(), wo: z(), wd: z(), wt: z(), tmp: z(),
              cur: new Float64Array(n * NBN), sum: new Float64Array(n * NBN), hist: new Int32Array(n * NBHW), team: 0 };
   });
   // garbage time: when a 4th-quarter lead passes a + b x minutes left, each team's top five hand most of their role
@@ -808,7 +808,10 @@ function nbBegin(tk) {
     for (let i = 0; i < t.n; i++) {
       const p = t.ps[i], m = Math.min(48, t.m[i] * sc); t.m[i] = m;
       // game-to-game swings in a player's role (hot hand, matchups, foul trouble): one draw each for shots, boards, assists
-      const sg = t.sig, vs = sg ? Math.exp(sg * normal() - sg * sg / 2) : 1, vr = sg ? Math.exp(sg * normal() - sg * sg / 2) : 1, va = sg ? Math.exp(sg * normal() - sg * sg / 2) : 1;
+      // rho > 0: part of the swing is shared, so a big night lifts his shots, boards and assists together (real
+      // points-assists / points-rebounds correlations run ~0.18 / ~0.28; independent swings gave 0.03 / 0.11)
+      const sg = t.sig, rho = t.rho || 0, z0 = rho ? normal() : 0, sw = () => sg ? Math.exp(sg * (rho * z0 + Math.sqrt(1 - rho * rho) * normal()) - sg * sg / 2) : 1;
+      const vs = sw(), vr = sw(), va = sw();
       t.w2m[i] = vs * m * p.fga2 * p.p2; t.w2x[i] = vs * m * p.fga2 * (1 - p.p2); t.w3m[i] = vs * m * p.fga3 * p.p3; t.w3x[i] = vs * m * p.fga3 * (1 - p.p3);
       t.wft[i] = vs * m * p.fta; t.wa[i] = va * m * p.ast; t.wo[i] = vr * m * p.oreb; t.wd[i] = vr * m * p.dreb; t.wt[i] = m * p.tov; t.cur[i * NBN + NB.min] = m;
     }

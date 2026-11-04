@@ -61,7 +61,8 @@ def final_probability(p_model: float | None, p_market: float | None = None, p_hi
                       segment: str = "", hist_n: int = 0, adj: dict | None = None) -> Estimate:
     """Blend on the logit scale. Missing components hand their weight to the ones present."""
     adj = adj or load_adjustments()
-    b = adj["blend"]
+    # a sport's own blend (fitted from its graded legs by edge learn, or promoted from shadow) wins over the global one
+    b = (adj.get("blend_by_sport") or {}).get(segment.split(":")[0]) or adj["blend"]
     notes = []
     comps = {}
     if p_model is not None:

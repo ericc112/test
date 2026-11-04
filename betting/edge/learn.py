@@ -23,6 +23,14 @@ FIELDS = ["id", "date", "sport", "event", "event_id", "player", "player_id", "ma
           "proj", "opp_proj"]  # proj = projected median of the stat; opp_proj = projected BF / PA / TOI / rounds
 
 PRIOR_STRENGTH = 25.0   # how hard the blend weights are pulled back to their prior (in "bets" of evidence)
+# Fix 8 (learning discipline): a blend is refit per sport only, from at least MIN_REFIT graded legs of that sport,
+# at most every REFIT_DAYS; a segment joins the avoid list only with AVOID_MIN legs and the shortfall present in both
+# halves of its history (two disjoint time windows); every learned change is logged with its data window.
+MIN_REFIT = 200
+REFIT_DAYS = 30
+AVOID_MIN = 50
+HOLDOUT_WEEKDAY = 2     # Wednesday: legs from this weekday are priced and graded but never used for fitting
+LEARN_LOG = os.path.join(HERE, "data", "learn_log.jsonl")
 SEGMENT_K = 30.0        # shrinkage for per-segment bias: weight = n / (n + K)
 BIAS_CLIP = 0.4
 
@@ -51,6 +59,25 @@ def write_bets(rows: list[dict], path: str = BETS_PATH) -> None:
 
 def graded(rows: list[dict]) -> list[dict]:
     return [r for r in rows if r.get("status") in ("won", "lost")]
+
+
+def is_holdout(r: dict) -> bool:
+    """The permanent holdout: one fixed weekday's legs, never fitted on; headline accuracy is reported on them."""
+    try:
+        return dt.date.fromisoformat(r.get("date", "")[:10]).weekday() == HOLDOUT_WEEKDAY
+    except ValueError:
+        return False
+
+
+def fitting(rows: list[dict]) -> list[dict]:
+    """Graded legs that may be used for fitting (holdout excluded)."""
+    return [r for r in graded(rows) if not is_holdout(r)]
+
+
+def log_change(kind: str, key: str, before, after, window: tuple, n: int, path: str = LEARN_LOG):
+    with open(path, "a") as f:
+        f.write(json.dumps({"at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"), "kind": kind, "key": key,
+                            "before": before, "after": after, "window": list(window), "n": n}) + "\n")
 
 
 # ---------------------------------------------------------------- metrics
@@ -102,10 +129,11 @@ def _components(r: dict, adj: dict):
     return pm, pk, ph
 
 
-def fit_blend(rows: list[dict], adj: dict) -> dict:
-    """Penalised logistic regression of outcome on logit(model), logit(market), logit(hist), pulled toward the prior."""
+def fit_blend(rows: list[dict], adj: dict, min_n: int = 10) -> dict:
+    """Penalised logistic regression of outcome on logit(model), logit(market), logit(hist), pulled toward the prior.
+    Holdout legs are never used. Returns the weights with their standard errors."""
     X, y = [], []
-    for r in graded(rows):
+    for r in fitting(rows):
         pm, pk, ph = _components(r, adj)
         if pm is None or pk is None:
             continue
@@ -114,8 +142,8 @@ def fit_blend(rows: list[dict], adj: dict) -> dict:
         y.append(1.0 if r["status"] == "won" else 0.0)
     b = adj["blend"]
     prior = np.array([b["intercept"], b["w_model"], b["w_market"], b["w_hist"]])
-    if len(y) < 10:
-        return {**b, "n_fit": len(y), "note": "fewer than 10 graded bets with model+market: kept prior"}
+    if len(y) < min_n:
+        return {**b, "n_fit": len(y), "note": f"fewer than {min_n} graded bets with model+market: kept prior"}
     X, y = np.array(X), np.array(y)
     th = prior.copy()
     lam = PRIOR_STRENGTH
@@ -127,15 +155,18 @@ def fit_blend(rows: list[dict], adj: dict) -> dict:
         th -= step
         if np.abs(step).max() < 1e-8:
             break
+    p = 1 / (1 + np.exp(-X @ th))
+    se = np.sqrt(np.diag(np.linalg.inv(X.T @ (X * (p * (1 - p))[:, None]) + lam * np.eye(4))))
     return {"intercept": round(float(th[0]), 4), "w_model": round(float(th[1]), 4), "w_market": round(float(th[2]), 4),
-            "w_hist": round(float(th[3]), 4), "n_fit": int(len(y))}
+            "w_hist": round(float(th[3]), 4), "n_fit": int(len(y)),
+            "se": {k: round(float(v), 4) for k, v in zip(("intercept", "w_model", "w_market", "w_hist"), se)}}
 
 
 def learn_segment_bias(rows: list[dict], adj: dict) -> dict:
     """Shrunk one-step logistic correction per segment, measured after the blend (excluding old outcome bias)."""
     base = {**adj, "outcome_bias_logit": {}}
     acc = defaultdict(lambda: [0.0, 0.0, 0])
-    for r in graded(rows):
+    for r in fitting(rows):
         seg = r.get("segment", "")
         if not seg:
             continue
@@ -157,23 +188,49 @@ def learn_segment_bias(rows: list[dict], adj: dict) -> dict:
     return out
 
 
-def find_avoid_segments(rows: list[dict]) -> list[str]:
+def find_avoid_segments(rows: list[dict], min_n: int = AVOID_MIN) -> list[str]:
+    """Segments running 8+ pts under prediction (z < -2) over min_n+ legs, with the shortfall present in BOTH halves
+    of their history by date (two disjoint windows), so one bad night can't do it. Holdout legs are excluded."""
     acc = defaultdict(list)
-    for r in graded(rows):
+    for r in fitting(rows):
         p = _f(r.get("p_final"))
         if p is not None and r.get("segment"):
-            acc[r["segment"]].append((p, 1.0 if r["status"] == "won" else 0.0))
+            acc[r["segment"]].append((r.get("date", ""), p, 1.0 if r["status"] == "won" else 0.0))
     bad = []
     for seg, v in acc.items():
         n = len(v)
-        if n < 20:
+        if n < min_n:
             continue
-        mp = np.mean([p for p, _ in v])
-        hr = np.mean([y for _, y in v])
+        v.sort()
+        mp = np.mean([p for _, p, _ in v])
+        hr = np.mean([y for _, _, y in v])
         z = (hr - mp) / math.sqrt(max(mp * (1 - mp) / n, 1e-9))
-        if hr - mp < -0.08 and z < -2:
+        halves = [v[: n // 2], v[n // 2:]]
+        both = all(np.mean([y for _, _, y in h]) - np.mean([p for _, p, _ in h]) < -0.04 for h in halves)
+        if hr - mp < -0.08 and z < -2 and both:
             bad.append(seg)
     return sorted(bad)
+
+
+def fit_sport_blends(rows: list[dict], adj: dict, today: str) -> dict:
+    """Per-sport blends: refit only with MIN_REFIT+ graded legs of that sport (holdout excluded), and only if the last
+    refit is REFIT_DAYS old. Otherwise the sport keeps its prior (data/adjustments.json -> blend_by_sport)."""
+    out = dict(adj.get("blend_by_sport", {}))
+    meta = dict(adj.get("blend_by_sport_fit", {}))
+    for sport in sorted({r.get("sport") for r in graded(rows) if r.get("sport")}):
+        S = [r for r in rows if r.get("sport") == sport]
+        n = len([r for r in fitting(S) if _f(r.get("p_model")) is not None and _f(r.get("p_market")) is not None])
+        last = meta.get(sport, {}).get("date")
+        due = not last or (dt.date.fromisoformat(today) - dt.date.fromisoformat(last)).days >= REFIT_DAYS
+        if n < MIN_REFIT or not due:
+            continue
+        prior = out.get(sport) or adj["blend_prior"]
+        fit = fit_blend(S, {**adj, "blend": {k: prior[k] for k in ("intercept", "w_model", "w_market", "w_hist")}}, min_n=MIN_REFIT)
+        dates = sorted(r.get("date", "") for r in fitting(S))
+        log_change("blend", sport, out.get(sport), {k: fit[k] for k in ("intercept", "w_model", "w_market", "w_hist")}, (dates[0], dates[-1]), n)
+        out[sport] = {k: fit[k] for k in ("intercept", "w_model", "w_market", "w_hist")} | {"se": fit.get("se")}
+        meta[sport] = {"date": today, "n_fit": n, "window": [dates[0], dates[-1]]}
+    return out, meta
 
 
 def base_tag(reason: str) -> str:
@@ -282,16 +339,25 @@ def update(rows: list[dict] | None = None, adj_path: str = ADJ_PATH, lessons_pat
     rows = read_bets() if rows is None else rows
     adj = load_adjustments(adj_path)
     old = json.loads(json.dumps(adj))
-    # Refit from the fixed prior every run (not from last run's weights) so the same results are never counted twice.
+    # Fix 8: the cross-sport blend is no longer refit nightly; blends are refit per sport (fit_sport_blends) from
+    # MIN_REFIT+ legs, monthly. The global blend stays the fallback for sports without their own.
     adj.setdefault("blend_prior", dict(DEFAULT_ADJ["blend"]))
-    fit = fit_blend(rows, {**adj, "blend": adj["blend_prior"]})
-    adj["blend"] = {k: fit[k] for k in ("intercept", "w_model", "w_market", "w_hist")}
-    adj["blend_fit"] = {k: v for k, v in fit.items() if k in ("n_fit", "note")}
+    today_s = today or dt.date.today().isoformat()
+    adj["blend_by_sport"], adj["blend_by_sport_fit"] = fit_sport_blends(rows, adj, today_s)
+    fr = fitting(rows)
+    window = (min((r.get("date", "") for r in fr), default=""), max((r.get("date", "") for r in fr), default=""))
     adj["outcome_bias_logit"] = learn_segment_bias(rows, adj)
+    for seg, v in adj["outcome_bias_logit"].items():
+        if abs(v - old.get("outcome_bias_logit", {}).get(seg, 0.0)) >= 0.01:
+            log_change("outcome_bias", seg, old.get("outcome_bias_logit", {}).get(seg), v, window, len(fr))
     new_avoid = find_avoid_segments(rows)
     adj["avoid_segments"] = sorted(set(old.get("avoid_segments", [])) | set(new_avoid))
+    for seg in set(new_avoid) - set(old.get("avoid_segments", [])):
+        log_change("avoid", seg, False, True, window, len(fr))
     adj["cap_medium_segments"] = find_caps(rows)
-    adj["updated"] = today or dt.date.today().isoformat()
+    for seg in set(adj["cap_medium_segments"]) ^ set(old.get("cap_medium_segments", {})):
+        log_change("cap_medium", seg, seg in old.get("cap_medium_segments", {}), seg in adj["cap_medium_segments"], window, len(fr))
+    adj["updated"] = today_s
 
     notes = []
     for k in ("w_model", "w_market", "w_hist"):
@@ -302,7 +368,7 @@ def update(rows: list[dict] | None = None, adj_path: str = ADJ_PATH, lessons_pat
             notes.append(f"Segment {seg}: results run {'above' if v > 0 else 'below'} our probabilities; now auto-adjusting {v:+.2f} logit.")
     for seg in new_avoid:
         if seg not in old.get("avoid_segments", []):
-            notes.append(f"Segment {seg} added to AVOID list: hit rate >8 pts under prediction over 20+ bets.")
+            notes.append(f"Segment {seg} added to AVOID list: hit rate >8 pts under prediction over {AVOID_MIN}+ bets, in both halves of its history.")
     for seg, why in adj["cap_medium_segments"].items():
         if seg not in old.get("cap_medium_segments", {}):
             notes.append(f"Segment {seg} capped at Medium (no High legs) until results recover: {why}.")
