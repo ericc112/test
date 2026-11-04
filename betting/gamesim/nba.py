@@ -1069,7 +1069,8 @@ def with_prior(H: dict, A: dict, R: dict, ctx: dict | None, home: str, away: str
 
 
 def dk_player_lines(lg: str, gid: str, tip: str | None = None) -> dict:
-    """DraftKings points / rebounds / assists lines for one game from ESPN's propBets feed: {pid: {stat: {line, over,
+    """DraftKings player lines (points, rebounds, assists, 3s and the four combos) for one game from ESPN's propBets
+    feed: {pid: {stat: {line, over,
     under, updated}}}. Lines changed after tip-off are replaced by the opening line. The feed doesn't label which price is
     the over (lesson L2): the pair is matched to the milestone price ("N+") where one exists, else sides stay unknown.
     Empty when DraftKings hasn't posted yet (404)."""
@@ -1079,8 +1080,12 @@ def dk_player_lines(lg: str, gid: str, tip: str | None = None) -> dict:
         items = json.load(urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"}), timeout=30)).get("items", [])
     except Exception:
         return {}
-    TY = {"Total Points": "pts", "Total Assists": "ast", "Total Rebounds": "reb"}
-    MS = {"Points Milestones": "pts", "Assists Milestones": "ast", "Rebounds Milestones": "reb"}
+    TY = {"Total Points": "pts", "Total Assists": "ast", "Total Rebounds": "reb", "Total 3-Point Field Goals": "tpm",
+          "Total Points, Rebounds, and Assists": "pra", "Total Points and Rebounds": "pr", "Total Points and Assists": "pa",
+          "Total Assists and Rebounds": "ra"}
+    MS = {"Points Milestones": "pts", "Assists Milestones": "ast", "Rebounds Milestones": "reb", "3-Point Field Goals Milestones": "tpm",
+          "Points + Assists + Rebounds Milestones": "pra", "Points + Rebounds Milestones": "pr", "Points + Assists Milestones": "pa",
+          "Rebounds + Assists Milestones": "ra"}
     raw, ms = {}, {}
     for i in items:
         if not i.get("athlete"):

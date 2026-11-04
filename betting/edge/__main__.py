@@ -14,6 +14,7 @@
   card  [--date D]               exposure check: legs riding on the same game script
   pp    --league CS2 [--match Liquid] [--player X] [--types standard,goblin] [--log]   price a PrizePicks board
   passes --player ID --team ID (--event ID | --opp ID [--home|--away]) --line 50.5   soccer passes attempted
+  nba-picks [--top 5] [--match DAL] [--no-log] [--no-verify]   tonight's best NBA PrizePicks legs with the write-up
 """
 from __future__ import annotations
 
@@ -35,6 +36,46 @@ from .blend import final_probability, segment_key
 from .odds import fair_american
 from .pickem import PAYOUTS, breakeven, squad_ride
 
+
+
+def log_pp(rows: list[dict], action: dict | None = None, refresh: bool = False) -> list[tuple]:
+    """Log priced PrizePicks props to bets.csv (skips ones already logged). `action` maps id(row) to an action
+    ("lean", "pass", ...) to override the default. With `refresh`, a leg already logged and still pending is re-priced
+    in place (the board still lists it, so it hasn't started: the not-started rule of `verify --fix`).
+    Returns [(bet id, newly added)] in row order."""
+    bets = L.read_bets()
+    seen = {(b["event_id"], str(b["player"]).lower(), b["market"], str(float(b["line"])) if b["line"] else "", b["side"]): b["id"] for b in bets}
+    by_id = {b["id"]: b for b in bets}
+    nid = max(int(b["id"]) for b in bets if b["id"].isdigit()) + 1
+    out = []
+    rnd = lambda v: "" if v is None else round(v, 3)
+    for r in rows:
+        k = (str(r["event_id"]), str(r["player"]).lower(), r["market_key"], str(float(r["line"])), r["side"])
+        if k in seen:
+            b = by_id[seen[k]]
+            if refresh and b.get("status") == "pending" and (abs(float(b["p_final"] or 0) - r["p_final"]) > 1e-4 or b.get("confidence") != r["confidence"]):
+                b["notes"] = f"edge pp; {r['notes']} | re-priced {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%MZ} (was {b.get('p_final')} {b.get('confidence')})"
+                b.update({"p_model": rnd(r["p_model"]), "p_market": rnd(r["p_market"]), "p_hist": rnd(r["p_hist"]), "hist_n": r["hist_n"],
+                          "p_final": r["p_final"], "confidence": r["confidence"], "proj": "" if r.get("proj") is None else round(r["proj"], 1),
+                          "opp_proj": "" if r.get("opp_proj") is None else r["opp_proj"]})
+                if action and action.get(id(r)):
+                    b["action"] = action[id(r)]
+            out.append((seen[k], False))
+            continue
+        bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": r["sport"], "event": f"{r['team']} vs {r['opp']}",
+                     "event_id": r["event_id"], "player": r["player"], "player_id": r["player_id"], "market": r["market_key"],
+                     "line": r["line"], "side": r["side"], "book": f"PrizePicks {r['odds_type']}", "p_model": "" if r["p_model"] is None else round(r["p_model"], 3),
+                     "p_market": "" if r["p_market"] is None else round(r["p_market"], 3), "p_hist": "" if r["p_hist"] is None else round(r["p_hist"], 3),
+                     "hist_n": r["hist_n"], "p_final": r["p_final"], "confidence": r["confidence"],
+                     "action": (action or {}).get(id(r)) or ("lean" if r["confidence"] in ("High", "Medium") and not r.get("newcomer") else "pass"),
+                     "segment": f"{r['sport']}:{r['market_key']}:{r['side']}", "group": r["script"], "status": "pending",
+                     "proj": "" if r.get("proj") is None else round(r["proj"], 1),
+                     "opp_proj": "" if r.get("opp_proj") is None else r["opp_proj"], "notes": f"edge pp; {r['notes']}"})
+        seen[k] = str(nid)
+        out.append((str(nid), True))
+        nid += 1
+    L.write_bets(bets)
+    return out
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="edge", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -80,6 +121,13 @@ def main(argv=None):
     pb.add_argument("--player")
     pb.add_argument("--types", default="standard", help="odds types to include: standard,goblin,demon")
     pb.add_argument("--log", action="store_true", help="log every priced prop to bets.csv (skips ones already logged)")
+    npk = sub.add_parser("nba-picks", help="today's best NBA PrizePicks legs, back-checked, with the research write-up")
+    npk.add_argument("--top", type=int, default=5)
+    npk.add_argument("--n", type=int, default=50000, help="simulations per game")
+    npk.add_argument("--match", help="only games whose teams contain this text")
+    npk.add_argument("--no-log", action="store_true", help="don't log to bets.csv (default: log the picks, every Medium+ leg and each game's best leg)")
+    npk.add_argument("--no-verify", action="store_true")
+    npk.add_argument("--out", help="write the report here (default data/picks/DATE-nba.md)")
     nf = sub.add_parser("nfl", help="NFL game simulator (ESPN box scores + DraftKings lines)")
     nf.add_argument("--event", help="ESPN event id (see --week)")
     nf.add_argument("--week", type=int, help="list a week's games with event ids and DraftKings lines")
@@ -202,7 +250,7 @@ def main(argv=None):
             if args.fix and rep.verdict == "NOT VERIFIED" and getattr(rep, "fresh", None) and not rep.locked and not rep.start_unknown:
                 f = rep.fresh
                 r["notes"] = (r.get("notes", "") + f" | corrected by verify: {r.get('p_final')} {r.get('confidence')} -> {f['p_final']} {f['confidence']}; {f['side_note']}").strip(" |")
-                r.update({k: f[k] for k in ("p_model", "p_hist", "hist_n", "p_final", "confidence")})
+                r.update({k: f[k] for k in ("p_model", "p_market", "p_hist", "hist_n", "p_final", "confidence") if k in f})
                 if f["confidence"] not in ("High",) and r.get("action") in ("bet", "lean"):
                     r["action"] = "pass"
                 L.write_bets(rows)
@@ -275,26 +323,10 @@ def main(argv=None):
         if any(r["over_only"] for r in ok):
             print("MORE-ONLY lines can't be played under on PrizePicks; goblins/demons also pay differently, so check the payout.")
         if args.log:
-            bets = L.read_bets()
-            seen = {(b["event_id"], str(b["player"]).lower(), b["market"], str(float(b["line"])) if b["line"] else "", b["side"]) for b in bets}
-            nid = max(int(b["id"]) for b in bets if b["id"].isdigit()) + 1
-            added = 0
-            for r in ok:
-                k = (str(r["event_id"]), str(r["player"]).lower(), r["market_key"], str(float(r["line"])), r["side"])
-                if k in seen:
-                    continue
-                bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": r["sport"], "event": f"{r['team']} vs {r['opp']}",
-                             "event_id": r["event_id"], "player": r["player"], "player_id": r["player_id"], "market": r["market_key"],
-                             "line": r["line"], "side": r["side"], "book": f"PrizePicks {r['odds_type']}", "p_model": "" if r["p_model"] is None else round(r["p_model"], 3),
-                             "p_market": "" if r["p_market"] is None else round(r["p_market"], 3), "p_hist": "" if r["p_hist"] is None else round(r["p_hist"], 3),
-                             "hist_n": r["hist_n"], "p_final": r["p_final"], "confidence": r["confidence"],
-                             "action": "lean" if r["confidence"] in ("High", "Medium") and not r.get("newcomer") else "pass",
-                             "segment": f"{r['sport']}:{r['market_key']}:{r['side']}", "group": r["script"], "status": "pending",
-                             "proj": "" if r.get("proj") is None else round(r["proj"], 1), "notes": f"edge pp; {r['notes']}"})
-                nid += 1
-                added += 1
-            L.write_bets(bets)
+            added = len([1 for _, new in log_pp(ok) if new])
             print(f"Logged {added} new prop(s) to bets.csv.")
+    elif args.cmd == "nba-picks":
+        _nba_picks(args)
     elif args.cmd == "nfl":
         _nfl(args)
     elif args.cmd == "simlab":
@@ -314,6 +346,91 @@ def main(argv=None):
             R.write_pm(pms)
         R.render_md(pms, rows)
         print("tagged", args.id)
+
+
+def _nba_picks(args):
+    """Price tonight's NBA PrizePicks board, keep the best legs (one per game), back-check each, write the report."""
+    import gzip
+    import json
+    import os
+    from . import nba_pp as N
+    from . import pp as P
+    from . import verify as V
+    from .blend import HERE, load_adjustments
+    props = [p for p in P.board("NBA", ("standard", "goblin", "demon")) if p["stat"] in N.STATS]
+    if args.match:
+        props = [p for p in props if args.match.lower() in f"{p['team']} {p['opp']} {p['home']} {p['away']}".lower()]
+    if not props:
+        print("No NBA props on the PrizePicks board for the stats the simulation scores.")
+        return
+    print(f"Pricing {len(props)} NBA prop(s) ({sum(p['odds_type'] == 'standard' for p in props)} standard) with {args.n:,} runs per game...")
+    rows = N.price_nba(props, n=args.n)
+    ok = [r for r in rows if "error" not in r]
+    today = dt.date.today().isoformat()
+    os.makedirs(os.path.join(HERE, "data", "nba_boards"), exist_ok=True)
+    with gzip.open(os.path.join(HERE, "data", "nba_boards", f"{today}.json.gz"), "wt") as f:     # the full priced board
+        json.dump([{k: v for k, v in r.items() if k not in ("research", "dk")} for r in ok], f, default=float)
+    picks = N.pick_order(ok, args.top)
+    ids = {}
+    if not args.no_log:
+        best_game = {}
+        for r in sorted([r for r in ok if r["odds_type"] == "standard"], key=lambda r: -r["p_final"]):
+            best_game.setdefault(r["script"], r)
+        keep = {id(r) for r in picks} | {id(r) for r in best_game.values()} | {id(r) for r in ok if r["odds_type"] == "standard" and r["confidence"] in ("High", "Medium")}
+        logrows = [r for r in ok if id(r) in keep]
+        pick_ids = {id(r) for r in picks}
+        act = {id(r): (("lean" if r["confidence"] in ("High", "Medium") and not r.get("newcomer") else "pass") if id(r) in pick_ids else "pass")
+               for r in logrows}          # only the published picks are leans; the rest are logged for calibration
+        for r, (bid, _) in zip(logrows, log_pp(logrows, act, refresh=True)):
+            ids[id(r)] = bid
+        print(f"Logged {len(logrows)} leg(s) to bets.csv (picks, every Medium+ leg, each game's best leg); full board in data/nba_boards/{today}.json.gz")
+    adj = load_adjustments()
+    bets = L.read_bets()
+    blocks = []
+    for r in picks:
+        ver, warns = "not checked", []
+        if not args.no_verify and id(r) in ids:
+            row = next(b for b in bets if b["id"] == ids[id(r)])
+            rep = V.verify(row, bets, adj)
+            ver = rep.verdict
+            warns = [f"{n}: {d}" for st, n, d in rep.checks if st != "PASS"]
+            print(rep.text())
+        if id(r) in ids:
+            r["bet_id"] = f"#{ids[id(r)]} "
+        blocks.append(N.write_up(r, ver, warns))
+    bias = N.model_market_bias(ok)
+    n_std = sum(r["odds_type"] == "standard" for r in ok)
+    head = [f"# NBA PrizePicks: best {len(picks)} legs, {today}",
+            f"Board pulled {rows[0].get('pulled', '') if rows else ''} · {len(ok)} props priced ({n_std} standard) across {len({r['script'] for r in ok})} games · "
+            f"{args.n:,} simulations per game · not priced: {len(rows) - len(ok)}",
+            "",
+            "Ranked by calibrated probability (model + DraftKings + this season, blended as `edge prob`), High before Medium, "
+            "standard lines only, one leg per game. Entry rule (ANALYST_PROMPT): only High legs at 65%+ go in entries, two legs max; "
+            "PrizePicks break-evens per leg: 2-pick power 57.7%, 3-pick power 58.5%, 5/6-pick flex 54.2%. These are model numbers, "
+            "not locks: the NBA player model has not beaten DraftKings' prices out of sample (projection error 4.72 vs the line's 4.72 on Nov 2).",
+            ""]
+    if bias:
+        head.append("Simulation vs DraftKings tonight, main lines (mean logit gap, taken out of the model before blending, L7): "
+                    + ", ".join(f"{N.LABEL[k]} {v['bias_logit']:+.2f} (n {v['n']})" for k, v in sorted(bias.items())))
+        head.append("")
+    high = [r for r in picks if N.verdict(r).startswith("ENTRY")]
+    if len(high) >= 2:
+        head.append(f"**Best 2-leg entry:** {high[0]['player']} {high[0]['side']} {high[0]['line']} + {high[1]['player']} {high[1]['side']} {high[1]['line']} "
+                    f"-> P(both) {high[0]['p_final'] * high[1]['p_final']:.1%} (2-pick power pays 3x; break-even 33.3%)")
+    else:
+        head.append("**No 2-leg entry clears the High gate tonight (65%+, one leg per game). Sitting out beats forcing it.**")
+    head.append("")
+    rest = [r for r in N.pick_order(ok, args.top + 10)[args.top:]]
+    tail = ["", "## Next best", "| p | conf | player | stat | side | line | model | DK | history |", "|---|---|---|---|---|---|---|---|---|"]
+    fm = lambda v: "-" if v is None else f"{v:.0%}"
+    tail += [f"| {r['p_final']:.1%} | {r['confidence']} | {r['player']} ({r['team']}) | {N.LABEL[r['stat_key']]} | {r['side']} | {r['line']} | {fm(r['p_model'])} | {fm(r['p_market'])} | {fm(r['p_hist'])} ({r['hist_n']}) |" for r in rest]
+    report = "\n".join(head) + "\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n"
+    out = args.out or os.path.join(HERE, "data", "picks", f"{today}-nba.md")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "w") as f:
+        f.write(report)
+    print("\n" + report)
+    print(f"Report: {out}")
 
 
 def _nfl(args):

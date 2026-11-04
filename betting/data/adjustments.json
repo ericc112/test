@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-03",
+  "updated": "2026-11-04",
   "blend_prior": {
     "intercept": 0.0,
     "w_model": 0.45,

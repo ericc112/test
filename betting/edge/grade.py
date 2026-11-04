@@ -196,7 +196,32 @@ def cfb_value(event_id: str, player_id: str, market: str, cache: dict):
     return nfl_value(event_id, player_id, market, cache, league="college-football")
 
 
-GRADERS = {"mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value}
+# ------------------------------------------------------------------ NBA (event_id = ESPN event, player_id = ESPN athlete id)
+NBA_PARTS = {"pts": ("pts",), "reb": ("reb",), "ast": ("ast",), "tpm": ("tpm",), "pra": ("pts", "reb", "ast"),
+             "pr": ("pts", "reb"), "pa": ("pts", "ast"), "ra": ("reb", "ast")}
+
+
+def nba_value(event_id: str, player_id: str, market: str, cache: dict):
+    """A player who doesn't play is voided, as PrizePicks does."""
+    from gamesim import nba as gnba
+    key = ("nba", event_id)
+    if key not in cache:
+        cache[key] = _get(f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={event_id}")
+    s = cache[key]
+    if s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_FINAL":
+        return "pending", None
+    for rows in gnba._box_players(s).values():
+        for r in rows:
+            if str(r["id"]) == str(player_id):
+                if r["dnp"] or r["min"] <= 0:
+                    return "void", None
+                val = {"pts": r["pts"], "reb": r["oreb"] + r["dreb"], "ast": r["ast"], "tpm": r["tpm"]}
+                return "final", float(sum(val[k] for k in NBA_PARTS[market]))
+    return "void", None
+
+
+GRADERS = {"mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value,
+           "nba": nba_value}
 
 
 def settle(value: float, line: float, side: str) -> str:
