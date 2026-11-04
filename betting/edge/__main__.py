@@ -395,6 +395,12 @@ def _nba_picks(args):
     lk = N.likely_order(ok, ctx, likely, args.top)
     for r in lk:
         r["notes"] = "most-likely-game list; " + r["notes"]
+    for r in picks + hist:               # the same reasons, marked, on the other two lists (shown, not used to drop legs)
+        try:
+            N._likely_context(r, ctx)
+        except (KeyError, TypeError, StopIteration):
+            pass
+        r["reasons"] = N.likely_reasons(r)
     ids = {}
     if not args.no_log:
         best_game = {}
@@ -483,8 +489,11 @@ def _nba_picks(args):
     lsec = ["", "## Top 5 by the most likely game",
             "Each game's most likely simulated run (the most common final score of the runs, then the run closest to every rotation player's "
             "typical line: the game the broadcast plays). A leg is listed when that run's line is on the same side of the PrizePicks line as the "
-            "simulation's median and this season's record; one run is a single draw, so the order comes from the calibrated probability, one leg per game. Usage, head-to-head and "
-            "what the opponent allows by position are shown as context: in the fair test they added no information beyond the price (LESSONS L27).", ""]
+            "simulation's median and this season's record, and every reason shown (DraftKings' price, this season's count and average, the last 5, "
+            "head-to-head count and per 36, what the opponent allows to his position and to all players, usage and minutes) supports the side or is "
+            "neutral: any reason against it drops the leg, so the list can hold fewer than five. One run is a single draw, so the order comes from the "
+            "calibrated probability, one leg per game. The reasons make the list consistent, not more accurate: in the fair test they added no "
+            "information beyond the price (LESSONS L27).", ""]
     report = ("\n".join(head) + "\n## Top 5 by the model\n\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n" + "\n".join(hsec) + "\n"
               + "\n\n".join(hblocks) + "\n" + "\n".join(lsec) + "\n" + "\n\n".join(lblocks) + "\n\n" + NR.markdown(track, clv_s, tilt_s) + "\n" + "\n".join(shsec) + "\n")
     out = args.out or os.path.join(HERE, "data", "picks", f"{today}-nba.md")

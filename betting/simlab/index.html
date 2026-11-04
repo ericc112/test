@@ -168,6 +168,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
 .pk-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px } .pk-cols h3 { margin: 0 0 8px }
 .pk-list { display: grid; gap: 8px } .pk { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); padding: 10px 12px; display: grid; gap: 4px; font-size: .86rem; min-width: 0 }
 .pk-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px } .pk-h b { font-size: .98rem } .pk-p { font-family: var(--font-data); font-size: 1.15rem; font-weight: 700 }
+.pk-why { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 2px } .pk-why li { display: grid; grid-template-columns: 1.2em 1fr; gap: 2px } .pk-why .m { font-weight: 700 } .pk-why .supports .m { color: var(--accent) } .pk-why .neutral .m { color: var(--muted) } .pk-why .against .m { color: var(--warn) }
 .pk .k { color: var(--muted) } .pk-warn { color: var(--warn); font-size: .8rem } .pill.High { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink) }
 .pill.ok { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good) } .pill.no { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad) }
 .rs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px }
@@ -220,7 +221,7 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="pk-cols">
       <div><h3>By the model <span class="note">(50,000-run simulation + DraftKings + this season)</span></h3><div class="pk-list" id="pkModel"></div></div>
       <div><h3>By history only <span class="note">(this season's record at the line, then last 5, then head-to-head)</span></h3><div class="pk-list" id="pkHist"></div></div>
-      <div><h3>By the most likely game <span class="note">(the most likely simulated game, the median and this season agree on the side; ranked by probability)</span></h3><div class="pk-list" id="pkLikely"></div></div>
+      <div><h3>By the most likely game <span class="note">(the most likely simulated game, the median, this season, DraftKings, head-to-head, the matchup and usage all support the side or are neutral; ranked by probability)</span></h3><div class="pk-list" id="pkLikely"></div></div>
     </div>
     <div id="pkTrack"></div>
     <div class="note" id="pkNote"></div>
@@ -1084,6 +1085,10 @@ function renderPicks() {
     if (r.opp_allows) parts.push(`<span class="k">${esc(r.opp)} allows</span> ${r.opp_allows.per_game.toFixed(1)} a game, rank ${r.opp_allows.rank}/${r.opp_allows.teams}`);
     return parts.join(" · ");
   };
+  // each reason marked against the pick's side: ✓ supports, – neutral, ✗ against
+  const MARK = { supports: "✓", neutral: "–", against: "✗" };
+  const why = (r, head) => (r.reasons || []).length ? `<div><span class="k">${esc(head)}</span><ul class="pk-why">${r.reasons.map((x) =>
+    `<li class="${esc(x.verdict)}"><span class="m">${MARK[x.verdict] || "?"}</span><span><b>${esc(x.name)}</b> ${esc(x.text)}</span></li>`).join("")}</ul></div>` : "";
   const card = (r, hist) => `<div class="pk">
     <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)}</span></div>
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
@@ -1091,6 +1096,7 @@ function renderPicks() {
     <div><span class="k">Sources</span> simulation ${pc(r.model)} · DraftKings ${pc(r.market)}${r.dk ? ` (${r.dk.line} at ${esc(r.dk.over || "?")}/${esc(r.dk.under || "?")})` : " (not posted)"} · this season ${pc(r.hist)} (${r.hist_n})</div>
     <div><span class="k">Simulation</span> median ${r.median} (25–75th ${r.q25}–${r.q75}), mean ${r.mean}, ${r.minutes} min</div>
     <div>${research(r)}</div>
+    ${why(r, "Context check (✓ supports, – neutral, ✗ against; shown, not used to drop the leg)")}
     <div class="note">${esc(r.verdict)}</div>
     ${r.warns && r.warns.length ? `<div class="pk-warn">${r.warns.map(esc).join("; ")}</div>` : ""}
   </div>`;
@@ -1105,14 +1111,14 @@ function renderPicks() {
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
     <div><span class="k">Most likely game</span> ${esc(ml.away || "")} ${ml.score ? ml.score[1] : ""}–${ml.score ? ml.score[0] : ""} ${esc(ml.home || "")}: <b>${Math.round(b.pts || 0)} pts / ${Math.round(b.reb || 0)} reb / ${Math.round(b.ast || 0)} ast / ${Math.round(b.tpm || 0)} 3PM</b> in ${Math.round(b.min || 0)} min (${ml.gap > 0 ? "+" : ""}${Math.round(ml.gap || 0)} vs the line)</div>
     <div><span class="k">Simulation</span> median ${r.median} (25–75th ${r.q25}–${r.q75}) · <span class="k">Sources</span> simulation ${pc(r.model)} · DraftKings ${pc(r.market)} · this season ${pc(r.hist)} (${r.hist_n})</div>
-    <div>${research(r)}</div>
+    ${(r.reasons || []).length ? why(r, "Reasons (each one supports the pick or is neutral)") : `<div>${research(r)}</div>
     ${u.tonight != null ? `<div><span class="k">Usage</span> ${Math.round(100 * u.tonight)}% of team possessions tonight${u.season != null ? ` vs ${Math.round(100 * u.season)}% this season` : ""}${u.min_tonight && u.min_season ? `, ${Math.round(u.min_tonight)} min vs ${Math.round(u.min_season)}` : ""}${(u.out || []).length ? ` · out: ${u.out.map((o) => esc(o.name)).join(", ")}` : ""}</div>` : ""}
+    ${pa ? `<div><span class="k">${esc(r.opp)} allows</span> ${pa}</div>` : ""}`}
     ${u.self_absent ? `<div class="pk-warn">Missing from his team's latest box score: confirm he plays.</div>` : ""}
-    ${pa ? `<div><span class="k">${esc(r.opp)} allows</span> ${pa}</div>` : ""}
     <div class="note">${esc(r.verdict)}</div>
     ${r.warns && r.warns.length ? `<div class="pk-warn">${r.warns.map(esc).join("; ")}</div>` : ""}
   </div>`; };
-  $("pkLikely").innerHTML = (P.likely || []).map(lcard).join("") || `<div class="note">No leg where the most likely game, the simulation's median and this season agree.</div>`;
+  $("pkLikely").innerHTML = (P.likely || []).map(lcard).join("") || `<div class="note">No leg tonight where the most likely game, the simulation's median, this season and every other reason agree.</div>`;
   // logic versions, track record, closing line value and tonight's tilt (written by nba-picks)
   const pct1 = (v) => v == null ? "—" : (100 * v).toFixed(1) + "%";
   const tr = P.track || {}, cl = P.clv || {}, tl = P.tilt || {};
