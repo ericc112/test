@@ -222,7 +222,7 @@ def _bt(name: str, compute):
 
 def engines(data: dict) -> dict:
     """Fitted NFL play-by-play, NBA possession and NHL event engines plus per-game inputs and backtests."""
-    from gamesim import backtest as gbt, nba as gnba, nfl_pbp, nhl as gnhl, players as gpl
+    from gamesim import backtest as gbt, nba as gnba, nba_research as gres, nfl_pbp, nhl as gnhl, players as gpl
     today = dt.date.today()
     out = {}
     # ---- NFL play by play
@@ -275,6 +275,7 @@ def engines(data: dict) -> dict:
     span0 = gnba.LAST_SEASON.get(y)                       # player layer prior: each player's own last season
     PT = gnba.season_player_totals("nba", gnba.season_games("nba", *span0)) if span0 else None
     PRt = gnba.PlayerRatings("nba", G, y) if gnba.PLAYER_RATING_W else None   # team strength from player ratings
+    RS = gres.Research("nba", G, y)                       # handicapper-style research (game logs, hit rates, head-to-head)
     prf = PRt.fit(cut) if PRt else None
     sides, prof = {}, {}
     for g in nba_games:
@@ -287,8 +288,15 @@ def engines(data: dict) -> dict:
         H, A, prior = gnba.with_prior(H, A, R, gnba.prior_context("nba", y) if gnba.PRIOR_K else None, g["home"], g["away"],
                                       {g[s_]: gnba.latest_roster("nba", G, g[s_], cut) for s_ in ("home", "away")})
         # rotation tonight (also the player layer below): projected minutes, Out/Doubtful removed
-        prof[g["id"]] = {s_: gnba.player_profiles("nba", G, g[s_], gs_data.cutoff(gs_data.us_day(g["start"])), gone(g[s_]), prior_tot=PT)
+        opp_of = {"home": g["away"], "away": g["home"]}
+        cut_g = gs_data.cutoff(gs_data.us_day(g["start"]))
+        h2h = {s_: {pid: RS.rate_factors(pid, opp_of[s_], cut_g, gres.H2H_COEF) for pid, L in RS.logs.items()
+                    if L and L[-1]["team"] == g[s_] and L[-1]["date"] < cut_g} for s_ in ("home", "away")}
+        prof[g["id"]] = {s_: gnba.player_profiles("nba", G, g[s_], cut_g, gone(g[s_]), prior_tot=PT, rate_mult=h2h[s_])
                          for s_ in ("home", "away")}
+        for s_ in ("home", "away"):                       # research card data for every rotation player
+            for p in prof[g["id"]][s_]["players"]:
+                p["research"] = RS.export(p["id"], opp_of[s_], cut_g)
         pr_det = None
         if PRt and prf["n_games"] >= 100:
             lu = {s_: {p["id"]: p["min"] for p in prof[g["id"]][s_]["players"]} for s_ in ("home", "away")}
@@ -302,6 +310,8 @@ def engines(data: dict) -> dict:
                       "lineups": {"home": top("home"), "away": top("away")}}
         sides[g["id"]] = {"home": {k: round(v, 4) for k, v in H.items()}, "away": {k: round(v, 4) for k, v in A.items()},
                           "player_ratings": pr_det,
+                          # what each side's opponent allows (for the research card): per game, rank, by position
+                          "opp_allowed": {s_: RS.allowed_summary(opp_of[s_], cut_g) for s_ in ("home", "away")},
                           "prior": None if not prior else {t: {"net_last": round(v["net_last"], 2), "roster_delta": round(v["roster_delta"], 2),
                                                                 "shift": round(v["shift"], 2), "arrived": [n for n, _ in v["arrived"][:2]],
                                                                 "left": [n for n, _ in v["left"][:2]]} for t, v in prior.items()},
@@ -330,7 +340,9 @@ def engines(data: dict) -> dict:
                   "anchor": gnba.PROP_ANCHOR,
                   "players_bt": _bt("nba_players", lambda: {"metrics": gnba.player_backtest("nba", G, cut, prior_tot=PT)}),
                   # calibration of the browser player layer on finished games (written by the audit's pl_check.js run)
-                  "players_cal": _json_or_none(os.path.join(gs_data.CACHE, "bt_nba_players_cal.json"))}
+                  "players_cal": _json_or_none(os.path.join(gs_data.CACHE, "bt_nba_players_cal.json")),
+                  # fair test of the research factors (written by the audit's research_test.py / research_B.py)
+                  "research_test": _json_or_none(os.path.join(gs_data.CACHE, "bt_nba_research.json"))}
     # the "most likely game" backtest (written by the audit's likely_bt.py): accuracy of the most common simulated score
     out["likely_bt"] = {k: (_json_or_none(os.path.join(gs_data.CACHE, f"bt_likely_{k}.json")) or {}).get("summary") for k in ("nba", "nhl", "nfl")}
     # ---- NHL event clock

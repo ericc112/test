@@ -350,6 +350,24 @@ class TeamFromPlayers(unittest.TestCase):
         self.assertEqual(nba.with_player_ratings(H0, A0, R, None, w=0.6)[2], 0.0)
 
 
+class PlayerResearch(unittest.TestCase):
+    """Research factors: a head-to-head streak at his normal rate carries nothing; a real rate gap is shrunk."""
+
+    def test_head_to_head_ratio_is_shrunk_and_neutral_at_his_rate(self):
+        from gamesim import nba_research as nr
+        g = lambda opp, mins, reb: {"opp": opp, "min": mins, "reb": reb, "season": 2026}
+        r0 = 8.7 / 36
+        normal = [g("DAL", 22, 22 * r0)] * 5                       # five meetings at exactly his usual rate
+        hot = [g("DAL", 22, 22 * r0 * 1.5)] * 5                      # 50% above it
+        f0 = nr.factor_logs(normal, normal, "DAL", "reb", r0, 60.0, None, None)
+        f1 = nr.factor_logs(hot, hot, "DAL", "reb", r0, 60.0, None, None)
+        self.assertAlmostEqual(f0["h2h"], 0.0, places=9)
+        self.assertGreater(f1["h2h"], 0.0)
+        self.assertLess(f1["h2h"], np.log(1.5))                      # 110 min of meetings vs 60 of shrinkage
+        self.assertEqual(f1["opp"], 0.0)                             # no opponent data: no adjustment
+        self.assertAlmostEqual(np.exp(nr.H2H_COEF["reb"]["h2h"] * f1["h2h"]), 1.0, delta=0.03)   # the fitted effect is small
+
+
 class SeasonPrior(unittest.TestCase):
     def test_prior_moves_margin_not_total(self):
         from gamesim import nba

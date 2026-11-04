@@ -538,7 +538,7 @@ def season_player_totals(lg: str, games: list[dict], before: str = "2099-01-01")
 
 
 def player_profiles(lg: str, games: list[dict], team: str, before: str, out_names: set | None = None, recent: int = 5,
-                    prior_tot: dict | None = None, prior_min: float | None = -1.0) -> dict:
+                    prior_tot: dict | None = None, prior_min: float | None = -1.0, rate_mult: dict | None = None) -> dict:
     """Rotation for one team from this season's box scores before `before`: projected minutes (recency-weighted
     over the last `recent` team games, 0 when a player sat), per-minute rates for 2PA, 3PA, FTA, assists, offensive
     and defensive rebounds and turnovers (shrunk toward the team's per-player average by 60 minutes), and 2P%, 3P%,
@@ -640,14 +640,19 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
             p3 = (t["tpm"] + 50 * tp3) / (t["tpa"] + 50)
             ftp = (t["ftm"] + 25 * tft) / (t["fta"] + 25)
             src = "team average"
+        m_ = (rate_mult or {}).get(pid) or {}
+        f_pts, f_reb, f_ast, f_tpm = (m_.get(k, 1.0) for k in ("pts", "reb", "ast", "tpm"))
         gp = max(len(a["mins"]), 1)
         season = {"gp": len(a["mins"]), "min": float(np.mean(a["mins"])) if a["mins"] else 0.0,
                   "pts": a["pts_raw"] / gp, "reb": a["reb_raw"] / gp, "ast": a["ast_raw"] / gp}
         players.append({"id": pid, "name": a["name"], "pos": a["pos"], "min": a["proj"], "min_sd": float(max(3.0, np.std(a["mins"]) if len(a["mins"]) > 1 else 5.0)),
                         "season": {k: (round(v, 2) if isinstance(v, float) else v) for k, v in season.items()},
                         "games": len(a["mins"]), "starter": a["starter"], "returning": a["returning"],
-                        "fga2": fga2, "fga3": rate("tpa"), "fta": rate("fta"), "ast": rate("ast"), "oreb": rate("oreb"), "dreb": rate("dreb"),
-                        "tov": rate("tov"), "p2": p2, "p3": p3, "ftp": ftp, "prior": src})
+                        # head-to-head multipliers (nba_research.H2H_COEF): usage x pts factor, 3PA x 3PM factor
+                        "fga2": fga2 * f_pts, "fga3": rate("tpa") * f_tpm, "fta": rate("fta") * f_pts, "ast": rate("ast") * f_ast,
+                        "oreb": rate("oreb") * f_reb, "dreb": rate("dreb") * f_reb,
+                        "tov": rate("tov"), "p2": p2, "p3": p3, "ftp": ftp, "prior": src,
+                        "h2h": {k: round(v, 4) for k, v in (("pts", f_pts), ("reb", f_reb), ("ast", f_ast), ("tpm", f_tpm))} if m_ else None})
     tot = sum(p["min"] for p in players)
     if tot > 0:
         for p in players:

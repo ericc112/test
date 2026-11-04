@@ -162,6 +162,10 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
 .line-out { font-family: var(--font-data); font-size: .85rem; grid-column: 1 / -1 }
 .card-wrap { display: grid; gap: 8px; font-size: .86rem } .card-wrap table { min-width: 560px } .card-wrap .k { color: var(--muted) }
 .card-wrap ul { margin: 0; padding-left: 18px; display: grid; gap: 3px } .field.wide { grid-column: span 2 }
+.rs-hit { color: var(--good); font-weight: 600 } .rs-miss { color: var(--bad); font-weight: 600 }
+.rs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px }
+.rs-grid > div { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px }
+.rs-grid b { font-family: var(--font-data); font-size: 1.05rem } .card-wrap table.rs-log { min-width: 0 }
 .bc-box { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; font-size: .76rem }
 @media (max-width: 600px) { .bc-box { grid-template-columns: minmax(0, 1fr) } } .bc-box > div { min-width: 0; overflow: hidden }
 .bc-box table { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; font-family: var(--font-data) } .bc-box th:first-child { width: 46% } .bc-box th, .bc-box td { padding: 2px 4px; text-align: right; color: #dfe7ee; border-bottom: 1px solid #26323e }
@@ -345,9 +349,11 @@ table.dec, #factorTbl { min-width: 600px }
           <div class="line-out" id="nlOut" aria-live="polite"></div>
         </div>
         <div id="nbaCard" class="card-wrap"></div>
+        <h3>Research</h3>
+        <div id="nbaResearch" class="card-wrap"></div>
         <p class="note" id="nlCal"></p>
         <p class="note" id="nbaBt"></p>
-        <div class="warnbox">These are model numbers, not picks. In the kit, a pick is named only after <span class="num">python3 -m edge verify ID</span> passes. The data feed has no NBA player prop lines, so nothing here is compared with a book.</div>
+        <div class="warnbox">These are model numbers, not picks. In the kit, a pick is named only after <span class="num">python3 -m edge verify ID</span> passes. DraftKings lines come from ESPN's feed once posted on game day.</div>
       </section>
 
       <section class="panel honest" aria-label="How accurate is this">
@@ -1659,6 +1665,57 @@ function nbaCard() {
       ${Object.keys(lines).length ? `Projection = DraftKings' line + ${["pts", "reb", "ast"].map((k) => `${Math.round(100 * (E.nba.anchor || {})[k])}%`).join(" / ")} (points / rebounds / assists) of the simulation's gap from it: the share the simulation's disagreements were worth on earlier games (on Nov 2 it brought the average miss to the line's level). Without a line the projection is the simulation. ` : ""}Error bars are the average miss of these projections on this season's games (${(bt.n || 0).toLocaleString()} player-games). ${recon.length ? `Formula (minutes × his rates) and simulation differ by more than 10% on ${recon.join("; ")}.` : `Formula (minutes × his rates) and simulation agree within 10% on all three.`}</div>
     ${top.length ? `<div><span class="k">What moved his points most vs his season average (${se.pts.toFixed(1)})</span><ul>${top.map(([nm, v]) => `<li>${nm}: ${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}</li>`).join("")}</ul></div>` : ""}
     <div><span class="k">Biggest risk</span> minutes: in ${pct(lo / n)} of simulated games he played 6+ fewer than projected (foul trouble, a blowout, a knock); each lost minute costs about ${ptsRate.toFixed(2)} points. Not modelled: confirmed lineups, minutes restrictions, rest days, on/off splits, tracking data (potential assists, rebound chances).</div>`;
+  nbaResearch();
+}
+// Research card: the handicapper's write-up (game log against the line, hit rates, head-to-head, per 36, what the
+// opponent allows), from box scores before tonight, next to what the fair test found each piece is worth.
+function nbaResearch() {
+  const el = $("nbaResearch"), R = state.nbaRes; if (!R || !el) return;
+  const [ti, i] = $("nlP").value.split(":").map(Number), side = ti === 0 ? "home" : "away", g = game(), sd = nbaSide();
+  const p = sd.players[side].players[i], rs = p.research;
+  if (!rs || !rs.log.length) { el.innerHTML = `<div class="note">No games this season to research yet.</div>`; return; }
+  const h = Number($("nlS").value), L = Number($("nlL").value), keys = ["pts", "reb", "ast", "tpm"];
+  const lab = ["points", "rebounds", "assists", "3-pointers made", "points + rebounds + assists"][h];
+  const v = (r, off) => h === 4 ? r[off] + r[off + 1] + r[off + 2] : r[off + h];       // log rows [date, opp, home, min, pts, reb, ast, 3PM]; h2h [date, min, ...]
+  const opp = side === "home" ? g.away : g.home, log = rs.log, h2 = rs.h2h || [];
+  const cnt = (rows, off) => rows.filter((r) => v(r, off) > L).length;
+  const avg = (rows, off) => rows.length ? rows.reduce((a, r) => a + v(r, off), 0) / rows.length : 0;
+  const mavg = (rows, mi) => rows.length ? rows.reduce((a, r) => a + r[mi], 0) / rows.length : 0;
+  const last5 = log.slice(-5), low = log.filter((r) => r[3] < 20);
+  const per36 = 36 * log.reduce((a, r) => a + v(r, 4), 0) / Math.max(log.reduce((a, r) => a + r[3], 0), 1);
+  const h2per36 = 36 * h2.reduce((a, r) => a + v(r, 2), 0) / Math.max(h2.reduce((a, r) => a + r[1], 0), 1);
+  const dk = h < 3 ? ((((sd.players.lines || {})[p.id] || {})[keys[h]]) || {}).line : null;
+  const lineLab = dk != null && Number(dk) === L ? "DraftKings line" : "line typed above";
+  const rate = (o, n) => `${o}/${n}${n ? ` (${Math.round(100 * o / n)}%)` : ""}`;
+  const oa = (sd.opp_allowed || {})[side] || {}, pos = rs.pos;
+  let allow = "";
+  if (h < 4 && oa[keys[h]] && oa[keys[h]].per_game != null) { const a = oa[keys[h]], pp = pos && a.pos ? a.pos[pos] : null;
+    allow = `${opp} allows <b>${a.per_game.toFixed(1)}</b> ${lab} a game to opposing players: rank ${a.rank} of ${a.teams} (1 = most), league average ${a.league.toFixed(1)}, ${a.games} games.` +
+      (pp && pp.per_game != null ? ` To ${{ G: "guards", F: "forwards", C: "centres" }[pos]}: ${pp.per_game.toFixed(1)} (rank ${pp.rank}; league ${pp.league_per_game.toFixed(1)}).` : ""); }
+  else if (h === 4 && oa.pts && oa.pts.per_game != null) { const t = ["pts", "reb", "ast"].reduce((s, k) => s + oa[k].per_game, 0), lgv = ["pts", "reb", "ast"].reduce((s, k) => s + oa[k].league, 0);
+    allow = `${opp} allows ${t.toFixed(1)} points + rebounds + assists a game to opposing players (league average ${lgv.toFixed(1)}).`; }
+  const f = p.h2h ? (h < 4 ? p.h2h[keys[h]] : null) : null;
+  const rt = E.nba.research_test || {}, B = rt.B || {}, A = rt.A || {};
+  const b80 = ((B.last5 || {}).buckets || []).find((b) => b.hit_rate === "80%-100%");
+  const testTxt = B.n ? `On ${B.n.toLocaleString()} DraftKings lines this season, hit rates against the line didn't predict overs beyond the book's price` +
+    ` (weight beyond the price: season hit rate ${B.season.weight[0].toFixed(2)} ± ${B.season.weight[1].toFixed(2)}, last 5 ${B.last5.weight[0].toFixed(2)} ± ${B.last5.weight[1].toFixed(2)}; 0 means no information)` +
+    (b80 ? `; players over in 80–100% of their last 5 went over ${Math.round(100 * b80.went_over)}% of the time (${b80.n} lines) against ${Math.round(100 * b80.market_said)}% priced in` : "") +
+    `. On ${(A.player_game_stats || 0).toLocaleString()} player-games over three seasons, head-to-head was the only factor that sharpened the projection on unseen games, and only by about 0.1%; it's already in this projection${f ? ` (×${f.toFixed(3)} here)` : ""}.` +
+    ` What the opponent allows is already in the team simulation (pace, its defence, missed shots to rebound), and recent form didn't hold up on unseen games.` : "";
+  el.innerHTML = `<div><span class="k">${esc(p.name)} · ${lab} · ${L} (${lineLab})</span></div>
+    <div class="rs-grid">
+      <div><span class="k">This season</span><br><b>${rate(cnt(log, 4), log.length)}</b> over<br>avg ${avg(log, 4).toFixed(1)} in ${mavg(log, 3).toFixed(1)} min</div>
+      <div><span class="k">Last 5</span><br><b>${rate(cnt(last5, 4), last5.length)}</b> over<br>avg ${avg(last5, 4).toFixed(1)} in ${mavg(last5, 3).toFixed(1)} min</div>
+      <div><span class="k">vs ${opp}, last ${h2.length} (any season)</span><br><b>${h2.length ? rate(cnt(h2, 2), h2.length) : "—"}</b>${h2.length ? " over" : ""}<br>${h2.length ? `avg ${avg(h2, 2).toFixed(1)} in ${mavg(h2, 1).toFixed(1)} min` : "no meetings"}</div>
+      <div><span class="k">Per 36 minutes</span><br><b>${per36.toFixed(1)}</b><br>${h2.length ? `vs ${opp}: ${h2per36.toFixed(1)}` : "&nbsp;"}</div>
+      <div><span class="k">Under 20 minutes</span><br><b>${low.length ? rate(cnt(low, 4), low.length) : "—"}</b>${low.length ? " over" : ""}<br>${low.length ? `avg ${avg(low, 4).toFixed(1)}` : "no such games"}</div>
+    </div>
+    <div class="tbl-wrap"><table class="rs-log"><thead><tr><th class="l">Date</th><th class="l">Opponent</th><th>Min</th><th>${h === 4 ? "PRA" : ["Pts", "Reb", "Ast", "3PM"][h]}</th><th>vs ${L}</th></tr></thead><tbody>
+      ${log.slice(-10).reverse().map((r) => `<tr><td class="l">${r[0].slice(5)}</td><td class="l">${r[2] ? "vs" : "@"} ${esc(r[1])}</td><td>${Math.round(r[3])}</td><td>${v(r, 4)}</td><td class="${v(r, 4) > L ? "rs-hit" : "rs-miss"}">${v(r, 4) > L ? "over" : v(r, 4) < L ? "under" : "push"}</td></tr>`).join("")}
+    </tbody></table></div>
+    ${h2.length ? `<div><span class="k">Meetings with ${opp}</span> ${h2.slice().reverse().map((r) => `${r[0]}: ${v(r, 2)} in ${Math.round(r[1])} min`).join(" · ")}</div>` : ""}
+    ${allow ? `<div><span class="k">Opponent</span> ${allow}</div>` : ""}
+    <div class="note"><b>What this research is worth.</b> ${testTxt} Hit rates measure the past against tonight's line; the line already moves with them. Per 36 vs the opponent is the fairer way to read a head-to-head streak.</div>`;
 }
 ["nlP", "nlS"].forEach((id) => $(id).addEventListener("change", () => nbaLine(true)));
 $("nlL").addEventListener("input", () => nbaLine(false));

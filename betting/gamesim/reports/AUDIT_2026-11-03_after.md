@@ -393,3 +393,75 @@ The user asked for three improvements used by stronger public models. Each was t
 - *Disagreement with the line:* its weight is still about 0 (winners +0.07 ± 0.28, spreads −0.02 ± 0.24, totals −0.08 ± 0.15). The PLAY rule still passes every game.
 
 **Not re-measured on the new engine:** the most-likely-game backtest and the player-layer calibration. Fewer simulated blowouts mean slightly fewer garbage-time minutes for starters. The garbage-time rule was fitted on minutes by final margin, so it should carry over.
+
+## Added after review: handicapper-style player research, and a fair test of it (Nov 4)
+
+The user shared a tout's write-up (Keldon Johnson over 3.5 rebounds vs DAL):
+- 7/7 this season, 5.6 in 23.1 minutes;
+- 5/5 in the last 5 against Dallas;
+- 6+ in 4 of the last 5;
+- 8.7 per 36;
+- Dallas "allowing 43.1 rebounds";
+- 8.0 rebound chances (tracking data).
+
+The question was how to use research like this. The write-up was rebuilt from box scores, and then each piece was tested for whether it predicts anything.
+
+**Research card** (`gamesim/nba_research.py`, Sim Lab projection card). For any player, stat and line, it shows:
+- the game log against the line;
+- season, last-5 and under-20-minute hit rates;
+- the last 5 meetings with tonight's opponent (any season);
+- per 36, overall and against the opponent;
+- what the opponent allows per game, to everyone and to his position, with its rank.
+
+It reproduces the post exactly (7/7, avg 5.6 in 23.0 min, 5/5 vs DAL, avg 5.4 in 22.0, 8.7 per 36, DAL 43.1). It also adds what the post left out:
+- Dallas's 43.1 ranks **20th of 30**, below the league's 44.2.
+- His 5/5 against Dallas works out to 8.8 rebounds per 36, the same as his normal 8.7.
+
+Rebound chances come from NBA.com tracking data, which blocks scripted access, so they aren't available.
+
+**Fair test B: do hit rates predict overs beyond the price?**
+- *Sample:* every 2026-27 DraftKings points / rebounds / assists line with both prices (2,330), hit rates from earlier games only.
+- *Method:* logistic regression of the result on the no-vig price plus the hit rate's departure from it.
+
+| Signal | Lines | Weight beyond the price (0 = none) | Strongest bucket: went over vs priced |
+|---|---|---|---|
+| Season hit rate (5+ games) | 762 | −0.08 ± 0.11 | 80–100%: 46.6% vs 49.9% (58) |
+| Last 5 | 762 | −0.06 ± 0.11 | 80–100%: **39.3% vs 49.5%** (84) |
+| Head-to-head, last 5 meetings (3+) | 1,862 | +0.07 ± 0.06 | 100%: 52.0% vs 49.2% (102) |
+
+- *Hit rates and streaks:* they carry no information the price doesn't have. The hottest last-5 streaks went over *less* often than priced.
+- *Perfect records:* only 5 lines had a perfect record this season (5+ games), which is too few to say anything.
+- *Overs in general:* across all 2,330 lines they hit 46.9% against 48.5% priced.
+
+**Fair test A: do the factors improve the projection beyond the simulation?**
+- *Sample:* 89,711 player-game-stats over three seasons.
+- *Baseline:* the simulation's own logic, with the minutes actually played to take the minutes problem out. That is the per-minute rate (shrunk to last season) × minutes × the team matchup (expected team points / rebounds / assists / 3s from the opponent-adjusted ratings, as the engine does).
+- *Factors tested:* head-to-head, recent form (last 5), what the opponent allows, and what it allows to his position.
+- *Method:* Poisson regression with the baseline as the offset. Fitted on 2025-26 Nov–Jan and judged on Feb–Apr; fitted on 2025-26 and judged on 2026-27.
+
+Each factor was judged in 8 test cells (4 stats × 2 held-out periods):
+
+| Factor | Cells improved: deviance / average miss | Verdict |
+|---|---|---|
+| Head-to-head (last 5 meetings, any season) | **8 / 7** | applied |
+| Recent form (last 5 games) | 2 / 2 | not applied |
+| What the opponent allows (per player-minute) | 3 / 2 | not applied (the engine already has the team matchup) |
+| What it allows to his position | 3 / 4 | not applied |
+| All four together | 4 / 3 | not applied |
+
+Average miss with head-to-head, Feb–Apr / 2026-27:
+
+| Stat | Before | After |
+|---|---|---|
+| Points | 4.110 / 4.291 | 4.109 / 4.293 |
+| Rebounds | 1.719 / 1.774 | 1.718 / 1.771 |
+| Assists | 1.361 / 1.355 | 1.360 / 1.354 |
+| 3PM | 0.939 / 0.991 | 0.939 / 0.991 |
+
+- *Head-to-head:* the only factor that improved the fit on unseen games in all 8 cells (Poisson deviance; average miss in 7 of 8). The gain is about 0.1%.
+  - Applied as a rate multiplier exp(c × log of his shrunk head-to-head rate ratio), with c = 0.059 / 0.068 / 0.102 / 0.066 for points / rebounds / assists / 3s, fitted on 2025-26.
+  - Keldon Johnson's rebounds vs DAL move ×1.001.
+- *Recent form:* helped in one test period and hurt in the other, so it was not applied (recency weighting also failed earlier, F3).
+- *What the opponent allows:* adds nothing beyond the team-level matchup the engine already simulates, overall or by position.
+
+**Kit rule L27** (`LESSONS.md`): never cite a hit rate, streak or head-to-head record as a reason for a side. Read head-to-head as per-36 against his own rate, and an opponent's allowed numbers with their rank.
