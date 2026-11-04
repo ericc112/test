@@ -387,13 +387,21 @@ def _nba_picks(args):
     hist = N.history_order(ok, args.top)
     for r in hist:
         r["notes"] = "history-only list; " + r["notes"]
+    # the most-likely-game list: each game's most likely simulated run (the page's broadcast pick), its box line vs
+    # the PrizePicks line, backed by the simulation's median and this season's record
+    ctx = N.build({N._us_date(p["start"]) for p in props if p.get("start")}, n=args.n)
+    print(f"Finding the most likely game for {len(ctx['sims'])} games...")
+    likely = N.run_likely(ctx, sorted(ctx["sims"]), n=args.n)
+    lk = N.likely_order(ok, ctx, likely, args.top)
+    for r in lk:
+        r["notes"] = "most-likely-game list; " + r["notes"]
     ids = {}
     if not args.no_log:
         best_game = {}
         for r in sorted([r for r in ok if r["odds_type"] == "standard"], key=lambda r: -r["p_final"]):
             best_game.setdefault(r["script"], r)
         keep = {id(r) for r in picks} | {id(r) for r in best_game.values()} | {id(r) for r in ok if r["odds_type"] == "standard" and r["confidence"] in ("High", "Medium")}
-        logrows = [r for r in ok if id(r) in keep] + hist
+        logrows = [r for r in ok if id(r) in keep] + hist + lk
         pick_ids = {id(r) for r in picks}
         def action(r):
             if id(r) not in pick_ids or r.get("newcomer"):
@@ -417,8 +425,9 @@ def _nba_picks(args):
         print(rep.text())
         return rep.verdict, [f"{n}: {d}" for st, n, d in rep.checks if st != "PASS"]
 
-    blocks, hblocks, page = [], [], {"model": [], "history": []}
-    for lst, out, key, writer in ((picks, blocks, "model", N.write_up), (hist, hblocks, "history", N.history_write_up)):
+    blocks, hblocks, lblocks, page = [], [], [], {"model": [], "history": [], "likely": []}
+    for lst, out, key, writer in ((picks, blocks, "model", N.write_up), (hist, hblocks, "history", N.history_write_up),
+                                  (lk, lblocks, "likely", N.likely_write_up)):
         for r in lst:
             ver, warns = check(r)
             if id(r) in ids:
@@ -471,8 +480,13 @@ def _nba_picks(args):
                  f"{NM.MIN_LEGS}+ graded legs or {NM.MIN_DAYS} days, on log loss and label calibration (python -m edge.nba_model report).", "",
                  "| p | conf | player | stat | side | line | verdict |", "|---|---|---|---|---|---|---|"]
         shsec += [f"| {r['p_final']:.1%} | {r['confidence']} | {r['player']} ({r['team']}) | {N.LABEL[r['stat_key']]} | {r['side']} | {r['line']} | {N.verdict(r)} |" for r in sp]
+    lsec = ["", "## Top 5 by the most likely game",
+            "Each game's most likely simulated run (the most common final score of the runs, then the run closest to every rotation player's "
+            "typical line: the game the broadcast plays). A leg is listed when that run's line is on the same side of the PrizePicks line as the "
+            "simulation's median and this season's record, ranked by the gap over his simulated spread, one leg per game. Usage, head-to-head and "
+            "what the opponent allows by position are shown as context: in the fair test they added no information beyond the price (LESSONS L27).", ""]
     report = ("\n".join(head) + "\n## Top 5 by the model\n\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n" + "\n".join(hsec) + "\n"
-              + "\n\n".join(hblocks) + "\n\n" + NR.markdown(track, clv_s, tilt_s) + "\n" + "\n".join(shsec) + "\n")
+              + "\n\n".join(hblocks) + "\n" + "\n".join(lsec) + "\n" + "\n\n".join(lblocks) + "\n\n" + NR.markdown(track, clv_s, tilt_s) + "\n" + "\n".join(shsec) + "\n")
     out = args.out or os.path.join(HERE, "data", "picks", f"{today}-nba.md")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:

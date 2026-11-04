@@ -555,6 +555,152 @@ def history_order(rows: list[dict], top: int = 5, min_games: int = 5) -> list[di
     return out
 
 
+LIKELY_SCRIPT = os.path.join(HERE, "simlab", "likely_sim.js")
+
+
+def run_likely(ctx: dict, gids: list[str], n: int = N_SIMS, workers: int = 4) -> dict:
+    """The most likely game for each game (the page's eng_likely: the most common final score of n runs, then the run
+    closest to every rotation player's typical line), with its box score. Parallel Node processes."""
+    eng = ctx["eng"]
+    chunks = [gids[i::workers] for i in range(workers) if gids[i::workers]]
+    procs = []
+    os.makedirs(CACHE, exist_ok=True)
+    for k, ch in enumerate(chunks):
+        ip, op = os.path.join(CACHE, f"likely_in_{k}.json"), os.path.join(CACHE, f"likely_out_{k}.json")
+        with open(ip, "w") as f:
+            json.dump({"R": eng["R"], "n": n, "games": [{"id": gid, "seed": 4242 + i, "sides": {"home": eng["sides"][gid]["home"], "away": eng["sides"][gid]["away"]},
+                                                         "pl": [eng["sides"][gid]["players"]["home"], eng["sides"][gid]["players"]["away"]]} for i, gid in enumerate(ch)]}, f)
+        procs.append((subprocess.Popen(["node", LIKELY_SCRIPT, ip, op]), op))
+    out = {}
+    for p, op in procs:
+        if p.wait() == 0:
+            with open(op) as f:
+                out.update(json.load(f))
+    return out
+
+
+def _usage(players: list[dict], pid: str) -> float | None:
+    """Share of the team's projected possessions used (FGA + 0.44 FTA + TOV, per minute x projected minutes)."""
+    u = {p["id"]: (p["fga2"] + p["fga3"] + 0.44 * p["fta"] + p["tov"]) * p["min"] for p in players}
+    tot = sum(u.values())
+    return u.get(pid, 0.0) / tot if tot else None
+
+
+def _season_usage(team: str, pid: str, before: str) -> float | None:
+    """His share of the team's possessions used in this season's games he played (box scores)."""
+    from gamesim import nba as gnba
+    y = gnba.season_of(before[:10])
+    G = gnba.season_games("nba", f"{y}1018", (dt.date.fromisoformat(before[:10]) - dt.timedelta(days=1)).strftime("%Y%m%d"))
+    me = tot = 0.0
+    for g in G:
+        if not g["final"] or team not in (g["home"], g["away"]):
+            continue
+        rows = gnba._box_cached("nba", g["id"]).get(team, [])
+        if not any(r["id"] == pid and not r["dnp"] and r["min"] > 0 for r in rows):
+            continue
+        for r in rows:
+            if r["dnp"] or r["min"] <= 0:
+                continue
+            u = r["fga"] + 0.44 * r["fta"] + r["tov"]
+            tot += u
+            me += u if r["id"] == pid else 0.0
+    return me / tot if tot else None
+
+
+def likely_order(rows: list[dict], ctx: dict, likely: dict, top: int = 5) -> list[dict]:
+    """The most-likely-game list: each standard line compared with the player's line in that game's most likely
+    simulated run. Kept only when the run's side agrees with the simulation's median (a one-run fluke is dropped) and
+    with this season's record at the line; ranked by the gap over his simulated spread; one leg per game. Each leg
+    carries the blend's numbers for that side, the run's box line, the usage shift from teammates out, and what the
+    opponent allows to his position."""
+    from .blend import final_probability
+    from . import nba_model
+    adj = _logic_adj({**nba_model.V1, **nba_model.params("current")})
+    cand = []
+    for r in rows:
+        if "error" in r or r.get("odds_type") != "standard" or r["event_id"] not in likely:
+            continue
+        L = likely[r["event_id"]]
+        g = ctx["games"][r["event_id"]]
+        side_team = "home" if espn_abbr(r["team"]) == g["home"] else "away"
+        me = next((x for x in (L.get("box") or {}).get(side_team, []) if str(x["id"]) == str(r["player_id"])), None)
+        if not me:
+            continue
+        val = sum(me[k] for k in PARTS_KEYS[r["stat_key"]])
+        gap = val - r["line"]
+        if gap == 0:
+            continue
+        side = "over" if gap > 0 else "under"
+        if side == "under" and r.get("over_only"):
+            continue
+        if (r["proj"] - r["line"]) * gap < 0:              # the run disagrees with the simulation's median: a fluke
+            continue
+        rs = r.get("research") or {}
+        o, u, n = rs.get("season", [0, 0, 0])
+        if n < 3 or (o if side == "over" else u) < (u if side == "over" else o):     # history must not lean the other way
+            continue
+        spread = max((r["q75"] - r["q25"]) / 1.35, 1.0)
+        same = side == r["side"]
+        flip = lambda v: None if v is None else (v if same else 1 - v)
+        pm, pk = flip(r["p_model"]), flip(r["p_market"])
+        ph = (o if side == "over" else u) / max(o + u, 1)
+        e = final_probability(pm, pk, ph, f"nba:{r['stat_key']}:{side}", o + u, adj)
+        cand.append({**r, "side": side, "p_model": pm, "p_market": pk, "p_hist": ph, "hist_n": o + u, "p_final": e.p,
+                     "confidence": "Low" if r.get("newcomer") else e.confidence, "method": "likely", "z_gap": abs(gap) / spread,
+                     "ml": {"score": L["score"], "home": g["home"], "away": g["away"], "line": me, "value": val, "gap": gap, "maxZ": L.get("maxZ")}})
+    cand.sort(key=lambda r: -r["z_gap"])
+    seen, out = set(), []
+    for r in cand:
+        if r["script"] in seen:
+            continue
+        seen.add(r["script"])
+        sd = ctx["eng"]["sides"][r["event_id"]]
+        side_team = "home" if espn_abbr(r["team"]) == ctx["games"][r["event_id"]]["home"] else "away"
+        prof = sd["players"][side_team]["players"]
+        out_rows = [x for x in (sd.get("availability") or {}).get(side_team, {}).get("rows", []) if x.get("out_tonight")]
+        r["usage"] = {"tonight": _usage(prof, r["player_id"]), "season": _season_usage(espn_abbr(r["team"]), r["player_id"], ctx["games"][r["event_id"]]["start"]),
+                      "out": [{"name": x["name"], "value": x["value"], "missed": x["missed_share"]} for x in out_rows],
+                      "min_tonight": next((p["min"] for p in prof if p["id"] == r["player_id"]), None),
+                      "min_season": next(((p.get("season") or {}).get("min") for p in prof if p["id"] == r["player_id"]), None)}
+        pos = (r.get("research_pos") or next((p.get("research", {}).get("pos") for p in prof if p["id"] == r["player_id"]), None))
+        oa = (sd.get("opp_allowed") or {}).get(side_team) or {}
+        r["pos"] = pos
+        r["pos_allows"] = {k: {**(oa.get(k, {}).get("pos", {}).get(pos) or {}), "all": oa.get(k, {}).get("per_game"), "all_rank": oa.get(k, {}).get("rank"),
+                               "league": oa.get(k, {}).get("league")} for k in PARTS_KEYS[r["stat_key"]]} if pos else {}
+        out.append(r)
+        if len(out) == top:
+            break
+    return out
+
+
+def likely_write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
+    rs, st, line, ml = r["research"], r["stat_key"], r["line"], r["ml"]
+    f = lambda v: "-" if v is None else f"{v:.0%}"
+    k = 0 if r["side"] == "over" else 1
+    cnt = lambda t: (f"{t[k]}/{t[2]}" + (f" ({t[2] - t[0] - t[1]} push{'es' if t[2] - t[0] - t[1] > 1 else ''})" if t[2] - t[0] - t[1] else "")) if t and t[2] else "-"
+    b = ml["line"]
+    lines = [f"### {r.get('bet_id', '')}{r['player']} ({r['team']}) {r['side'].upper()} {line} {LABEL[st]} — {r['game']}",
+             f"**Most likely game: {ml['away']} {ml['score'][1]}–{ml['score'][0]} {ml['home']}; he goes {int(b['pts'])} pts / {int(b['reb'])} reb / {int(b['ast'])} ast"
+             f" / {int(b['tpm'])} 3PM in {b['min']:.0f} min = {ml['value']:.0f} {LABEL[st]} ({ml['gap']:+.0f} vs the line).** Simulation median {r['proj']} (25–75th {r['q25']}–{r['q75']}).",
+             f"- Blended: simulation {f(r['p_model'])}, DraftKings {f(r['p_market'])}, this season {f(r['p_hist'])} → **{r['p_final']:.1%} {r['confidence']}** · {verdict(r)}"
+             + (f" · back-check: **{verified}**" if verified else ""),
+             f"- History: {cnt(rs.get('season'))} {r['side']} this season (avg {rs.get('season_avg') or 0:.1f}), {cnt(rs.get('last5'))} last 5, {cnt(rs.get('h2h'))} vs {r['opp_espn']}"
+             + (f"; per 36 {rs['per36']:.1f}" + (f" (vs {r['opp_espn']} {rs['h2h_per36']:.1f})" if rs.get("h2h_per36") is not None else "") if rs.get("per36") is not None else "")]
+    us = r.get("usage") or {}
+    if us.get("tonight") is not None:
+        lines.append(f"- Usage: {us['tonight']:.0%} of the team's possessions tonight" + (f" vs {us['season']:.0%} in his games this season" if us.get("season") is not None else "")
+                     + (f"; {us['min_tonight']:.0f} projected minutes vs {us['min_season']:.0f} this season" if us.get("min_tonight") and us.get("min_season") else "")
+                     + (f". Out tonight: " + ", ".join(f"{o['name']} ({o['value']:+.1f} Game Score a game)" for o in us["out"]) if us.get("out") else ". No teammate out who played in the rating games."))
+    if r.get("pos_allows"):
+        pa = [f"{kk} {v['per_game']:.1f} a game to {r['pos']}s (rank {v['rank']}/30; league {v['league_per_game']:.1f})" for kk, v in r["pos_allows"].items() if v.get("per_game") is not None]
+        if pa:
+            lines.append(f"- {r['opp_espn']} allows " + "; ".join(pa) + " (positions are ESPN's G / F / C)")
+    lines.append("- Context, not proof: one simulated game is a single draw, and hit rates, head-to-head and positional allowances added no information beyond the price in the fair test (LESSONS L27).")
+    if warns:
+        lines.append("- Back-check warnings: " + "; ".join(warns))
+    return "\n".join(lines)
+
+
 def history_write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
     rs, st, line = r["research"], r["stat_key"], r["line"]
     f = lambda v: "-" if v is None else f"{v:.0%}"
@@ -585,7 +731,8 @@ def page_row(r: dict, verified: str, warns: list, bet_id: str | None) -> dict:
             "season": rs.get("season"), "last5": rs.get("last5"), "h2h": rs.get("h2h"), "per36": rnd(rs.get("per36"), 1),
             "h2h_per36": rnd(rs.get("h2h_per36"), 1), "season_avg": rnd(rs.get("season_avg"), 1), "last_games": rs.get("last_games"),
             "h2h_games": rs.get("h2h_games"), "opp_allows": rs.get("opp_allows"), "flags": "role unconfirmed" in (r.get("notes") or ""),
-            "verified": verified, "warns": warns, "start": r.get("start")}
+            "verified": verified, "warns": warns, "start": r.get("start"),
+            "ml": r.get("ml"), "usage": r.get("usage"), "pos": r.get("pos"), "pos_allows": r.get("pos_allows")}
 
 
 def verdict(r: dict) -> str:
