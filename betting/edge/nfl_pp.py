@@ -16,6 +16,7 @@ Role flags (back from injury, under 3 games with the team, line far from the mod
 """
 from __future__ import annotations
 
+import collections
 import datetime as dt
 
 import numpy as np
@@ -192,15 +193,16 @@ def current_week(season: int) -> int:
     return 18
 
 
-def pick_order(rows: list[dict], top: int = 5) -> list[dict]:
-    """Best legs by probability, High before Medium, one per game."""
+def pick_order(rows: list[dict], top: int = 5, per_game: int = 1) -> list[dict]:
+    """Best legs by probability, High before Medium, at most `per_game` legs per game (one, unless the day has
+    fewer games than picks: see days())."""
     rank = {"High": 0, "Medium": 1, "Low": 2}
     ok = sorted([r for r in rows if "error" not in r], key=lambda r: (rank.get(r["confidence"], 3), -r["p_final"]))
-    seen, out = set(), []
+    seen, out = collections.Counter(), []
     for r in ok:
-        if r["script"] in seen:
+        if seen[r["script"]] >= per_game or any(o["player"] == r["player"] for o in out if o["script"] == r["script"]):
             continue
-        seen.add(r["script"])
+        seen[r["script"]] += 1
         out.append(r)
         if len(out) == top:
             break
@@ -280,7 +282,7 @@ def allowed(res: dict, team: str, market: str) -> dict | None:
     return {"per_game": avg[team], "rank": ranked.index(avg[team]) + 1, "teams": len(ranked), "league": league, "games": len(per[team])}
 
 
-def history_order(rows: list[dict], store: dict, top: int = 5, min_games: int = 4) -> list[dict]:
+def history_order(rows: list[dict], store: dict, top: int = 5, min_games: int = 4, per_game: int = 1) -> list[dict]:
     """The hit-rate method, for comparison (LESSONS L27: no information beyond the price in the NBA test): the side each
     line cleared more often this season (4+ games), ranked by that rate, then the last 3, then sample size; one leg
     per game. Each leg carries what the simulation and DraftKings say about that same side."""
@@ -299,11 +301,11 @@ def history_order(rows: list[dict], store: dict, top: int = 5, min_games: int = 
         x = r if side == r["side"] else {**r, **price_leg(store[r["event_id"]], r["player"], r["market_key"], r["line"], side=side)}
         cand.append({**x, "method": "history", "hist_rank": (rate(r["research"]["season"]), rate(r["research"]["last3"]), n)})
     cand.sort(key=lambda r: tuple(-v for v in r["hist_rank"]))
-    seen, out = set(), []
+    seen, out = collections.Counter(), []
     for r in cand:
-        if r["script"] in seen:
+        if seen[r["script"]] >= per_game or any(o["player"] == r["player"] for o in out if o["script"] == r["script"]):
             continue
-        seen.add(r["script"])
+        seen[r["script"]] += 1
         out.append(r)
         if len(out) == top:
             break
@@ -330,7 +332,7 @@ def most_likely_run(res: dict) -> dict:
     return {"run": run, "score": {sim["teams"][t]["abbr"]: int(sim["teams"][t]["points"][run]) for t in tids}, "share": float(counts.max() / len(a))}
 
 
-def likely_order(rows: list[dict], store: dict, top: int = 5, drop: list | None = None) -> list[dict]:
+def likely_order(rows: list[dict], store: dict, top: int = 5, drop: list | None = None, per_game: int = 1) -> list[dict]:
     """The most-likely-game list: a line is kept when the player's line in the game's most likely simulated run, the
     simulation's median and this season's record agree on the side, and every reason shown supports that side or
     is neutral (any reason against it drops the leg, recorded in `drop`). Ranked High before Medium, then by
@@ -361,9 +363,9 @@ def likely_order(rows: list[dict], store: dict, top: int = 5, drop: list | None 
         cand.append({**x, "method": "likely", "ml": {"score": L["score"], "share": L["share"], "value": val, "gap": gap, "box": box}})
     rank = {"High": 0, "Medium": 1, "Low": 2}
     cand.sort(key=lambda r: (rank.get(r["confidence"], 3), -r["p_final"]))
-    seen, out = set(), []
+    seen, out = collections.Counter(), []
     for r in cand:
-        if r["script"] in seen:
+        if seen[r["script"]] >= per_game or any(o["player"] == r["player"] for o in out if o["script"] == r["script"]):
             continue
         r["reasons"] = reasons(r, store[r["event_id"]])
         against = [x["name"] for x in r["reasons"] if x["verdict"] == "against"]
@@ -372,11 +374,34 @@ def likely_order(rows: list[dict], store: dict, top: int = 5, drop: list | None 
                 drop.append({"player": r["player"], "side": r["side"], "line": r["line"], "stat": LABEL[r["market_key"]],
                              "p": round(r["p_final"], 3), "against": against})
             continue
-        seen.add(r["script"])
+        seen[r["script"]] += 1
         out.append(r)
         if len(out) == top:
             break
     return out
+
+
+def days(rows: list[dict]) -> list[tuple[str, list[dict]]]:
+    """The board split by kickoff day (US Eastern): Thursday, Sunday, Monday. Each day gets its own lists."""
+    from zoneinfo import ZoneInfo
+    by = collections.defaultdict(list)
+    for r in rows:
+        if "error" in r or not r.get("start"):
+            continue
+        t = dt.datetime.fromisoformat(r["start"].replace("Z", "+00:00")).astimezone(ZoneInfo("America/New_York"))
+        by[t.strftime("%Y-%m-%d")].append(r)
+    out = []
+    for d in sorted(by):
+        label = dt.date.fromisoformat(d).strftime("%a %b %-d")
+        out.append((label, by[d]))
+    return out
+
+
+def per_game_cap(rows: list[dict], top: int) -> int:
+    """One leg per game, unless the day has fewer games than picks (Thursday, Monday): then up to 3 per game, each
+    flagged as the same game script (never two in one entry)."""
+    g = len({r["script"] for r in rows})
+    return 1 if g >= top else min(3, -(-top // max(g, 1)))
 
 
 def _lean(x, ref, band):

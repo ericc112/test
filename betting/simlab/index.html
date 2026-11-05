@@ -229,6 +229,7 @@ table.dec, #factorTbl { min-width: 600px }
 
   <details class="panel picks" id="nflPicksPanel" hidden open>
     <summary><h2 class="pk-title">This week's NFL PrizePicks picks</h2><span class="note" id="nflMeta"></span></summary>
+    <div class="row"><div class="seg" role="group" aria-label="Kickoff day" id="nflDays"></div><span class="note" id="nflDayNote"></span></div>
     <div class="note" id="nflEntry"></div>
     <div class="pk-cols">
       <div><h3>By the model <span class="note">(simulation re-centred on DraftKings' line + the simulation + this season; High before Medium)</span></h3><div class="pk-list" id="nflList"></div></div>
@@ -1166,7 +1167,16 @@ function renderNflPicks() {
   const pc = (v) => v == null ? "—" : Math.round(100 * v) + "%";
   const ver = (v) => !v ? "" : `<span class="pill ${/NOT/.test(v) ? "no" : "ok"}">${esc(v)}</span>`;
   $("nflMeta").textContent = `week ${P.week} · ${P.date} · ${Number(P.lines).toLocaleString()} lines priced across ${P.games} games · board ${P.pulled || ""}`;
-  $("nflEntry").innerHTML = P.entry ? `<b>Entry legs:</b> ${esc(P.entry)}` : "<b>No leg clears the ENTRY rule this week</b> (High, 65%+). The list below is leans and passes, not bets: sitting out beats forcing it.";
+  const days = P.days || [{ label: "This week", games: [], picks: P.picks, history: P.history, likely: P.likely, likely_dropped: P.likely_dropped, entry: P.entry }];
+  if (state.nflDay == null) {                  // the next day with a game still to play
+    const now = Date.now(), up = days.findIndex((d) => [...(d.model || d.picks || []), ...(d.history || []), ...(d.likely || [])].some((r) => r.start && new Date(r.start).getTime() > now));
+    state.nflDay = up >= 0 ? up : 0;
+  }
+  const D0 = days[Math.min(state.nflDay, days.length - 1)];
+  $("nflDays").innerHTML = days.map((d, i) => `<button type="button" aria-pressed="${i === state.nflDay}" data-i="${i}">${esc(d.label)}</button>`).join("");
+  $("nflDays").querySelectorAll("button").forEach((b) => { b.onclick = () => { state.nflDay = +b.dataset.i; renderNflPicks(); }; });
+  $("nflDayNote").textContent = `${(D0.games || []).join(" · ")}${D0.lines ? ` · ${D0.lines} lines` : ""}${D0.per_game > 1 ? ` · up to ${D0.per_game} legs per game (same game: never two in one entry)` : ""}`;
+  $("nflEntry").innerHTML = D0.entry ? `<b>Entry legs:</b> ${esc(D0.entry)}` : "<b>No leg clears the ENTRY rule</b> (High, 65%+). The lists below are leans and passes, not bets: sitting out beats forcing it.";
   const MK = { supports: "✓", neutral: "–", against: "✗" };
   const whyList = (r, head) => (r.reasons || []).length ? `<div><span class="k">${esc(head)}</span><ul class="pk-why">${r.reasons.map((x) =>
     `<li class="${esc(x.verdict)}"><span class="m">${MK[x.verdict] || "?"}</span><span><b>${esc(x.name)}</b> ${esc(x.text)}</span></li>`).join("")}</ul></div>` : "";
@@ -1187,15 +1197,15 @@ function renderNflPicks() {
     <div class="note">${esc(r.verdict)}</div>
     ${r.warns && r.warns.length ? `<div class="pk-warn">${r.warns.map(esc).join("; ")}</div>` : ""}
   </div>`;
-  $("nflList").innerHTML = (P.picks || []).map((r) => card(r, "model")).join("") || `<div class="note">No lines priced.</div>`;
-  $("nflHist").innerHTML = (P.history || []).map((r) => card(r, "history")).join("") || `<div class="note">No lines with 4+ games.</div>`;
-  const dr = P.likely_dropped || [];
-  $("nflLikely").innerHTML = ((P.likely || []).map((r) => card(r, "likely")).join("") || `<div class="note">No leg this week where the most likely game, the median, this season and every other reason agree.</div>`)
+  $("nflList").innerHTML = (D0.model || D0.picks || []).map((r) => card(r, "model")).join("") || `<div class="note">No lines priced.</div>`;
+  $("nflHist").innerHTML = (D0.history || []).map((r) => card(r, "history")).join("") || `<div class="note">No lines with 4+ games.</div>`;
+  const dr = D0.likely_dropped || [];
+  $("nflLikely").innerHTML = ((D0.likely || []).map((r) => card(r, "likely")).join("") || `<div class="note">No leg on ${esc(D0.label)} where the most likely game, the median, this season and every other reason agree.</div>`)
     + (dr.length ? `<div class="note">Dropped for a reason against them (${dr.length}): ${dr.map((d) => `${esc(d.player)} ${esc(d.side)} ${d.line} ${esc(d.stat)} (${esc(d.against.join(", "))})`).join("; ")}</div>` : "");
-  const g = (P.gaps || []).slice(0, 20);
+  const dayGames = new Set(D0.games || []), gAll = (P.gaps || []).filter((x) => !dayGames.size || !x.game || dayGames.has(x.game)), g = gAll.slice(0, 20);
   $("nflGaps").innerHTML = g.length ? `<div class="tbl-wrap pk-gaps"><table><thead><tr><th class="l">Player · stat</th><th title="PrizePicks line">PP</th><th title="DraftKings line">DK</th><th>Side · p</th></tr></thead><tbody>${
     g.map((x) => `<tr><td class="l">${esc(x.player)}<span class="sub">${esc(x.stat)}</span></td><td>${x.pp}</td><td>${x.dk}</td><td>${esc(x.side)} ${pc(x.p)}<span class="sub">${esc(x.conf)}</span></td></tr>`).join("")}</tbody></table></div>
-    <div class="note">${P.gaps.length} lines differ from DraftKings'${P.gaps.length > 20 ? "; the 20 biggest gaps shown" : ""}. Where PrizePicks posts DraftKings' line, the market part is 50/50 (the feed carries lines, not prices).</div>` : `<div class="note">Every PrizePicks line matches DraftKings'.</div>`;
+    <div class="note">${gAll.length} lines differ from DraftKings' on ${esc(D0.label)}${gAll.length > 20 ? "; the 20 biggest gaps shown" : ""}. Where PrizePicks posts DraftKings' line, the market part is 50/50 (the feed carries lines, not prices).</div>` : `<div class="note">Every PrizePicks line matches DraftKings'.</div>`;
   $("nflNote").innerHTML = "Most-likely-game list: one simulated game per matchup (the most common final score, then the run closest to every player's median), kept only where that run, the simulation's median and this season's record agree on the side and no reason shown points the other way; one run is a single draw, so the order comes from the probability. History list: the hit-rate method, for comparison. " + "Each PrizePicks line is priced from the simulation re-centred on DraftKings' line for the same player and stat (the backtest's better centre; the simulation's own centre showed no edge on the line), the simulation's number shrunk toward 50%, and this season's record, blended like <span class=\"num\">edge prob</span>. A leg is held at Low without a DraftKings line, with a role flag, or on a touchdown or interception line (often heavily juiced, and the feed has no prices). Every pick passed <span class=\"num\">edge verify</span> before it was listed.";
 }
 function fmtKick(iso) { if (!iso) return ""; const t = new Date(iso); return isNaN(t) ? "" : t.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }); }
