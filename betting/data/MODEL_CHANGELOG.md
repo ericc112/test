@@ -30,3 +30,10 @@ Logic versions live in `data/nba_model.json`; `python -m edge.nba_model status |
   - Wednesday legs are a permanent holdout, never fitted on.
 - **Data:** every DraftKings pull is snapshotted (`data/nba_dk_snap/`) for closing line value. The nightly report carries the skill, label, CLV and tilt tables.
 - **Rollback:** `git revert` the commit; the published logic (v1) is unchanged by these.
+
+## 2026-11-05: v1 -> v2 (v2 candidate (minutes^1.0, shared swing .8, segment bias, market-dominant blend, derived gates, SE entry))
+- Live shadow evidence: 848 graded legs over 1 days; log loss current 0.7121272649833567 vs new 0.6944613590929176; label gap 0.11611233019070066 -> 0.04377976988033119
+- Backtest evidence: {"corpus": "walk-forward 2026-10-25..11-02, live-like availability, 4,801 held-out legs (data/nba_bt/final_eval.json)", "logloss_selected": [0.6908378077671773, 0.6863245948130448], "brier_selected": [0.2487967026558354, 0.24660997726008627], "logloss_over": {"before": 0.6908378077671773, "after": 0.6863763902831964, "market": 0.6875868366393822}, "after_vs_before": {"mean": -0.004461417483980874, "ci95": [-0.006526755894954256, -0.0024379895648026294]}, "after_vs_market": {"mean": -0.0012104463561858803, "ci95": [-0.0026145046282530144, 0.00024041031556068748]}, "info_weight": {"b": 0.2286006
+- Rollback: `python -m edge.nba_model rollback` restores v1.
+- Caveat recorded at promotion: the live evidence is one night (12 final games). A game-clustered bootstrap of the log-loss difference gives −0.0177 (95% CI −0.0371 to +0.0017); the new logic was better in 8 of 12 games. The promotion rule (200+ legs or 14 days) is met by leg count; the backtest (CI excluding zero) and the much smaller label gap carry the rest. Watch the next 3 nights; roll back if v2 trails v1's archived numbers.
+- With this promotion the simulation settings follow the logic version everywhere: pricing, the most-likely-game list and the Sim Lab export use the published logic's settings, and `edge verify` re-runs each leg under the version that priced it (`logic vN` in its notes).

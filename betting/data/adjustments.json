@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-04",
+  "updated": "2026-11-05",
   "blend_prior": {
     "intercept": 0.0,
     "w_model": 0.45,
@@ -59,7 +59,23 @@
   "rule_flags": [
     "cs2:cs_kills_m12:under|model bias",
     "mlb:batter_hrr:under|model bias",
-    "mlb:pitcher_outs:over|opportunity"
+    "mlb:pitcher_outs:over|opportunity",
+    "nba:pa:over|model bias",
+    "nba:pa:under|model bias",
+    "nba:pr:over|model bias",
+    "nba:pr:over|role/lineup",
+    "nba:pr:under|model bias",
+    "nba:pra:over|model bias",
+    "nba:pra:over|role/lineup",
+    "nba:pra:under|model bias",
+    "nba:pts:over|model bias",
+    "nba:pts:over|role/lineup",
+    "nba:pts:under|model bias",
+    "nba:ra:over|model bias",
+    "nba:ra:under|model bias",
+    "nba:reb:over|model bias",
+    "nba:reb:over|role/lineup",
+    "nba:reb:under|model bias"
   ],
   "blend_by_sport": {},
   "blend_by_sport_fit": {}

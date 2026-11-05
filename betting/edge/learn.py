@@ -250,14 +250,15 @@ def cause_counts(rows: list[dict]) -> dict:
 
 def find_caps(rows: list[dict], min_losses: int = 3) -> dict:
     """Cap a segment at Medium while it has >= 3 losses from the same fixable cause AND hits below prediction.
-    Recomputed from all graded bets every run, so the cap lifts itself once results recover."""
+    Recomputed from all graded bets outside the weekday holdout (Fix 8) every run, so the cap lifts itself once
+    results recover."""
     acc = defaultdict(list)
-    for r in graded(rows):
+    for r in fitting(rows):
         p = _f(r.get("p_final"))
         if p is not None and r.get("segment"):
             acc[r["segment"]].append((p, 1.0 if r["status"] == "won" else 0.0))
     caps = {}
-    for seg, c in cause_counts(rows).items():
+    for seg, c in cause_counts(fitting(rows)).items():
         tag, n = c.most_common(1)[0]
         v = acc.get(seg, [])
         if n >= min_losses and v:

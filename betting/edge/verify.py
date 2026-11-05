@@ -263,6 +263,19 @@ def check_nfl(rep: Report, adj: dict):
         rep.add("WARN", "role", "; ".join(x["flags"]))
 
 
+def minutes_gap(side: str, proj_min: float | None, last_mins: list[float], tol: float = 3.0) -> str | None:
+    """L28: an over projected on 3+ more minutes than his last-5 average, or an under on 3+ fewer, rests on the
+    minutes projection rather than his rate. Needs 3+ recent games."""
+    if proj_min is None or len(last_mins) < 3:
+        return None
+    l5 = sum(last_mins) / len(last_mins)
+    if side == "over" and proj_min > l5 + tol:
+        return f"projected {proj_min:.0f} min vs {l5:.0f} in his last {len(last_mins)}: the over needs minutes he hasn't been getting (L28)"
+    if side == "under" and proj_min < l5 - tol:
+        return f"projected {proj_min:.0f} min vs {l5:.0f} in his last {len(last_mins)}: the under leans on fewer minutes than he's been playing (L28)"
+    return None
+
+
 def last_priced(notes: str):
     """When a leg was last priced: the latest of the pricer's "pulled" stamp and any "fresh" stamp a verify --fix
     re-price added (UTC), or None."""
@@ -279,7 +292,8 @@ def check_nba(rep: Report, adj: dict):
     line, stat, side = float(r["line"]), r["market"], r["side"]
     entry = r.get("action") == "bet"
     tol_m, tol_h = (TOL_ENTRY, TOL_ENTRY) if entry else (TOL_MODEL, TOL_HIST)
-    ctx = nba_pp.build(gids={str(r["event_id"])})
+    mv = re.search(r"logic v(\d+)", r.get("notes") or "")       # re-run under the simulation settings that priced it
+    ctx = nba_pp.build(gids={str(r["event_id"])}, sim=nba_pp.current_sim(int(mv.group(1)) if mv else 1))
     g = ctx["games"].get(str(r["event_id"]))
     if not g or str(r["event_id"]) not in ctx["sims"]:
         rep.add("WARN" if getattr(rep, "locked", False) else "FAIL", "reprice", "game not on ESPN's schedule now (started, postponed?): can't re-run")
@@ -305,6 +319,13 @@ def check_nba(rep: Report, adj: dict):
     if not sim:
         rep.add("WARN" if getattr(rep, "locked", False) else "FAIL", "reprice", f"{r['player']} is out of tonight's projected rotation now (injury report?)")
         return
+    # L28: a pick that needs minutes he hasn't been playing (bench overs, starter unders lost on minutes, Nov 4)
+    gid_ = str(r["event_id"])
+    prof = next((p for s_ in ("home", "away") for p in ctx["eng"]["sides"][gid_]["players"][s_]["players"]
+                 if str(p["id"]) == str(r["player_id"])), None)
+    w = minutes_gap(side, prof["min"] if prof else None, [e["min"] for e in cur[-5:]])
+    if w:
+        rep.add("WARN", "minutes", w)
     po, pu, pp_ = nba_pp.sides_at(sim["hist"][stat], line)
     m = re.search(r"model de-biased ([+-]\d+\.\d+) logit", r.get("notes") or "")
     if m and 0 < po < 1 - pp_:                 # the same per-scan bias fix the pricer applied (L7)

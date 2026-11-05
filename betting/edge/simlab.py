@@ -351,7 +351,16 @@ def engines(data: dict) -> dict:
                       "backtest_prior": gbt.prior_metrics("pbp"), "info": gbt.info_weights(_bt_records("pbp") + gbt.prior_records("pbp"))}
     # ---- NBA possessions
     nba_games = next(lg for lg in data["leagues"] if lg["key"] == "nba")["games"]
-    out["nba"] = nba_engine(nba_games, today)
+    from gamesim import nba as gnba_
+    from .nba_pp import SIM_KNOBS, current_sim
+    saved = {k: getattr(gnba_, a) for k, a in SIM_KNOBS.items()}
+    for k, v in current_sim().items():           # the page runs the published logic's simulation settings
+        setattr(gnba_, SIM_KNOBS[k], v)
+    try:
+        out["nba"] = nba_engine(nba_games, today)
+    finally:
+        for k, v in saved.items():
+            setattr(gnba_, SIM_KNOBS[k], v)
     y = today.year if today.month >= 9 else today.year - 1
     yday = (today - dt.timedelta(days=1)).strftime("%Y%m%d")
     # the "most likely game" backtest (written by the audit's likely_bt.py): accuracy of the most common simulated score

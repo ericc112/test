@@ -50,6 +50,13 @@ class LearnDiscipline(unittest.TestCase):
         self.assertTrue(LN.is_holdout({"date": "2026-11-04"}))      # a Wednesday
         self.assertFalse(LN.is_holdout({"date": "2026-11-05"}))
 
+    def test_caps_skip_the_holdout(self):
+        legs = [{"date": "2026-11-04", "segment": "nba:pts:over", "p_final": "0.65", "status": "lost", "miss_reason": "model bias"}
+                for _ in range(6)]                                       # a Wednesday: never fitted on
+        self.assertEqual(LN.find_caps(legs), {})
+        thu = [{**r, "date": "2026-11-05"} for r in legs]
+        self.assertIn("nba:pts:over", LN.find_caps(thu))
+
     def test_avoid_needs_50_legs_in_both_windows(self):
         def legs(n, start_hit, end_hit):
             out = []
@@ -137,6 +144,15 @@ class VerifyFreshness(unittest.TestCase):
         self.assertEqual(V.last_priced(n).strftime("%Y-%m-%d %H:%M"), "2026-11-05 00:04")
         self.assertEqual(V.last_priced("edge pp; pulled 2026-11-04T21:00Z").strftime("%H:%M"), "21:00")
         self.assertIsNone(V.last_priced("no stamp"))
+
+
+class MinutesGap(unittest.TestCase):
+    def test_l28(self):
+        from edge import verify as V
+        self.assertIn("needs minutes", V.minutes_gap("over", 25.2, [20, 18, 22, 19, 21]))        # Keldon Johnson, Nov 4
+        self.assertIn("fewer minutes", V.minutes_gap("under", 25.0, [33, 31, 34, 30]))           # Derrick White, Nov 4
+        self.assertIsNone(V.minutes_gap("over", 22.0, [20, 21, 23]))
+        self.assertIsNone(V.minutes_gap("over", 30.0, [20, 20]))                                  # too few games
 
 
 class FitPieces(unittest.TestCase):

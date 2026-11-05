@@ -31,6 +31,8 @@ Each lesson came from a real mistake or near-miss. Before publishing a number, c
 | L25 | CS2 maps 1-2 kill unders hit 7 of 20 (35%) against 59% predicted over 2026-10-12/13. One overtime map (Ancient, 30 rounds) sank six unders at once; three losses were tagged `model bias` | The model treats overtime as rare, and it leans on kill-per-round rates that run low for players who are good in close maps | The segment is on the AVOID list and capped at Medium. No CS2 kill unders until the model prices P(overtime) × 6+ extra rounds explicitly and a fresh 20-bet sample lands within 5 pts of prediction |
 | L26 | A tout's post (2026-11-02 MNF) showed "50,000-run" sim averages within a few yards of the box score and a ✅ on every pick, including 76% and 71% on WR overs | A list of post-game winners is not a track record. It hides the losses and the number of picks; one game's result is mostly noise (receiving yards have an sd of ~35); 50,000 runs shrink simulation error, not model error. Our own 50k sim, backtested on 5,354 DraftKings closing props, missed by more than the line and showed no edge alone | Judge a model only by calibration and Brier against closing lines over hundreds of props (`edge nfl --backtest`, `edge report`). Never quote a single game's hits as accuracy. Any side above ~60% against a fair DraftKings line is a bug or missing news until a price confirms it |
 | L27 | A tout's NBA write-up (2026-11-04, Keldon Johnson o3.5 reb) rested on 7/7 this season, 5/5 vs DAL, 6+ in 4 of the last 5, and "Dallas allows 43.1 rebounds" | Hit rates against tonight's line are already in the line. Tested on 2,330 DraftKings lines with prices (2026-27): season and last-5 hit rates carry no weight beyond the no-vig price (−0.08 ± 0.11, −0.06 ± 0.11); players over in 80–100% of their last 5 went over 39% (84 lines) vs 50% priced. His 5/5 vs DAL was 8.8 reb per 36, his normal 8.7. Dallas's 43.1 was 20th of 30, below the league's 44.2 | Never cite a hit rate, streak or head-to-head record as a reason for a side. Read head-to-head as per-36 against his own rate (the Sim Lab research card does), and the opponent's allowed numbers with their rank. Only head-to-head improved projections in the fair test (~0.1%, already in the sim via `nba_research.H2H_COEF`) |
+| L28 | Nov 4, first graded NBA night: 266 legs hit 45.9% vs 63.3% predicted. Bench overs lost on minutes (Keldon Johnson 19 min vs 25 projected, Sensabaugh 12 vs 17, Beringer 13 vs 25) and starter unders lost on minutes (Derrick White 36 vs 25, SGA 35 vs 31.5). Across the board v1 projected starters 2.8 min short and the bench 2.1 long; 74 of 134 pass losses and 6 of 10 published losses trace to it | v1's minutes exponent 0.8 moved minutes from starters to the bench (found in Fix 1, still published); Beringer's also took minutes freed by Anthony Edwards that went to wings, not to a backup center | v2 (exponent 1.0) promoted 2026-11-05 on 848 graded shadow legs (log loss 0.7121 → 0.6945, label gap 11.6 → 4.4 pts). `edge verify` WARNs when an over is projected 3+ min above his last-5 minutes or an under 3+ below (`minutes` check): such a pick rests on the minutes projection, not his rate. Minutes freed by an absence should go to the same position (open model work) |
+| L29 | Isaiah Collier (3 min) and Jaylin Williams (out) had their PrizePicks lines pulled before tip; Collier's lean still graded as a loss | A pulled or moved line before tip is role or injury news the box scores don't show yet | When `verify` reports a line pulled from the board, withdraw the leg and treat the player's other legs in that game as unconfirmed until the injury report or lineup confirms him |
 
 ## Every loss gets a post-mortem
 `python -m edge grade` writes one for each new loss, and `python -m edge review` covers any that were missed. That includes passes, Low legs and user entries, not just High picks. Each post-mortem pulls the box score or play-by-play, finds which input failed (volume, rate, price, script), links legs that lost on the same game script, and suggests a tag. Confirm it with `python -m edge tag ID "tag" --lesson "what to change"`. The readable log is `POSTMORTEMS.md`.
@@ -58,3 +60,69 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 
 ### Auto-learned 2026-11-03
 - Segment cs2:cs_kills_m12:under capped at Medium (no High legs) until results recover: 3 losses tagged 'model bias'; hit 35% vs 59% predicted over 20.
+
+### Auto-learned 2026-11-05
+- Segment nba:pr:under capped at Medium (no High legs) until results recover: 10 losses tagged 'model bias'; hit 19% vs 60% predicted over 16.
+- Segment nba:pts:under capped at Medium (no High legs) until results recover: 9 losses tagged 'model bias'; hit 33% vs 59% predicted over 15.
+- Segment nba:pa:over capped at Medium (no High legs) until results recover: 3 losses tagged 'model bias'; hit 50% vs 59% predicted over 14.
+- Segment nba:pra:over capped at Medium (no High legs) until results recover: 10 losses tagged 'model bias'; hit 43% vs 70% predicted over 42.
+- Segment nba:pr:over capped at Medium (no High legs) until results recover: 5 losses tagged 'role/lineup'; hit 54% vs 64% predicted over 24.
+- Segment nba:pts:over capped at Medium (no High legs) until results recover: 6 losses tagged 'model bias'; hit 32% vs 63% predicted over 19.
+- Segment nba:reb:over capped at Medium (no High legs) until results recover: 4 losses tagged 'model bias'; hit 53% vs 64% predicted over 19.
+- Segment nba:pa:under capped at Medium (no High legs) until results recover: 7 losses tagged 'model bias'; hit 31% vs 58% predicted over 13.
+- Segment nba:pra:under capped at Medium (no High legs) until results recover: 4 losses tagged 'model bias'; hit 45% vs 61% predicted over 11.
+- Segment nba:reb:under capped at Medium (no High legs) until results recover: 4 losses tagged 'model bias'; hit 50% vs 59% predicted over 8.
+- Segment nba:ra:over capped at Medium (no High legs) until results recover: 4 losses tagged 'model bias'; hit 58% vs 63% predicted over 31.
+- Segment nba:ra:under capped at Medium (no High legs) until results recover: 12 losses tagged 'model bias'; hit 54% vs 65% predicted over 35.
+- 10 losses in nba:pr:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 9 losses in nba:pts:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 3 losses in nba:pa:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:pra:over share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 10 losses in nba:pra:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 5 losses in nba:pr:over share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 5 losses in nba:pr:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 3 losses in nba:pts:over share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 6 losses in nba:pts:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:reb:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 2 losses in nba:reb:over share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 7 losses in nba:pa:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:pra:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:reb:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:ra:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 12 losses in nba:ra:under share the cause 'model bias': write a checklist rule for it in the table above.
+
+### Auto-learned 2026-11-05
+- 10 losses in nba:pr:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 9 losses in nba:pts:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 3 losses in nba:pa:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:pra:over share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 10 losses in nba:pra:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 5 losses in nba:pr:over share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 5 losses in nba:pr:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 3 losses in nba:pts:over share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 6 losses in nba:pts:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:reb:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 2 losses in nba:reb:over share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 7 losses in nba:pa:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:pra:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:reb:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:ra:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 12 losses in nba:ra:under share the cause 'model bias': write a checklist rule for it in the table above.
+
+### Auto-learned 2026-11-05
+- 10 losses in nba:pr:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 9 losses in nba:pts:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 3 losses in nba:pa:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:pra:over share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 10 losses in nba:pra:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 5 losses in nba:pr:over share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 5 losses in nba:pr:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 3 losses in nba:pts:over share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 6 losses in nba:pts:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:reb:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 2 losses in nba:reb:over share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 7 losses in nba:pa:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:pra:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:reb:under share the cause 'model bias': write a checklist rule for it in the table above.
+- 4 losses in nba:ra:over share the cause 'model bias': write a checklist rule for it in the table above.
+- 12 losses in nba:ra:under share the cause 'model bias': write a checklist rule for it in the table above.

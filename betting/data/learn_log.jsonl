@@ -1,0 +1,24 @@
+{"at": "2026-11-05T05:38Z", "kind": "cap_medium", "key": "nba:pa:over", "before": false, "after": true, "window": ["2026-10-12", "2026-10-13"], "n": 147}
+{"at": "2026-11-05T05:38Z", "kind": "cap_medium", "key": "nba:ra:under", "before": false, "after": true, "window": ["2026-10-12", "2026-10-13"], "n": 147}
+{"at": "2026-11-05T05:38Z", "kind": "cap_medium", "key": "nba:pts:under", "before": false, "after": true, "window": ["2026-10-12", "2026-10-13"], "n": 147}
+{"at": "2026-11-05T05:38Z", "kind": "cap_medium", "key": "nba:reb:over", "before": false, "after": true, "window": ["2026-10-12", "2026-10-13"], "n": 147}
+{"at": "2026-11-05T05:38Z", "kind": "cap_medium", "key": "nba:pra:over", "before": false, "after": true, "window": ["2026-10-12", "2026-10-13"], "n": 147}
+{"at": "2026-11-05T05:38Z", "kind": "cap_medium", "key": "nba:pra:under", "before": false, "after": true, "window": ["2026-10-12", "2026-10-13"], "n": 147}
+{"at": "2026-11-05T05:38Z", "kind": "cap_medium", "key": "nba:pr:under", "before": false, "after": true, "window": ["2026-10-12", "2026-10-13"], "n": 147}
+{"at": "2026-11-05T05:38Z", "kind": "cap_medium", "key": "nba:ra:over", "before": false, "after": true, "window": ["2026-10-12", "2026-10-13"], "n": 147}
+{"at": "2026-11-05T05:38Z", "kind": "cap_medium", "key": "nba:reb:under", "before": false, "after": true, "window": ["2026-10-12", "2026-10-13"], "n": 147}
+{"at": "2026-11-05T05:38Z", "kind": "cap_medium", "key": "nba:pa:under", "before": false, "after": true, "window": ["2026-10-12", "2026-10-13"], "n": 147}
+{"at": "2026-11-05T05:38Z", "kind": "cap_medium", "key": "nba:pr:over", "before": false, "after": true, "window": ["2026-10-12", "2026-10-13"], "n": 147}
+{"at": "2026-11-05T05:38Z", "kind": "cap_medium", "key": "nba:pts:over", "before": false, "after": true, "window": ["2026-10-12", "2026-10-13"], "n": 147}
+{"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:pa:over", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
+{"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:ra:under", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
+{"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:pts:under", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
+{"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:reb:over", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
+{"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:pra:over", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
+{"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:pra:under", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
+{"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:pr:under", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
+{"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:ra:over", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
+{"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:reb:under", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
+{"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:pa:under", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
+{"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:pr:over", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
+{"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:pts:over", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}

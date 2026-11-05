@@ -142,12 +142,19 @@ def run_sims(eng: dict, gids: list[str], n: int = N_SIMS, workers: int = 4) -> d
 SIM_KNOBS = {"minutes_alpha": "MINUTES_ALPHA", "swing_rho": "SWING_RHO", "shock": "PLAYER_SHOCK", "prior_min": "PLAYER_PRIOR_MIN"}
 
 
+def current_sim(version: int | None = None) -> dict:
+    """The simulation settings of a logic version (default: the published one); {} = the engine's defaults (v1)."""
+    from . import nba_model
+    return dict((nba_model.params_for(version) if version is not None else nba_model.params("current") or {}).get("sim") or {})
+
+
 def build(dates: set | None = None, gids: set | None = None, n: int = N_SIMS, sim: dict | None = None) -> dict:
     """Tonight's NBA games (ESPN), the engine inputs (simlab.nba_engine) and the player distributions. Memoized per
     process, so `edge verify` on several picks re-runs the engine once. `sim` overrides simulation settings (a
     shadow logic's), restored afterwards."""
     from gamesim import nba as gnba
-    sim = sim or {}
+    if sim is None:                       # default: the published (current) logic's simulation settings
+        sim = current_sim()
     saved = {k: getattr(gnba, a) for k, a in SIM_KNOBS.items()}
     for k, v in sim.items():
         setattr(gnba, SIM_KNOBS[k], v)
@@ -349,7 +356,7 @@ def price_nba(props: list[dict], n: int = N_SIMS, logic: dict | None = None) -> 
     out = [{**p, "error": "stat not priced yet"} for p in props if p["stat"] not in STATS]
     if not want:
         return out
-    ctx = build({_us_date(p["start"]) for p in want if p.get("start")}, n=n, sim=logic.get("sim"))
+    ctx = build({_us_date(p["start"]) for p in want if p.get("start")}, n=n, sim=logic.get("sim") or {})
     by_pair = {frozenset((g["home"], g["away"])): g for g in ctx["games"].values()}
     staged = []
     for p in want:

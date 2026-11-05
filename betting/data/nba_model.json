@@ -1,20 +1,5 @@
 {
  "current": {
-  "version": 1,
-  "name": "v1 (2026-11-04)",
-  "params": {
-   "bias": "night_flat",
-   "blend": null,
-   "history": "raw",
-   "recal": null,
-   "gates": null,
-   "high_thin": null,
-   "entry": "flat2",
-   "push": "half"
-  },
-  "since": "2026-11-04"
- },
- "shadow": {
   "version": 2,
   "name": "v2 candidate (minutes^1.0, shared swing .8, segment bias, market-dominant blend, derived gates, SE entry)",
   "params": {
@@ -92,7 +77,7 @@
    "se_w": 0.1,
    "push": "exclusive"
   },
-  "since": "2026-11-04",
+  "since": "2026-11-05",
   "backtest_evidence": {
    "corpus": "walk-forward 2026-10-25..11-02, live-like availability, 4,801 held-out legs (data/nba_bt/final_eval.json)",
    "logloss_selected": [
@@ -172,7 +157,65 @@
     "median_before": 3.952509893772131,
     "median_after": 3.924807331805874
    }
+  },
+  "live_evidence": {
+   "legs": 848,
+   "days": 1,
+   "cur": {
+    "logloss": 0.7121272649833567,
+    "brier": 0.2588015612382075,
+    "labels": {
+     "Medium": {
+      "n": 130,
+      "pred": 0.6389469230769231,
+      "real": 0.43846153846153846
+     },
+     "Low": {
+      "n": 718,
+      "pred": 0.5512378830083565,
+      "real": 0.5194986072423399
+     }
+    },
+    "label_gap": 0.11611233019070066
+   },
+   "sh": {
+    "logloss": 0.6944613590929176,
+    "brier": 0.25065401096698114,
+    "labels": {
+     "Medium": {
+      "n": 79,
+      "pred": 0.5523455696202532,
+      "real": 0.46835443037974683
+     },
+     "Low": {
+      "n": 769,
+      "pred": 0.5172224967490248,
+      "real": 0.5136540962288687
+     }
+    },
+    "label_gap": 0.04377976988033119
+   },
+   "eligible": true,
+   "shadow_wins": true
   }
  },
- "history": []
+ "shadow": null,
+ "history": [
+  {
+   "version": 1,
+   "name": "v1 (2026-11-04)",
+   "params": {
+    "bias": "night_flat",
+    "blend": null,
+    "history": "raw",
+    "recal": null,
+    "gates": null,
+    "high_thin": null,
+    "entry": "flat2",
+    "push": "half"
+   },
+   "since": "2026-11-04",
+   "retired": "2026-11-05"
+  }
+ ]
 }
