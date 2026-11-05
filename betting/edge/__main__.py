@@ -253,7 +253,10 @@ def main(argv=None):
                 f = rep.fresh
                 r["notes"] = (r.get("notes", "") + f" | corrected by verify: {r.get('p_final')} {r.get('confidence')} -> {f['p_final']} {f['confidence']}; {f['side_note']}").strip(" |")
                 r.update({k: f[k] for k in ("p_model", "p_market", "p_hist", "hist_n", "p_final", "confidence") if k in f})
-                if f["confidence"] not in ("High",) and r.get("action") in ("bet", "lean"):
+                # demote only when the fresh label no longer supports the action: an ENTRY leg needs High, a lean Medium+
+                if r.get("action") == "bet" and f["confidence"] != "High":
+                    r["action"] = "lean" if f["confidence"] == "Medium" else "pass"
+                elif r.get("action") == "lean" and f["confidence"] not in ("High", "Medium"):
                     r["action"] = "pass"
                 L.write_bets(rows)
                 rep = V.verify(r, rows, fetch=not args.offline)

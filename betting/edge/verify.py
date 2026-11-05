@@ -301,8 +301,8 @@ def check_nba(rep: Report, adj: dict):
     po, pu, pp_ = nba_pp.sides_at(sim["hist"][stat], line)
     m = re.search(r"model de-biased ([+-]\d+\.\d+) logit", r.get("notes") or "")
     if m and 0 < po < 1 - pp_:                 # the same per-scan bias fix the pricer applied (L7)
-        o = nba_pp._sg(nba_pp._lg(po / (1 - pp_)) + float(m.group(1))) * (1 - pp_)
-        po, pu = o, 1 - pp_ - o
+        q = nba_pp._sg(nba_pp._lg(po / (1 - pp_)) + float(m.group(1))) * (1 - pp_)
+        po, pu = q, 1 - pp_ - q                # (not `o`: o and u are the season's over/under counts used below)
     pm = (po if side == "over" else pu) / max(1 - pp_, 1e-9)
     lm = _f(r.get("p_model"))
     off = lm is None or abs(pm - lm) > tol_m
@@ -314,11 +314,13 @@ def check_nba(rep: Report, adj: dict):
     if mt and abs(float(mt.group(1))) > nba_pp.TILT_MAX and stat not in causes:
         rep.add("FAIL" if entry else "WARN", "tilt", f"tonight's raw simulation-vs-DraftKings tilt on {stat} is {mt.group(1)} logit (limit "
                 f"{nba_pp.TILT_MAX}) with no cause logged in data/nba_tilt_causes.json" + (": no ENTRY leg in this stat" if entry else ""))
-    mp = re.search(r"pulled (\d{4}-\d\d-\d\dT\d\d:\d\dZ)", r.get("notes") or "")
-    if mp and g.get("start") and not getattr(rep, "locked", False):
+    # the latest of the pricer's "pulled" stamp and any "fresh" stamp a verify --fix re-price added
+    stamps = re.findall(r"(?:pulled|fresh) (\d{4}-\d\d-\d\d)[T ](\d\d:\d\d)Z", r.get("notes") or "")
+    if stamps and g.get("start") and not getattr(rep, "locked", False):
         now = dt.datetime.now(dt.timezone.utc)
         tip = dt.datetime.fromisoformat(g["start"].replace("Z", "+00:00"))
-        age = (now - dt.datetime.fromisoformat(mp.group(1).replace("Z", "+00:00"))).total_seconds() / 60
+        last = max(dt.datetime.fromisoformat(f"{d}T{t}+00:00") for d, t in stamps)
+        age = (now - last).total_seconds() / 60
         if (tip - now).total_seconds() / 60 <= 60 and age > STALE_MIN:
             rep.add("FAIL", "freshness", f"market and injury data pulled {age:.0f} min ago, inside the last hour before tip: re-price (edge verify --fix)")
     dk = ((ctx["eng"]["sides"][str(r["event_id"])]["players"].get("lines") or {}).get(str(r["player_id"])) or {}).get(stat)
