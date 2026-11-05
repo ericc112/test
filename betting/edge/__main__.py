@@ -380,21 +380,27 @@ def _nfl_picks(args):
         print("No NFL props on the PrizePicks board for the stats the simulation prices.")
         return
     print(f"Pricing {len(props)} PrizePicks NFL lines ({args.n:,} runs per game)...")
-    rows = NP.price_board(props, n=args.n, week=args.week)
+    store = {}
+    rows = NP.price_board(props, n=args.n, week=args.week, store=store)
     ok = [r for r in rows if "error" not in r]
     picks = NP.pick_order(ok, args.top)
+    hist = NP.history_order(ok, store, args.top)
+    dropped = []
+    likely = NP.likely_order(ok, store, args.top, dropped)
+    for r in picks + hist:                       # the same reasons, marked, on the other two lists (shown, not used to drop legs)
+        r["reasons"] = NP.reasons(r, store[r["event_id"]])
     ids = {}
     if not args.no_log:
         pick_ids = {id(r) for r in picks}
-        logrows = [r for r in ok if id(r) in pick_ids or r["confidence"] in ("High", "Medium")]
+        logrows = [r for r in ok if id(r) in pick_ids or r["confidence"] in ("High", "Medium")] + hist + likely
         act = {id(r): ("bet" if NP.verdict(r).startswith("ENTRY") else "lean" if r["confidence"] in ("High", "Medium") else "pass")
                if id(r) in pick_ids else "pass" for r in logrows}
         for r, (bid, _) in zip(logrows, log_pp(logrows, act, refresh=True)):
             ids[id(r)] = bid
         print(f"Logged {len(logrows)} leg(s) to bets.csv")
     adj, bets = load_adjustments(), L.read_bets()
-    blocks, page = [], []
-    for r in picks:
+    blocks, page = {"model": [], "history": [], "likely": []}, {"model": [], "history": [], "likely": []}
+    for key, r in [("model", r) for r in picks] + [("history", r) for r in hist] + [("likely", r) for r in likely]:
         ver, warns = "not checked", []
         if not args.no_verify and id(r) in ids:
             row = next(b for b in bets if b["id"] == ids[id(r)])
@@ -403,13 +409,15 @@ def _nfl_picks(args):
             ver, warns = rep.verdict, [f"{n}: {d}" for st, n, d in rep.checks if st != "PASS"]
         if id(r) in ids:
             r["bet_id"] = f"#{ids[id(r)]} "
-        blocks.append(NP.write_up(r, ver, warns))
-        page.append({"id": ids.get(id(r)), "player": r["player"], "team": r["team"], "game": r["game"], "stat": NP.LABEL[r["market_key"]],
+        blocks[key].append(NP.write_up(r, ver, warns))
+        page[key].append({"id": ids.get(id(r)), "player": r["player"], "team": r["team"], "game": r["game"], "stat": NP.LABEL[r["market_key"]],
                      "side": r["side"], "line": r["line"], "p": round(r["p_final"], 4), "conf": r["confidence"], "verdict": NP.verdict(r),
                      "model": r["p_model"], "market": r["p_market"], "hist": r["p_hist"], "hist_n": r["hist_n"], "dk_line": r["dk_line"],
                      "hist_o": r["hist"][0], "hist_u": r["hist"][1], "median": round(r["median"], 1), "q25": round(r["q25"]), "q75": round(r["q75"]),
                      "volume": f"{r['volume'][1]:.1f} {r['volume'][0].replace('_', ' ')}" if r["volume"] else None,
-                     "why": "; ".join(r.get("why") or []), "flags": r["flags"], "verified": ver, "warns": warns, "start": r["start"]})
+                     "why": "; ".join(r.get("why") or []), "flags": r["flags"], "verified": ver, "warns": warns, "start": r["start"],
+                     "reasons": r.get("reasons"), "ml": r.get("ml"), "season": (r.get("research") or {}).get("season"),
+                     "last3": (r.get("research") or {}).get("last3")})
     gaps = sorted([r for r in ok if r["gap"]], key=lambda r: -abs(r["gap"]))
     today = dt.date.today().isoformat()
     head = [f"# NFL PrizePicks: best {len(picks)} legs, {today}",
@@ -423,13 +431,18 @@ def _nfl_picks(args):
                 f"**ENTRY legs:** {', '.join(r['player'] for r in high)}")
     tail = ["", f"## PrizePicks lines that differ from DraftKings' ({len(gaps)})", "| player | stat | PrizePicks | DraftKings | side | p | conf |", "|---|---|---|---|---|---|---|"]
     tail += [f"| {r['player']} | {NP.LABEL[r['market_key']]} | {r['line']} | {r['dk_line']} | {r['side']} | {r['p_final']:.1%} | {r['confidence']} |" for r in gaps[:25]]
-    report = "\n".join(head) + "\n\n## Top by probability (one per game)\n\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n"
+    report = ("\n".join(head) + "\n\n## Top by the model (one per game)\n\n" + "\n\n".join(blocks["model"])
+              + "\n\n## Top by history only (this season's record at the line; LESSONS L27: no information beyond the price)\n\n" + "\n\n".join(blocks["history"])
+              + "\n\n## Top by the most likely game (every reason supports the side or is neutral)\n\n" + "\n\n".join(blocks["likely"])
+              + f"\n\nDropped for a reason against them: {len(dropped)}" + (": " + "; ".join(f"{d['player']} {d['side']} {d['line']} {d['stat']} ({', '.join(d['against'])})" for d in dropped) if dropped else "")
+              + "\n" + "\n".join(tail) + "\n")
     out = args.out or os.path.join(HERE, "data", "picks", f"{today}-nfl.md")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
         f.write(report)
     pg = {"date": today, "week": args.week or NP.current_week(2026), "pulled": f"{dt.datetime.now(dt.timezone.utc):%Y-%m-%dT%H:%MZ}",
-          "lines": len(ok), "games": len({r["script"] for r in ok}), "picks": page,
+          "lines": len(ok), "games": len({r["script"] for r in ok}), "picks": page["model"], "history": page["history"], "likely": page["likely"],
+          "likely_dropped": dropped,
           "entry": ", ".join(f"{r['player']} {r['side']} {r['line']}" for r in high) if len(high) >= 2 else None,
           "gaps": [{"player": r["player"], "stat": NP.LABEL[r["market_key"]], "pp": r["line"], "dk": r["dk_line"], "side": r["side"],
                     "p": round(r["p_final"], 4), "conf": r["confidence"]} for r in gaps]}
