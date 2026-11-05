@@ -263,6 +263,13 @@ def check_nfl(rep: Report, adj: dict):
         rep.add("WARN", "role", "; ".join(x["flags"]))
 
 
+def last_priced(notes: str):
+    """When a leg was last priced: the latest of the pricer's "pulled" stamp and any "fresh" stamp a verify --fix
+    re-price added (UTC), or None."""
+    stamps = re.findall(r"(?:pulled|fresh) (\d{4}-\d\d-\d\d)[T ](\d\d:\d\d)Z", notes)
+    return max(dt.datetime.fromisoformat(f"{d}T{t}+00:00") for d, t in stamps) if stamps else None
+
+
 def check_nba(rep: Report, adj: dict):
     """Recount this season's games at the line from the box scores, re-run the simulation (50,000 runs, fresh injury
     report and DraftKings lines) and rebuild the label from fresh components."""
@@ -314,12 +321,10 @@ def check_nba(rep: Report, adj: dict):
     if mt and abs(float(mt.group(1))) > nba_pp.TILT_MAX and stat not in causes:
         rep.add("FAIL" if entry else "WARN", "tilt", f"tonight's raw simulation-vs-DraftKings tilt on {stat} is {mt.group(1)} logit (limit "
                 f"{nba_pp.TILT_MAX}) with no cause logged in data/nba_tilt_causes.json" + (": no ENTRY leg in this stat" if entry else ""))
-    # the latest of the pricer's "pulled" stamp and any "fresh" stamp a verify --fix re-price added
-    stamps = re.findall(r"(?:pulled|fresh) (\d{4}-\d\d-\d\d)[T ](\d\d:\d\d)Z", r.get("notes") or "")
-    if stamps and g.get("start") and not getattr(rep, "locked", False):
+    last = last_priced(r.get("notes") or "")
+    if last and g.get("start") and not getattr(rep, "locked", False):
         now = dt.datetime.now(dt.timezone.utc)
         tip = dt.datetime.fromisoformat(g["start"].replace("Z", "+00:00"))
-        last = max(dt.datetime.fromisoformat(f"{d}T{t}+00:00") for d, t in stamps)
         age = (now - last).total_seconds() / 60
         if (tip - now).total_seconds() / 60 <= 60 and age > STALE_MIN:
             rep.add("FAIL", "freshness", f"market and injury data pulled {age:.0f} min ago, inside the last hour before tip: re-price (edge verify --fix)")

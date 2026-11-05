@@ -130,6 +130,15 @@ class Reasons(unittest.TestCase):
         self.assertEqual(self.verdicts(self.leg(side="under", line=20.5, proj=16, ml={"value": 14, "gap": -6.5}))["matchup"], "supports")
 
 
+class VerifyFreshness(unittest.TestCase):
+    def test_latest_stamp_wins(self):
+        from edge import verify as V
+        n = "edge pp; pulled 2026-11-04T21:00Z | corrected by verify: 0.76 Medium -> 0.75 Medium; fresh 2026-11-05 00:04Z: simulation re-run"
+        self.assertEqual(V.last_priced(n).strftime("%Y-%m-%d %H:%M"), "2026-11-05 00:04")
+        self.assertEqual(V.last_priced("edge pp; pulled 2026-11-04T21:00Z").strftime("%H:%M"), "21:00")
+        self.assertIsNone(V.last_priced("no stamp"))
+
+
 class FitPieces(unittest.TestCase):
     def test_bias_table_shrinks_small_segments(self):
         legs = [{"stat": "pts", "seg": ("pts", "top5"), "m_raw": 0.40, "q": 0.50} for _ in range(400)] + \
