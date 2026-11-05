@@ -243,7 +243,7 @@ table.dec, #factorTbl { min-width: 600px }
 
   <details class="panel picks" id="shopPanel" hidden open>
     <summary><h2 class="pk-title">Line shop: PrizePicks vs Dabble</h2><span class="note" id="shopMeta"></span></summary>
-    <div class="row"><div class="seg" role="group" aria-label="Kind" id="shopKind"></div><label class="note"><input type="checkbox" id="shopOnly"> only legs that clear 57.7%</label></div>
+    <div class="row"><div class="seg" role="group" aria-label="Kind" id="shopKind"></div><label class="note" id="shopOnlyLabel"><input type="checkbox" id="shopOnly"> only legs that clear 57.7%</label></div>
     <div id="shopTable"></div>
     <div class="note" id="shopNote"></div>
   </details>
@@ -1250,15 +1250,24 @@ function renderShop() {
   if (!$("shopPanel")) return;
   $("shopPanel").hidden = !(V && !V.error);
   if (!V || V.error) return;
-  const rows = V.rows || [], kind = state.shopKind || "line", only = $("shopOnly").checked;
+  const rows = V.rows || [], kind = state.shopKind || "dabble", only = $("shopOnly").checked, DV = V.dabble || [];
   const nLine = rows.filter((r) => r.kind === "line").length, nPrice = rows.filter((r) => r.kind === "price").length;
   $("shopMeta").textContent = `${lg} · ${V.matched} of ${V.pp_lines} PrizePicks lines found on Dabble · pulled ${S.pulled}`;
-  $("shopKind").innerHTML = [["line", `Line gaps (${nLine})`], ["price", `Same line (${nPrice})`]]
+  $("shopKind").innerHTML = [["dabble", `Better on Dabble (${DV.filter((r) => r.ev >= 0.1).length})`], ["line", `Better on PrizePicks: line gaps (${nLine})`], ["price", `Same line (${nPrice})`]]
     .map(([v, t]) => `<button type="button" aria-pressed="${v === kind}" data-v="${v}">${t}</button>`).join("");
   $("shopKind").querySelectorAll("button").forEach((b) => { b.onclick = () => { state.shopKind = b.dataset.v; renderShop(); }; });
   $("shopOnly").onchange = renderShop;
-  const R = rows.filter((r) => r.kind === kind && (!only || r.clears)).slice(0, 40);
+  $("shopOnlyLabel").lastChild.textContent = kind === "dabble" ? " only value of +10% or more" : " only legs that clear 57.7%";
   const pct = (v) => (100 * v).toFixed(1) + "%", dec = (v) => v == null ? "—" : Number(v).toFixed(2);
+  if (kind === "dabble") {
+    const RD = DV.filter((r) => !only || r.ev >= 0.1).slice(0, 40);
+    $("shopTable").innerHTML = RD.length ? `<div class="tbl-wrap pk-gaps pk-gapbox"><table><thead><tr><th class="l">Player · stat</th><th class="l">Take on Dabble</th><th title="Dabble's decimal price">Price</th><th title="DraftKings' fair chance at Dabble's line">Fair</th><th>Value</th></tr></thead><tbody>${
+      RD.map((r) => `<tr><td class="l">${esc(r.player)}<span class="sub">${esc(r.stat)} · ${esc(r.team || "")} · ${esc(fmtKick(r.start))}</span></td><td class="l">${esc(r.side)} ${r.dabble_line}<span class="sub">PrizePicks ${r.pp_line}${r.better_than_pp ? " · better number on Dabble" : ""}</span></td><td>${dec(r.price)}<span class="sub">Dabble ${pct(r.dabble_p)}</span></td><td>${pct(r.fair)}<span class="sub">${esc(r.source)}</span></td><td><b>${r.ev >= 0 ? "+" : ""}${(100 * r.ev).toFixed(1)}%</b><span class="sub">per pick</span></td></tr>`).join("")}</tbody></table></div>`
+      : `<div class="note">${only ? "Nothing at +10% or more right now." : "No Dabble pick prices above DraftKings' fair chance here (or no DraftKings reference yet: the sport's picks run supplies it)."}</div>`;
+    $("shopNote").innerHTML = `<b>Better on Dabble.</b> Dabble pays by the price on each pick (an entry pays the product of its picks' prices, as the app shows). A pick is worth taking there when DraftKings' fair chance × Dabble's price is above 1; <b>Value</b> is that minus 1, per pick. <b>Fair</b> is DraftKings' view moved to Dabble's line: NBA from its de-vigged price, NHL from its milestone ladder, NFL from its line as the median (the feed has no NFL prices, so only rows where Dabble's line differs from DraftKings' are counted; TD and interception lines are left out because they are often heavily juiced). Picks with no DraftKings reference are left out, not guessed. Whenever Dabble and DraftKings disagree, one side looks positive, so read the size, not the count. If Dabble shrinks an entry's payout below the product of the prices, each leg has to clear that cut too: check a two-pick payout in the app. Market data, not a verified pick.`;
+    return;
+  }
+  const R = rows.filter((r) => r.kind === kind && (!only || r.clears)).slice(0, 40);
   $("shopTable").innerHTML = R.length ? `<div class="tbl-wrap pk-gaps pk-gapbox"><table><thead><tr><th class="l">Player · stat</th><th title="PrizePicks line">PP</th><th title="Dabble line">Dabble</th><th>Take on PP</th><th title="Dabble's price moved to the PrizePicks line">Dabble-implied</th></tr></thead><tbody>${
     R.map((r) => `<tr><td class="l">${esc(r.player)}<span class="sub">${esc(r.stat)} · ${esc(r.team || "")} · ${esc(fmtKick(r.start))}</span></td><td>${r.pp_line}</td><td>${r.dabble_line}<span class="sub">o ${dec(r.dabble_over)} / u ${dec(r.dabble_under)}</span></td><td>${esc(r.side)}<span class="sub">${r.kind === "line" ? `${r.gap > 0 ? "+" : ""}${r.gap} vs Dabble` : "same line"}</span></td><td>${pct(r.pp_p)}${r.clears ? `<span class="sub"><b>clears ${pct(S.break_even)}</b></span>` : ""}</td></tr>`).join("")}</tbody></table></div>`
     : `<div class="note">${only ? "Nothing clears 57.7% here right now." : "No rows."}</div>`;

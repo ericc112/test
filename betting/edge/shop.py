@@ -11,7 +11,8 @@ and stat this finds:
 
 and turns Dabble's price into a probability at the PrizePicks line (a normal approximation around Dabble's implied
 median, spread by stat). That probability is Dabble's, not ours: it is market data for shopping, not a verified pick.
-A PrizePicks leg is worth a look when it clears the 2-pick power break-even (57.7%). Every number here still has to
+A PrizePicks leg is worth a look when it clears the 2-pick power break-even (57.7%). The other way round,
+`dabble_values` finds the Dabble picks that pay more than they should, taking PrizePicks' line as the fair 50/50 point. Every number here still has to
 go through the sport's pricer and `edge verify` before it is named as a pick.
 """
 from __future__ import annotations
@@ -116,14 +117,21 @@ def prob_at(q_over: float, d_line: float, pp_line: float, stats: tuple) -> float
     """Dabble's P(over) moved from its own line to the PrizePicks line: Dabble's implied median (its line shifted by
     the price) with a normal spread for the stat. Only meant for lines within a few units of each other."""
     q = min(max(q_over, 0.02), 0.98)
-    if not any(x in YARDS for x in stats) and d_line < 4:      # small counts (TDs, goals, assists, low lines): Poisson
+    counts = not any(x in YARDS for x in stats)
+    if counts and d_line < 4:                                   # small counts (TDs, goals, assists, low lines): Poisson
         return poisson_at(q, d_line, pp_line)
     sd = spread(stats, d_line)
-    med = d_line + _phinv(q) * sd
-    if float(pp_line).is_integer() and not any(x in YARDS for x in stats):
-        over, under = 1 - _phi((pp_line + 0.5 - med) / sd), _phi((pp_line - 0.5 - med) / sd)   # a whole line can push
-        return over / max(over + under, 1e-9)
-    return 1 - _phi((pp_line - med) / sd)
+
+    def over_at(med, line):
+        if counts and float(line).is_integer():                 # a whole line can push: P(over | no push)
+            o, u = 1 - _phi((line + 0.5 - med) / sd), _phi((line - 0.5 - med) / sd)
+            return o / max(o + u, 1e-9)
+        return 1 - _phi((line - med) / sd)
+    lo, hi = d_line - 6 * sd, d_line + 6 * sd                   # the median that gives q at the reference line
+    for _ in range(80):
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if over_at(mid, d_line) < q else (lo, mid)
+    return over_at((lo + hi) / 2, pp_line)
 
 
 def _pois_sf(lam: float, k: int) -> float:
@@ -132,18 +140,13 @@ def _pois_sf(lam: float, k: int) -> float:
 
 
 def poisson_at(q_over: float, d_line: float, pp_line: float) -> float:
-    """Fit a Poisson so P(X > Dabble's line) = Dabble's over price, then P(over) at the PrizePicks line with a whole
-    line's push excluded."""
-    k = int(math.floor(d_line)) + 1
+    """Fit a Poisson so P(over the reference line) = q (push excluded on a whole line), then P(over) at the target
+    line, push excluded the same way."""
     lo, hi = 1e-3, 30.0
     for _ in range(80):
         mid = (lo + hi) / 2
-        lo, hi = (mid, hi) if _pois_sf(mid, k) < q_over else (lo, mid)
-    lam = (lo + hi) / 2
-    if float(pp_line).is_integer():
-        over, under = _pois_sf(lam, int(pp_line) + 1), 1 - _pois_sf(lam, int(pp_line))
-        return over / max(over + under, 1e-9)
-    return _pois_sf(lam, int(math.floor(pp_line)) + 1)
+        lo, hi = (mid, hi) if _pois_over(mid, d_line) < q_over else (lo, mid)
+    return _pois_over((lo + hi) / 2, pp_line)
 
 
 def compare(league: str, comp_id: str | None = None) -> dict:
@@ -186,7 +189,87 @@ def compare(league: str, comp_id: str | None = None) -> dict:
                                 "under": "PrizePicks" if gap > 0 else "Dabble" if gap < 0 else "same"},
                      "game": d["game"], "start": p.get("start") or d["start"]})
     rows.sort(key=lambda r: (-r["pp_p"]))
-    return {"league": league, "pp_lines": len(P), "dabble_lines": len(D), "matched": matched, "rows": rows}
+    return {"league": league, "pp_lines": len(P), "dabble_lines": len(D), "matched": matched, "rows": rows,
+            "dabble": dabble_values(P, idx, league)}
+
+
+def _latest_board(sport: str) -> list[dict]:
+    """The most recent full priced board this sport's picks command saved (data/<sport>_boards/DATE.json.gz)."""
+    import gzip
+    from .blend import HERE
+    d = os.path.join(HERE, "data", "nba_boards" if sport == "NBA" else f"{sport.lower()}_boards")
+    if not os.path.isdir(d):
+        return []
+    fs = sorted(f for f in os.listdir(d) if f.endswith(".json.gz"))
+    if not fs:
+        return []
+    with gzip.open(os.path.join(d, fs[-1]), "rt") as f:
+        return json.load(f)
+
+
+def references(league: str) -> dict:
+    """DraftKings' view of each PrizePicks player and stat, from the latest priced board: NBA the de-vigged
+    probability at the PrizePicks line, NHL the Poisson mean of the milestone ladder, NFL DraftKings' line (the feed
+    has no NFL prices, so it counts as the median)."""
+    ref = {}
+    for r in _latest_board(league):
+        if r.get("odds_type") not in (None, "standard"):          # goblin/demon lines sit off the median
+            continue
+        k = (_norm(r.get("player") or ""), r.get("stat"))
+        if league == "NHL" and r.get("dk_lambda"):
+            ref[k] = {"kind": "lambda", "lam": float(r["dk_lambda"])}
+        elif league == "NFL" and r.get("dk_line") is not None and r.get("stat") not in ("Pass TDs", "INT", "Rush TDs"):
+            # (TD and interception lines are often heavily juiced: DraftKings' line isn't a median there)
+            ref[k] = {"kind": "line", "line": float(r["dk_line"])}
+        elif league == "NBA" and r.get("p_market") is not None:
+            q = float(r["p_market"]) if r.get("side") == "over" else 1 - float(r["p_market"])
+            ref[k] = {"kind": "prob", "q_over": q, "line": float(r["line"])}
+    return ref
+
+
+def _pois_over(lam: float, line: float) -> float:
+    if float(line).is_integer():
+        over, under = _pois_sf(lam, int(line) + 1), 1 - _pois_sf(lam, int(line))
+        return over / max(over + under, 1e-9)
+    return _pois_sf(lam, int(math.floor(line)) + 1)
+
+
+def dabble_values(P: list[dict], idx: dict, league: str) -> list[dict]:
+    """Which Dabble picks pay more than they should against DraftKings: DraftKings' fair chance moved to Dabble's
+    line, times Dabble's price. Value per pick = fair x price - 1; Dabble pays the product of its pick prices, so a
+    leg above 0 adds to an entry. Picks with no DraftKings reference are left out, not guessed."""
+    ref = references(league)
+    out, seen = [], set()
+    for p in P:
+        stats = tuple(sorted(STAT_MAP[league][p["stat"]]))
+        rf = ref.get((_norm(p["player"]), p["stat"]))
+        if not rf:
+            continue
+        for d in idx.get((_norm(p["player"]), stats), []):
+            key = (d["player"], stats, d["line"])
+            if key in seen or not d["over"] or not d["under"]:
+                continue
+            seen.add(key)
+            if rf["kind"] == "lambda":
+                fo, src = _pois_over(rf["lam"], d["line"]), f"DraftKings ladder (mean {rf['lam']:.2f})"
+            elif rf["kind"] == "line":
+                if abs(rf["line"] - d["line"]) < 1e-9:
+                    continue        # NFL: no DraftKings price in the feed, so a same-line row would rest on unknown juice
+                fo, src = prob_at(0.5, rf["line"], d["line"], stats), f"DraftKings line {rf['line']:g} as the median"
+            else:
+                fo, src = prob_at(rf["q_over"], rf["line"], d["line"], stats), f"DraftKings no-vig ({rf['q_over']:.0%} over {rf['line']:g})"
+            for side, price in (("over", d["over"]), ("under", d["under"])):
+                fair = fo if side == "over" else 1 - fo
+                gap = round(d["line"] - p["line"], 2)
+                out.append({"league": league, "player": p["player"], "team": p.get("team"), "stat": p["stat"], "side": side,
+                            "dabble_line": d["line"], "pp_line": p["line"], "gap": gap, "price": price,
+                            "dabble_p": round((1 / price) / (1 / d["over"] + 1 / d["under"]), 4), "fair": round(fair, 4), "source": src,
+                            "ev": round(fair * price - 1, 4),
+                            "better_than_pp": (side == "over" and gap < 0) or (side == "under" and gap > 0),
+                            "game": d["game"], "start": p.get("start") or d["start"]})
+    out = [r for r in out if r["ev"] > 0]
+    out.sort(key=lambda r: -r["ev"])
+    return out
 
 
 def run(leagues=("NBA", "NFL", "NHL")) -> dict:

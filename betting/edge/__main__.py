@@ -370,6 +370,11 @@ def main(argv=None):
             for r in rows[:10]:
                 print(f"   {r['player']} {r['stat']}: PrizePicks {r['pp_line']} vs Dabble {r['dabble_line']} -> {r['side']} on PrizePicks, "
                       f"Dabble-implied {r['pp_p']:.1%}{' (clears)' if r['clears'] else ''}")
+            dv = v.get("dabble") or []
+            print(f"   Better on Dabble (against DraftKings): {len(dv)} picks with positive value")
+            for r in dv[:10]:
+                print(f"     {r['player']} {r['stat']} {r['side']} {r['dabble_line']} on Dabble at {r['price']:.2f} (PrizePicks {r['pp_line']}): "
+                      f"fair {r['fair']:.1%} ({r['source']}), value {r['ev']:+.1%} per pick")
         print("Saved:", SH.write(res, page=args.page))
         print("Market data for shopping, not verified picks: run a leg through its pricer and `edge verify` before naming it.")
     elif args.cmd == "nfl-picks":
@@ -434,6 +439,11 @@ def _board_picks(args, sport: str):
     rows = (NP.price_board(props, n=args.n, week=args.week, store=store) if sport == "nfl" else NP.price_board(props, n=args.n, store=store))
     ok = [r for r in rows if "error" not in r]
     lab = lambda r: NP.LABEL[r.get("stat_key") or r["market_key"]]
+    import gzip
+    os.makedirs(os.path.join(HERE, "data", f"{sport}_boards"), exist_ok=True)
+    with gzip.open(os.path.join(HERE, "data", f"{sport}_boards", f"{dt.date.today().isoformat()}.json.gz"), "wt") as f:   # the full priced board
+        json.dump([{k: r.get(k) for k in ("player", "team", "stat", "line", "side", "p_final", "confidence", "p_model", "p_market", "dk_line",
+                                          "dk_lambda", "median", "event_id", "player_id", "game", "start", "odds_type")} for r in ok], f, default=float)
     D = []
     for label, drows in NP.days(ok):
         cap = NP.per_game_cap(drows, args.top)

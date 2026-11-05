@@ -215,3 +215,11 @@ class LineShop(unittest.TestCase):
         q = shop.implied_over(1.46, 3.18)                     # Herbert 0.5+ pass TDs at ~68.5%
         under_1 = 1 - shop.prob_at(q, 0.5, 1.0, ("passing-touchdowns",))
         self.assertTrue(0.40 < under_1 < 0.55)               # wins only on 0 TDs, pushes on 1
+
+
+class DabbleValue(unittest.TestCase):
+    def test_whole_reference_line_push(self):
+        from edge import shop
+        # DraftKings 51% over 3 threes (push excluded): over 3.5 needs 4+, well under 51%
+        self.assertTrue(0.35 < shop.prob_at(0.51, 3.0, 3.5, ("three-made",)) < 0.45)
+        self.assertAlmostEqual(shop.prob_at(0.6, 19.5, 19.5, ("points",)), 0.6, places=3)
