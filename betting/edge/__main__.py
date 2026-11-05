@@ -162,6 +162,9 @@ def main(argv=None):
     nhp.add_argument("--no-verify", action="store_true")
     nhp.add_argument("--out", default=None)
     nhp.add_argument("--page", help="also write the picks for the Sim Lab page here (nhl_picks.js)")
+    shp = sub.add_parser("shop")
+    shp.add_argument("--leagues", default="NBA,NFL,NHL")
+    shp.add_argument("--page", help="also write the Sim Lab line-shop data here (shop.js)")
     t = sub.add_parser("tag")
     t.add_argument("id")
     t.add_argument("reason")
@@ -354,6 +357,21 @@ def main(argv=None):
     elif args.cmd == "simlab":
         from . import simlab
         print(simlab.export(args.out, nfl_week=args.week, backtest_weeks=None if args.no_backtest else (3, 8)))
+    elif args.cmd == "shop":
+        from . import shop as SH
+        res = SH.run(tuple(x.strip().upper() for x in args.leagues.split(",")))
+        for lg, v in res["leagues"].items():
+            if "error" in v:
+                print(f"{lg}: {v['error']}")
+                continue
+            rows = v["rows"]
+            print(f"{lg}: {v['pp_lines']} PrizePicks lines, {v['dabble_lines']} Dabble lines, {v['matched']} matched; "
+                  f"{sum(r['kind'] == 'line' for r in rows)} line gaps; {sum(r['clears'] for r in rows)} clear {SH.BREAK_EVEN:.1%} by Dabble's price")
+            for r in rows[:10]:
+                print(f"   {r['player']} {r['stat']}: PrizePicks {r['pp_line']} vs Dabble {r['dabble_line']} -> {r['side']} on PrizePicks, "
+                      f"Dabble-implied {r['pp_p']:.1%}{' (clears)' if r['clears'] else ''}")
+        print("Saved:", SH.write(res, page=args.page))
+        print("Market data for shopping, not verified picks: run a leg through its pricer and `edge verify` before naming it.")
     elif args.cmd == "nfl-picks":
         _nfl_picks(args)
     elif args.cmd == "nhl-picks":

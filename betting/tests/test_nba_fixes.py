@@ -199,3 +199,19 @@ class FitPieces(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LineShop(unittest.TestCase):
+    def test_implied_and_shift(self):
+        from edge import shop
+        q = shop.implied_over(1.91, 2.10)
+        self.assertAlmostEqual(q, 0.5237, places=3)
+        self.assertAlmostEqual(shop.prob_at(q, 19.5, 19.5, ("points",)), q, places=3)          # same line: Dabble's own number
+        self.assertGreater(shop.prob_at(q, 19.5, 17.5, ("points",)), q)                        # a lower line helps the over
+        self.assertLess(shop.prob_at(q, 19.5, 21.5, ("points",)), q)
+
+    def test_small_counts_use_poisson_with_push(self):
+        from edge import shop
+        q = shop.implied_over(1.46, 3.18)                     # Herbert 0.5+ pass TDs at ~68.5%
+        under_1 = 1 - shop.prob_at(q, 0.5, 1.0, ("passing-touchdowns",))
+        self.assertTrue(0.40 < under_1 < 0.55)               # wins only on 0 TDs, pushes on 1
