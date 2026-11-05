@@ -68,7 +68,37 @@ def mlb_value(event_id: str, player_id: str, market: str, cache: dict):
 NHL_STATS = {"skater_sog": "sog", "skater_points": "points", "skater_goals": "goals", "goalie_saves": "saves"}
 
 
+NHL_ESPN = {"nhl_sog": ("S",), "nhl_hits": ("HT",), "nhl_fow": ("FW",), "nhl_points": ("G", "A"), "nhl_assists": ("A",),
+            "nhl_goals": ("G",), "nhl_blocks": ("BS",), "nhl_toi": ("TOI",), "nhl_pm": ("+/-",)}
+
+
+def nhl_espn_value(event_id: str, player_id: str, market: str, cache: dict):
+    """edge nhl-picks legs (ESPN event and athlete ids): the stat from ESPN's final box score; DNP voids."""
+    key = ("nhl_espn", event_id)
+    if key not in cache:
+        cache[key] = _get(f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/summary?event={event_id}")
+    s = cache[key]
+    if s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_FINAL":
+        return "pending", None
+    for t in (s.get("boxscore") or {}).get("players", []):
+        for cat in t.get("statistics", []):
+            if cat.get("name") not in ("forwards", "defenses"):
+                continue
+            for a in cat["athletes"]:
+                if str(a["athlete"]["id"]) != str(player_id):
+                    continue
+                st = dict(zip(cat["labels"], a.get("stats", [])))
+                if market == "nhl_toi":
+                    mm, ss = (str(st.get("TOI", "0:0")).split(":") + ["0"])[:2]
+                    v = float(mm) + float(ss) / 60
+                    return ("final", round(v, 2)) if v > 0 else ("void", None)
+                return "final", float(sum(float(st.get(k, 0) or 0) for k in NHL_ESPN[market]))
+    return "void", None
+
+
 def nhl_value(event_id: str, player_id: str, market: str, cache: dict):
+    if market.startswith("nhl_"):
+        return nhl_espn_value(event_id, player_id, market, cache)
     key = ("nhl", event_id)
     if key not in cache:
         cache[key] = _get(f"https://api-web.nhle.com/v1/gamecenter/{event_id}/boxscore")

@@ -236,9 +236,23 @@ table.dec, #factorTbl { min-width: 600px }
       <div><h3>By history only <span class="note">(this season's record at the line, then the last 3)</span></h3><div class="pk-list" id="nflHist"></div></div>
       <div><h3>By the most likely game <span class="note">(the most likely simulated game, the median, this season, DraftKings, the last 3, the matchup and usage all support the side or are neutral)</span></h3><div class="pk-list" id="nflLikely"></div></div>
     </div>
-    <h3>PrizePicks lines that differ from DraftKings' <span class="note">(where an edge can come from; biggest gaps first)</span></h3>
+    <h3 id="nflGapTitle">PrizePicks lines that differ from DraftKings' <span class="note">(where an edge can come from; biggest gaps first)</span></h3>
     <div id="nflGaps" class="pk-gapbox"></div>
     <div class="note" id="nflNote"></div>
+  </details>
+
+  <details class="panel picks" id="nhlPicksPanel" hidden open>
+    <summary><h2 class="pk-title">Tonight's NHL PrizePicks picks</h2><span class="note" id="nhlMeta"></span></summary>
+    <div class="row"><div class="seg" role="group" aria-label="Game day" id="nhlDays"></div><span class="note" id="nhlDayNote"></span></div>
+    <div class="note" id="nhlEntry"></div>
+    <div class="pk-cols">
+      <div><h3>By the model <span class="note">(player simulation + DraftKings' milestone ladders; High before Medium)</span></h3><div class="pk-list" id="nhlList"></div></div>
+      <div><h3>By history only <span class="note">(this season's record at the line, then the last 5)</span></h3><div class="pk-list" id="nhlHist"></div></div>
+      <div><h3>By the most likely game <span class="note">(the most likely simulated game, the median, this season, DraftKings, the last 5, the matchup and ice time all support the side or are neutral)</span></h3><div class="pk-list" id="nhlLikely"></div></div>
+    </div>
+    <h3 id="nhlGapTitle">Lines DraftKings' ladder prices furthest from 50/50 <span class="note">(where an edge can come from)</span></h3>
+    <div id="nhlGaps" class="pk-gapbox"></div>
+    <div class="note" id="nhlNote"></div>
   </details>
 
   <div class="layout">
@@ -1080,6 +1094,7 @@ onmessage = (e) => {
 <script src="data.js"></script>
 <script src="picks.js"></script>
 <script src="nfl_picks.js"></script>
+<script src="nhl_picks.js"></script>
 <script>
 "use strict";
 const D = window.SIMLAB || { leagues: [], pulled: null };
@@ -1162,58 +1177,71 @@ function renderPicks() {
     `History list: the hit-rate method, shown for comparison. On 2,330 DraftKings lines this season, hit rates and streaks carried no information beyond the book's price, and players over in 80–100% of their last 5 went over 39% of the time against 50% priced. Both lists are logged and graded, so their records can be compared. Every pick passed <span class="num">edge verify</span> when this was written (status shown); warnings must be checked on screen. Model numbers, not locks: the player model has not beaten DraftKings out of sample.`;
 }
 // This week's NFL PrizePicks picks (written by `python -m edge nfl-picks --page nfl_picks.js`)
-function renderNflPicks() {
-  const P = window.SIMLAB_NFL_PICKS; if (!P || !$("nflPicksPanel")) return;
+const SPORT_NOTE = {
+  nfl: "Each PrizePicks line is priced from the simulation re-centred on DraftKings' line for the same player and stat (the backtest's better centre; the simulation's own centre showed no edge on the line), the simulation's number shrunk toward 50%, and this season's record, blended like <span class=\"num\">edge prob</span>. A leg is held at Low without a DraftKings line, with a role flag, or on a touchdown or interception line (often heavily juiced, and the feed has no prices).",
+  nhl: "Each PrizePicks line is priced from a player simulation of the game (projected ice time, per-60 rates with last season as the prior, the opponent, DraftKings' total and moneyline) and, for shots, points, assists and goals, DraftKings' de-vigged milestone ladder. The player model is new and untested against closing lines, so the market carries 80% of the weight, a missing market counts as 50%, and a leg without one stays Low (hits, faceoffs won, blocked shots, ice time, plus/minus).",
+};
+const BOX_LABEL = { pass_yds: "pass yds", rush_att: "car", rush_yds: "rush yds", targets: "tgt", receptions: "rec", rec_yds: "rec yds",
+  toi: "min", sog: "SOG", hits: "hits", blocks: "blk", fow: "FOW", goals: "G", assists: "A" };
+// a league's PrizePicks picks (NFL, NHL): day tabs, then the model / history / most-likely lists and the market gaps
+function renderSportPicks(pre) {
+  const P = window[`SIMLAB_${pre.toUpperCase()}_PICKS`]; if (!P || !$(pre + "PicksPanel")) return;
   const pc = (v) => v == null ? "—" : Math.round(100 * v) + "%";
   const ver = (v) => !v ? "" : `<span class="pill ${/NOT/.test(v) ? "no" : "ok"}">${esc(v)}</span>`;
-  $("nflMeta").textContent = `week ${P.week} · ${P.date} · ${Number(P.lines).toLocaleString()} lines priced across ${P.games} games · board ${P.pulled || ""}`;
+  $(pre + "Meta").textContent = `${P.week ? `week ${P.week} · ` : ""}${P.date} · ${Number(P.lines).toLocaleString()} lines priced across ${P.games} games · board ${P.pulled || ""}`;
   const days = P.days || [{ label: "This week", games: [], picks: P.picks, history: P.history, likely: P.likely, likely_dropped: P.likely_dropped, entry: P.entry }];
-  if (state.nflDay == null) {                  // the next day with a game still to play
+  const dk = pre + "Day";
+  if (state[dk] == null) {                     // the next day with a game still to play
     const now = Date.now(), up = days.findIndex((d) => [...(d.model || d.picks || []), ...(d.history || []), ...(d.likely || [])].some((r) => r.start && new Date(r.start).getTime() > now));
-    state.nflDay = up >= 0 ? up : 0;
+    state[dk] = up >= 0 ? up : 0;
   }
-  const D0 = days[Math.min(state.nflDay, days.length - 1)];
-  $("nflDays").innerHTML = days.map((d, i) => `<button type="button" aria-pressed="${i === state.nflDay}" data-i="${i}">${esc(d.label)}</button>`).join("");
-  $("nflDays").querySelectorAll("button").forEach((b) => { b.onclick = () => { state.nflDay = +b.dataset.i; renderNflPicks(); }; });
-  $("nflDayNote").textContent = `${(D0.games || []).join(" · ")}${D0.lines ? ` · ${D0.lines} lines` : ""}${D0.per_game > 1 ? ` · up to ${D0.per_game} legs per game (same game: never two in one entry)` : ""}`;
-  $("nflEntry").innerHTML = D0.entry ? `<b>Entry legs:</b> ${esc(D0.entry)}` : "<b>No leg clears the ENTRY rule</b> (High, 65%+). The lists below are leans and passes, not bets: sitting out beats forcing it.";
+  const D0 = days[Math.min(state[dk], days.length - 1)];
+  $(pre + "Days").innerHTML = days.map((d, i) => `<button type="button" aria-pressed="${i === state[dk]}" data-i="${i}">${esc(d.label)}</button>`).join("");
+  $(pre + "Days").querySelectorAll("button").forEach((b) => { b.onclick = () => { state[dk] = +b.dataset.i; renderSportPicks(pre); }; });
+  $(pre + "DayNote").textContent = `${(D0.games || []).join(" · ")}${D0.lines ? ` · ${D0.lines} lines` : ""}${D0.per_game > 1 ? ` · up to ${D0.per_game} legs per game (same game: never two in one entry)` : ""}`;
+  $(pre + "Entry").innerHTML = D0.entry ? `<b>Entry legs:</b> ${esc(D0.entry)}` : "<b>No leg clears the ENTRY rule</b> (High, 65%+). The lists below are leans and passes, not bets: sitting out beats forcing it.";
   const MK = { supports: "✓", neutral: "–", against: "✗" };
   const whyList = (r, head) => (r.reasons || []).length ? `<div><span class="k">${esc(head)}</span><ul class="pk-why">${r.reasons.map((x) =>
     `<li class="${esc(x.verdict)}"><span class="m">${MK[x.verdict] || "?"}</span><span><b>${esc(x.name)}</b> ${esc(x.text)}</span></li>`).join("")}</ul></div>` : "";
-  const mlLine = (r) => { const m = r.ml; if (!m) return ""; const sc = Object.entries(m.score).map(([k, v]) => `${esc(k)} ${v}`).join(", "); const b = m.box || {};
-    const parts = [b.pass_yds != null && b.pass_yds > 0 ? `${Math.round(b.pass_yds)} pass yds` : "", b.rush_att ? `${Math.round(b.rush_att)} car, ${Math.round(b.rush_yds || 0)} rush yds` : "",
-      b.targets != null && (b.targets > 0 || /rec/.test(r.stat)) ? `${Math.round(b.targets)} tgt, ${Math.round(b.receptions || 0)} rec, ${Math.round(b.rec_yds || 0)} rec yds` : ""].filter(Boolean).join(" · ");
-    return `<div><span class="k">Most likely game</span> ${sc}: <b>${Math.round(m.value)} ${esc(r.stat)}</b> (${m.gap > 0 ? "+" : ""}${m.gap.toFixed(1)} vs the line)${parts ? ` · ${parts}` : ""}</div>`; };
+  const fmtV = (k, v) => k === "toi" ? v.toFixed(1) : String(Math.round(v));
+  const mlLine = (r) => { const m = r.ml; if (!m) return ""; const sc = Object.entries(m.score).map(([k, v]) => `${esc(k)} ${v}`).join(", ");
+    const parts = Object.entries(m.box || {}).filter(([k, v]) => v > 0 && BOX_LABEL[k]).map(([k, v]) => `${fmtV(k, v)} ${BOX_LABEL[k]}`).join(" · ");
+    return `<div><span class="k">Most likely game</span> ${sc}: <b>${/time on ice/.test(r.stat) ? m.value.toFixed(1) : Math.round(m.value)} ${esc(r.stat)}</b> (${m.gap > 0 ? "+" : ""}${m.gap.toFixed(1)} vs the line)${parts ? ` · ${parts}` : ""}</div>`; };
+  const src = (r) => `DraftKings ${pc(r.market)}${r.dk_line != null ? ` (DraftKings ${r.dk_line}, PrizePicks ${r.line})` : r.dk_lambda != null ? ` (milestone ladder, mean ${r.dk_lambda.toFixed(2)})` : " (no DraftKings line)"} · simulation ${pc(r.model)} · this season ${r.hist_o ?? "—"} over / ${r.hist_u ?? "—"} under`;
+  const recent = (r) => r.recent || r.last3;
   const card = (r, kind) => `<div class="pk">
     <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)} · ${esc(fmtKick(r.start))}</span></div>
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
-    <div><span class="k">Sources</span> DraftKings-anchored ${pc(r.market)}${r.dk_line != null ? ` (DraftKings ${r.dk_line}, PrizePicks ${r.line})` : " (no DraftKings line)"} · simulation ${pc(r.model)} · this season ${r.hist_o ?? "—"} over / ${r.hist_u ?? "—"} under</div>
+    <div><span class="k">Sources</span> ${src(r)}</div>
     ${kind === "likely" ? mlLine(r) : ""}
     <div><span class="k">Simulation</span> median ${r.median}${r.q25 != null ? ` (25–75th ${r.q25}–${r.q75})` : ""}${r.volume ? ` · ${esc(r.volume)}` : ""}</div>
-    ${kind === "history" && r.season ? `<div><span class="k">History</span> <b>${r.side === "under" ? r.season[1] : r.season[0]}/${r.season[2]}</b> this season · <b>${r.last3 ? (r.side === "under" ? r.last3[1] : r.last3[0]) + "/" + r.last3[2] : "—"}</b> last 3</div>` : ""}
+    ${kind === "history" && r.season ? `<div><span class="k">History</span> <b>${r.side === "under" ? r.season[1] : r.season[0]}/${r.season[2]}</b> this season · <b>${recent(r) ? (r.side === "under" ? recent(r)[1] : recent(r)[0]) + "/" + recent(r)[2] : "—"}</b> ${esc(r.recent_label || "last 3")}</div>` : ""}
     ${whyList(r, kind === "likely" ? "Reasons (each one supports the pick or is neutral)" : "Context check (✓ supports, – neutral, ✗ against; shown, not used to drop the leg)")}
     ${(r.flags || []).length && !(r.warns || []).some((w) => /^role:/.test(w)) ? `<div class="pk-warn">${r.flags.map(esc).join("; ")}</div>` : ""}
     ${r.why ? `<div class="note">${esc(r.why)}</div>` : ""}
     <div class="note">${esc(r.verdict)}</div>
     ${r.warns && r.warns.length ? `<div class="pk-warn">${r.warns.map(esc).join("; ")}</div>` : ""}
   </div>`;
-  $("nflList").innerHTML = (D0.model || D0.picks || []).map((r) => card(r, "model")).join("") || `<div class="note">No lines priced.</div>`;
-  $("nflHist").innerHTML = (D0.history || []).map((r) => card(r, "history")).join("") || `<div class="note">No lines with 4+ games.</div>`;
+  $(pre + "List").innerHTML = (D0.model || D0.picks || []).map((r) => card(r, "model")).join("") || `<div class="note">No lines priced.</div>`;
+  $(pre + "Hist").innerHTML = (D0.history || []).map((r) => card(r, "history")).join("") || `<div class="note">No lines with enough games.</div>`;
   const dr = D0.likely_dropped || [];
-  $("nflLikely").innerHTML = ((D0.likely || []).map((r) => card(r, "likely")).join("") || `<div class="note">No leg on ${esc(D0.label)} where the most likely game, the median, this season and every other reason agree.</div>`)
+  $(pre + "Likely").innerHTML = ((D0.likely || []).map((r) => card(r, "likely")).join("") || `<div class="note">No leg on ${esc(D0.label)} where the most likely game, the median, this season and every other reason agree.</div>`)
     + (dr.length ? `<div class="note">Dropped for a reason against them (${dr.length}): ${dr.map((d) => `${esc(d.player)} ${esc(d.side)} ${d.line} ${esc(d.stat)} (${esc(d.against.join(", "))})`).join("; ")}</div>` : "");
   const dayGames = new Set(D0.games || []), gAll = (P.gaps || []).filter((x) => !dayGames.size || !x.game || dayGames.has(x.game)), g = gAll.slice(0, 20);
-  $("nflGaps").innerHTML = g.length ? `<div class="tbl-wrap pk-gaps"><table><thead><tr><th class="l">Player · stat</th><th title="PrizePicks line">PP</th><th title="DraftKings line">DK</th><th>Side · p</th></tr></thead><tbody>${
-    g.map((x) => `<tr><td class="l">${esc(x.player)}<span class="sub">${esc(x.stat)}</span></td><td>${x.pp}</td><td>${x.dk}</td><td>${esc(x.side)} ${pc(x.p)}<span class="sub">${esc(x.conf)}</span></td></tr>`).join("")}</tbody></table></div>
-    <div class="note">${gAll.length} lines differ from DraftKings' on ${esc(D0.label)}${gAll.length > 20 ? "; the 20 biggest gaps shown" : ""}. Where PrizePicks posts DraftKings' line, the market part is 50/50 (the feed carries lines, not prices).</div>` : `<div class="note">Every PrizePicks line matches DraftKings'.</div>`;
-  $("nflNote").innerHTML = "Most-likely-game list: one simulated game per matchup (the most common final score, then the run closest to every player's median), kept only where that run, the simulation's median and this season's record agree on the side and no reason shown points the other way; one run is a single draw, so the order comes from the probability. History list: the hit-rate method, for comparison. " + "Each PrizePicks line is priced from the simulation re-centred on DraftKings' line for the same player and stat (the backtest's better centre; the simulation's own centre showed no edge on the line), the simulation's number shrunk toward 50%, and this season's record, blended like <span class=\"num\">edge prob</span>. A leg is held at Low without a DraftKings line, with a role flag, or on a touchdown or interception line (often heavily juiced, and the feed has no prices). Every pick passed <span class=\"num\">edge verify</span> before it was listed.";
+  if ($(pre + "GapTitle") && P.gap_title) $(pre + "GapTitle").firstChild.textContent = P.gap_title + " ";
+  $(pre + "Gaps").innerHTML = g.length ? `<div class="tbl-wrap pk-gaps"><table><thead><tr><th class="l">Player · stat</th><th title="PrizePicks line">PP</th><th title="DraftKings">DK</th><th>Side · p</th></tr></thead><tbody>${
+    g.map((x) => `<tr><td class="l">${esc(x.player)}<span class="sub">${esc(x.stat)}</span></td><td>${x.pp}</td><td>${esc(String(x.dk))}</td><td>${esc(x.side)} ${pc(x.p)}<span class="sub">${esc(x.conf)}</span></td></tr>`).join("")}</tbody></table></div>
+    <div class="note">${gAll.length} lines on ${esc(D0.label)}${gAll.length > 20 ? "; the top 20 shown" : ""}.${pre === "nfl" ? " Where PrizePicks posts DraftKings' line, the market part is 50/50 (the feed carries lines, not prices)." : " DK is the mean of the Poisson fitted to DraftKings' de-vigged milestone ladder."}</div>` : `<div class="note">No DraftKings comparison for ${esc(D0.label)}.</div>`;
+  $(pre + "Note").innerHTML = "Most-likely-game list: one simulated game per matchup (the most common final score, then the run closest to every player's median), kept only where that run, the simulation's median and this season's record agree on the side and no reason shown points the other way; one run is a single draw, so the order comes from the probability. History list: the hit-rate method, for comparison. " + SPORT_NOTE[pre] + " Every pick passed <span class=\"num\">edge verify</span> before it was listed.";
 }
+const renderNflPicks = () => renderSportPicks("nfl");
 function fmtKick(iso) { if (!iso) return ""; const t = new Date(iso); return isNaN(t) ? "" : t.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }); }
-// each league's picks show with that league: NBA picks in the NBA section, NFL picks in the NFL section
+// each league's picks show with that league: NBA picks in the NBA section, NFL in NFL, NHL in NHL
 function syncPicks() {
   const k = state.custom ? null : (league() || {}).key;
   if ($("picksPanel")) $("picksPanel").hidden = !(window.SIMLAB_PICKS && k === "nba");
   if ($("nflPicksPanel")) $("nflPicksPanel").hidden = !(window.SIMLAB_NFL_PICKS && k === "nfl");
+  if ($("nhlPicksPanel")) $("nhlPicksPanel").hidden = !(window.SIMLAB_NHL_PICKS && k === "nhl");
 }
 const N = 50000;
 const $ = (id) => document.getElementById(id);
@@ -2493,6 +2521,6 @@ $("bcNew").onclick = () => bcStart("random");
 $("bcLikelyBtn").onclick = () => bcStart("likely");
 
 $("pulled").textContent = D.pulled ? `Lines and injuries as of ${new Date(D.pulled).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "No data file loaded: use Any game (custom).";
-renderRail(); renderHonest(); renderPicks(); renderNflPicks(); syncPicks();
+renderRail(); renderHonest(); renderPicks(); renderNflPicks(); renderSportPicks("nhl"); syncPicks();
 if (D.leagues.length && D.leagues[0].games.length) { renderGames(); selectGame(); } else openCustom();
 </script>

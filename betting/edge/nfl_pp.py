@@ -475,3 +475,10 @@ def reasons(r: dict, res: dict) -> list[dict]:
     if r.get("flags"):
         add("role", "against", "; ".join(r["flags"]))
     return out
+
+
+def gap_rows(ok: list[dict]) -> list[dict]:
+    """PrizePicks lines that differ from DraftKings', biggest gaps first."""
+    gaps = sorted([r for r in ok if r.get("gap")], key=lambda r: -abs(r["gap"]))
+    return [{"player": r["player"], "stat": LABEL[r["market_key"]], "pp": r["line"], "dk": r["dk_line"], "side": r["side"],
+             "p": round(r["p_final"], 4), "conf": r["confidence"], "game": r["game"]} for r in gaps]

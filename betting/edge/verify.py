@@ -75,6 +75,12 @@ def check_recompute(rep: Report, adj: dict):
         if "role unconfirmed" in (r.get("notes") or ""):
             c_ = "Low"
         e = type(e)(p=p_, confidence=c_, agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
+    elif r.get("sport") == "nhl" and str(r.get("market", "")).startswith("nhl_"):
+        from . import nhl_pp
+        a2 = dict(adj); a2["blend_by_sport"] = {**(adj.get("blend_by_sport") or {}), "nhl": nhl_pp.BLEND}
+        e = final_probability(pm, 0.5 if pk is None else pk, None, r.get("segment", ""), 0, a2)
+        if e.confidence in ("High", "Medium") and ("no DraftKings line" in (r.get("notes") or "") or "flags:" in (r.get("notes") or "")):
+            e = type(e)(p=e.p, confidence="Low", agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
     elif r.get("sport") == "nfl" and "nfl sim median" in (r.get("notes") or "") and e.confidence in ("High", "Medium") and \
             ("no DraftKings line" in r["notes"] or "flags:" in r["notes"] or "heavily juiced" in r["notes"]):
         # edge nfl-picks holds a leg at Low without a DraftKings line (the simulation alone has no edge), with a role flag,
@@ -141,6 +147,9 @@ def started(row: dict) -> bool | None:
             return g["status"]["abstractGameState"] != "Preview"
         if row.get("sport") == "nba":
             s = _get(f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={row['event_id']}")
+            return s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_SCHEDULED"
+        if row.get("sport") == "nhl" and str(row.get("market", "")).startswith("nhl_"):     # edge nhl-picks legs: ESPN event ids
+            s = _get(f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/summary?event={row['event_id']}")
             return s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_SCHEDULED"
     except Exception:
         return None
@@ -266,6 +275,40 @@ def check_nfl(rep: Report, adj: dict):
     off = lm is None or abs(pm - lm) > TOL_MODEL
     rep.add("WARN" if off and getattr(rep, "locked", False) else "FAIL" if off else "PASS", "reprice",
             f"simulator now {pm:.3f} (calibrated), logged {lm}")
+    if x["flags"]:
+        rep.add("WARN", "role", "; ".join(x["flags"]))
+
+
+def check_nhl_pp(rep: Report):
+    """A PrizePicks NHL leg (edge nhl-picks): rebuild the game (same seed, fresh injury report, DraftKings ladders and
+    box scores), re-price the leg on its side, compare each component and rebuild the label."""
+    from . import nhl_pp
+    r = rep.row
+    locked = getattr(rep, "locked", False)
+    G = nhl_pp.game_for(str(r["event_id"]))
+    if not G:
+        rep.add("WARN" if locked else "FAIL", "reprice", "game not on ESPN's schedule now (started, postponed?): can't re-run")
+        return
+    m = r["market"][len("nhl_"):]
+    x = nhl_pp.price_leg(G, r["player"], m, float(r["line"]), side=r["side"])
+    if not x:
+        rep.add("WARN" if locked else "FAIL", "reprice", f"{r['player']} is out of the projected rotation now (scratched or injured?)")
+        return
+    rep.add("PASS", "recount", f"this season {x['hist'][0]} over / {x['hist'][1]} under at {r['line']} (context only: history isn't blended for NHL)")
+    lm = _f(r.get("p_model"))
+    off = lm is None or abs(x["p_model"] - lm) > TOL_MODEL
+    rep.add("WARN" if off and locked else "FAIL" if off else "PASS", "reprice", f"simulation now {x['p_model']:.3f}, logged {lm}")
+    lk = _f(r.get("p_market"))
+    moved = (x["p_market"] is None) != (lk is None) or (lk is not None and abs(x["p_market"] - lk) > TOL_MODEL)
+    rep.add("WARN" if moved else "PASS", "market",
+            (f"DraftKings ladder now {x['p_market']} (logged {lk})" if x["p_market"] is not None else f"no DraftKings ladder now (logged {lk})")
+            + (": the ladder moved, re-price before publishing" if moved else ""))
+    rep.fresh = {"p_model": x["p_model"], "p_market": "" if x["p_market"] is None else x["p_market"], "p_hist": "", "hist_n": 0,
+                 "p_final": round(x["p_final"], 4), "confidence": x["confidence"],
+                 "side_note": f"fresh {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%MZ}: NHL simulation re-run"}
+    conf = r.get("confidence")
+    rep.add("PASS" if x["confidence"] == conf else "FAIL", "fresh label",
+            f"rebuilt {x['p_final']:.3f} {x['confidence']}" + ("" if x["confidence"] == conf else f" (logged {conf})"))
     if x["flags"]:
         rep.add("WARN", "role", "; ".join(x["flags"]))
 
@@ -493,6 +536,8 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
                 check_nfl(rep, adj)
             elif sport == "nba":
                 check_nba(rep, adj)
+            elif sport == "nhl" and str(row.get("market", "")).startswith("nhl_"):
+                check_nhl_pp(rep)
             else:
                 rep.add("WARN", "recount", f"no automatic recount for {sport} yet: recount history by hand before publishing")
         except Exception as e:
