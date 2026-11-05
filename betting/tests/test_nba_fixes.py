@@ -161,6 +161,18 @@ class SideNumbers(unittest.TestCase):
         self.assertAlmostEqual(y["p_model"], 0.40)
 
 
+class NflAnchoring(unittest.TestCase):
+    def test_count_tilt_keeps_pushes(self):
+        from edge import nfl_pp
+        rng = np.random.default_rng(1)
+        arr = rng.poisson(1.9, 200000).astype(float)
+        self.assertAlmostEqual(nfl_pp.anchored_count(arr, 2.5, 2.5), 0.5, places=2)       # DK's line is the median
+        o = nfl_pp.anchored_count(arr, 2.5, 2.0)                                          # over 2.0: 3+ wins, 2 pushes
+        k = np.arange(0, 15)
+        self.assertTrue(0.5 < o < 0.75)
+        self.assertLess(nfl_pp.anchored_count(arr, 1.5, 2.0), 0.5)                         # DK at 1.5: 3+ is less likely than not
+
+
 class MinutesGap(unittest.TestCase):
     def test_l28(self):
         from edge import verify as V

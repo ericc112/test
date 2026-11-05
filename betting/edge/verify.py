@@ -75,6 +75,11 @@ def check_recompute(rep: Report, adj: dict):
         if "role unconfirmed" in (r.get("notes") or ""):
             c_ = "Low"
         e = type(e)(p=p_, confidence=c_, agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
+    elif r.get("sport") == "nfl" and "nfl sim median" in (r.get("notes") or "") and e.confidence in ("High", "Medium") and \
+            ("no DraftKings line" in r["notes"] or "flags:" in r["notes"] or "heavily juiced" in r["notes"]):
+        # edge nfl-picks holds a leg at Low without a DraftKings line (the simulation alone has no edge), with a role flag,
+        # or on a TD/interception line (often heavily juiced; the feed has no prices)
+        e = type(e)(p=e.p, confidence="Low", agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
     logged, conf = _f(r.get("p_final")), r.get("confidence")
     if (logged is None or abs(e.p - logged) > TOL_P or e.confidence != conf) and getattr(rep, "locked", False):
         rep.add("WARN", "recompute", f"today's weights give {e.p:.3f} {e.confidence}; logged {logged} {conf} (event under way: logged number stands)")
@@ -236,6 +241,8 @@ def check_nfl(rep: Report, adj: dict):
     if getattr(rep, "locked", False):
         rep.add("WARN", "offered", "game under way or over: pick is locked; audit only (never rewritten)")
     res = nfl.price_game(str(r["event_id"]), n=50000)
+    if "prizepicks" in (r.get("book") or "").lower():
+        return check_nfl_pp(rep, res)
     hit = [x for x in res["rows"] if str(x["player_id"]) == str(r["player_id"]) and x["market"] == r["market"]]
     if not hit:
         rep.add("FAIL", "offered", f"DraftKings no longer posts {r['player']} {r['market']}: pulled (injury/role?)")
@@ -259,6 +266,38 @@ def check_nfl(rep: Report, adj: dict):
     off = lm is None or abs(pm - lm) > TOL_MODEL
     rep.add("WARN" if off and getattr(rep, "locked", False) else "FAIL" if off else "PASS", "reprice",
             f"simulator now {pm:.3f} (calibrated), logged {lm}")
+    if x["flags"]:
+        rep.add("WARN", "role", "; ".join(x["flags"]))
+
+
+def check_nfl_pp(rep: Report, res: dict):
+    """A PrizePicks NFL leg (edge nfl-picks): re-price it the same way (simulation re-centred on DraftKings' current
+    line, the shrunk simulation, this season's count), compare each component and rebuild the label. The board check
+    (offered) runs separately."""
+    from . import nfl_pp
+    r = rep.row
+    locked = getattr(rep, "locked", False)
+    x = nfl_pp.price_leg(res, r["player"], r["market"], float(r["line"]), side=r["side"])
+    if not x:
+        rep.add("WARN" if locked else "FAIL", "reprice", f"{r['player']} {r['market']} is not in the simulation now (inactive? role?)")
+        return
+    lh, ln = _f(r.get("p_hist")), int(_f(r.get("hist_n")) or 0)
+    bad = (x["p_hist"] is None) != (lh is None) or (lh is not None and abs(x["p_hist"] - lh) > TOL_HIST) or abs(x["hist_n"] - ln) > 1
+    rep.add("FAIL" if bad else "PASS", "recount", f"2026 games recount to {x['hist'][0]} over / {x['hist'][1]} under at {r['line']} (logged {lh} over {ln})")
+    lm = _f(r.get("p_model"))
+    off = lm is None or abs(x["p_model"] - lm) > TOL_MODEL
+    rep.add("WARN" if off and locked else "FAIL" if off else "PASS", "reprice", f"simulation now {x['p_model']:.3f} (shrunk), logged {lm}")
+    lk = _f(r.get("p_market"))
+    moved = (x["p_market"] is None) != (lk is None) or (lk is not None and abs(x["p_market"] - lk) > TOL_MODEL)
+    rep.add("WARN" if moved else "PASS", "market",
+            (f"DraftKings line {x['dk_line']}: anchored {x['p_market']} (logged {lk})" if x["dk_line"] is not None else f"no DraftKings line now (logged {lk})")
+            + (": the line moved, re-price before publishing" if moved else ""))
+    rep.fresh = {"p_model": x["p_model"], "p_market": "" if x["p_market"] is None else x["p_market"],
+                 "p_hist": "" if x["p_hist"] is None else x["p_hist"], "hist_n": x["hist_n"], "p_final": round(x["p_final"], 4),
+                 "confidence": x["confidence"], "side_note": f"fresh {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%MZ}: NFL simulation re-run"}
+    conf = r.get("confidence")
+    rep.add("PASS" if x["confidence"] == conf else "FAIL", "fresh label",
+            f"rebuilt {x['p_final']:.3f} {x['confidence']}" + ("" if x["confidence"] == conf else f" (logged {conf})"))
     if x["flags"]:
         rep.add("WARN", "role", "; ".join(x["flags"]))
 
@@ -458,7 +497,7 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
                 rep.add("WARN", "recount", f"no automatic recount for {sport} yet: recount history by hand before publishing")
         except Exception as e:
             rep.add("FAIL", "recount", f"back-check crashed ({type(e).__name__}: {str(e)[:60]}): not verified")
-        if sport != "nfl":   # check_nfl reads the DraftKings board itself
+        if sport != "nfl" or "prizepicks" in (row.get("book") or "").lower():   # a DraftKings NFL leg: check_nfl reads that board
             check_offered(rep)
     repriced = any(n == "reprice" and st == "PASS" for st, n, _ in rep.checks)
     if row.get("date") and row["date"] < dt.date.today().isoformat() and not repriced:

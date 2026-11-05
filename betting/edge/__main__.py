@@ -145,6 +145,14 @@ def main(argv=None):
     sl.add_argument("--out", default="simlab_data.js")
     sl.add_argument("--week", type=int, help="NFL week (default: the next one with games to play)")
     sl.add_argument("--no-backtest", action="store_true", help="skip the ~40 s NFL backtest summary")
+    nfp = sub.add_parser("nfl-picks")
+    nfp.add_argument("--week", type=int, default=None)
+    nfp.add_argument("--top", type=int, default=5)
+    nfp.add_argument("--n", type=int, default=50000)
+    nfp.add_argument("--match", default=None, help="only games with this team")
+    nfp.add_argument("--no-log", action="store_true")
+    nfp.add_argument("--no-verify", action="store_true")
+    nfp.add_argument("--out", default=None)
     t = sub.add_parser("tag")
     t.add_argument("id")
     t.add_argument("reason")
@@ -337,6 +345,8 @@ def main(argv=None):
     elif args.cmd == "simlab":
         from . import simlab
         print(simlab.export(args.out, nfl_week=args.week, backtest_weeks=None if args.no_backtest else (3, 8)))
+    elif args.cmd == "nfl-picks":
+        _nfl_picks(args)
     elif args.cmd == "tag":
         if L.base_tag(args.reason) not in R.TAGS:
             print(f"note: '{args.reason}' is not a standard tag ({', '.join(R.TAGS)}); recorded anyway")
@@ -351,6 +361,76 @@ def main(argv=None):
             R.write_pm(pms)
         R.render_md(pms, rows)
         print("tagged", args.id)
+
+
+def _nfl_picks(args):
+    """Price this week's PrizePicks NFL board (simulation anchored on DraftKings' lines), keep the best legs (one per
+    game), log, back-check each and write the report."""
+    import json
+    import os
+    from . import nfl_pp as NP
+    from . import pp as P
+    from . import verify as V
+    from .blend import HERE, load_adjustments
+    props = [p for p in P.board("NFL", ("standard",)) if p["stat"] in NP.STATS]
+    if args.match:
+        props = [p for p in props if args.match.upper() in (str(p.get("home")) + " " + str(p.get("away"))).upper()]
+    if not props:
+        print("No NFL props on the PrizePicks board for the stats the simulation prices.")
+        return
+    print(f"Pricing {len(props)} PrizePicks NFL lines ({args.n:,} runs per game)...")
+    rows = NP.price_board(props, n=args.n, week=args.week)
+    ok = [r for r in rows if "error" not in r]
+    picks = NP.pick_order(ok, args.top)
+    ids = {}
+    if not args.no_log:
+        pick_ids = {id(r) for r in picks}
+        logrows = [r for r in ok if id(r) in pick_ids or r["confidence"] in ("High", "Medium")]
+        act = {id(r): ("bet" if NP.verdict(r).startswith("ENTRY") else "lean" if r["confidence"] in ("High", "Medium") else "pass")
+               if id(r) in pick_ids else "pass" for r in logrows}
+        for r, (bid, _) in zip(logrows, log_pp(logrows, act, refresh=True)):
+            ids[id(r)] = bid
+        print(f"Logged {len(logrows)} leg(s) to bets.csv")
+    adj, bets = load_adjustments(), L.read_bets()
+    blocks, page = [], []
+    for r in picks:
+        ver, warns = "not checked", []
+        if not args.no_verify and id(r) in ids:
+            row = next(b for b in bets if b["id"] == ids[id(r)])
+            rep = V.verify(row, bets, adj)
+            print(rep.text())
+            ver, warns = rep.verdict, [f"{n}: {d}" for st, n, d in rep.checks if st != "PASS"]
+        if id(r) in ids:
+            r["bet_id"] = f"#{ids[id(r)]} "
+        blocks.append(NP.write_up(r, ver, warns))
+        page.append({"id": ids.get(id(r)), "player": r["player"], "team": r["team"], "game": r["game"], "stat": NP.LABEL[r["market_key"]],
+                     "side": r["side"], "line": r["line"], "p": round(r["p_final"], 4), "conf": r["confidence"], "verdict": NP.verdict(r),
+                     "model": r["p_model"], "market": r["p_market"], "hist": r["p_hist"], "hist_n": r["hist_n"], "dk_line": r["dk_line"],
+                     "median": round(r["median"], 1), "flags": r["flags"], "verified": ver, "warns": warns, "start": r["start"]})
+    gaps = sorted([r for r in ok if r["gap"]], key=lambda r: -abs(r["gap"]))
+    today = dt.date.today().isoformat()
+    head = [f"# NFL PrizePicks: best {len(picks)} legs, {today}",
+            f"{len(ok)} lines priced across {len({r['script'] for r in ok})} games; not priced: {len(rows) - len(ok)}. "
+            "Each line is priced from the simulation re-centred on DraftKings' line for the same player and stat (the backtest's "
+            "better centre), the simulation's own number shrunk toward 50%, and this season's record, blended as `edge prob`. "
+            "Where PrizePicks posts DraftKings' line the market says 50/50 (the feed has no prices), so the edge, if any, sits in lines "
+            "that differ from DraftKings'. No locks: the NFL simulation alone has not beaten DraftKings' closing lines (README).", ""]
+    high = [r for r in picks if NP.verdict(r).startswith("ENTRY")]
+    head.append("**No leg clears the ENTRY rule (High, 65%+). Sitting out beats forcing it.**" if len(high) < 2 else
+                f"**ENTRY legs:** {', '.join(r['player'] for r in high)}")
+    tail = ["", f"## PrizePicks lines that differ from DraftKings' ({len(gaps)})", "| player | stat | PrizePicks | DraftKings | side | p | conf |", "|---|---|---|---|---|---|---|"]
+    tail += [f"| {r['player']} | {NP.LABEL[r['market_key']]} | {r['line']} | {r['dk_line']} | {r['side']} | {r['p_final']:.1%} | {r['confidence']} |" for r in gaps[:25]]
+    report = "\n".join(head) + "\n\n## Top by probability (one per game)\n\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n"
+    out = args.out or os.path.join(HERE, "data", "picks", f"{today}-nfl.md")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "w") as f:
+        f.write(report)
+    with open(out[:-3] + ".json", "w") as f:
+        json.dump({"date": today, "lines": len(ok), "games": len({r["script"] for r in ok}), "picks": page,
+                   "gaps": [{"player": r["player"], "stat": NP.LABEL[r["market_key"]], "pp": r["line"], "dk": r["dk_line"], "side": r["side"],
+                             "p": round(r["p_final"], 4), "conf": r["confidence"]} for r in gaps]}, f, default=float)
+    print(report)
+    print(f"Report: {out}")
 
 
 def _nba_picks(args):
