@@ -153,6 +153,7 @@ def main(argv=None):
     nfp.add_argument("--no-log", action="store_true")
     nfp.add_argument("--no-verify", action="store_true")
     nfp.add_argument("--out", default=None)
+    nfp.add_argument("--page", help="also write the picks for the Sim Lab page here (nfl_picks.js)")
     t = sub.add_parser("tag")
     t.add_argument("id")
     t.add_argument("reason")
@@ -406,7 +407,9 @@ def _nfl_picks(args):
         page.append({"id": ids.get(id(r)), "player": r["player"], "team": r["team"], "game": r["game"], "stat": NP.LABEL[r["market_key"]],
                      "side": r["side"], "line": r["line"], "p": round(r["p_final"], 4), "conf": r["confidence"], "verdict": NP.verdict(r),
                      "model": r["p_model"], "market": r["p_market"], "hist": r["p_hist"], "hist_n": r["hist_n"], "dk_line": r["dk_line"],
-                     "median": round(r["median"], 1), "flags": r["flags"], "verified": ver, "warns": warns, "start": r["start"]})
+                     "hist_o": r["hist"][0], "hist_u": r["hist"][1], "median": round(r["median"], 1), "q25": round(r["q25"]), "q75": round(r["q75"]),
+                     "volume": f"{r['volume'][1]:.1f} {r['volume'][0].replace('_', ' ')}" if r["volume"] else None,
+                     "why": "; ".join(r.get("why") or []), "flags": r["flags"], "verified": ver, "warns": warns, "start": r["start"]})
     gaps = sorted([r for r in ok if r["gap"]], key=lambda r: -abs(r["gap"]))
     today = dt.date.today().isoformat()
     head = [f"# NFL PrizePicks: best {len(picks)} legs, {today}",
@@ -425,10 +428,17 @@ def _nfl_picks(args):
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
         f.write(report)
+    pg = {"date": today, "week": args.week or NP.current_week(2026), "pulled": f"{dt.datetime.now(dt.timezone.utc):%Y-%m-%dT%H:%MZ}",
+          "lines": len(ok), "games": len({r["script"] for r in ok}), "picks": page,
+          "entry": ", ".join(f"{r['player']} {r['side']} {r['line']}" for r in high) if len(high) >= 2 else None,
+          "gaps": [{"player": r["player"], "stat": NP.LABEL[r["market_key"]], "pp": r["line"], "dk": r["dk_line"], "side": r["side"],
+                    "p": round(r["p_final"], 4), "conf": r["confidence"]} for r in gaps]}
     with open(out[:-3] + ".json", "w") as f:
-        json.dump({"date": today, "lines": len(ok), "games": len({r["script"] for r in ok}), "picks": page,
-                   "gaps": [{"player": r["player"], "stat": NP.LABEL[r["market_key"]], "pp": r["line"], "dk": r["dk_line"], "side": r["side"],
-                             "p": round(r["p_final"], 4), "conf": r["confidence"]} for r in gaps]}, f, default=float)
+        json.dump(pg, f, default=float)
+    if args.page:
+        with open(args.page, "w") as f:
+            f.write("window.SIMLAB_NFL_PICKS = " + json.dumps(pg, default=float) + ";\n")
+        print(f"Page data: {args.page}")
     print(report)
     print(f"Report: {out}")
 
