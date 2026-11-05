@@ -146,6 +146,21 @@ class VerifyFreshness(unittest.TestCase):
         self.assertIsNone(V.last_priced("no stamp"))
 
 
+class SideNumbers(unittest.TestCase):
+    """A re-sided leg (history and most-likely lists) is priced by the same recompute verify runs."""
+
+    def test_v2_ignores_history_and_neutral_market(self):
+        logic = {**NM.V1, "blend": {"intercept": 0.0, "w_model": 0.2, "w_market": 0.8, "w_hist": 0.0}, "history": "off",
+                 "missing_market": "neutral", "cap": 0.70, "gates": {"high": 0.62, "medium": 0.54, "max_spread_high": 0.16,
+                 "min_hist_n_high": 0, "no_market_min_hist_n": 99999}}
+        r = {"side": "over", "p_model": 0.60, "p_market": None, "stat_key": "reb", "research": {"season": [6, 1, 7]}}
+        x = N.side_numbers(r, "over", logic)
+        self.assertIsNone(x["p_hist"]); self.assertEqual(x["hist_n"], 0)
+        self.assertEqual((x["p_final"], x["confidence"]), N.recompute(0.60, None, None, 0, "nba:reb:over", logic))
+        y = N.side_numbers(r, "under", logic)
+        self.assertAlmostEqual(y["p_model"], 0.40)
+
+
 class MinutesGap(unittest.TestCase):
     def test_l28(self):
         from edge import verify as V

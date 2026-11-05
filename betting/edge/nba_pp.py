@@ -142,6 +142,14 @@ def run_sims(eng: dict, gids: list[str], n: int = N_SIMS, workers: int = 4) -> d
 SIM_KNOBS = {"minutes_alpha": "MINUTES_ALPHA", "swing_rho": "SWING_RHO", "shock": "PLAYER_SHOCK", "prior_min": "PLAYER_PRIOR_MIN"}
 
 
+def nba_model_params(version: int | None = None) -> dict:
+    """A logic version's parameters with its version number (default: the published one)."""
+    from . import nba_model
+    if version is None:
+        return board_logic()
+    return {**nba_model.params_for(version), "_version": version}
+
+
 def current_sim(version: int | None = None) -> dict:
     """The simulation settings of a logic version (default: the published one); {} = the engine's defaults (v1)."""
     from . import nba_model
@@ -524,12 +532,36 @@ def pick_order(rows: list[dict], top: int = 5) -> list[dict]:
     return out
 
 
+def board_logic() -> dict:
+    """The published logic, as price_nba applies it."""
+    from . import nba_model
+    return {**nba_model.V1, **(nba_model.params("current") or {}), "_version": nba_model.load()["current"]["version"]}
+
+
+def side_numbers(r: dict, side: str, logic: dict | None = None) -> dict:
+    """The blend's numbers for `side` of a priced leg under the logic that priced the board: the components flipped
+    to that side, history only if the logic uses it, and the probability and label from `recompute` (the same code
+    edge verify runs), so a re-sided leg in the history or most-likely list verifies like any other."""
+    logic = logic or board_logic()
+    same = side == r["side"]
+    flip = lambda v: None if v is None else (v if same else 1 - v)
+    pm, pk = flip(r["p_model"]), flip(r["p_market"])
+    o, u, _ = (r.get("research") or {}).get("season", [0, 0, 0])
+    if logic.get("history") == "off" or not (o + u):
+        ph, n = None, 0
+    else:
+        ph, n = (o if side == "over" else u) / (o + u), o + u
+    p, conf = recompute(pm, pk, ph, n, f"nba:{r['stat_key']}:{side}", logic)
+    return {"p_model": pm, "p_market": pk, "p_hist": ph, "hist_n": n, "p_final": p,
+            "confidence": "Low" if r.get("newcomer") else conf}
+
+
 def history_order(rows: list[dict], top: int = 5, min_games: int = 5) -> list[dict]:
     """The hit-rate method, for comparison: the side each standard line has cleared more often this season (5+ games),
     ranked by that season hit rate, then the last 5, then head-to-head, then sample size; one leg per game. Each leg
     carries what the model, DraftKings and the blend say about that same side (LESSONS L27: history alone has shown no
     information beyond the price)."""
-    from .blend import final_probability
+    logic = board_logic()
     cand = []
     for r in rows:
         if "error" in r or r.get("odds_type") != "standard" or not r.get("research"):
@@ -543,12 +575,7 @@ def history_order(rows: list[dict], top: int = 5, min_games: int = 5) -> list[di
             continue
         k = 0 if side == "over" else 1
         rate = lambda t: t[k] / t[2] if t[2] else 0.0
-        same = side == r["side"]
-        flip = lambda v: None if v is None else (v if same else 1 - v)
-        pm, pk, ph = flip(r["p_model"]), flip(r["p_market"]), (o if side == "over" else u) / max(o + u, 1)
-        e = final_probability(pm, pk, ph, f"nba:{r['stat_key']}:{side}", o + u)
-        conf = "Low" if r.get("newcomer") else e.confidence
-        cand.append({**r, "side": side, "p_model": pm, "p_market": pk, "p_hist": ph, "hist_n": o + u, "p_final": e.p, "confidence": conf,
+        cand.append({**r, "side": side, **side_numbers(r, side, logic),
                      "hist_rank": (rate(rs["season"]), rate(rs["last5"]), rate(rs["h2h"]), n), "method": "history"})
     cand.sort(key=lambda r: tuple(-x for x in r["hist_rank"]))
     seen, out = set(), []
@@ -624,9 +651,7 @@ def likely_order(rows: list[dict], ctx: dict, likely: dict, top: int = 5) -> lis
     then the run's gap over his simulated spread; one leg per game. Each leg
     carries the blend's numbers for that side, the run's box line, the usage shift from teammates out, and what the
     opponent allows to his position."""
-    from .blend import final_probability
-    from . import nba_model
-    adj = _logic_adj({**nba_model.V1, **nba_model.params("current")})
+    logic = board_logic()
     cand = []
     for r in rows:
         if "error" in r or r.get("odds_type") != "standard" or r["event_id"] not in likely:
@@ -651,13 +676,7 @@ def likely_order(rows: list[dict], ctx: dict, likely: dict, top: int = 5) -> lis
         if n < 3 or (o if side == "over" else u) < (u if side == "over" else o):     # history must not lean the other way
             continue
         spread = max((r["q75"] - r["q25"]) / 1.35, 1.0)
-        same = side == r["side"]
-        flip = lambda v: None if v is None else (v if same else 1 - v)
-        pm, pk = flip(r["p_model"]), flip(r["p_market"])
-        ph = (o if side == "over" else u) / max(o + u, 1)
-        e = final_probability(pm, pk, ph, f"nba:{r['stat_key']}:{side}", o + u, adj)
-        cand.append({**r, "side": side, "p_model": pm, "p_market": pk, "p_hist": ph, "hist_n": o + u, "p_final": e.p,
-                     "confidence": "Low" if r.get("newcomer") else e.confidence, "method": "likely", "z_gap": abs(gap) / spread,
+        cand.append({**r, "side": side, **side_numbers(r, side, logic), "method": "likely", "z_gap": abs(gap) / spread,
                      "ml": {"score": L["score"], "home": g["home"], "away": g["away"], "line": me, "value": val, "gap": gap, "maxZ": L.get("maxZ")}})
     # one simulated run is a single draw: it only decides the side together with the median and this season;
     # the order comes from the calibrated probability (ranking by the run's gap rewarded its most extreme lines)

@@ -450,8 +450,9 @@ def _nba_picks(args):
             f"Board pulled {pulled} · {len(ok)} props priced ({n_std} standard) across {len({r['script'] for r in ok})} games · "
             f"{args.n:,} simulations per game · not priced: {len(rows) - len(ok)}",
             "",
-            "Ranked by calibrated probability (model + DraftKings + this season, blended as `edge prob`), High before Medium, "
-            "standard lines only, one leg per game. Entry rule (ANALYST_PROMPT): only High legs at 65%+ go in entries, two legs max; "
+            f"Ranked by calibrated probability under the published logic ({NM.load()['current']['name']}), High before Medium, "
+            "standard lines only, one leg per game. Entry rule: the logic's ENTRY rule (v1: High, 65%+, break-even + 2 pts; v2: High and "
+            "p − break-even > 1 standard error), two legs max; "
             "PrizePicks break-evens per leg: 2-pick power 57.7%, 3-pick power 58.5%, 5/6-pick flex 54.2%. These are model numbers, "
             "not locks: the NBA player model has not beaten DraftKings' prices out of sample (projection error 4.72 vs the line's 4.72 on Nov 2).",
             ""]

@@ -292,8 +292,8 @@ def check_nba(rep: Report, adj: dict):
     line, stat, side = float(r["line"]), r["market"], r["side"]
     entry = r.get("action") == "bet"
     tol_m, tol_h = (TOL_ENTRY, TOL_ENTRY) if entry else (TOL_MODEL, TOL_HIST)
-    mv = re.search(r"logic v(\d+)", r.get("notes") or "")       # re-run under the simulation settings that priced it
-    ctx = nba_pp.build(gids={str(r["event_id"])}, sim=nba_pp.current_sim(int(mv.group(1)) if mv else 1))
+    mv0 = re.search(r"logic v(\d+)", r.get("notes") or "")      # re-run under the simulation settings that priced it
+    ctx = nba_pp.build(gids={str(r["event_id"])}, sim=nba_pp.current_sim(int(mv0.group(1)) if mv0 else 1))
     g = ctx["games"].get(str(r["event_id"]))
     if not g or str(r["event_id"]) not in ctx["sims"]:
         rep.add("WARN" if getattr(rep, "locked", False) else "FAIL", "reprice", "game not on ESPN's schedule now (started, postponed?): can't re-run")
@@ -309,7 +309,12 @@ def check_nba(rep: Report, adj: dict):
     o, u = sum(v > line for v in vals), sum(v < line for v in vals)
     ph = (o if side == "over" else u) / max(o + u, 1) if o + u else None
     logged, ln = _f(r.get("p_hist")), int(_f(r.get("hist_n")) or 0)
-    if ph is None and logged is None:
+    mv = re.search(r"logic v(\d+)", r.get("notes") or "")
+    logic = nba_pp.nba_model_params(int(mv.group(1)) if mv else 1)
+    hist_off = logic.get("history") == "off"
+    if hist_off and logged is None:
+        rep.add("PASS", "recount", f"history not used by logic v{mv.group(1) if mv else 1}; box scores recount to {o} over / {u} under at {line} in {len(vals)} games")
+    elif ph is None and logged is None:
         rep.add("PASS", "recount", "no games this season: no history component")
     else:
         bad = ph is None or logged is None or abs(ph - logged) > tol_h or abs((o + u) - ln) > 1
@@ -359,15 +364,16 @@ def check_nba(rep: Report, adj: dict):
     lk = _f(r.get("p_market"))
     if (pk is None) != (lk is None) or (pk is not None and abs(pk - lk) > TOL_MODEL):
         rep.add("WARN", "market", f"DraftKings now {'none' if pk is None else f'{pk:.3f}'} (logged {lk}): the line or price moved, re-price before publishing")
-    e = final_probability(pm, pk, ph, r.get("segment", ""), o + u, adj)
-    rep.fresh = {"p_model": round(pm, 3), "p_market": "" if pk is None else round(pk, 3), "p_hist": "" if ph is None else round(ph, 3),
-                 "hist_n": o + u, "p_final": round(e.p, 4), "confidence": e.confidence,
+    ph_l, n_l = (None, 0) if hist_off else (ph, o + u)        # history only if the leg's logic uses it
+    fp, fc = nba_pp.recompute(pm, pk, ph_l, n_l, r.get("segment", ""), logic)     # the fresh label under the leg's own logic
+    rep.fresh = {"p_model": round(pm, 3), "p_market": "" if pk is None else round(pk, 3), "p_hist": "" if ph_l is None else round(ph_l, 3),
+                 "hist_n": n_l, "p_final": round(fp, 4), "confidence": fc,
                  "side_note": f"fresh {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%MZ}: simulation re-run, {o + u} games of history"}
     conf = r.get("confidence")
     if "role unconfirmed" in (r.get("notes") or "") and conf == "Low":
-        rep.add("PASS", "fresh label", f"rebuilt {e.p:.3f} {e.confidence}; stays Low (role or minutes unconfirmed, L5)")
+        rep.add("PASS", "fresh label", f"rebuilt {fp:.3f} {fc}; stays Low (role or minutes unconfirmed, L5)")
     else:
-        rep.add("PASS" if e.confidence == conf else "FAIL", "fresh label", f"rebuilt from fresh data: {e.p:.3f} {e.confidence}" + ("" if e.confidence == conf else f" (logged {conf})"))
+        rep.add("PASS" if fc == conf else "FAIL", "fresh label", f"rebuilt from fresh data: {fp:.3f} {fc}" + ("" if fc == conf else f" (logged {conf})"))
 
 
 def check_drift(rep: Report, rows: list[dict]):
