@@ -75,7 +75,8 @@
     "nba:ra:under|model bias",
     "nba:reb:over|model bias",
     "nba:reb:over|role/lineup",
-    "nba:reb:under|model bias"
+    "nba:reb:under|model bias",
+    "nba:tpm:under|model bias"
   ],
   "blend_by_sport": {},
   "blend_by_sport_fit": {}

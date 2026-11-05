@@ -126,3 +126,6 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 - 4 losses in nba:reb:under share the cause 'model bias': write a checklist rule for it in the table above.
 - 4 losses in nba:ra:over share the cause 'model bias': write a checklist rule for it in the table above.
 - 12 losses in nba:ra:under share the cause 'model bias': write a checklist rule for it in the table above.
+
+### Auto-learned 2026-11-05
+- 2 losses in nba:tpm:under share the cause 'model bias': write a checklist rule for it in the table above.
