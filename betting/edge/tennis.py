@@ -614,7 +614,8 @@ def price_leg(G: dict, name: str, stat: str, line: float, over_only: bool = Fals
         if best is None or e.p > best["p_final"]:
             best = {"side": sd, "p_model": round(pm, 4), "p_market": None if pk is None else round(pk, 4), "p_hist": None, "hist_n": 0,
                     "p_final": e.p, "confidence": conf, "why": why}
-    return {"a_side": a_side, "median": float(np.median(arr)), "mean": float(np.mean(arr)), "q25": float(np.percentile(arr, 25)),
+    from . import viz as _viz
+    return {"a_side": a_side, "dist": _viz.dist_from_samples(arr), "median": float(np.median(arr)), "mean": float(np.mean(arr)), "q25": float(np.percentile(arr, 25)),
             "q75": float(np.percentile(arr, 75)), "flags": flags, "dabble": dk, **best}
 
 
@@ -764,7 +765,8 @@ def research(p: dict, o: dict, st: str, line: float) -> dict:
     h2h = [(r, v) for r, v in vals if r["opp_slug"] == o["slug"]]
     avg = lambda L: float(np.mean([v for _, v in L])) if L else None
     return {"season": cnt(vals), "last5": cnt(vals[-5:]), "h2h": cnt(h2h), "season_avg": avg(vals), "last5_avg": avg(vals[-5:]),
-            "h2h_avg": avg(h2h), "last_games": [v for _, v in vals[-5:]]}
+            "h2h_avg": avg(h2h), "last_games": [v for _, v in vals[-5:]],
+            "games": [[r["date"], r.get("opp", ""), None, None, v] for r, v in vals]}
 
 
 # ------------------------------------------------------------------ lists (same shape as nfl_pp / nhl_pp, for edge tennis-picks)

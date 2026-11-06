@@ -26,6 +26,8 @@ import unicodedata
 
 import numpy as np
 
+from . import viz as _viz
+
 from .blend import HERE
 
 STATS = {"Points": "pts", "Rebounds": "reb", "Assists": "ast", "3-PT Made": "tpm", "Pts+Rebs+Asts": "pra",
@@ -277,7 +279,8 @@ def research(p: dict, stat: str, line: float, opp: str, allowed: dict | None) ->
            "h2h": [over(h2h, 2), under(h2h, 2), len(h2h)], "per36": per36,
            "h2h_per36": 36 * sum(v(r, 2) for r in h2h) / h2m if h2m else None,
            "season_avg": float(np.mean([v(r, 4) for r in log])) if log else None, "last_games": [v(r, 4) for r in log[-5:]],
-           "h2h_games": [[r[0], v(r, 2), r[1]] for r in h2h]}
+           "h2h_games": [[r[0], v(r, 2), r[1]] for r in h2h],
+           "games": [[r[0], r[1], r[2], r[3], v(r, 4)] for r in log]}          # date, opponent, home, minutes, value (cards)
     if allowed and len(PARTS[stat]) == 1:
         a = allowed.get(["pts", "reb", "ast", "tpm"][PARTS[stat][0]]) or {}
         if a.get("per_game") is not None:
@@ -522,7 +525,7 @@ def price_nba(props: list[dict], n: int = N_SIMS, logic: dict | None = None) -> 
         row["verdict_v"] = verdict(row)
         out.append({**row, "event_id": g["id"], "player_id": pl["id"], "proj": quantile(h, 0.5), "opp_proj": round(mean(mh), 1),
                     "script": f"nba:{g['id']}", "newcomer": bool(flags), "research": rs, "game": f"{g['away']} @ {g['home']}",
-                    "opp_espn": opp, "sim_mean": mean(h), "q25": quantile(h, 0.25), "q75": quantile(h, 0.75), "dk": dk,
+                    "opp_espn": opp, "sim_mean": mean(h), "q25": quantile(h, 0.25), "q75": quantile(h, 0.75), "dk": dk, "dist": _viz.dist_from_counts(h),
                     "h2h_factor": (pl.get("h2h") or {}).get(stat) if len(PARTS[stat]) == 1 else None, "stat_key": stat,
                     "p_home": ctx["sims"][g["id"]]["p_home"], "pulled": ctx["pulled"], "n_sims": ctx["sims"][g["id"]]["n"],
                     "bias_logit": b, "bias_n": len(gaps.get(stat, [])), "top5": top5,
@@ -802,8 +805,8 @@ def likely_reasons(r: dict) -> list[dict]:
         add("simulation median", vd(cmp(r["proj"], r["line"])), f"median {r['proj']} (25-75th {r['q25']}-{r['q75']})")
     pk = r.get("p_market")
     if pk is not None:
-        add("DraftKings", "supports" if pk >= 0.52 else "against" if pk <= 0.48 else "neutral",
-            f"{pk:.0%} for this side after the vig" + (f" ({r['dk'].get('book', 'DraftKings')} line {r['dk']['line']})" if r.get("dk") else ""))
+        add((r.get("dk") or {}).get("book", "DraftKings"), "supports" if pk >= 0.52 else "against" if pk <= 0.48 else "neutral",
+            f"{pk:.0%} for this side after the vig" + (f" (line {r['dk']['line']})" if r.get("dk") else ""))
     else:
         add("DraftKings", "neutral", "no DraftKings price at this line")
     o, u, n = rs.get("season", [0, 0, 0])
@@ -913,7 +916,7 @@ def page_row(r: dict, verified: str, warns: list, bet_id: str | None) -> dict:
             "season": rs.get("season"), "last5": rs.get("last5"), "h2h": rs.get("h2h"), "per36": rnd(rs.get("per36"), 1),
             "h2h_per36": rnd(rs.get("h2h_per36"), 1), "season_avg": rnd(rs.get("season_avg"), 1), "last_games": rs.get("last_games"),
             "h2h_games": rs.get("h2h_games"), "opp_allows": rs.get("opp_allows"), "flags": "role unconfirmed" in (r.get("notes") or ""),
-            "verified": verified, "warns": warns, "start": r.get("start"),
+            "verified": verified, "warns": warns, "start": r.get("start"), "games": rs.get("games"), "dist": r.get("dist"),
             "ml": r.get("ml"), "usage": r.get("usage"), "pos": r.get("pos"), "pos_allows": r.get("pos_allows"), "reasons": r.get("reasons")}
 
 

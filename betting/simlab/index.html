@@ -4,6 +4,43 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
+/* visual pick cards: probability meters, game log against the line, simulated distribution */
+.vz { display: grid; gap: 10px; margin: 4px 0 2px; min-width: 0 }
+.vz-prob { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 8px; align-items: center; font-size: .8rem }
+.vz-prob .k { color: var(--muted) } .vz-prob .v { font-family: var(--font-data); font-variant-numeric: tabular-nums; text-align: right }
+.vz-track { position: relative; height: 8px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line) }
+.vz-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--home) }
+.vz-be { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--accent) }
+.vz-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .74rem; color: var(--muted) }
+.vz-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px }
+.vz-legend i.be { width: 3px; background: var(--accent) }
+.vz-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px }
+.vz-tabs button { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 8px; padding: 5px 4px; display: grid; gap: 1px; font: inherit; cursor: pointer; min-width: 0 }
+.vz-tabs button[aria-selected="true"] { border-color: var(--home); box-shadow: inset 0 0 0 1px var(--home) }
+.vz-tabs .t { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700 }
+.vz-tabs .n { font-family: var(--font-data); font-size: .9rem; font-weight: 700 } .vz-tabs .pc { font-family: var(--font-data); font-size: .72rem; color: var(--muted) }
+.vz-tabs .n.good, .vz-tabs .pc.good { color: var(--good) } .vz-tabs .n.bad, .vz-tabs .pc.bad { color: var(--bad) }
+.vz-chart { position: relative; height: 128px; border-bottom: 1px solid var(--line); margin-top: 4px }
+.vz-bars { position: absolute; inset: 0 34px 0 0; display: flex; align-items: flex-end; gap: 2px }
+.vz-col { flex: 1 1 0; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center }
+.vz-col b { font-family: var(--font-data); font-size: .72rem; font-variant-numeric: tabular-nums; color: var(--ink); line-height: 1.2 }
+.vz-bar { width: 100%; max-width: 30px; border-radius: 4px 4px 0 0; min-height: 3px; outline-offset: 1px }
+.vz-bar.hit { background: var(--good) }
+.vz-bar.miss { background: repeating-linear-gradient(135deg, var(--bad) 0 4px, color-mix(in srgb, var(--bad) 45%, var(--surface)) 4px 7px) }
+.vz-bar.push { background: var(--muted) }
+.vz-bar:hover, .vz-bar:focus-visible { filter: brightness(1.12); outline: 2px solid var(--ink) }
+.vz-line { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--ink); opacity: .55; pointer-events: none }
+.vz-line span { position: absolute; right: 0; top: -.75em; width: 32px; text-align: center; font-family: var(--font-data); font-size: .7rem; font-weight: 700; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; color: var(--ink) }
+.vz-axis { display: flex; gap: 2px; font-size: .64rem; color: var(--muted); line-height: 1.15; padding-right: 34px }
+.vz-axis span { flex: 1 1 0; min-width: 0; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: clip }
+.vz-read { font-size: .76rem; color: var(--muted); min-height: 1.2em }
+.vz-read b { color: var(--ink); font-family: var(--font-data) }
+.vz-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: .8rem }
+.vz-foot .num { font-weight: 700 }
+.vz-dist svg { display: block; width: 100%; height: 64px }
+.vz-dist .cap { font-size: .76rem; color: var(--muted) } .vz-dist .cap b { color: var(--ink) }
+.vz h4 { margin: 0; font-family: var(--font-display); font-size: .86rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted) }
+
 .pk-board { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; min-width: 0 }
 .pk-board .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 6px 0 }
 .pk-board .seg { flex-wrap: wrap } .pk-board .seg button small { opacity: .7; margin-left: 4px; font-weight: 500 }
@@ -1158,6 +1195,7 @@ function renderPicks() {
   const card = (r, hist) => `<div class="pk">
     <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)}</span></div>
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
+    ${viz(r, { book: (r.dk && r.dk.book) || "DraftKings", extra: "min" })}
     ${hist ? `<div><span class="k">History</span> <b>${cnt(r.season, r.side)}</b> this season · <b>${cnt(r.last5, r.side)}</b> last 5 · <b>${r.h2h && r.h2h[2] ? cnt(r.h2h, r.side) : "—"}</b> vs ${esc(r.opp)}</div>` : ""}
     <div><span class="k">Sources</span> simulation ${pc(r.model)} · ${esc((r.dk && r.dk.book) || "DraftKings")} ${pc(r.market)}${r.dk ? ` (${r.dk.line} at ${esc(r.dk.over || "?")}/${esc(r.dk.under || "?")})` : " (not posted)"} · this season ${pc(r.hist)} (${r.hist_n})</div>
     <div><span class="k">Simulation</span> median ${r.median} (25–75th ${r.q25}–${r.q75}), mean ${r.mean}, ${r.minutes} min</div>
@@ -1176,6 +1214,7 @@ function renderPicks() {
     return `<div class="pk">
     <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)}</span></div>
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
+    ${viz(r, { book: (r.dk && r.dk.book) || "DraftKings", extra: "min" })}
     <div><span class="k">Most likely game</span> ${esc(ml.away || "")} ${ml.score ? ml.score[1] : ""}–${ml.score ? ml.score[0] : ""} ${esc(ml.home || "")}: <b>${Math.round(b.pts || 0)} pts / ${Math.round(b.reb || 0)} reb / ${Math.round(b.ast || 0)} ast / ${Math.round(b.tpm || 0)} 3PM</b> in ${Math.round(b.min || 0)} min (${ml.gap > 0 ? "+" : ""}${Math.round(ml.gap || 0)} vs the line)</div>
     <div><span class="k">Simulation</span> median ${r.median} (25–75th ${r.q25}–${r.q75}) · <span class="k">Sources</span> simulation ${pc(r.model)} · DraftKings ${pc(r.market)} · this season ${pc(r.hist)} (${r.hist_n})</div>
     ${(r.reasons || []).length ? why(r, "Reasons (each one supports the pick or is neutral)") : `<div>${research(r)}</div>
@@ -1223,6 +1262,77 @@ const SPORT_NOTE = {
 const BOX_LABEL = { pass_yds: "pass yds", rush_att: "car", rush_yds: "rush yds", targets: "tgt", receptions: "rec", rec_yds: "rec yds",
   toi: "min", sog: "SOG", hits: "hits", blocks: "blk", fow: "FOW", goals: "G", assists: "A" };
 // a league's PrizePicks picks (NFL, NHL): day tabs, then the model / history / most-likely lists and the market gaps
+// ---------- visual pick cards: probability meters, game log against the line, simulated distribution ----------
+const VZ = {}; let vzN = 0;
+const vzPct = (v) => v == null ? "—" : (100 * v).toFixed(1).replace(/\.0$/, "") + "%";
+const vzFmt = (v) => v == null ? "—" : (Math.abs(v - Math.round(v)) < 1e-9 ? String(Math.round(v)) : v.toFixed(1));
+const vzMon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const vzDate = (d) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || "")); return m ? `${vzMon[+m[2] - 1]} ${+m[3]}` : esc(d || ""); };
+function vzOpp(o) { const t = String(o || "").replace(/^(vs|@) /, "").trim(); const w = t.split(/\s+/); return (w.length > 1 ? w[w.length - 1] : t).slice(0, 6); }
+function vzHit(v, r) { const d = r.side === "under" ? r.line - v : v - r.line; return d > 1e-9 ? "hit" : d < -1e-9 ? "miss" : "push"; }
+function vzGames(r, tab) {
+  const g = (r.games || []).map((x) => ({ d: x[0], o: x[1], h: x[2], x: x[3], v: +x[4] })).filter((x) => isFinite(x.v));
+  if (tab === "H2H") {
+    if ((r.h2h_games || []).length) return r.h2h_games.map((x) => ({ d: x[0], o: r.opp, h: null, x: x[2], v: +x[1] }));
+    const o = String(r.opp || "").toLowerCase(); return o ? g.filter((x) => String(x.o || "").toLowerCase() === o || o.includes(String(x.o || "").toLowerCase() || "~")) : [];
+  }
+  return tab === "L5" ? g.slice(-5) : tab === "L10" ? g.slice(-10) : g;
+}
+function vzSummary(list, r) {
+  const n = list.length, hits = list.filter((x) => vzHit(x.v, r) === "hit").length;
+  const vals = list.map((x) => x.v).sort((a, b) => a - b);
+  const med = n ? (n % 2 ? vals[(n - 1) / 2] : (vals[n / 2 - 1] + vals[n / 2]) / 2) : null;
+  return { n, hits, pct: n ? hits / n : null, avg: n ? vals.reduce((a, b) => a + b, 0) / n : null, med };
+}
+function vzLog(key) {
+  const { r, tab, extra } = VZ[key];
+  const tabs = ["Season", "H2H", "L5", "L10"], allName = VZ[key].allName || "Season";
+  const tabHtml = tabs.map((t) => { const s_ = vzSummary(vzGames(r, t), r); const tone = s_.pct == null ? "" : s_.pct >= 0.5 ? "good" : "bad";
+    return `<button type="button" role="tab" aria-selected="${t === tab}" data-vz-tab="${t}"><span class="t">${t === "Season" ? esc(allName) : t}</span><span class="n ${tone}">${s_.n ? `${s_.hits}/${s_.n}` : "—"}</span><span class="pc ${tone}">${s_.pct == null ? "no games" : vzPct(s_.pct)}</span></button>`; }).join("");
+  const list = vzGames(r, tab).slice(-20), sm = vzSummary(list, r);
+  if (!list.length) return `<div class="vz-log"><div class="vz-tabs" role="tablist" aria-label="Game log range">${tabHtml}</div><div class="note">No games in this range.</div></div>`;
+  const top = Math.max(r.line, ...list.map((x) => x.v)) * 1.18 || 1, H = (v) => Math.max(0, Math.min(100, 100 * v / top));
+  const unit = esc(r.stat || ""), ex = extra || "";
+  const showAxis = list.length <= 12;
+  return `<div class="vz-log"><div class="vz-tabs" role="tablist" aria-label="Game log range">${tabHtml}</div>
+    <div class="vz-chart" role="img" aria-label="${esc(`${r.player}: ${sm.hits} of ${sm.n} games ${r.side} ${r.line} ${r.stat}`)}">
+      <div class="vz-bars">${list.map((x) => { const k = vzHit(x.v, r);
+        const tip = `${vzDate(x.d)} ${x.h === 1 ? "vs" : x.h === 0 ? "@" : "vs"} ${x.o || "—"}: ${vzFmt(x.v)} ${r.stat}${x.x != null && ex ? ` · ${vzFmt(+x.x)} ${ex}` : ""} · ${k === "hit" ? `${r.side} hit` : k === "miss" ? `${r.side} missed` : "push"}`;
+        return `<div class="vz-col"><b>${vzFmt(x.v)}</b><div class="vz-bar ${k}" tabindex="0" style="height:${H(x.v).toFixed(1)}%" data-tip="${esc(tip)}" aria-label="${esc(tip)}"></div></div>`; }).join("")}</div>
+      <div class="vz-line" style="bottom:${H(r.line).toFixed(1)}%"><span>${r.line}</span></div>
+    </div>
+    ${showAxis ? `<div class="vz-axis">${list.map((x) => `<span>${vzDate(x.d)}<br>${esc(vzOpp(x.o))}</span>`).join("")}</div>` : ""}
+    <div class="vz-read" aria-live="polite">Tap or hover a bar for the game.</div>
+    <div class="vz-foot"><span>Average <span class="num">${vzFmt(sm.avg)}</span> · Median <span class="num">${vzFmt(sm.med)}</span></span>
+      <span class="vz-legend"><span><i style="background:var(--good)"></i>${esc(r.side)} hit</span><span><i style="background:repeating-linear-gradient(135deg,var(--bad) 0 3px,transparent 3px 5px)"></i>missed</span><span><i style="background:var(--muted)"></i>push</span></span></div></div>`;
+}
+function vzDist(r) {
+  const D = r.dist; if (!D || !(D.p || []).length) return "";
+  const W = 300, Hh = 56, n = D.p.length, mx = Math.max(...D.p) || 1, bw = W / n;
+  const x0 = (v) => (v - D.lo) / (D.w * n) * W;
+  const pick = (lo, hi) => r.side === "under" ? hi <= r.line + 1e-9 : lo >= r.line - 1e-9;
+  const bars = D.p.map((p, i) => { const lo = D.lo + i * D.w, hi = lo + D.w, mid = D.w === 1 ? lo : (lo + hi) / 2;
+    const on = D.w === 1 ? (r.side === "under" ? lo < r.line : lo > r.line) : pick(lo, hi);
+    const h = Math.max(1, (Hh - 4) * p / mx);
+    return `<rect x="${(i * bw + 1).toFixed(1)}" y="${(Hh - h).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${on ? "var(--home)" : "var(--line)"}"><title>${esc(`${vzFmt(mid)}: ${(100 * p).toFixed(1)}% of runs`)}</title></rect>`; }).join("");
+  const lx = Math.max(0, Math.min(W, D.w === 1 ? x0(r.line + 0.5) : x0(r.line)));
+  return `<div class="vz-dist"><h4>Simulated ${esc(r.stat)}</h4><svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none" role="img" aria-label="${esc(`Simulated distribution: ${vzPct(r.model)} of runs ${r.side} ${r.line}`)}">${bars}<line x1="${lx.toFixed(1)}" x2="${lx.toFixed(1)}" y1="0" y2="${Hh}" stroke="var(--ink)" stroke-width="2" stroke-dasharray="4 3" opacity=".6"></line></svg>
+    <div class="cap"><b>${vzPct(r.model)}</b> of simulated games land ${esc(r.side)} ${r.line} · median ${vzFmt(r.median)}${r.q25 != null ? ` (middle half ${vzFmt(r.q25)}–${vzFmt(r.q75)})` : ""}</div></div>`;
+}
+function vzProb(r, book) {
+  const be = 0.577, row = (k, v) => `<span class="k">${esc(k)}</span><span class="vz-track">${v == null ? "" : `<span class="vz-fill" style="width:${(100 * v).toFixed(1)}%"></span>`}<span class="vz-be" style="left:${100 * be}%"></span></span><span class="v">${v == null ? "none" : vzPct(v)}</span>`;
+  return `<div><div class="vz-prob">${row("Simulation", r.model)}${row(book ? `Market (${book})` : "Market", r.market)}${row("Final", r.p)}</div>
+    <div class="vz-legend" style="margin-top:4px"><span><i class="be"></i>57.7% break-even (2-pick power)</span><span>for the ${esc(r.side)}</span></div></div>`;
+}
+function viz(r, opt) {
+  opt = opt || {};
+  const key = "vz" + (++vzN); VZ[key] = { r, tab: (r.games || []).length > 5 ? "L10" : "Season", extra: opt.extra || r.extra || "", allName: opt.allName || "Season" };
+  return `<div class="vz" data-vz="${key}">${vzProb(r, opt.book)}${(r.games || []).length || (r.h2h_games || []).length ? vzLog(key) : ""}${vzDist(r)}</div>`;
+}
+document.addEventListener("click", (e) => { const b = e.target.closest("[data-vz-tab]"); if (!b) return; const box = b.closest("[data-vz]"); if (!box || !VZ[box.dataset.vz]) return;
+  VZ[box.dataset.vz].tab = b.dataset.vzTab; const old = box.querySelector(".vz-log"); if (old) { const t = document.createElement("div"); t.innerHTML = vzLog(box.dataset.vz); old.replaceWith(t.firstElementChild); } });
+const vzShow = (e) => { const b = e.target.closest && e.target.closest(".vz-bar"); if (!b) return; const rd = b.closest(".vz-log").querySelector(".vz-read"); if (rd) rd.textContent = b.dataset.tip; };
+document.addEventListener("pointerover", vzShow); document.addEventListener("focusin", vzShow);
 // ---------- every priced leg, filtered by label (boards.js from `python -m edge boards --page boards.js`) ----------
 const BOARD = {};
 function renderBoard(sport, el) {
@@ -1291,6 +1401,7 @@ function renderSportPicks(pre) {
   const card = (r, kind) => `<div class="pk">
     <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)}${r.event ? ` · ${esc(r.event)}` : ""} · ${esc(fmtKick(r.start))}</span></div>
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
+    ${viz(r, { book: r.book || mkName, allName: pre === "tennis" ? "Last 20" : "Season", extra: ({ tgt: "targets", car: "carries", touches: "touches", pass_att: "pass attempts", TOI: "min on ice" })[r.extra] || "" })}
     <div><span class="k">Sources</span> ${src(r)}</div>
     ${kind === "likely" ? mlLine(r) : ""}
     <div><span class="k">Simulation</span> median ${r.median}${r.q25 != null ? ` (25–75th ${r.q25}–${r.q75})` : ""}${r.volume ? ` · ${esc(r.volume)}` : ""}</div>

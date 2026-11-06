@@ -383,7 +383,9 @@ def price_leg(G: dict, name: str, m: str, line: float, over_only: bool = False, 
         if best is None or e.p > best["p_final"]:
             best = {"side": sd, "p_model": round(pm, 4), "p_market": None if pk is None else round(pk, 4), "p_hist": None, "hist_n": 0,
                     "p_final": e.p, "confidence": conf, "why": why}
-    return {"player_id": pid, "sim_name": p["name"], "team_espn": p["team"], "dk_lambda": lam, "dabble": dab, "median": float(np.median(arr)),
+    from . import viz as _viz
+    return {"player_id": pid, "sim_name": p["name"], "team_espn": p["team"], "dk_lambda": lam, "dabble": dab, "dist": _viz.dist_from_samples(arr),
+            "median": float(np.median(arr)),
             "mean": float(np.mean(arr)), "q25": float(np.percentile(arr, 25)), "q75": float(np.percentile(arr, 75)),
             "toi_proj": p["prof"]["toi"], "flags": flags, "hist": (int(ho), int(hu)), **best}
 
@@ -396,7 +398,8 @@ def research(p: dict, m: str, line: float, opp: str, games: list[dict]) -> dict:
     h2h = [x for x in vals if x[1] == opp]
     avg = lambda L: float(np.mean([v for _, _, v, _ in L])) if L else None
     return {"season": cnt(vals), "last5": cnt(vals[-5:]), "h2h": cnt(h2h), "season_avg": avg(vals), "last5_avg": avg(vals[-5:]),
-            "h2h_avg": avg(h2h), "last_games": [v for _, _, v, _ in vals[-5:]], "toi_avg": float(np.mean([t for *_, t in vals])) if vals else None}
+            "h2h_avg": avg(h2h), "last_games": [v for _, _, v, _ in vals[-5:]], "toi_avg": float(np.mean([t for *_, t in vals])) if vals else None,
+            "games": [[d, o, None, t, v] for d, o, v, t in vals], "extra": "TOI"}
 
 
 def verdict(r: dict) -> str:

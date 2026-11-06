@@ -141,7 +141,9 @@ def price_leg(res: dict, name: str, market: str, line: float, over_only: bool = 
     vol_key = {"rec_yds": "targets", "receptions": "targets", "rush_yds": "rush_att", "rush_att": "rush_att",
                "rush_rec_yds": "rush_att"}.get(market, "pass_att")
     vol = p.get(vol_key)
+    from . import viz as _viz
     return {"player_id": str(pid), "sim_name": p.get("name"), "team_espn": sim["teams"][p["team"]]["abbr"], "dk_line": dk_line, "dabble": dab,
+            "dist": _viz.dist_from_samples(arr),
             "median": med, "mean": mu, "q25": float(np.percentile(arr, 25)), "q75": float(np.percentile(arr, 75)),
             "volume": (vol_key, float(np.mean(vol))) if vol is not None else None, "flags": flags,
             "hist": (ho, hu), **best}
@@ -276,7 +278,8 @@ def research(res: dict, pid: str, market: str, line: float, opp: str) -> dict:
     h2h = [x for x in log if x["opp"] == opp]
     avg = lambda L: float(np.mean([x["value"] for x in L])) if L else None
     return {"season": cnt(log), "last3": cnt(log[-3:]), "h2h": cnt(h2h), "season_avg": avg(log), "last3_avg": avg(log[-3:]),
-            "h2h_avg": avg(h2h), "last_games": [x["value"] for x in log[-3:]], "vol_avg": float(np.mean([x["vol"] for x in log])) if log else None}
+            "h2h_avg": avg(h2h), "last_games": [x["value"] for x in log[-3:]], "vol_avg": float(np.mean([x["vol"] for x in log])) if log else None,
+            "games": [[x["date"], x["opp"], None, x["vol"], x["value"]] for x in log], "extra": VOLUME[market][0]}
 
 
 def allowed(res: dict, team: str, market: str) -> dict | None:

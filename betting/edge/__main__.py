@@ -522,7 +522,8 @@ def _board_picks(args, sport: str):
                 "reasons": r.get("reasons"), "ml": r.get("ml"), "season": rs.get("season"),
                 "recent": rs.get("last3") or rs.get("last5"), "recent_label": "last 3" if "last3" in rs else "last 5", "event": r.get("event"),
                 "book": "Dabble" if sport != "tennis" and r.get("dabble") and r.get("dk_line") is None and r.get("dk_lambda") is None else None,
-                "book_line": (r.get("dabble") or {}).get("line") if sport != "tennis" else None}
+                "book_line": (r.get("dabble") or {}).get("line") if sport != "tennis" else None,
+                "games": rs.get("games"), "extra": rs.get("extra"), "dist": r.get("dist"), "opp": r.get("opp")}
     today = dt.date.today().isoformat()
     sections, days_out = [], []
     for d in D:
