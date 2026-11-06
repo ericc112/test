@@ -60,12 +60,12 @@ class Report:
 
 
 # ------------------------------------------------------------------ individual checks
-def check_recompute(rep: Report, adj: dict):
-    r = rep.row
+def expected(r: dict, adj: dict):
+    """The leg's probability and label rebuilt from its stored components the way its pricer builds them (NBA: the
+    logic version that priced it; tennis and NHL: their own blends and Low holds). None without components."""
     pm, pk, ph = _f(r.get("p_model")), _f(r.get("p_market")), _f(r.get("p_hist"))
     if pm is None and pk is None and ph is None:
-        rep.add("FAIL", "recompute", "no model, market or history stored: nothing to check the number against")
-        return
+        return None
     e = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), adj)
     if r.get("sport") == "nba":                  # NBA legs: rebuild under the logic version that priced them
         from . import nba_model, nba_pp
@@ -92,6 +92,16 @@ def check_recompute(rep: Report, adj: dict):
         # edge nfl-picks holds a leg at Low without a DraftKings line (the simulation alone has no edge), with a role flag,
         # or on a TD/interception line (often heavily juiced; the feed has no prices)
         e = type(e)(p=e.p, confidence="Low", agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
+    return e
+
+
+def check_recompute(rep: Report, adj: dict):
+    r = rep.row
+    pm, pk, ph = _f(r.get("p_model")), _f(r.get("p_market")), _f(r.get("p_hist"))
+    e = expected(r, adj)
+    if e is None:
+        rep.add("FAIL", "recompute", "no model, market or history stored: nothing to check the number against")
+        return
     logged, conf = _f(r.get("p_final")), r.get("confidence")
     if (logged is None or abs(e.p - logged) > TOL_P or e.confidence != conf) and getattr(rep, "locked", False):
         rep.add("WARN", "recompute", f"today's weights give {e.p:.3f} {e.confidence}; logged {logged} {conf} (event under way: logged number stands)")
@@ -553,10 +563,9 @@ def refresh(rows: list[dict], adj: dict | None = None) -> list[tuple]:
     for r in rows:
         if r.get("status") not in ("pending", "") or started(r):
             continue
-        pm, pk, ph = _f(r.get("p_model")), _f(r.get("p_market")), _f(r.get("p_hist"))
-        if pm is None and pk is None and ph is None:
+        e = expected(r, adj)                   # the same rebuild verify checks against (each leg's own logic)
+        if e is None:
             continue
-        e = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), adj)
         if _f(r.get("p_final")) is None or abs(e.p - _f(r["p_final"])) > TOL_P or e.confidence != r.get("confidence"):
             changed.append((r["id"], r["player"], r.get("p_final"), r.get("confidence"), round(e.p, 4), e.confidence))
             r["notes"] = (r.get("notes", "") + f" | re-scored {dt.date.today()}: {r.get('p_final')} {r.get('confidence')} -> {e.p:.4f} {e.confidence}").strip(" |")

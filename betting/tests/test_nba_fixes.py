@@ -145,6 +145,25 @@ class VerifyFreshness(unittest.TestCase):
         self.assertEqual(V.last_priced("edge pp; pulled 2026-11-04T21:00Z").strftime("%H:%M"), "21:00")
         self.assertIsNone(V.last_priced("no stamp"))
 
+    def test_refresh_uses_each_legs_own_logic(self):
+        """edge verify --refresh must rebuild a leg the way verify checks it (an NBA v2 leg under v2), so a consistent
+        leg is left alone (it once re-scored v2 legs with the generic blend and broke every back-check)."""
+        from edge import nba_model, nba_pp, verify as V
+        from edge.blend import load_adjustments
+        lg = nba_model.params_for(2)
+        p, c = nba_pp.recompute(0.70, 0.55, None, 0, "nba:pts:under", lg)
+        row = {"id": "1", "player": "X", "sport": "nba", "status": "pending", "segment": "nba:pts:under", "p_model": "0.70",
+               "p_market": "0.55", "p_hist": "", "hist_n": "0", "p_final": f"{p:.4f}", "confidence": c,
+               "notes": "edge pp; logic v2", "event_id": "", "market": "pts"}
+        real = V.started
+        V.started = lambda r: False
+        try:
+            self.assertEqual(V.refresh([row], load_adjustments()), [])
+        finally:
+            V.started = real
+        e = V.expected(row, load_adjustments())
+        self.assertAlmostEqual(e.p, p, places=4)
+
 
 class SideNumbers(unittest.TestCase):
     """A re-sided leg (history and most-likely lists) is priced by the same recompute verify runs."""
