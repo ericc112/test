@@ -91,7 +91,9 @@ def league_games(path: str, days, today: dt.date) -> list[dict]:
                 evs[e["id"]] = e
         except Exception:
             continue
-    evs = [e for e in evs.values() if e["competitions"][0]["status"]["type"]["name"] in ("STATUS_SCHEDULED", "STATUS_IN_PROGRESS")]
+    # pre-game or live (in progress, halftime, between periods): ESPN's state is "pre" / "in"; "post" is final
+    evs = [e for e in evs.values() if (e["competitions"][0]["status"]["type"].get("state") in ("pre", "in"))
+           or e["competitions"][0]["status"]["type"]["name"] in ("STATUS_SCHEDULED", "STATUS_IN_PROGRESS", "STATUS_HALFTIME", "STATUS_END_PERIOD")]
 
     def one(e):
         try:
@@ -145,8 +147,15 @@ def nfl_game(target: dict, history: list[dict], L: dict) -> dict:
             "history_games": len(history)}
 
 
+def us_today() -> dt.date:
+    """Today's date in US Eastern time: slates are US dates, and the server clock is UTC (after 8 pm ET it already
+    reads tomorrow, which dropped tonight's games from the export)."""
+    from zoneinfo import ZoneInfo
+    return dt.datetime.now(ZoneInfo("America/New_York")).date()
+
+
 def export(path: str, nfl_week: int | None = None, backtest_weeks: tuple = (3, 8)) -> dict:
-    today = dt.date.today()
+    today = us_today()
     season = today.year if today.month >= 3 else today.year - 1
     adj = load_adjustments()
     data = {"pulled": dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%MZ"), "leagues": [],
@@ -307,7 +316,7 @@ def nba_engine(nba_games: list[dict], today: dt.date | None = None) -> dict:
 def engines(data: dict) -> dict:
     """Fitted NFL play-by-play, NBA possession and NHL event engines plus per-game inputs and backtests."""
     from gamesim import backtest as gbt, nfl_pbp, nhl as gnhl, players as gpl
-    today = dt.date.today()
+    today = us_today()
     out = {}
     # ---- NFL play by play
     sched = gs_data.schedule()

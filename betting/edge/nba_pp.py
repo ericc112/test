@@ -184,7 +184,7 @@ def _build(dates, gids, n, simkey) -> dict:
             if isinstance(v, dict) and "sims" in v and set(gids) <= set(v["sims"]) and k[2] == n and k[3] == simkey and \
                     now - dt.datetime.strptime(v["pulled"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=dt.timezone.utc) < dt.timedelta(minutes=15):
                 return v
-    today = dt.date.today()
+    today = simlab.us_today()
     games = simlab.league_games("basketball/nba", [-1, 0, 1], today)
     if dates:
         games = [g for g in games if _us_date(g["start"]) in dates]
