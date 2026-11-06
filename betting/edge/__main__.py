@@ -521,8 +521,12 @@ def _board_picks(args, sport: str):
                     r["bet_id"] = f"#{ids[id(r)]} "
                 blocks.append(NP.write_up(r, ver, warns))
                 cards.append(card(r, ver, warns))
-            pg_d[key] = cards
+            gone = [c for c in cards if str(c["verified"]).startswith("NOT")]       # NOT VERIFIED is not published
+            pg_d[key] = [c for c in cards if c not in gone]
+            pg_d.setdefault("withdrawn", []).extend(f"#{c['id']} {c['player']} {c['side']} {c['line']} {c['stat']}" for c in gone)
             md += ["", f"### {title}", ""] + (blocks or ["None."])
+            if gone:
+                md.append("Withdrawn (NOT VERIFIED, not published): " + "; ".join(pg_d["withdrawn"][-len(gone):]))
         md.append(f"\nDropped from the most-likely list for a reason against them: {len(d['dropped'])}"
                   + (": " + "; ".join(f"{x['player']} {x['side']} {x['line']} {x['stat']} ({', '.join(x['against'])})" for x in d["dropped"]) if d["dropped"] else ""))
         high = [r for r in d["model"] if NP.verdict(r).startswith("ENTRY")]

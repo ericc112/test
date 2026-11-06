@@ -1231,7 +1231,8 @@ function renderSportPicks(pre) {
   $(pre + "List").innerHTML = (D0.model || D0.picks || []).map((r) => card(r, "model")).join("") || `<div class="note">No lines priced.</div>`;
   const dr = D0.likely_dropped || [];
   $(pre + "Likely").innerHTML = ((D0.likely || []).map((r) => card(r, "likely")).join("") || `<div class="note">No leg on ${esc(D0.label)} where the most likely game, the median and the market agree with nothing against it.</div>`)
-    + (dr.length ? `<div class="note">Dropped for a reason against them (${dr.length}): ${dr.map((d) => `${esc(d.player)} ${esc(d.side)} ${d.line} ${esc(d.stat)} (${esc(d.against.join(", "))})`).join("; ")}</div>` : "");
+    + (dr.length ? `<div class="note">Dropped for a reason against them (${dr.length}): ${dr.map((d) => `${esc(d.player)} ${esc(d.side)} ${d.line} ${esc(d.stat)} (${esc(d.against.join(", "))})`).join("; ")}</div>` : "")
+    + ((D0.withdrawn || []).length ? `<div class="note">Withdrawn, failed the back-check (line moved or pulled): ${D0.withdrawn.map(esc).join("; ")}</div>` : "");
   const dayGames = new Set(D0.games || []), gAll = (P.gaps || []).filter((x) => !dayGames.size || !x.game || dayGames.has(x.game)), g = gAll.slice(0, 20);
   if ($(pre + "GapTitle") && P.gap_title) $(pre + "GapTitle").firstChild.textContent = P.gap_title + " ";
   $(pre + "Gaps").innerHTML = g.length ? `<div class="tbl-wrap pk-gaps"><table><thead><tr><th class="l">Player · stat</th><th title="PrizePicks line">PP</th><th title="DraftKings">DK</th><th>Side · p</th></tr></thead><tbody>${
