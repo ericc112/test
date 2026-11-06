@@ -142,5 +142,17 @@ class DeeperHistory(unittest.TestCase):
         self.assertEqual(M.surname_key("Davidovich Fokina A."), "davidovichfokina")
 
 
+class TennisReasons(unittest.TestCase):
+    """Tennis reasons are only the tested ones (LESSONS L30)."""
+
+    def test_tennis_reasons(self):
+        from edge import tennis as T
+        s = T.simulate(0.64, 0.62, 3, n=2000, seed=1)
+        G = {"sim": s, "avg": {"spw": 0.63}, "ctx": {"best_of": 3}}
+        r = {"side": "under", "line": 22.5, "median": 22.0, "q25": 19, "q75": 27, "p_market": None, "stat_key": "games", "a_side": True, "flags": []}
+        v = {x["name"]: x["verdict"] for x in T.reasons(r, G)}
+        self.assertEqual(v, {"simulation": "supports", "market": "neutral"})
+
+
 if __name__ == "__main__":
     unittest.main()

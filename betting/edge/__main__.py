@@ -563,8 +563,8 @@ def _board_picks(args, sport: str):
 
 
 def _nba_picks(args):
-    """Price tonight's NBA PrizePicks board, keep the best legs (one per game) by the model and the most-likely-game
-    list, back-check each, write the report (markdown) and the page data (JSON + picks.js)."""
+    """Price tonight's NBA PrizePicks board, keep the best legs (one per game) by the model and, for comparison, by
+    history alone, back-check each, write the report (markdown) and the page data (JSON + picks.js)."""
     import gzip
     import json
     import os
@@ -596,16 +596,18 @@ def _nba_picks(args):
     with gzip.open(os.path.join(HERE, "data", "nba_boards", f"{today}.json.gz"), "wt") as f:     # the full priced board
         json.dump([{k: v for k, v in r.items() if k not in ("research", "dk")} for r in ok], f, default=float)
     picks = N.pick_order(ok, args.top)
+    hist = N.history_order(ok, args.top)
+    for r in hist:
+        r["notes"] = "history-only list; " + r["notes"]
     # the most-likely-game list: each game's most likely simulated run (the page's broadcast pick), its box line vs
-    # the PrizePicks line, backed by the simulation's median and DraftKings (no history list: hit rates carry no
-    # information beyond the price, LESSONS L27 / L30)
+    # the PrizePicks line, backed by the simulation's median and this season's record
     ctx = N.build({N._us_date(p["start"]) for p in props if p.get("start")}, n=args.n)
     print(f"Finding the most likely game for {len(ctx['sims'])} games...")
     likely = N.run_likely(ctx, sorted(ctx["sims"]), n=args.n)
     lk = N.likely_order(ok, ctx, likely)          # every leg that passes all its reasons (one per player), not just five
     for r in lk:
         r["notes"] = "most-likely-game list; " + r["notes"]
-    for r in picks:                      # the same reasons, marked, on the model list (shown, not used to drop legs)
+    for r in picks + hist:               # the same reasons, marked, on the other two lists (shown, not used to drop legs)
         try:
             N._likely_context(r, ctx)
         except (KeyError, TypeError, StopIteration):
@@ -617,7 +619,7 @@ def _nba_picks(args):
         for r in sorted([r for r in ok if r["odds_type"] == "standard"], key=lambda r: -r["p_final"]):
             best_game.setdefault(r["script"], r)
         keep = {id(r) for r in picks} | {id(r) for r in best_game.values()} | {id(r) for r in ok if r["odds_type"] == "standard" and r["confidence"] in ("High", "Medium")}
-        logrows = [r for r in ok if id(r) in keep] + lk
+        logrows = [r for r in ok if id(r) in keep] + hist + lk
         pick_ids = {id(r) for r in picks}
         def action(r):
             if id(r) not in pick_ids or r.get("newcomer"):
@@ -628,7 +630,7 @@ def _nba_picks(args):
         act = {id(r): action(r) for r in logrows}   # only the model's published picks can be bets or leans
         for r, (bid, _) in zip(logrows, log_pp(logrows, act, refresh=True)):
             ids[id(r)] = bid
-        print(f"Logged {len(logrows)} leg(s) to bets.csv (model picks, most-likely-game picks, every Medium+ leg, each game's best leg); "
+        print(f"Logged {len(logrows)} leg(s) to bets.csv (model picks, history-only picks, every Medium+ leg, each game's best leg); "
               f"full board in data/nba_boards/{today}.json.gz")
     adj = load_adjustments()
     bets = L.read_bets()
@@ -641,8 +643,9 @@ def _nba_picks(args):
         print(rep.text())
         return rep.verdict, [f"{n}: {d}" for st, n, d in rep.checks if st != "PASS"]
 
-    blocks, lblocks, page = [], [], {"model": [], "likely": []}
-    for lst, out, key, writer in ((picks, blocks, "model", N.write_up), (lk, lblocks, "likely", N.likely_write_up)):
+    blocks, hblocks, lblocks, page = [], [], [], {"model": [], "history": [], "likely": []}
+    for lst, out, key, writer in ((picks, blocks, "model", N.write_up), (hist, hblocks, "history", N.history_write_up),
+                                  (lk, lblocks, "likely", N.likely_write_up)):
         for r in lst:
             ver, warns = check(r)
             if id(r) in ids:
@@ -674,8 +677,13 @@ def _nba_picks(args):
     head.append("")
     rest = [r for r in N.pick_order(ok, args.top + 10)[args.top:]]
     fm = lambda v: "-" if v is None else f"{v:.0%}"
-    tail = ["", "## Next best (model)", "| p | conf | player | stat | side | line | model | DK |", "|---|---|---|---|---|---|---|---|"]
-    tail += [f"| {r['p_final']:.1%} | {r['confidence']} | {r['player']} ({r['team']}) | {N.LABEL[r['stat_key']]} | {r['side']} | {r['line']} | {fm(r['p_model'])} | {fm(r['p_market'])} |" for r in rest]
+    tail = ["", "## Next best (model)", "| p | conf | player | stat | side | line | model | DK | history |", "|---|---|---|---|---|---|---|---|---|"]
+    tail += [f"| {r['p_final']:.1%} | {r['confidence']} | {r['player']} ({r['team']}) | {N.LABEL[r['stat_key']]} | {r['side']} | {r['line']} | {fm(r['p_model'])} | {fm(r['p_market'])} | {fm(r['p_hist'])} ({r['hist_n']}) |" for r in rest]
+    hsec = ["", "## Top 5 by history only (the hit-rate method, for comparison)",
+            "Ranked by this season's record at the line (5+ games), then the last 5, then head-to-head; one leg per game. "
+            "Tested on 2,330 DraftKings lines this season, these counts carried no information beyond the book's price, and players "
+            "over in 80–100% of their last 5 went over 39% of the time against 50% priced (LESSONS L27). Each leg shows what the model "
+            "and DraftKings say about the same side; both lists are saved daily so their records can be compared.", ""]
     track = NR.nightly(L.read_bets())
     try:
         clv_s = nba_clv()
@@ -694,16 +702,17 @@ def _nba_picks(args):
     lsec = ["", f"## By the most likely game: every leg that passes ({len(lk)})",
             "Each game's most likely simulated run (the most common final score of the runs, then the run closest to every rotation player's "
             "typical line: the game the broadcast plays). A leg is listed when that run's line is on the same side of the PrizePicks line as the "
-            "simulation's median, the blend favors the side, and no reason that makes a difference points the other way: DraftKings' price, "
-            "availability, role. Hit rates, last 5, head-to-head records, what the opponent allows and usage summaries are not used: they "
-            "carried no information beyond the price and the simulation (LESSONS L27, L30). One run is a single draw, so the order comes from "
-            "the calibrated probability; every passing leg is listed (one per player), so legs from the same game are flagged and never go in one entry together.", ""]
+            "simulation's median and this season's record, and every reason shown (DraftKings' price, this season's count and average, the last 5, "
+            "head-to-head count and per 36, what the opponent allows to his position and to all players, usage and minutes) supports the side or is "
+            "neutral: any reason against it drops the leg, so the list can hold fewer than five. One run is a single draw, so the order comes from the "
+            "calibrated probability; every passing leg is listed (one per player), so legs from the same game are flagged and never go in one entry together. The reasons make the list consistent, not more accurate: in the fair test they added no "
+            "information beyond the price (LESSONS L27).", ""]
     drop = ctx.get("likely_dropped") or []
     lsec.append(f"Dropped for a reason against them: {len(drop)}" + (": " + "; ".join(
         f"{d['player']} {d['side']} {d['line']} {d['stat']} ({d['p']:.0%}; against: {', '.join(d['against'])})" for d in drop) if drop else "") + "")
     lsec.append("")
-    report = ("\n".join(head) + "\n## Top 5 by the model\n\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n"
-              + "\n".join(lsec) + "\n" + "\n\n".join(lblocks) + "\n\n" + NR.markdown(track, clv_s, tilt_s) + "\n" + "\n".join(shsec) + "\n")
+    report = ("\n".join(head) + "\n## Top 5 by the model\n\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n" + "\n".join(hsec) + "\n"
+              + "\n\n".join(hblocks) + "\n" + "\n".join(lsec) + "\n" + "\n\n".join(lblocks) + "\n\n" + NR.markdown(track, clv_s, tilt_s) + "\n" + "\n".join(shsec) + "\n")
     out = args.out or os.path.join(HERE, "data", "picks", f"{today}-nba.md")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w") as f:
