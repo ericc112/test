@@ -86,6 +86,38 @@ def dabble_board(league: str, comp_id: str) -> list[dict]:
     return rows
 
 
+_LINES = {}
+
+
+def dabble_lines(league: str, max_age: float = 600) -> dict:
+    """{(player, stats tuple): [{line, over, under}]} for a league's open Dabble props (decimal prices on both sides),
+    cached for max_age seconds; empty when Dabble can't be reached. The fallback market when DraftKings posts no line."""
+    import time
+    c = _LINES.get(league)
+    if c and time.time() - c[0] < max_age:
+        return c[1]
+    out = {}
+    try:
+        cid = competitions().get(league)
+        for r in (dabble_board(league, cid) if cid else []):
+            if r.get("over") and r.get("under"):
+                out.setdefault((_norm(r["player"]), tuple(sorted(r["stats"]))), []).append(
+                    {"line": float(r["line"]), "over": float(r["over"]), "under": float(r["under"])})
+    except Exception:
+        out = {}
+    _LINES[league] = (time.time(), out)
+    return out
+
+
+def dabble_market(league: str, name: str, stats: tuple, line: float) -> dict | None:
+    """Dabble's line nearest the PrizePicks line for a player's stat: {line, over, under, q} (q = no-vig over)."""
+    alts = dabble_lines(league).get((_norm(name), tuple(sorted(stats)))) or []
+    if not alts:
+        return None
+    b = min(alts, key=lambda a: (abs(a["line"] - line), a["line"]))
+    return {**b, "q": implied_over(b["over"], b["under"]), "book": "Dabble"}
+
+
 def implied_over(over: float | None, under: float | None) -> float | None:
     """Dabble's probability of the over, normalized over both sides (its prices sum to ~100% anyway)."""
     if not over or not under:

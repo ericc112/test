@@ -60,6 +60,11 @@ class Report:
 
 
 # ------------------------------------------------------------------ individual checks
+def _no_market(notes: str) -> bool:
+    """The pricer found no market: no DraftKings line and (since 2026-11-06) no Dabble line either."""
+    return "no DraftKings or Dabble line" in notes or ("no DraftKings line" in notes and "Dabble" not in notes)
+
+
 def expected(r: dict, adj: dict):
     """The leg's probability and label rebuilt from its stored components the way its pricer builds them (NBA: the
     logic version that priced it; tennis and NHL: their own blends and Low holds). None without components."""
@@ -85,10 +90,10 @@ def expected(r: dict, adj: dict):
         from . import nhl_pp
         a2 = dict(adj); a2["blend_by_sport"] = {**(adj.get("blend_by_sport") or {}), "nhl": nhl_pp.BLEND}
         e = final_probability(pm, 0.5 if pk is None else pk, None, r.get("segment", ""), 0, a2)
-        if e.confidence in ("High", "Medium") and ("no DraftKings line" in (r.get("notes") or "") or "flags:" in (r.get("notes") or "")):
+        if e.confidence in ("High", "Medium") and (_no_market(r.get("notes") or "") or "flags:" in (r.get("notes") or "")):
             e = type(e)(p=e.p, confidence="Low", agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
     elif r.get("sport") == "nfl" and "nfl sim median" in (r.get("notes") or "") and e.confidence in ("High", "Medium") and \
-            ("no DraftKings line" in r["notes"] or "flags:" in r["notes"] or "heavily juiced" in r["notes"]):
+            (_no_market(r["notes"]) or "flags:" in r["notes"] or "heavily juiced" in r["notes"]):
         # edge nfl-picks holds a leg at Low without a DraftKings line (the simulation alone has no edge), with a role flag,
         # or on a TD/interception line (often heavily juiced; the feed has no prices)
         e = type(e)(p=e.p, confidence="Low", agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
@@ -498,16 +503,15 @@ def check_nba(rep: Report, adj: dict):
         age = (now - last).total_seconds() / 60
         if (tip - now).total_seconds() / 60 <= 60 and age > STALE_MIN:
             rep.add("FAIL", "freshness", f"market and injury data pulled {age:.0f} min ago, inside the last hour before tip: re-price (edge verify --fix)")
-    dk = ((ctx["eng"]["sides"][str(r["event_id"])]["players"].get("lines") or {}).get(str(r["player_id"])) or {}).get(stat)
+    mk_, _ = nba_pp.market_for(ctx["eng"]["sides"][str(r["event_id"])]["players"].get("lines"), str(r["player_id"]), r["player"], stat, line)
     pk = None
-    if dk and dk.get("over") and dk.get("under"):
-        qo, qu = nba_pp._imp(dk["over"]), nba_pp._imp(dk["under"])
-        q = qo / (qo + qu)
-        q = q if abs(dk["line"] - line) < 1e-9 else nba_pp.market_at(sim["hist"][stat], dk["line"], q, line)[0]
+    if mk_:                                    # the same market the pricer uses: DraftKings, else Dabble
+        q = mk_["q"] if abs(mk_["line"] - line) < 1e-9 else nba_pp.market_at(sim["hist"][stat], mk_["line"], mk_["q"], line)[0]
         pk = q if side == "over" else 1 - q
     lk = _f(r.get("p_market"))
+    bk = mk_["book"] if mk_ else "DraftKings / Dabble"
     if (pk is None) != (lk is None) or (pk is not None and abs(pk - lk) > TOL_MODEL):
-        rep.add("WARN", "market", f"DraftKings now {'none' if pk is None else f'{pk:.3f}'} (logged {lk}): the line or price moved, re-price before publishing")
+        rep.add("WARN", "market", f"{bk} now {'none' if pk is None else f'{pk:.3f}'} (logged {lk}): the line or price moved, re-price before publishing")
     ph_l, n_l = (None, 0) if hist_off else (ph, o + u)        # history only if the leg's logic uses it
     fp, fc = nba_pp.recompute(pm, pk, ph_l, n_l, r.get("segment", ""), logic)     # the fresh label under the leg's own logic
     rep.fresh = {"p_model": round(pm, 3), "p_market": "" if pk is None else round(pk, 3), "p_hist": "" if ph_l is None else round(ph_l, 3),

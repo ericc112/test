@@ -31,6 +31,7 @@ STATS = {"Shots On Goal": "sog", "Hits": "hits", "Faceoffs Won": "fow", "Points"
          "Goals": "goals", "Blocked Shots": "blocks", "Time On Ice": "toi", "Plus/Minus": "pm"}
 LABEL = {"sog": "shots on goal", "hits": "hits", "fow": "faceoffs won", "points": "points", "assists": "assists", "goals": "goals",
          "blocks": "blocked shots", "toi": "time on ice", "pm": "plus/minus"}
+DABBLE_STATS = {"sog": ("shots",), "goals": ("goals",), "assists": ("assists",), "points": ("points",), "blocks": ("blocked-shots",)}
 LADDER = {"sog": "Shots on Goal Milestones", "points": "Points Milestones", "assists": "Assists Milestones", "goals": "Goals Milestones"}
 ESPN = {"UTA": "UTAH", "VGK": "VGK", "LA": "LA", "NJ": "NJ", "TB": "TB", "SJ": "SJ"}
 BLEND = {"intercept": 0.0, "w_model": 0.2, "w_market": 0.8, "w_hist": 0.0}
@@ -350,6 +351,12 @@ def price_leg(G: dict, name: str, m: str, line: float, over_only: bool = False, 
     if m in LADDER and (m, pid) in G["ladders"]:
         lam = ladder_lambda(G["ladders"][(m, pid)])
     mk_over = poisson_over(lam, line) if lam is not None else None
+    dab = None
+    if mk_over is None and m in DABBLE_STATS:      # no DraftKings ladder: Dabble's price, carried with a Poisson
+        from . import shop
+        dab = shop.dabble_market("NHL", name, DABBLE_STATS[m], line)
+        if dab and dab.get("q") is not None:
+            mk_over = dab["q"] if abs(dab["line"] - line) < 1e-9 else shop.poisson_at(dab["q"], dab["line"], line)
     logs = p["prof"]["logs"]
     ho = sum(stat_value(x, m) > line for x in logs); hu = sum(stat_value(x, m) < line for x in logs)
     adj = load_adjustments()
@@ -370,13 +377,13 @@ def price_leg(G: dict, name: str, m: str, line: float, over_only: bool = False, 
         conf = e.confidence
         why = []
         if pk is None and conf in ("High", "Medium"):
-            conf, why = "Low", ["no DraftKings line for this stat: the untested player model alone can't carry a leg"]
+            conf, why = "Low", ["no DraftKings or Dabble line for this stat: the untested player model alone can't carry a leg"]
         if flags and conf in ("High", "Medium"):
             conf = "Low"
         if best is None or e.p > best["p_final"]:
             best = {"side": sd, "p_model": round(pm, 4), "p_market": None if pk is None else round(pk, 4), "p_hist": None, "hist_n": 0,
                     "p_final": e.p, "confidence": conf, "why": why}
-    return {"player_id": pid, "sim_name": p["name"], "team_espn": p["team"], "dk_lambda": lam, "median": float(np.median(arr)),
+    return {"player_id": pid, "sim_name": p["name"], "team_espn": p["team"], "dk_lambda": lam, "dabble": dab, "median": float(np.median(arr)),
             "mean": float(np.mean(arr)), "q25": float(np.percentile(arr, 25)), "q75": float(np.percentile(arr, 75)),
             "toi_proj": p["prof"]["toi"], "flags": flags, "hist": (int(ho), int(hu)), **best}
 
@@ -453,7 +460,9 @@ def price_board(props: list[dict], n: int = N_SIMS, log=print, store: dict | Non
             opp = g["home"] if x["team_espn"] == g["away"] else g["away"]
             sp = G["sim"]["players"][x["player_id"]]
             note = (f"nhl sim median {x['median']:.1f} (25-75th {x['q25']:.0f}-{x['q75']:.0f}), toi {x['toi_proj']:.1f}"
-                    + (f"; DraftKings ladder mean {x['dk_lambda']:.2f}" if x["dk_lambda"] is not None else "; no DraftKings line")
+                    + (f"; DraftKings ladder mean {x['dk_lambda']:.2f}" if x["dk_lambda"] is not None else
+                       f"; no DraftKings line; Dabble {x['dabble']['line']:g} at {x['dabble']['over']}/{x['dabble']['under']} (no-vig over {x['dabble']['q']:.0%})"
+                       if x.get("dabble") else "; no DraftKings or Dabble line")
                     + (f"; flags: {', '.join(x['flags'])}" if x["flags"] else "") + (f"; {x['why'][0]}" if x["why"] else "")
                     + f"; history {x['hist'][0]} over / {x['hist'][1]} under; pulled {dt.datetime.now(dt.timezone.utc):%Y-%m-%dT%H:%MZ}")
             rows.append({**p, **x, "event_id": g["id"], "team": x["team_espn"], "opp": opp, "market_key": f"nhl_{m}", "stat_key": m,
@@ -617,7 +626,10 @@ def reasons(r: dict, G: dict) -> list[dict]:
     add("simulation median", vd(cmp(r["median"], r["line"])), f"median {r['median']:.1f} (25-75th {r['q25']:.0f}-{r['q75']:.0f})")
     pk = r.get("p_market")
     if pk is None:
-        add("DraftKings", "neutral", "no DraftKings line for this stat")
+        add("DraftKings", "neutral", "no DraftKings or Dabble line for this stat")
+    elif r.get("dk_lambda") is None and r.get("dabble"):
+        add("Dabble", "supports" if pk >= 0.52 else "against" if pk <= 0.48 else "neutral",
+            f"{pk:.0%} for this side from Dabble's {r['dabble']['line']:g} (no DraftKings line)")
     else:
         add("DraftKings", "supports" if pk >= 0.52 else "against" if pk <= 0.48 else "neutral",
             f"{pk:.0%} for this side from DraftKings' ladder (mean {r['dk_lambda']:.2f})")
@@ -665,7 +677,8 @@ def write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
     f = lambda v: "-" if v is None else f"{v:.0%}"
     lines = [f"### {r.get('bet_id', '')}{r['player']} ({r['team']}) {r['side'].upper()} {r['line']} {LABEL[r['stat_key']]} — {r['game']}",
              f"**{r['p_final']:.1%} {r['confidence']}** · {verdict(r)}" + (f" · back-check: **{verified}**" if verified else ""),
-             f"- Sources: DraftKings ladder {f(r['p_market'])}" + (f" (mean {r['dk_lambda']:.2f})" if r.get("dk_lambda") is not None else " (no DraftKings line)")
+             (f"- Sources: DraftKings ladder {f(r['p_market'])} (mean {r['dk_lambda']:.2f})" if r.get("dk_lambda") is not None else
+              f"- Sources: Dabble {f(r['p_market'])} ({r['dabble']['line']:g}, no DraftKings line)" if r.get("dabble") else "- Sources: no DraftKings or Dabble line")
              + f" · simulation {f(r['p_model'])} · this season {r['hist'][0]} over / {r['hist'][1]} under",
              f"- Simulation: median {r['median']:.1f}, 25–75th {r['q25']:.0f}–{r['q75']:.0f}, {r['toi_proj']:.1f} min projected"]
     if r.get("ml"):

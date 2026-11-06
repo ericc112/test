@@ -165,6 +165,38 @@ class VerifyFreshness(unittest.TestCase):
         self.assertAlmostEqual(e.p, p, places=4)
 
 
+class MarketFallback(unittest.TestCase):
+    """DraftKings first; with no DraftKings price, Dabble's line nearest the PrizePicks line (user, 2026-11-06)."""
+
+    def test_draftkings_first_then_dabble(self):
+        import time
+        from edge import nba_pp
+        nba_pp._DABBLE.update(t=time.time() + 1e6, map={("derikqueen", "ra"): [{"line": 9.5, "over": 2.06, "under": 1.95},
+                                                                               {"line": 12.5, "over": 3.1, "under": 1.4}]})
+        try:
+            dk = {"p1": {"ra": {"line": 10.5, "over": "-110", "under": "-110"}}}
+            m, _ = nba_pp.market_for(dk, "p1", "Derik Queen", "ra", 10.0)
+            self.assertEqual((m["book"], m["line"]), ("DraftKings", 10.5))
+            self.assertAlmostEqual(m["q"], 0.5)
+            m, _ = nba_pp.market_for({}, "p1", "Derik Queen", "ra", 10.0)
+            self.assertEqual((m["book"], m["line"]), ("Dabble", 9.5))          # the nearest Dabble line
+            self.assertAlmostEqual(m["q"], (1 / 2.06) / (1 / 2.06 + 1 / 1.95))
+            self.assertEqual(nba_pp.market_for({}, "p1", "Nobody Here", "ra", 10.0)[0], None)
+        finally:
+            nba_pp._DABBLE.clear()
+
+    def test_unpriced_draftkings_line_falls_back(self):
+        import time
+        from edge import nba_pp
+        nba_pp._DABBLE.update(t=time.time() + 1e6, map={("derikqueen", "reb"): [{"line": 6.5, "over": 1.83, "under": 2.2}]})
+        try:
+            m, raw = nba_pp.market_for({"p1": {"reb": {"line": 7.0}}}, "p1", "Derik Queen", "reb", 7.0)
+            self.assertEqual(m["book"], "Dabble")
+            self.assertEqual(raw["line"], 7.0)
+        finally:
+            nba_pp._DABBLE.clear()
+
+
 class SideNumbers(unittest.TestCase):
     """A re-sided leg (history and most-likely lists) is priced by the same recompute verify runs."""
 

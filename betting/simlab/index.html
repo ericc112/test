@@ -1159,7 +1159,7 @@ function renderPicks() {
     <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)}</span></div>
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
     ${hist ? `<div><span class="k">History</span> <b>${cnt(r.season, r.side)}</b> this season · <b>${cnt(r.last5, r.side)}</b> last 5 · <b>${r.h2h && r.h2h[2] ? cnt(r.h2h, r.side) : "—"}</b> vs ${esc(r.opp)}</div>` : ""}
-    <div><span class="k">Sources</span> simulation ${pc(r.model)} · DraftKings ${pc(r.market)}${r.dk ? ` (${r.dk.line} at ${esc(r.dk.over || "?")}/${esc(r.dk.under || "?")})` : " (not posted)"} · this season ${pc(r.hist)} (${r.hist_n})</div>
+    <div><span class="k">Sources</span> simulation ${pc(r.model)} · ${esc((r.dk && r.dk.book) || "DraftKings")} ${pc(r.market)}${r.dk ? ` (${r.dk.line} at ${esc(r.dk.over || "?")}/${esc(r.dk.under || "?")})` : " (not posted)"} · this season ${pc(r.hist)} (${r.hist_n})</div>
     <div><span class="k">Simulation</span> median ${r.median} (25–75th ${r.q25}–${r.q75}), mean ${r.mean}, ${r.minutes} min</div>
     <div>${research(r)}</div>
     ${why(r, "Context check (✓ supports, – neutral, ✗ against; shown, not used to drop the leg)")}
@@ -1286,7 +1286,7 @@ function renderSportPicks(pre) {
     const parts = Object.entries(m.box || {}).filter(([k, v]) => v > 0 && BOX_LABEL[k]).map(([k, v]) => `${fmtV(k, v)} ${BOX_LABEL[k]}`).join(" · ");
     return `<div><span class="k">Most likely game</span> ${sc}: <b>${/time on ice/.test(r.stat) ? m.value.toFixed(1) : Math.round(m.value)} ${esc(r.stat)}</b> (${m.gap > 0 ? "+" : ""}${m.gap.toFixed(1)} vs the line)${parts ? ` · ${parts}` : ""}</div>`; };
   const mkName = pre === "tennis" ? "Dabble" : "DraftKings";
-  const src = (r) => `${mkName} ${pc(r.market)}${r.dk_line != null ? ` (DraftKings ${r.dk_line}, PrizePicks ${r.line})` : r.dk_lambda != null ? ` (milestone ladder, mean ${r.dk_lambda.toFixed(2)})` : r.market == null ? ` (no ${mkName} price)` : ""} · simulation ${pc(r.model)}${pre === "tennis" ? "" : ` · this season ${r.hist_o ?? "—"} over / ${r.hist_u ?? "—"} under`}`;
+  const src = (r) => r.book ? `${esc(r.book)} ${pc(r.market)} (${esc(r.book)} ${r.book_line}, PrizePicks ${r.line}; no DraftKings line) · simulation ${pc(r.model)}${pre === "tennis" ? "" : ` · this season ${r.hist_o ?? "—"} over / ${r.hist_u ?? "—"} under`}` : `${mkName} ${pc(r.market)}${r.dk_line != null ? ` (DraftKings ${r.dk_line}, PrizePicks ${r.line})` : r.dk_lambda != null ? ` (milestone ladder, mean ${r.dk_lambda.toFixed(2)})` : r.market == null ? ` (no ${mkName} price)` : ""} · simulation ${pc(r.model)}${pre === "tennis" ? "" : ` · this season ${r.hist_o ?? "—"} over / ${r.hist_u ?? "—"} under`}`;
   const recent = (r) => r.recent || r.last3;
   const card = (r, kind) => `<div class="pk">
     <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)}${r.event ? ` · ${esc(r.event)}` : ""} · ${esc(fmtKick(r.start))}</span></div>

@@ -31,6 +31,9 @@ ESPN = {"JAC": "JAX", "LA": "LAR", "WAS": "WSH", "LAR": "LAR"}           # Prize
 BREAK_EVEN = {"standard": 0.577}                                          # 2-pick power; goblin/demon multipliers unknown
 
 
+DABBLE_STATS = {"rec_yds": ("receiving-yards",), "rush_yds": ("rushing-yards",), "rush_rec_yds": ("receiving-yards", "rushing-yards"),
+                "receptions": ("receptions",), "rush_att": ("rushing-attempts",), "pass_yds": ("passing-yards",), "pass_att": ("passing-attempts",),
+                "completions": ("passing-completions",), "pass_td": ("passing-touchdowns",), "pass_int": ("interceptions",)}
 COUNT_MARKETS = {"receptions", "rush_att", "completions", "pass_att", "pass_td", "pass_int"}
 JUICED = {"pass_td", "pass_int"}
 
@@ -93,7 +96,18 @@ def price_leg(res: dict, name: str, market: str, line: float, over_only: bool = 
     dk = next((r for r in res["rows"] if str(r["player_id"]) == str(pid) and r["market"] == market), None)
     dk_line = dk["line"] if dk else None
     so, su, push = nfl.side_probs(arr, line)
-    if dk_line is None:
+    dab = None
+    if dk_line is None and market in DABBLE_STATS:   # no DraftKings line: Dabble's line and price (user, 2026-11-06)
+        from . import shop
+        dab = shop.dabble_market("NFL", name, DABBLE_STATS[market], line)
+    if dk_line is None and dab and dab.get("q") is not None:
+        if abs(dab["line"] - line) < 1e-9:
+            a_over = dab["q"]
+        else:                                        # carried along the simulated shape, anchored at Dabble's line
+            base = anchored_count(arr, dab["line"], line) if market in COUNT_MARKETS else nfl.anchored_over(arr, dab["line"], line)
+            lg = lambda x: float(np.log(np.clip(x, 1e-4, 1 - 1e-4) / (1 - np.clip(x, 1e-4, 1 - 1e-4))))
+            a_over = float(1 / (1 + np.exp(-(lg(base) + lg(dab["q"])))))     # shift by Dabble's lean off 50/50 at its line
+    elif dk_line is None:
         a_over = None
     elif abs(dk_line - line) < 1e-9:
         a_over = 0.5            # PrizePicks posts DraftKings' line: with no prices in the feed the market says 50/50
@@ -116,7 +130,7 @@ def price_leg(res: dict, name: str, market: str, line: float, over_only: bool = 
         conf = e.confidence
         why = []
         if pk is None and conf in ("High", "Medium"):
-            conf, why = "Low", ["no DraftKings line for this player and stat: the simulation alone has no edge on a line"]
+            conf, why = "Low", ["no DraftKings or Dabble line for this player and stat: the simulation alone has no edge on a line"]
         if flags and conf in ("High", "Medium"):
             conf = "Low"
         if market in JUICED and conf in ("High", "Medium"):
@@ -127,7 +141,7 @@ def price_leg(res: dict, name: str, market: str, line: float, over_only: bool = 
     vol_key = {"rec_yds": "targets", "receptions": "targets", "rush_yds": "rush_att", "rush_att": "rush_att",
                "rush_rec_yds": "rush_att"}.get(market, "pass_att")
     vol = p.get(vol_key)
-    return {"player_id": str(pid), "sim_name": p.get("name"), "team_espn": sim["teams"][p["team"]]["abbr"], "dk_line": dk_line,
+    return {"player_id": str(pid), "sim_name": p.get("name"), "team_espn": sim["teams"][p["team"]]["abbr"], "dk_line": dk_line, "dabble": dab,
             "median": med, "mean": mu, "q25": float(np.percentile(arr, 25)), "q75": float(np.percentile(arr, 75)),
             "volume": (vol_key, float(np.mean(vol))) if vol is not None else None, "flags": flags,
             "hist": (ho, hu), **best}
@@ -173,7 +187,9 @@ def price_board(props: list[dict], n: int = 50000, season: int = 2026, week: int
             gap = None if x["dk_line"] is None else p["line"] - x["dk_line"]
             note = (f"nfl sim median {x['median']:.1f} (25-75th {x['q25']:.0f}-{x['q75']:.0f})"
                     + (f", {x['volume'][0]} {x['volume'][1]:.1f}" if x["volume"] else "")
-                    + (f"; DraftKings line {x['dk_line']} (PrizePicks {gap:+g})" if x["dk_line"] is not None else "; no DraftKings line")
+                    + (f"; DraftKings line {x['dk_line']} (PrizePicks {gap:+g})" if x["dk_line"] is not None else
+                       f"; no DraftKings line; Dabble {x['dabble']['line']:g} at {x['dabble']['over']}/{x['dabble']['under']} (no-vig over {x['dabble']['q']:.0%})"
+                       if x.get("dabble") else "; no DraftKings or Dabble line")
                     + (f"; flags: {', '.join(x['flags'])}" if x["flags"] else "") + (f"; {x['why'][0]}" if x["why"] else "")
                     + f"; history {x['hist'][0]} over / {x['hist'][1]} under; pulled {dt.datetime.now(dt.timezone.utc):%Y-%m-%dT%H:%MZ}")
             rows.append({**p, **x, "event_id": ev["id"], "team": x["team_espn"], "opp": opp, "market_key": m, "sport": "nfl",
@@ -214,7 +230,8 @@ def write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
     lines = [f"### {r.get('bet_id', '')}{r['player']} ({r['team']}) {r['side'].upper()} {r['line']} {LABEL[r['market_key']]} — {r['game']}",
              f"**{r['p_final']:.1%} {r['confidence']}** · {verdict(r)}" + (f" · back-check: **{verified}**" if verified else ""),
              f"- Sources: DraftKings-anchored {f(r['p_market'])}"
-             + (f" (DraftKings line {r['dk_line']}, PrizePicks {r['gap']:+g})" if r["dk_line"] is not None else " (no DraftKings line)")
+             + (f" (DraftKings line {r['dk_line']}, PrizePicks {r['gap']:+g})" if r["dk_line"] is not None else
+                f" (Dabble {r['dabble']['line']:g} at {r['dabble']['over']}/{r['dabble']['under']}; no DraftKings line)" if r.get("dabble") else " (no DraftKings or Dabble line)")
              + f" · simulation {f(r['p_model'])} (shrunk) · this season {r['hist'][0]} over / {r['hist'][1]} under",
              f"- Simulation: median {r['median']:.1f}, 25–75th {r['q25']:.0f}–{r['q75']:.0f}"
              + (f", {r['volume'][1]:.1f} {r['volume'][0].replace('_', ' ')}" if r["volume"] else "")]
@@ -429,7 +446,10 @@ def reasons(r: dict, res: dict) -> list[dict]:
     add("simulation median", vd(cmp(r["median"], r["line"])), f"median {r['median']:.1f} (25-75th {r['q25']:.0f}-{r['q75']:.0f})")
     pk = r.get("p_market")
     if pk is None:
-        add("DraftKings", "neutral", "no DraftKings line for this player and stat")
+        add("DraftKings", "neutral", "no DraftKings or Dabble line for this player and stat")
+    elif r.get("dk_line") is None and r.get("dabble"):
+        add("Dabble", "supports" if pk >= 0.52 else "against" if pk <= 0.48 else "neutral",
+            f"{pk:.0%} for this side from Dabble's {r['dabble']['line']:g} at {r['dabble']['over']}/{r['dabble']['under']} (no DraftKings line)")
     elif r.get("dk_line") is not None and abs(r["dk_line"] - r["line"]) < 1e-9:
         add("DraftKings", "neutral", f"DraftKings posts the same line ({r['dk_line']}): no prices in the feed, so 50/50")
     else:

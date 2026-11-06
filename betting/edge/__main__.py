@@ -520,7 +520,9 @@ def _board_picks(args, sport: str):
                 "volume": (f"{vol[1]:.1f} {vol[0].replace('_', ' ')}" if vol else f"{r['toi_proj']:.1f} min projected" if r.get("toi_proj") else None),
                 "why": "; ".join(r.get("why") or []), "flags": r["flags"], "verified": ver, "warns": warns, "start": r["start"],
                 "reasons": r.get("reasons"), "ml": r.get("ml"), "season": rs.get("season"),
-                "recent": rs.get("last3") or rs.get("last5"), "recent_label": "last 3" if "last3" in rs else "last 5", "event": r.get("event")}
+                "recent": rs.get("last3") or rs.get("last5"), "recent_label": "last 3" if "last3" in rs else "last 5", "event": r.get("event"),
+                "book": "Dabble" if sport != "tennis" and r.get("dabble") and r.get("dk_line") is None and r.get("dk_lambda") is None else None,
+                "book_line": (r.get("dabble") or {}).get("line") if sport != "tennis" else None}
     today = dt.date.today().isoformat()
     sections, days_out = [], []
     for d in D:

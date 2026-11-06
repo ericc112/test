@@ -116,6 +116,48 @@ def _imp(a) -> float | None:
     return 100 / (v + 100) if v > 0 else -v / (-v + 100)
 
 
+
+_DABBLE = {}
+
+
+def dabble_nba(max_age: float = 600) -> dict:
+    """{(player, stat key): [{line, over, under}]} from Dabble's open NBA pick'em props (decimal prices on both sides;
+    they sum to about 100%). Cached for max_age seconds. Empty when Dabble can't be reached."""
+    import time
+    if _DABBLE.get("t") and time.time() - _DABBLE["t"] < max_age:
+        return _DABBLE["map"]
+    from . import shop
+    out = {}
+    try:
+        cid = shop.competitions().get("NBA")
+        rows = shop.dabble_board("NBA", cid) if cid else []
+    except Exception:
+        rows = []
+    inv = {tuple(sorted(v)): k for k, v in shop.STAT_MAP["NBA"].items()}
+    for r in rows:
+        key = STATS.get(inv.get(tuple(sorted(r["stats"])), ""))
+        if key and r.get("over") and r.get("under"):
+            out.setdefault((_norm(r["player"]), key), []).append({"line": float(r["line"]), "over": r["over"], "under": r["under"]})
+    _DABBLE.update(t=time.time(), map=out)
+    return out
+
+
+def market_for(lines: dict | None, pid, name: str, stat: str, line: float) -> tuple[dict | None, dict | None]:
+    """The market for a player's stat: DraftKings when it posts a priced line, otherwise Dabble's line nearest the
+    PrizePicks line (user, 2026-11-06: use other books when DraftKings has no price). Returns (market, raw DraftKings):
+    market = {book, line, over, under, q} with q the no-vig over at the book's own line, or None."""
+    dk = ((lines or {}).get(pid) or {}).get(stat)
+    if dk and dk.get("over") and dk.get("under"):
+        qo, qu = _imp(dk["over"]), _imp(dk["under"])
+        if qo and qu:
+            return {"book": "DraftKings", "line": float(dk["line"]), "over": dk["over"], "under": dk["under"], "q": qo / (qo + qu)}, dk
+    alts = dabble_nba().get((_norm(name), stat)) or []
+    if alts:
+        b = min(alts, key=lambda a: (abs(a["line"] - line), a["line"]))
+        a_, u_ = 1 / float(b["over"]), 1 / float(b["under"])
+        return {"book": "Dabble", "line": b["line"], "over": b["over"], "under": b["under"], "q": a_ / (a_ + u_)}, dk
+    return None, dk
+
 # ------------------------------------------------------------------ engine + simulation
 def run_sims(eng: dict, gids: list[str], n: int = N_SIMS, workers: int = 4) -> dict:
     """50,000 runs per game in parallel Node processes, each running the page's worker code."""
@@ -387,23 +429,23 @@ def price_nba(props: list[dict], n: int = N_SIMS, logic: dict | None = None) -> 
         stat, line = STATS[p["stat"]], float(p["line"])
         h = sim["hist"][stat]
         po, pu, ppush = sides_at(h, line)
-        dk = ((sd["players"].get("lines") or {}).get(pl["id"]) or {}).get(stat)
-        mk_over, mk_note = None, "no DraftKings line for this player and stat yet"
-        if dk and dk.get("over") and dk.get("under"):
-            qo, qu = _imp(dk["over"]), _imp(dk["under"])
-            q = qo / (qo + qu)
+        dk, raw_dk = market_for(sd["players"].get("lines"), pl["id"], pl["name"], stat, line)
+        mk_over, mk_note = None, "no DraftKings or Dabble line for this player and stat yet"
+        if dk:
+            q, bk = dk["q"], dk["book"]
+            pre = "" if bk == "DraftKings" else "no DraftKings line; "
             if abs(dk["line"] - line) < 1e-9:
-                mk_over, mk_note = q, f"DraftKings {dk['line']} at {dk['over']}/{dk['under']} (no-vig over {q:.0%})"
+                mk_over, mk_note = q, f"{pre}{bk} {dk['line']} at {dk['over']}/{dk['under']} (no-vig over {q:.0%})"
             else:
                 mk_over = market_sides(h, dk["line"], q, line)[0] if logic["push"] == "exclusive" else market_at(h, dk["line"], q, line)[0]
-                mk_note = f"DraftKings {dk['line']} at {dk['over']}/{dk['under']} (no-vig over {q:.0%}), carried to {line}: {mk_over:.0%}"
-        elif dk:
-            mk_note = f"DraftKings line {dk['line']} but its sides are unlabelled (L2): market not used"
+                mk_note = f"{pre}{bk} {dk['line']} at {dk['over']}/{dk['under']} (no-vig over {q:.0%}), carried to {line}: {mk_over:.0%}"
+        elif raw_dk:
+            mk_note = f"DraftKings line {raw_dk['line']} but its sides are unlabelled (L2): market not used"
         staged.append((p, g, side, sd, pl, sim, stat, line, h, po, pu, ppush, dk, mk_over, mk_note, top5))
     # tonight's raw tilt per stat on main lines (L7 measurement; Fix 7 tilt monitor)
     gaps = {}
     for (p, g, side, sd, pl, sim, stat, line, h, po, pu, ppush, dk, mk_over, mk_note, top5) in staged:
-        if mk_over is not None and p.get("odds_type") == "standard" and abs(dk["line"] - line) <= 1.0 and 0 < po < 1 - ppush:
+        if mk_over is not None and dk.get("book") == "DraftKings" and p.get("odds_type") == "standard" and abs(dk["line"] - line) <= 1.0 and 0 < po < 1 - ppush:
             gaps.setdefault(stat, []).append(_lg(po / max(1 - ppush, 1e-9)) - _lg(mk_over))
     tilt = {k: float(np.mean(v)) for k, v in gaps.items() if len(v) >= 10}
     causes = json.load(open(TILT_CAUSES)) if os.path.exists(TILT_CAUSES) else {}
@@ -761,7 +803,7 @@ def likely_reasons(r: dict) -> list[dict]:
     pk = r.get("p_market")
     if pk is not None:
         add("DraftKings", "supports" if pk >= 0.52 else "against" if pk <= 0.48 else "neutral",
-            f"{pk:.0%} for this side after the vig" + (f" (line {r['dk']['line']})" if r.get("dk") else ""))
+            f"{pk:.0%} for this side after the vig" + (f" ({r['dk'].get('book', 'DraftKings')} line {r['dk']['line']})" if r.get("dk") else ""))
     else:
         add("DraftKings", "neutral", "no DraftKings price at this line")
     o, u, n = rs.get("season", [0, 0, 0])
@@ -867,7 +909,7 @@ def page_row(r: dict, verified: str, warns: list, bet_id: str | None) -> dict:
             "side": r["side"], "line": r["line"], "p": rnd(r["p_final"], 4), "conf": r["confidence"], "verdict": verdict(r),
             "model": rnd(r["p_model"]), "market": rnd(r["p_market"]), "hist": rnd(r["p_hist"]), "hist_n": r["hist_n"],
             "median": r.get("proj"), "mean": rnd(r.get("sim_mean"), 1), "q25": r.get("q25"), "q75": r.get("q75"), "minutes": r.get("opp_proj"),
-            "dk": None if not r.get("dk") else {"line": r["dk"]["line"], "over": r["dk"].get("over"), "under": r["dk"].get("under")},
+            "dk": None if not r.get("dk") else {"line": r["dk"]["line"], "over": r["dk"].get("over"), "under": r["dk"].get("under"), "book": r["dk"].get("book", "DraftKings")},
             "season": rs.get("season"), "last5": rs.get("last5"), "h2h": rs.get("h2h"), "per36": rnd(rs.get("per36"), 1),
             "h2h_per36": rnd(rs.get("h2h_per36"), 1), "season_avg": rnd(rs.get("season_avg"), 1), "last_games": rs.get("last_games"),
             "h2h_games": rs.get("h2h_games"), "opp_allows": rs.get("opp_allows"), "flags": "role unconfirmed" in (r.get("notes") or ""),
@@ -903,16 +945,16 @@ def write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
              "", "| Source | Probability | Basis |", "|---|---|---|",
              f"| Model ({r['n_sims']:,} runs) | {f(r['p_model'])} | median {r['proj']}, mean {r['sim_mean']:.1f}, 25–75th {r['q25']}–{r['q75']}, {r['opp_proj']} minutes"
              + (f"; raw {f(r['p_model_raw'])} before tonight's bias fix ({-r['bias_logit']:+.2f} logit, L7)" if r.get("bias_logit") else "") + " |",
-             f"| Market (DraftKings) | {f(r['p_market'])} | " + (f"{r['dk']['line']} at {r['dk']['over']}/{r['dk']['under']}" if r.get("dk") and r["dk"].get("over") else "not posted / not usable") + " |",
+             f"| Market ({(r.get('dk') or {}).get('book', 'DraftKings')}) | {f(r['p_market'])} | " + (f"{r['dk']['line']} at {r['dk']['over']}/{r['dk']['under']}" if r.get("dk") and r["dk"].get("over") else "not posted / not usable") + " |",
              f"| History (this season) | {f(r['p_hist'])} | {side_n(rs['season'])} at {line} (regressed toward the market, or 50% without one, by n/(n+10)) |",
              "", "**Why (model and market):**"]
     gap = r["sim_mean"] - line
     lines.append(f"- The simulation puts him at {r['sim_mean']:.1f} {LABEL[st]} on {r['opp_proj']} minutes, {abs(gap):.1f} {'above' if gap > 0 else 'below'} the line; {f(r['p_model'])} of runs land {r['side']}.")
     if r.get("p_market") is not None:
-        lines.append(f"- DraftKings' price says {f(r['p_market'])} for the {r['side']}" +
+        lines.append(f"- {(r.get('dk') or {}).get('book', 'DraftKings')}'s price says {f(r['p_market'])} for the {r['side']}" +
                      (": it agrees with the side." if r["p_market"] >= 0.5 else ": it leans the other way, and the blend is pulled toward it."))
     else:
-        lines.append("- No sportsbook price yet, so nothing checks the model: this can't be High until DraftKings posts (agreement rule).")
+        lines.append("- No sportsbook price yet (DraftKings or Dabble), so nothing checks the model: this can't be High until one posts (agreement rule).")
     lines.append(f"- Game: home win {r['p_home']:.0%} in the simulation; blowout minutes are already in the runs (garbage time).")
     lines += ["", "**Research (context, not a reason: hit rates and streaks didn't predict beyond the price on 2,330 lines, LESSONS L27):**",
               f"- This season: {side_n(rs['season'])} at {line} (average {rs['season_avg']:.1f})" if rs.get("season_avg") is not None else "- This season: no games",
