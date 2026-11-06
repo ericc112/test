@@ -688,8 +688,8 @@ def likely_order(rows: list[dict], ctx: dict, likely: dict, top: int | None = No
     players = set()
     for r in cand:
         # every leg that passes (top=None), one per player; same-game legs are flagged, never two in one entry
-        if seen[r["script"]] >= per_game or (r["script"], r["player"]) in players:
-            continue
+        if seen[r["script"]] >= per_game or (r["script"], r["player"]) in players or r["p_final"] < 0.5:
+            continue                        # (the blend has to favor the side too: a sub-50% leg isn't a pick)
         _likely_context(r, ctx)
         r["reasons"] = likely_reasons(r)
         against = [x["name"] for x in r["reasons"] if x["verdict"] == "against"]
