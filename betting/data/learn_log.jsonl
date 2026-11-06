@@ -22,3 +22,6 @@
 {"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:pa:under", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
 {"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:pr:over", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
 {"at": "2026-11-05T06:00Z", "kind": "cap_medium", "key": "nba:pts:over", "before": true, "after": false, "note": "reverted: learned from Wednesday holdout legs (find_caps read every graded leg; fixed to use fitting legs only)"}
+{"at": "2026-11-06T20:47Z", "kind": "outcome_bias", "key": "nba:ast:over", "before": null, "after": -0.069, "window": ["2026-10-12", "2026-11-05"], "n": 210}
+{"at": "2026-11-06T20:47Z", "kind": "outcome_bias", "key": "nba:reb:over", "before": null, "after": 0.151, "window": ["2026-10-12", "2026-11-05"], "n": 210}
+{"at": "2026-11-06T20:47Z", "kind": "outcome_bias", "key": "nba:pra:under", "before": null, "after": 0.107, "window": ["2026-10-12", "2026-11-05"], "n": 210}

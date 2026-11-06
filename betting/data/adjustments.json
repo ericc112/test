@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-05",
+  "updated": "2026-11-06",
   "blend_prior": {
     "intercept": 0.0,
     "w_model": 0.45,
@@ -34,7 +34,10 @@
     "cs2:cs_headshots_m12:under": -0.055,
     "mlb:batter_hrr:under": -0.076,
     "cs2:cs_kills_m12:over": -0.128,
-    "cfb:rec_yds:over": 0.073
+    "cfb:rec_yds:over": 0.073,
+    "nba:ast:over": -0.069,
+    "nba:reb:over": 0.151,
+    "nba:pra:under": 0.107
   },
   "avoid_segments": [
     "cs2:cs_kills_m12:under"
