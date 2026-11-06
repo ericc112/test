@@ -2,7 +2,7 @@
 
 Reads the full priced boards each pricer saves (data/{sport}_boards/DATE.json.gz), joins the ledger (a leg logged in
 bets.csv gets its id) and the day's published lists (data/picks/DATE-{sport}.json: the back-check result of each
-listed leg). A leg that was never back-checked is shown as such: it is a price, not a pick, until `edge verify` passes
+listed leg). Goblin lines are left out (user, 2026-11-06). A leg that was never back-checked is shown as such: it is a price, not a pick, until `edge verify` passes
 it (CLAUDE.md)."""
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def export(date: str | None = None) -> dict:
             continue
         rows = []
         for r in json.load(gzip.open(path, "rt")):
-            if r.get("p_final") is None or not r.get("side"):
+            if r.get("p_final") is None or not r.get("side") or r.get("odds_type") == "goblin":   # user: no goblin lines
                 continue
             b = logged.get(key(r.get("event_id"), r.get("player"), r.get("line"), r.get("side")))
             v = ver.get(b["id"]) if b else None

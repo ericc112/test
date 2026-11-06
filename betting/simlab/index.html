@@ -1255,7 +1255,7 @@ function renderBoard(sport, el) {
         <td><b>${(100 * r.p).toFixed(1)}%</b><span class="sub">${esc(r.conf)}</span></td><td class="l">${status(r)}</td></tr>`).join("")}</tbody></table></div>
       ${L.length > st.n ? `<button type="button" class="chip more" data-more="1">Show ${Math.min(60, L.length - st.n)} more of ${L.length - st.n}</button>` : ""}`
       : `<div class="note">No ${st.conf === "all" ? "" : esc(st.conf) + " "}${st.type === "all" ? "" : esc((typeName[st.type] || st.type).toLowerCase()) + " "}legs${q ? ` matching “${esc(st.q)}”` : ""}.</div>`}
-    <div class="note">Every line the pricer scored, not picks: only a leg marked VERIFIED passed <span class="num">edge verify</span>; anything else needs it before you use it.${types.includes("goblin") ? " Goblins and demons: PrizePicks doesn't publish their payouts, so their break-even is unknown and they never count as entry legs; a goblin is easy to label High (the probability is capped at 70%) because its line is set low." : ""}</div>`;
+    <div class="note">Every line the pricer scored, not picks: only a leg marked VERIFIED passed <span class="num">edge verify</span>; anything else needs it before you use it.${types.includes("demon") ? " Demons: PrizePicks doesn't publish their payout, so their break-even is unknown and they never count as entry legs. Goblin lines aren't shown." : ""}</div>`;
   el.querySelectorAll(".seg").forEach((g) => g.querySelectorAll("button").forEach((b) => { b.onclick = () => { st[g.dataset.k] = b.dataset.v; st.n = 60; renderBoard(sport, el); }; }));
   const sel = el.querySelector("select"); if (sel) sel.onchange = () => { st.sort = sel.value; renderBoard(sport, el); };
   const inp = el.querySelector("input[type=search]");
