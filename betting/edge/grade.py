@@ -250,7 +250,29 @@ def nba_value(event_id: str, player_id: str, market: str, cache: dict):
     return "void", None
 
 
-GRADERS = {"mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value,
+def tennis_value(event_id: str, player_id: str, market: str, cache: dict):
+    """edge tennis-picks legs: event_id '<slugA>-<slugB>-<date>', player_id the player's Tennis Abstract slug. The
+    stat comes from the final score on the player's Tennis Abstract page (retirements and walkovers void)."""
+    from . import tennis as T
+    d = event_id[-10:]                                  # '<slugA>-<slugB>-YYYY-MM-DD'
+    slugs = event_id[: -11].split("-")
+    opp = next((x for x in slugs if x != player_id), None)
+    key = ("tennis", player_id)
+    if key not in cache:
+        cache[key] = T.player_by_slug(player_id, max_age=3 * 3600)
+    p = cache[key]
+    if not p:
+        return "pending", None
+    row = T._player_row(p, opp, d)
+    if not row:
+        return "pending", None
+    sc = T.parse_score(row["score"])
+    if not sc:
+        return "void", None
+    return "final", float(T._stat(sc, market[len("tennis_"):], row["won"]))
+
+
+GRADERS = {"tennis": tennis_value, "mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value,
            "nba": nba_value}
 
 

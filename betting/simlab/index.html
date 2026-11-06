@@ -262,6 +262,20 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="note" id="nhlNote"></div>
   </details>
 
+  <details class="panel picks" id="tennisPicksPanel" hidden open>
+    <summary><h2 class="pk-title">Tennis PrizePicks picks (ATP + WTA)</h2><span class="note" id="tennisMeta"></span></summary>
+    <div class="row"><div class="seg" role="group" aria-label="Match day" id="tennisDays"></div><span class="note" id="tennisDayNote"></span></div>
+    <div class="note" id="tennisEntry"></div>
+    <div class="pk-cols">
+      <div><h3>By the model <span class="note">(point-by-point match simulation on real serve and return stats + Dabble's price; High before Medium)</span></h3><div class="pk-list" id="tennisList"></div></div>
+      <div><h3>By history only <span class="note">(recent completed matches at the line, then the last 5)</span></h3><div class="pk-list" id="tennisHist"></div></div>
+      <div><h3>By the most likely game <span class="note">(every leg where the most likely simulated match, the median, the market, recent record, the last 5, head-to-head and the serve-return matchup all support the side or are neutral)</span></h3><div class="pk-list" id="tennisLikely"></div></div>
+    </div>
+    <h3 id="tennisGapTitle">Lines Dabble prices furthest from 50/50 <span class="note">(where an edge can come from)</span></h3>
+    <div id="tennisGaps" class="pk-gapbox"></div>
+    <div class="note" id="tennisNote"></div>
+  </details>
+
   <div class="layout">
     <div class="games" id="games" role="list"></div>
 
@@ -1103,6 +1117,7 @@ onmessage = (e) => {
 <script src="nfl_picks.js"></script>
 <script src="nhl_picks.js"></script>
 <script src="shop.js"></script>
+<script src="tennis_picks.js"></script>
 <script>
 "use strict";
 const D = window.SIMLAB || { leagues: [], pulled: null };
@@ -1187,6 +1202,7 @@ function renderPicks() {
 // This week's NFL PrizePicks picks (written by `python -m edge nfl-picks --page nfl_picks.js`)
 const SPORT_NOTE = {
   nfl: "Each PrizePicks line is priced from the simulation re-centred on DraftKings' line for the same player and stat (the backtest's better centre; the simulation's own centre showed no edge on the line), the simulation's number shrunk toward 50%, and this season's record, blended like <span class=\"num\">edge prob</span>. A leg is held at Low without a DraftKings line, with a role flag, or on a touchdown or interception line (often heavily juiced, and the feed has no prices).",
+  tennis: "Each PrizePicks line is priced from a point-by-point simulation of the match: each player's serve and return points won on the surface (Tennis Abstract's last-52-weeks splits, built from real match counts), combined by the Barnett-Clarke method, with every service game and tiebreak played out (tiebreak at 6-6; best of 5 only in ATP Grand Slams). Dabble's price is the market where it posts the same prop (the sportsbook feed carries no tennis props); without one a leg stays Low. Aces, double faults and break points won are left out until they can be graded from real counts.",
   nhl: "Each PrizePicks line is priced from a player simulation of the game (projected ice time, per-60 rates with last season as the prior, the opponent, DraftKings' total and moneyline) and, for shots, points, assists and goals, DraftKings' de-vigged milestone ladder. The player model is new and untested against closing lines, so the market carries 80% of the weight, a missing market counts as 50%, and a leg without one stays Low (hits, faceoffs won, blocked shots, ice time, plus/minus).",
 };
 const BOX_LABEL = { pass_yds: "pass yds", rush_att: "car", rush_yds: "rush yds", targets: "tgt", receptions: "rec", rec_yds: "rec yds",
@@ -1215,10 +1231,11 @@ function renderSportPicks(pre) {
   const mlLine = (r) => { const m = r.ml; if (!m) return ""; const sc = Object.entries(m.score).map(([k, v]) => `${esc(k)} ${v}`).join(", ");
     const parts = Object.entries(m.box || {}).filter(([k, v]) => v > 0 && BOX_LABEL[k]).map(([k, v]) => `${fmtV(k, v)} ${BOX_LABEL[k]}`).join(" · ");
     return `<div><span class="k">Most likely game</span> ${sc}: <b>${/time on ice/.test(r.stat) ? m.value.toFixed(1) : Math.round(m.value)} ${esc(r.stat)}</b> (${m.gap > 0 ? "+" : ""}${m.gap.toFixed(1)} vs the line)${parts ? ` · ${parts}` : ""}</div>`; };
-  const src = (r) => `DraftKings ${pc(r.market)}${r.dk_line != null ? ` (DraftKings ${r.dk_line}, PrizePicks ${r.line})` : r.dk_lambda != null ? ` (milestone ladder, mean ${r.dk_lambda.toFixed(2)})` : " (no DraftKings line)"} · simulation ${pc(r.model)} · this season ${r.hist_o ?? "—"} over / ${r.hist_u ?? "—"} under`;
+  const mkName = pre === "tennis" ? "Dabble" : "DraftKings";
+  const src = (r) => `${mkName} ${pc(r.market)}${r.dk_line != null ? ` (DraftKings ${r.dk_line}, PrizePicks ${r.line})` : r.dk_lambda != null ? ` (milestone ladder, mean ${r.dk_lambda.toFixed(2)})` : r.market == null ? ` (no ${mkName} price)` : ""} · simulation ${pc(r.model)} · ${pre === "tennis" ? "recent matches" : "this season"} ${r.hist_o ?? "—"} over / ${r.hist_u ?? "—"} under`;
   const recent = (r) => r.recent || r.last3;
   const card = (r, kind) => `<div class="pk">
-    <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)} · ${esc(fmtKick(r.start))}</span></div>
+    <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)}${r.event ? ` · ${esc(r.event)}` : ""} · ${esc(fmtKick(r.start))}</span></div>
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
     <div><span class="k">Sources</span> ${src(r)}</div>
     ${kind === "likely" ? mlLine(r) : ""}
@@ -1276,7 +1293,10 @@ function renderShop() {
 function fmtKick(iso) { if (!iso) return ""; const t = new Date(iso); return isNaN(t) ? "" : t.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }); }
 // each league's picks show with that league: NBA picks in the NBA section, NFL in NFL, NHL in NHL
 function syncPicks() {
-  const k = state.custom ? null : (league() || {}).key;
+  const tv = state.view === "tennis";
+  const lay = document.querySelector(".layout"); if (lay) lay.hidden = tv;
+  if ($("tennisPicksPanel")) $("tennisPicksPanel").hidden = !(tv && window.SIMLAB_TENNIS_PICKS);
+  const k = state.custom || tv ? null : (league() || {}).key;
   if ($("picksPanel")) $("picksPanel").hidden = !(window.SIMLAB_PICKS && k === "nba");
   if ($("nflPicksPanel")) $("nflPicksPanel").hidden = !(window.SIMLAB_NFL_PICKS && k === "nfl");
   if ($("nhlPicksPanel")) $("nhlPicksPanel").hidden = !(window.SIMLAB_NHL_PICKS && k === "nhl");
@@ -1381,9 +1401,15 @@ function renderRail() {
   syncPicks();
   const r = $("rail"); r.innerHTML = "";
   D.leagues.forEach((lg, i) => { const b = document.createElement("button"); b.className = "chip"; b.setAttribute("aria-pressed", String(!state.custom && i === state.lg));
-    b.innerHTML = `${esc(lg.label)}<small>${lg.games.length}</small>`; b.onclick = () => { state.lg = i; state.gi = 0; state.custom = false; renderRail(); renderGames(); selectGame(); }; r.appendChild(b); });
+    b.setAttribute("aria-pressed", String(!state.custom && !state.view && i === state.lg));
+    b.innerHTML = `${esc(lg.label)}<small>${lg.games.length}</small>`; b.onclick = () => { state.view = null; state.lg = i; state.gi = 0; state.custom = false; renderRail(); renderGames(); selectGame(); }; r.appendChild(b); });
+  if (window.SIMLAB_TENNIS_PICKS) {            // tennis has no game simulator on this page: its chip opens the tennis picks
+    const tb = document.createElement("button"); tb.className = "chip"; tb.setAttribute("aria-pressed", String(state.view === "tennis"));
+    const tp = window.SIMLAB_TENNIS_PICKS; tb.innerHTML = `Tennis<small>${tp.games || ""}</small>`;
+    tb.onclick = () => { state.view = "tennis"; state.custom = false; renderRail(); }; r.appendChild(tb);
+  }
   const c = document.createElement("button"); c.className = "chip"; c.setAttribute("aria-pressed", String(state.custom)); c.textContent = "Any game (custom)";
-  c.onclick = () => { openCustom(); }; r.appendChild(c);
+  c.onclick = () => { state.view = null; openCustom(); }; r.appendChild(c);
 }
 function lineText(g, m) {
   const s = sportOf(m);
@@ -2560,6 +2586,6 @@ $("bcNew").onclick = () => bcStart("random");
 $("bcLikelyBtn").onclick = () => bcStart("likely");
 
 $("pulled").textContent = D.pulled ? `Lines and injuries as of ${new Date(D.pulled).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "No data file loaded: use Any game (custom).";
-renderRail(); renderHonest(); renderPicks(); renderNflPicks(); renderSportPicks("nhl"); syncPicks();
+renderRail(); renderHonest(); renderPicks(); renderNflPicks(); renderSportPicks("nhl"); renderSportPicks("tennis"); syncPicks();
 if (D.leagues.length && D.leagues[0].games.length) { renderGames(); selectGame(); } else openCustom();
 </script>

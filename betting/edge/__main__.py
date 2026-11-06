@@ -154,6 +154,14 @@ def main(argv=None):
     nfp.add_argument("--no-verify", action="store_true")
     nfp.add_argument("--out", default=None)
     nfp.add_argument("--page", help="also write the picks for the Sim Lab page here (nfl_picks.js)")
+    tnp = sub.add_parser("tennis-picks")
+    tnp.add_argument("--top", type=int, default=5)
+    tnp.add_argument("--n", type=int, default=20000)
+    tnp.add_argument("--match", default=None, help="only matches with this player")
+    tnp.add_argument("--no-log", action="store_true")
+    tnp.add_argument("--no-verify", action="store_true")
+    tnp.add_argument("--out", default=None)
+    tnp.add_argument("--page", help="also write the picks for the Sim Lab page here (tennis_picks.js)")
     nhp = sub.add_parser("nhl-picks")
     nhp.add_argument("--top", type=int, default=5)
     nhp.add_argument("--n", type=int, default=20000)
@@ -382,6 +390,9 @@ def main(argv=None):
     elif args.cmd == "nhl-picks":
         args.week = None
         _nhl_picks(args)
+    elif args.cmd == "tennis-picks":
+        args.week = None
+        _board_picks(args, "tennis")
     elif args.cmd == "tag":
         if L.base_tag(args.reason) not in R.TAGS:
             print(f"note: '{args.reason}' is not a standard tag ({', '.join(R.TAGS)}); recorded anyway")
@@ -411,6 +422,10 @@ BOARD_TEXT = {
            "better centre), the simulation's own number shrunk toward 50%, and this season's record, blended as `edge prob`. "
            "Where PrizePicks posts DraftKings' line the market says 50/50 (the feed has no prices), so the edge, if any, sits in lines "
            "that differ from DraftKings'. No locks: the NFL simulation alone has not beaten DraftKings' closing lines (README).",
+    "tennis": "Each line is priced from a point-by-point simulation of the match: each player's serve and return points won on the "
+              "surface (Tennis Abstract's last-52-weeks splits, real match counts), combined with the Barnett-Clarke method, every "
+              "service game and tiebreak played out. Dabble's price is the market where it posts the same prop (no sportsbook tennis "
+              "props in the feed); without it a leg stays Low. History, head-to-head and the matchup are reasons, not inputs. No locks.",
     "nhl": "Each line is priced from a player simulation of the game (ice time, per-60 rates with last season as the prior, the "
            "opponent and DraftKings' total) and, for shots, points, assists and goals, DraftKings' de-vigged milestone ladder. The "
            "player model is new and untested against closing lines, so the market carries 80% of the weight, a missing market "
@@ -423,14 +438,14 @@ def _board_picks(args, sport: str):
     game with reasons), log, back-check every listed leg, write the report and the page data."""
     import json
     import os
-    from . import nfl_pp, nhl_pp
+    from . import nfl_pp, nhl_pp, tennis
     from . import pp as P
     from . import verify as V
     from .blend import HERE, load_adjustments
-    NP = {"nfl": nfl_pp, "nhl": nhl_pp}[sport]
+    NP = {"nfl": nfl_pp, "nhl": nhl_pp, "tennis": tennis}[sport]
     props = [p for p in P.board(sport.upper(), ("standard",)) if p["stat"] in NP.STATS]
     if args.match:
-        props = [p for p in props if args.match.upper() in (str(p.get("home")) + " " + str(p.get("away"))).upper()]
+        props = [p for p in props if args.match.upper() in (str(p.get("home")) + " " + str(p.get("away")) + " " + str(p.get("player")) + " " + str(p.get("opp"))).upper()]
     if not props:
         print(f"No {sport.upper()} props on the PrizePicks board for the stats the simulation prices.")
         return
@@ -487,7 +502,7 @@ def _board_picks(args, sport: str):
                 "volume": (f"{vol[1]:.1f} {vol[0].replace('_', ' ')}" if vol else f"{r['toi_proj']:.1f} min projected" if r.get("toi_proj") else None),
                 "why": "; ".join(r.get("why") or []), "flags": r["flags"], "verified": ver, "warns": warns, "start": r["start"],
                 "reasons": r.get("reasons"), "ml": r.get("ml"), "season": rs.get("season"),
-                "recent": rs.get("last3") or rs.get("last5"), "recent_label": "last 3" if "last3" in rs else "last 5"}
+                "recent": rs.get("last3") or rs.get("last5"), "recent_label": "last 3" if "last3" in rs else "last 5", "event": r.get("event")}
     today = dt.date.today().isoformat()
     sections, days_out = [], []
     for d in D:
@@ -519,8 +534,10 @@ def _board_picks(args, sport: str):
     entries = [x for x in days_out if x["entry"]]
     head.append("**No leg clears the ENTRY rule (High, 65%+). Sitting out beats forcing it.**" if not entries else
                 "**ENTRY legs:** " + "; ".join(f"{x['label']}: {x['entry']}" for x in entries))
-    gap_title = "PrizePicks lines that differ from DraftKings'" if sport == "nfl" else "Lines DraftKings' ladder prices furthest from 50/50"
-    tail = ["", f"## {gap_title} ({len(gaps)})", "| player | stat | PrizePicks | DraftKings | side | p | conf |", "|---|---|---|---|---|---|---|"]
+    gap_title = {"nfl": "PrizePicks lines that differ from DraftKings'", "nhl": "Lines DraftKings' ladder prices furthest from 50/50",
+                 "tennis": "Lines Dabble prices furthest from 50/50"}[sport]
+    ref = "Dabble" if sport == "tennis" else "DraftKings"
+    tail = ["", f"## {gap_title} ({len(gaps)})", f"| player | stat | PrizePicks | {ref} | side | p | conf |", "|---|---|---|---|---|---|---|"]
     tail += [f"| {g['player']} | {g['stat']} | {g['pp']} | {g['dk']} | {g['side']} | {g['p']:.1%} | {g['conf']} |" for g in gaps[:25]]
     report = "\n".join(head) + "\n\n" + "\n\n".join(sections) + "\n" + "\n".join(tail) + "\n"
     out = args.out or os.path.join(HERE, "data", "picks", f"{today}-{sport}.md")

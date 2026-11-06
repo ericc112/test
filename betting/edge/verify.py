@@ -75,6 +75,12 @@ def check_recompute(rep: Report, adj: dict):
         if "role unconfirmed" in (r.get("notes") or ""):
             c_ = "Low"
         e = type(e)(p=p_, confidence=c_, agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
+    elif r.get("sport") == "tennis":
+        from . import tennis as T
+        a2 = dict(adj); a2["blend_by_sport"] = {**(adj.get("blend_by_sport") or {}), "tennis": T.BLEND}
+        e = final_probability(pm, pk, None, r.get("segment", ""), 0, a2)
+        if e.confidence in ("High", "Medium") and ("no market price" in (r.get("notes") or "") or "flags:" in (r.get("notes") or "")):
+            e = type(e)(p=e.p, confidence="Low", agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
     elif r.get("sport") == "nhl" and str(r.get("market", "")).startswith("nhl_"):
         from . import nhl_pp
         a2 = dict(adj); a2["blend_by_sport"] = {**(adj.get("blend_by_sport") or {}), "nhl": nhl_pp.BLEND}
@@ -164,7 +170,7 @@ def check_offered(rep: Report):
     book = (r.get("book") or "").lower()
     if "prizepicks" in book:
         from . import pp
-        lg = {"cs2": "CS2", "lol": "LoL", "mlb": "MLB", "nhl": "NHL", "nfl": "NFL", "soccer": "UCL", "nba": "NBA"}.get(r.get("sport"))
+        lg = {"cs2": "CS2", "lol": "LoL", "mlb": "MLB", "nhl": "NHL", "nfl": "NFL", "soccer": "UCL", "nba": "NBA", "tennis": "TENNIS"}.get(r.get("sport"))
         try:
             board = pp.board(lg, ("standard", "goblin", "demon")) if lg else []
         except Exception as e:
@@ -275,6 +281,41 @@ def check_nfl(rep: Report, adj: dict):
     off = lm is None or abs(pm - lm) > TOL_MODEL
     rep.add("WARN" if off and getattr(rep, "locked", False) else "FAIL" if off else "PASS", "reprice",
             f"simulator now {pm:.3f} (calibrated), logged {lm}")
+    if x["flags"]:
+        rep.add("WARN", "role", "; ".join(x["flags"]))
+
+
+def check_tennis_pp(rep: Report):
+    """A PrizePicks tennis leg (edge tennis-picks): refetch both players' Tennis Abstract records and Dabble, re-run
+    the match simulation (same seed), re-price the leg on its side and rebuild the label."""
+    from . import tennis as T
+    r = rep.row
+    slugs = str(r["event_id"])[:-11].split("-")
+    me = r["player_id"]
+    opp = next((x for x in slugs if x != me), None)
+    pa, pb = T.player_by_slug(me), T.player_by_slug(opp) if opp else None
+    if not pa or not pb:
+        rep.add("FAIL", "reprice", "a player's Tennis Abstract record isn't available now")
+        return
+    pa["name"], pb["name"] = r["player"], r.get("event", "").split(" vs ")[-1] if " vs " in r.get("event", "") else pb["name"]
+    start = str(r["event_id"])[-10:] + "T12:00:00"
+    G = T.game(pa, pb, start, [pa, pb] + [x for x in [T.player_by_slug(s) for s in slugs] if x], T._dabble_board())
+    x = T.price_leg(G, r["player"], r["market"][len("tennis_"):], float(r["line"]), side=r["side"])
+    if not x:
+        rep.add("FAIL", "reprice", "player not matched in the rebuilt match")
+        return
+    rep.add("PASS", "recount", f"recent record {x['median']:g} median; history is context only for tennis")
+    lm = _f(r.get("p_model"))
+    off = lm is None or abs(x["p_model"] - lm) > TOL_MODEL
+    rep.add("FAIL" if off else "PASS", "reprice", f"simulation now {x['p_model']:.3f}, logged {lm}")
+    lk = _f(r.get("p_market"))
+    moved = (x["p_market"] is None) != (lk is None) or (lk is not None and abs(x["p_market"] - lk) > TOL_MODEL)
+    rep.add("WARN" if moved else "PASS", "market", (f"Dabble now {x['p_market']} (logged {lk})" if x["p_market"] is not None else f"no Dabble price now (logged {lk})"))
+    rep.fresh = {"p_model": x["p_model"], "p_market": "" if x["p_market"] is None else x["p_market"], "p_hist": "", "hist_n": 0,
+                 "p_final": round(x["p_final"], 4), "confidence": x["confidence"],
+                 "side_note": f"fresh {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%MZ}: tennis simulation re-run"}
+    conf = r.get("confidence")
+    rep.add("PASS" if x["confidence"] == conf else "FAIL", "fresh label", f"rebuilt {x['p_final']:.3f} {x['confidence']}" + ("" if x["confidence"] == conf else f" (logged {conf})"))
     if x["flags"]:
         rep.add("WARN", "role", "; ".join(x["flags"]))
 
@@ -538,6 +579,8 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
                 check_nba(rep, adj)
             elif sport == "nhl" and str(row.get("market", "")).startswith("nhl_"):
                 check_nhl_pp(rep)
+            elif sport == "tennis":
+                check_tennis_pp(rep)
             else:
                 rep.add("WARN", "recount", f"no automatic recount for {sport} yet: recount history by hand before publishing")
         except Exception as e:
