@@ -5,8 +5,8 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
 /* visual pick cards: probability meters, game log against the line, simulated distribution */
-.vz { display: grid; gap: 10px; margin: 4px 0 2px; min-width: 0 }
-.vz-prob { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 8px; align-items: center; font-size: .8rem }
+.vz { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin: 4px 0 2px; min-width: 0 } .vz > * { min-width: 0 } .pk-list > .pk, .pk { min-width: 0 }
+.vz-prob { display: grid; grid-template-columns: minmax(0, max-content) minmax(48px, 1fr) 3.4em; gap: 4px 8px; align-items: center; font-size: .8rem; min-width: 0 } .vz-prob .k { min-width: 0; overflow-wrap: anywhere; line-height: 1.15 }
 .vz-prob .k { color: var(--muted) } .vz-prob .v { font-family: var(--font-data); font-variant-numeric: tabular-nums; text-align: right }
 .vz-track { position: relative; height: 8px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--line) }
 .vz-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--home) }
@@ -1362,7 +1362,7 @@ function renderBoard(sport, el) {
       <input type="search" placeholder="Player or team" value="${esc(st.q)}" data-k="q" aria-label="Search player or team"></div>
     ${L.length ? `<div class="tbl-wrap"><table><thead><tr><th class="l">Player · line</th><th>p</th><th class="l">Back-check</th></tr></thead><tbody>${
       L.slice(0, st.n).map((r) => `<tr><td class="l"><b>${esc(r.player)}</b> ${esc(r.side.toUpperCase())} ${r.line} ${esc(r.stat)}<span class="sub">${esc(r.game || r.team || "")} · ${esc(typeName[r.type] || r.type)}${r.be ? ` · break-even ${pc(r.be)}` : " · payout not published"} · sim ${pc(r.model)} · market ${pc(r.market)}</span></td>
-        <td><b>${(100 * r.p).toFixed(1)}%</b><span class="sub">${esc(r.conf)}</span></td><td class="l">${status(r)}</td></tr>`).join("")}</tbody></table></div>
+        <td><b>${(100 * r.p).toFixed(1)}%</b><span class="sub">${esc(r.conf)}</span><span class="vz-track" style="display:block;margin-top:4px;min-width:56px" aria-hidden="true"><span class="vz-fill" style="width:${(100 * r.p).toFixed(1)}%"></span>${r.be ? `<span class="vz-be" style="left:${(100 * r.be).toFixed(1)}%"></span>` : ""}</span></td><td class="l">${status(r)}</td></tr>`).join("")}</tbody></table></div>
       ${L.length > st.n ? `<button type="button" class="chip more" data-more="1">Show ${Math.min(60, L.length - st.n)} more of ${L.length - st.n}</button>` : ""}`
       : `<div class="note">No ${st.conf === "all" ? "" : esc(st.conf) + " "}${st.type === "all" ? "" : esc((typeName[st.type] || st.type).toLowerCase()) + " "}legs${q ? ` matching “${esc(st.q)}”` : ""}.</div>`}
     <div class="note">Every line the pricer scored, not picks: only a leg marked VERIFIED passed <span class="num">edge verify</span>; anything else needs it before you use it.${types.includes("demon") ? " Demons: PrizePicks doesn't publish their payout, so their break-even is unknown and they never count as entry legs. Goblin lines aren't shown." : ""}</div>`;
