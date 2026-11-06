@@ -437,8 +437,9 @@ BOARD_TEXT = {
 
 
 def _board_picks(args, sport: str):
-    """Price a PrizePicks board (NFL, NHL or tennis), build the lists per kickoff day (model; most likely game with the
-    reasons that make a difference), log, back-check every listed leg, write the report and the page data."""
+    """Price a PrizePicks board (NFL, NHL or tennis), build the lists per kickoff day (model, history only for NFL and NHL,
+    most likely game with reasons), log, back-check every listed leg, write the report and the page data. Tennis has no
+    history list and only tested reasons (LESSONS L30)."""
     import json
     import os
     from . import nfl_pp, nhl_pp, tennis
@@ -466,15 +467,16 @@ def _board_picks(args, sport: str):
     for label, drows in NP.days(ok):
         cap = NP.per_game_cap(drows, args.top)
         picks = NP.pick_order(drows, args.top, cap)
+        hist = NP.history_order(drows, store, args.top, per_game=cap) if sport != "tennis" else []
         dropped = []
         likely = NP.likely_order(drows, store, None, dropped, per_game=99)     # every leg that passes all its reasons
-        for r in picks:                          # the same reasons, marked, on the model list (shown, not used to drop legs)
+        for r in picks + hist:                   # the same reasons, marked, on the other lists (shown, not used to drop legs)
             r["reasons"] = NP.reasons(r, store[r["event_id"]])
-        D.append({"label": label, "rows": drows, "cap": cap, "model": picks, "likely": likely, "dropped": dropped})
+        D.append({"label": label, "rows": drows, "cap": cap, "model": picks, "history": hist, "likely": likely, "dropped": dropped})
     ids = {}
     if not args.no_log:
         pick_ids = {id(r) for d in D for r in d["model"]}
-        logrows = [r for r in ok if id(r) in pick_ids or r["confidence"] in ("High", "Medium")] + [r for d in D for r in d["likely"]]
+        logrows = [r for r in ok if id(r) in pick_ids or r["confidence"] in ("High", "Medium")] + [r for d in D for r in d["history"] + d["likely"]]
         act = {id(r): ("bet" if NP.verdict(r).startswith("ENTRY") else "lean" if r["confidence"] in ("High", "Medium") else "pass")
                if id(r) in pick_ids else "pass" for r in logrows}
         for r, (bid, _) in zip(logrows, log_pp(logrows, act, refresh=True)):
@@ -511,8 +513,8 @@ def _board_picks(args, sport: str):
         pg_d = {"label": d["label"], "games": sorted({r["game"] for r in d["rows"]}), "lines": len(d["rows"]), "per_game": d["cap"],
                 "likely_dropped": d["dropped"]}
         md = [f"## {d['label']}: {', '.join(pg_d['games'])} ({pg_d['lines']} lines" + (f"; up to {d['cap']} legs per game, never two in one entry" if d["cap"] > 1 else "") + ")"]
-        for key, title in (("model", "By the model"),
-                           ("likely", "By the most likely game (every reason supports the side or is neutral)")):
+        lists = [("model", "By the model")] + ([("history", "By history only (LESSONS L27: no information beyond the price)")] if sport != "tennis" else [])
+        for key, title in lists + [("likely", "By the most likely game (every reason supports the side or is neutral)")]:
             cards, blocks = [], []
             for r in d[key]:
                 ver, warns = check(r)

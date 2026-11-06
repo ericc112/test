@@ -234,7 +234,8 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="note" id="nflEntry"></div>
     <div class="pk-cols">
       <div><h3>By the model <span class="note">(simulation re-centred on DraftKings' line + the simulation + this season; High before Medium)</span></h3><div class="pk-list" id="nflList"></div></div>
-      <div><h3>By the most likely game <span class="note">(every leg where the most likely simulated game, the median and DraftKings agree with the side and no role flag points the other way)</span></h3><div class="pk-list" id="nflLikely"></div></div>
+      <div><h3>By history only <span class="note">(this season's record at the line, then the last 3)</span></h3><div class="pk-list" id="nflHist"></div></div>
+      <div><h3>By the most likely game <span class="note">(every leg where the most likely simulated game, the median, this season, DraftKings, the last 3, the matchup and usage all support the side or are neutral)</span></h3><div class="pk-list" id="nflLikely"></div></div>
     </div>
     <h3 id="nflGapTitle">PrizePicks lines that differ from DraftKings' <span class="note">(where an edge can come from; biggest gaps first)</span></h3>
     <div id="nflGaps" class="pk-gapbox"></div>
@@ -248,7 +249,8 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="note" id="nhlEntry"></div>
     <div class="pk-cols">
       <div><h3>By the model <span class="note">(player simulation + DraftKings' milestone ladders; High before Medium)</span></h3><div class="pk-list" id="nhlList"></div></div>
-      <div><h3>By the most likely game <span class="note">(every leg where the most likely simulated game, the median and DraftKings agree with the side and no role flag points the other way)</span></h3><div class="pk-list" id="nhlLikely"></div></div>
+      <div><h3>By history only <span class="note">(this season's record at the line, then the last 5)</span></h3><div class="pk-list" id="nhlHist"></div></div>
+      <div><h3>By the most likely game <span class="note">(every leg where the most likely simulated game, the median, this season, DraftKings, the last 5, the matchup and ice time all support the side or are neutral)</span></h3><div class="pk-list" id="nhlLikely"></div></div>
     </div>
     <h3 id="nhlGapTitle">Lines DraftKings' ladder prices furthest from 50/50 <span class="note">(where an edge can come from)</span></h3>
     <div id="nhlGaps" class="pk-gapbox"></div>
@@ -1230,13 +1232,15 @@ function renderSportPicks(pre) {
     const parts = Object.entries(m.box || {}).filter(([k, v]) => v > 0 && BOX_LABEL[k]).map(([k, v]) => `${fmtV(k, v)} ${BOX_LABEL[k]}`).join(" · ");
     return `<div><span class="k">Most likely game</span> ${sc}: <b>${/time on ice/.test(r.stat) ? m.value.toFixed(1) : Math.round(m.value)} ${esc(r.stat)}</b> (${m.gap > 0 ? "+" : ""}${m.gap.toFixed(1)} vs the line)${parts ? ` · ${parts}` : ""}</div>`; };
   const mkName = pre === "tennis" ? "Dabble" : "DraftKings";
-  const src = (r) => `${mkName} ${pc(r.market)}${r.dk_line != null ? ` (DraftKings ${r.dk_line}, PrizePicks ${r.line})` : r.dk_lambda != null ? ` (milestone ladder, mean ${r.dk_lambda.toFixed(2)})` : r.market == null ? ` (no ${mkName} price)` : ""} · simulation ${pc(r.model)}${pre === "nfl" ? ` · this season ${r.hist_o ?? "—"} over / ${r.hist_u ?? "—"} under (small weight in the NFL blend)` : ""}`;
+  const src = (r) => `${mkName} ${pc(r.market)}${r.dk_line != null ? ` (DraftKings ${r.dk_line}, PrizePicks ${r.line})` : r.dk_lambda != null ? ` (milestone ladder, mean ${r.dk_lambda.toFixed(2)})` : r.market == null ? ` (no ${mkName} price)` : ""} · simulation ${pc(r.model)}${pre === "tennis" ? "" : ` · this season ${r.hist_o ?? "—"} over / ${r.hist_u ?? "—"} under`}`;
+  const recent = (r) => r.recent || r.last3;
   const card = (r, kind) => `<div class="pk">
     <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)}${r.event ? ` · ${esc(r.event)}` : ""} · ${esc(fmtKick(r.start))}</span></div>
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
     <div><span class="k">Sources</span> ${src(r)}</div>
     ${kind === "likely" ? mlLine(r) : ""}
     <div><span class="k">Simulation</span> median ${r.median}${r.q25 != null ? ` (25–75th ${r.q25}–${r.q75})` : ""}${r.volume ? ` · ${esc(r.volume)}` : ""}</div>
+    ${kind === "history" && r.season ? `<div><span class="k">History</span> <b>${r.side === "under" ? r.season[1] : r.season[0]}/${r.season[2]}</b> this season · <b>${recent(r) ? (r.side === "under" ? recent(r)[1] : recent(r)[0]) + "/" + recent(r)[2] : "—"}</b> ${esc(r.recent_label || "last 3")}</div>` : ""}
     ${whyList(r, kind === "likely" ? "Reasons (each one supports the pick or is neutral)" : "Reasons (✓ supports, – neutral, ✗ against; shown, not used to drop the leg)")}
     ${(r.flags || []).length && !(r.warns || []).some((w) => /^role:/.test(w)) ? `<div class="pk-warn">${r.flags.map(esc).join("; ")}</div>` : ""}
     ${r.why ? `<div class="note">${esc(r.why)}</div>` : ""}
@@ -1244,8 +1248,9 @@ function renderSportPicks(pre) {
     ${r.warns && r.warns.length ? `<div class="pk-warn">${r.warns.map(esc).join("; ")}</div>` : ""}
   </div>`;
   $(pre + "List").innerHTML = (D0.model || D0.picks || []).map((r) => card(r, "model")).join("") || `<div class="note">No lines priced.</div>`;
+  if ($(pre + "Hist")) $(pre + "Hist").innerHTML = (D0.history || []).map((r) => card(r, "history")).join("") || `<div class="note">No lines with enough games.</div>`;
   const dr = D0.likely_dropped || [];
-  $(pre + "Likely").innerHTML = ((D0.likely || []).map((r) => card(r, "likely")).join("") || `<div class="note">No leg on ${esc(D0.label)} where the most likely game, the median and the market agree with nothing against it.</div>`)
+  $(pre + "Likely").innerHTML = ((D0.likely || []).map((r) => card(r, "likely")).join("") || (pre === "tennis" ? `<div class="note">No leg on ${esc(D0.label)} where the most likely game, the median and the market agree with nothing against it.</div>` : `<div class="note">No leg on ${esc(D0.label)} where the most likely game, the median, this season and every other reason agree.</div>`))
     + (dr.length ? `<div class="note">Dropped for a reason against them (${dr.length}): ${dr.map((d) => `${esc(d.player)} ${esc(d.side)} ${d.line} ${esc(d.stat)} (${esc(d.against.join(", "))})`).join("; ")}</div>` : "")
     + ((D0.withdrawn || []).length ? `<div class="note">Withdrawn, failed the back-check (line moved or pulled): ${D0.withdrawn.map(esc).join("; ")}</div>` : "");
   const dayGames = new Set(D0.games || []), gAll = (P.gaps || []).filter((x) => !dayGames.size || !x.game || dayGames.has(x.game)), g = gAll.slice(0, 20);
@@ -1253,7 +1258,8 @@ function renderSportPicks(pre) {
   $(pre + "Gaps").innerHTML = g.length ? `<div class="tbl-wrap pk-gaps"><table><thead><tr><th class="l">Player · stat</th><th title="PrizePicks line">PP</th><th title="DraftKings">DK</th><th>Side · p</th></tr></thead><tbody>${
     g.map((x) => `<tr><td class="l">${esc(x.player)}<span class="sub">${esc(x.stat)}</span></td><td>${x.pp}</td><td>${esc(String(x.dk))}</td><td>${esc(x.side)} ${pc(x.p)}<span class="sub">${esc(x.conf)}</span></td></tr>`).join("")}</tbody></table></div>
     <div class="note">${gAll.length} lines on ${esc(D0.label)}${gAll.length > 20 ? "; the top 20 shown" : ""}.${pre === "nfl" ? " Where PrizePicks posts DraftKings' line, the market part is 50/50 (the feed carries lines, not prices)." : " DK is the mean of the Poisson fitted to DraftKings' de-vigged milestone ladder."}</div>` : `<div class="note">No DraftKings comparison for ${esc(D0.label)}.</div>`;
-  $(pre + "Note").innerHTML = "Most-likely-game list: one simulated game per matchup (the most common final score, then the run closest to every player's median), kept only where that run and the simulation's median agree on the side and no reason shown (the market, a role or sample flag) points the other way; one run is a single draw, so the order comes from the probability. Hit rates, last 5, head-to-head records and opponent allowances aren't shown: they carried no information beyond the price and the simulation (LESSONS L27, L30). " + SPORT_NOTE[pre] + " Every pick passed <span class=\"num\">edge verify</span> before it was listed.";
+  if (pre === "tennis") $(pre + "Note").innerHTML = "Most-likely-game list: one simulated game per matchup (the most common final score, then the run closest to every player's median), kept only where that run and the simulation's median agree on the side and no reason shown (the market, a role or sample flag) points the other way; one run is a single draw, so the order comes from the probability. Hit rates, last 5, head-to-head records and opponent allowances aren't shown: they carried no information beyond the price and the simulation (LESSONS L27, L30). " + SPORT_NOTE[pre] + " Every pick passed <span class=\"num\">edge verify</span> before it was listed.";
+  else $(pre + "Note").innerHTML = "Most-likely-game list: one simulated game per matchup (the most common final score, then the run closest to every player's median), kept only where that run, the simulation's median and this season's record agree on the side and no reason shown points the other way; one run is a single draw, so the order comes from the probability. History list: the hit-rate method, for comparison. " + SPORT_NOTE[pre] + " Every pick passed <span class=\"num\">edge verify</span> before it was listed.";
 }
 const renderNflPicks = () => renderSportPicks("nfl");
 // line shopping: the same player and stat on PrizePicks and Dabble (written by `python -m edge shop --page shop.js`)

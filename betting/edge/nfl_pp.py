@@ -215,7 +215,7 @@ def write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
              f"**{r['p_final']:.1%} {r['confidence']}** · {verdict(r)}" + (f" · back-check: **{verified}**" if verified else ""),
              f"- Sources: DraftKings-anchored {f(r['p_market'])}"
              + (f" (DraftKings line {r['dk_line']}, PrizePicks {r['gap']:+g})" if r["dk_line"] is not None else " (no DraftKings line)")
-             + f" · simulation {f(r['p_model'])} (shrunk)",
+             + f" · simulation {f(r['p_model'])} (shrunk) · this season {r['hist'][0]} over / {r['hist'][1]} under",
              f"- Simulation: median {r['median']:.1f}, 25–75th {r['q25']:.0f}–{r['q75']:.0f}"
              + (f", {r['volume'][1]:.1f} {r['volume'][0].replace('_', ' ')}" if r["volume"] else "")]
     if r.get("ml"):
@@ -225,7 +225,7 @@ def write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
         lines.append("- Role flags: " + "; ".join(r["flags"]))
     if r.get("reasons"):
         mark = {"supports": "✓", "neutral": "–", "against": "✗"}
-        lines.append("- Reasons:" if r.get("ml") else "- Reasons (shown, not used to drop the leg):")
+        lines.append("- Reasons:" if r.get("ml") else "- Context check (shown, not used to drop the leg):")
         lines += [f"  - {mark[x['verdict']]} {x['name']}: {x['text']}" for x in r["reasons"]]
     if warns:
         lines.append("- Back-check warnings: " + "; ".join(warns))
@@ -282,6 +282,36 @@ def allowed(res: dict, team: str, market: str) -> dict | None:
     return {"per_game": avg[team], "rank": ranked.index(avg[team]) + 1, "teams": len(ranked), "league": league, "games": len(per[team])}
 
 
+def history_order(rows: list[dict], store: dict, top: int = 5, min_games: int = 4, per_game: int = 1) -> list[dict]:
+    """The hit-rate method, for comparison (LESSONS L27: no information beyond the price in the NBA test): the side each
+    line cleared more often this season (4+ games), ranked by that rate, then the last 3, then sample size; one leg
+    per game. Each leg carries what the simulation and DraftKings say about that same side."""
+    cand = []
+    for r in rows:
+        if "error" in r or not r.get("research"):
+            continue
+        o, u, n = r["research"]["season"]
+        if n < min_games or o == u:
+            continue
+        side = "over" if o > u else "under"
+        if side == "under" and r.get("over_only"):
+            continue
+        k = 0 if side == "over" else 1
+        rate = lambda t: t[k] / t[2] if t[2] else 0.0
+        x = r if side == r["side"] else {**r, **price_leg(store[r["event_id"]], r["player"], r["market_key"], r["line"], side=side)}
+        cand.append({**x, "method": "history", "hist_rank": (rate(r["research"]["season"]), rate(r["research"]["last3"]), n)})
+    cand.sort(key=lambda r: tuple(-v for v in r["hist_rank"]))
+    seen, out = collections.Counter(), []
+    for r in cand:
+        if seen[r["script"]] >= per_game or any(o["player"] == r["player"] for o in out if o["script"] == r["script"]):
+            continue
+        seen[r["script"]] += 1
+        out.append(r)
+        if len(out) == top:
+            break
+    return out
+
+
 def most_likely_run(res: dict) -> dict:
     """The game the broadcast plays: the most common final score of the runs, then, among runs with that score, the
     one closest to every player's simulated median (his main stat, in standard deviations)."""
@@ -303,8 +333,8 @@ def most_likely_run(res: dict) -> dict:
 
 
 def likely_order(rows: list[dict], store: dict, top: int = 5, drop: list | None = None, per_game: int = 1) -> list[dict]:
-    """The most-likely-game list: a line is kept when the player's line in the game's most likely simulated run and the
-    simulation's median agree on the side, and every reason shown (DraftKings, role) supports that side or
+    """The most-likely-game list: a line is kept when the player's line in the game's most likely simulated run, the
+    simulation's median and this season's record agree on the side, and every reason shown supports that side or
     is neutral (any reason against it drops the leg, recorded in `drop`). Ranked High before Medium, then by
     probability; one leg per game."""
     runs = {e: most_likely_run(res) for e, res in store.items()}
@@ -324,6 +354,9 @@ def likely_order(rows: list[dict], store: dict, top: int = 5, drop: list | None 
         if side == "under" and r.get("over_only"):
             continue
         if (r["median"] - r["line"]) * gap <= 0:              # the run disagrees with the median: a one-run fluke
+            continue
+        o, u, n = r["research"]["season"]
+        if n < 3 or (o if side == "over" else u) < (u if side == "over" else o):
             continue
         x = r if side == r["side"] else {**r, **price_leg(res, r["player"], r["market_key"], r["line"], side=side)}
         box = {k: float(p[k][L["run"]]) for k in ("pass_yds", "rush_att", "rush_yds", "targets", "receptions", "rec_yds") if k in p}
@@ -379,9 +412,8 @@ def _lean(x, ref, band):
 
 
 def reasons(r: dict, res: dict) -> list[dict]:
-    """The reasons that make a difference, judged against the pick's side (supports, neutral, against): the most likely
-    game, the simulation's median, DraftKings, and role flags. Hit rates, last 3, head-to-head records, what the
-    opponent allows and usage summaries are not reasons: no information beyond the price and the simulation (L27, L30)."""
+    """Every reason shown for a pick, judged against its side: supports, neutral or against. A reason built from
+    several numbers (count and average) is against when any of them points the other way."""
     over = r["side"] == "over"
     sgn = 1 if over else -1
     rs = r.get("research") or {}
@@ -403,6 +435,43 @@ def reasons(r: dict, res: dict) -> list[dict]:
     else:
         add("DraftKings", "supports" if pk >= 0.52 else "against" if pk <= 0.48 else "neutral",
             f"{pk:.0%} for this side from DraftKings' line {r['dk_line']} (PrizePicks {r['line']})")
+    o, u, n = rs.get("season", [0, 0, 0]); avg = rs.get("season_avg")
+    add("this season", comb(vd(cmp(o, u)), vd(cmp(avg, r["line"])) if avg is not None else "neutral"),
+        f"{o} over / {u} under in {n}" + (f", average {avg:.1f}" if avg is not None else ""))
+    lo, lu, ln = rs.get("last3", [0, 0, 0]); la = rs.get("last3_avg")
+    add("last 3", comb(vd(cmp(lo, lu)), vd(cmp(la, r["line"])) if la is not None else "neutral"),
+        f"{lo} over / {lu} under" + (f" ({', '.join(str(int(v)) for v in rs.get('last_games', []))})" if rs.get("last_games") else ""))
+    h = rs.get("h2h", [0, 0, 0])
+    if h[2]:
+        add("head-to-head", comb(vd(cmp(h[0], h[1])), vd(cmp(rs.get("h2h_avg"), r["line"]))),
+            f"{h[0]} over / {h[1]} under vs {r['opp']} this season (average {rs['h2h_avg']:.1f})")
+    else:
+        add("head-to-head", "neutral", f"no meeting with {r['opp']} this season")
+    a = allowed(res, r["opp"], r["market_key"])
+    if a and a["games"] >= 3:
+        lp = _lean(a["per_game"], a["league"], 0.03)
+        word = "more than" if lp > 0 else "less than" if lp < 0 else "about"
+        add("matchup", vd(lp), f"{r['opp']} allows {a['per_game']:.1f} {LABEL[r['market_key']]} a game to all opposing players, {word} the league's "
+            f"{a['league']:.1f} (rank {a['rank']}/{a['teams']}, 1 = allows the most)")
+    else:
+        add("matchup", "neutral", "not enough games for the opponent")
+    vol, va = r.get("volume"), rs.get("vol_avg")
+    vk = VOLUME[r["market_key"]]
+    pv = None
+    if vk[0] == "touches":
+        p = res["sim"]["players"].get(str(r["player_id"])) or {}
+        if "rush_att" in p and "targets" in p:
+            pv = float(np.mean(p["rush_att"]) + np.mean(p["targets"]))
+    elif vol:
+        pv = vol[1]
+    outs = [x["name"] for t, L in (res["target"].get("out") or {}).items() if t != next((k for k in res["target"]["abbr"] if res["target"]["abbr"][k] == r["opp"]), None)
+            for x in L if (x.get("status") or "").lower() in ("out", "doubtful")]
+    if pv is not None and va:
+        lv = _lean(pv, va, 0.05)
+        name = {"tgt": "targets", "car": "carries", "touches": "touches", "pass_att": "pass attempts"}[vk[0]]
+        add("usage", vd(lv), f"projected {pv:.1f} {name} vs {va:.1f} a game this season" + (f"; out for his team: {', '.join(outs[:4])}" if outs else ""))
+    else:
+        add("usage", "neutral", "no volume history")
     if r.get("flags"):
         add("role", "against", "; ".join(r["flags"]))
     return out

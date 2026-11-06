@@ -502,6 +502,28 @@ def pick_order(rows: list[dict], top: int = 5, per_game: int = 1) -> list[dict]:
     return _take(ok, top, per_game)
 
 
+def history_order(rows: list[dict], store: dict, top: int = 5, min_games: int = 5, per_game: int = 1) -> list[dict]:
+    """The hit-rate method, for comparison (LESSONS L27): the side each line cleared more often this season (5+
+    games), ranked by that rate, then the last 5, then sample size. Each leg carries the model's and DraftKings'
+    numbers for that same side."""
+    cand = []
+    for r in rows:
+        if "error" in r or not r.get("research"):
+            continue
+        o, u, n = r["research"]["season"]
+        if n < min_games or o == u:
+            continue
+        side = "over" if o > u else "under"
+        if side == "under" and r.get("over_only"):
+            continue
+        k = 0 if side == "over" else 1
+        rate = lambda t: t[k] / t[2] if t[2] else 0.0
+        x = r if side == r["side"] else {**r, **price_leg(store[r["event_id"]], r["player"], r["stat_key"], r["line"], side=side)}
+        cand.append({**x, "method": "history", "hist_rank": (rate(r["research"]["season"]), rate(r["research"]["last5"]), n)})
+    cand.sort(key=lambda r: tuple(-v for v in r["hist_rank"]))
+    return _take(cand, top, per_game)
+
+
 def most_likely_run(G: dict) -> dict:
     """The most common final score, then the run with that score closest to every skater's median shots and ice time."""
     sim = G["sim"]
@@ -522,8 +544,8 @@ def most_likely_run(G: dict) -> dict:
 
 
 def likely_order(rows: list[dict], store: dict, top: int = 5, drop: list | None = None, per_game: int = 1) -> list[dict]:
-    """Kept when the player's line in the game's most likely run and the median agree on the side, and no reason shown
-    (DraftKings, role) points the other way (drops recorded in `drop`)."""
+    """Kept when the player's line in the game's most likely run, the median and this season's record agree on the
+    side, and no reason shown points the other way (drops recorded in `drop`)."""
     runs = {e: most_likely_run(G) for e, G in store.items()}
     cand = []
     for r in rows:
@@ -541,6 +563,9 @@ def likely_order(rows: list[dict], store: dict, top: int = 5, drop: list | None 
         if side == "under" and r.get("over_only"):
             continue
         if (r["median"] - r["line"]) * gap <= 0:
+            continue
+        o, u, n = r["research"]["season"]
+        if n < 3 or (o if side == "over" else u) < (u if side == "over" else o):
             continue
         x = r if side == r["side"] else {**r, **price_leg(G, r["player"], r["stat_key"], r["line"], side=side)}
         box = {k: float(p[k][L["run"]]) for k in ("toi", "sog", "hits", "blocks", "fow", "goals", "assists")}
@@ -576,9 +601,6 @@ def allowed(G: dict, team: str, m: str) -> dict | None:
 
 
 def reasons(r: dict, G: dict) -> list[dict]:
-    """The reasons that make a difference: the most likely game, the simulation's median, DraftKings' ladder and role
-    flags. Hit rates, last 5, head-to-head records, what the opponent allows and ice-time summaries are not reasons
-    (no information beyond the price and the simulation: L27, L30)."""
     over = r["side"] == "over"
     sgn = 1 if over else -1
     rs = r.get("research") or {}
@@ -599,6 +621,34 @@ def reasons(r: dict, G: dict) -> list[dict]:
     else:
         add("DraftKings", "supports" if pk >= 0.52 else "against" if pk <= 0.48 else "neutral",
             f"{pk:.0%} for this side from DraftKings' ladder (mean {r['dk_lambda']:.2f})")
+    o, u, n = rs.get("season", [0, 0, 0]); avg = rs.get("season_avg")
+    add("this season", comb(vd(cmp(o, u)), vd(cmp(avg, r["line"])) if avg is not None else "neutral"),
+        f"{o} over / {u} under in {n}" + (f", average {avg:.1f}" if avg is not None else ""))
+    lo, lu, _ = rs.get("last5", [0, 0, 0]); la = rs.get("last5_avg")
+    add("last 5", comb(vd(cmp(lo, lu)), vd(cmp(la, r["line"])) if la is not None else "neutral"),
+        f"{lo} over / {lu} under" + (f" ({', '.join(f'{v:g}' for v in rs.get('last_games', []))})" if rs.get("last_games") else ""))
+    h = rs.get("h2h", [0, 0, 0])
+    if h[2]:
+        add("head-to-head", comb(vd(cmp(h[0], h[1])), vd(cmp(rs.get("h2h_avg"), r["line"]))),
+            f"{h[0]} over / {h[1]} under vs {r['opp']} this season (average {rs['h2h_avg']:.1f})")
+    else:
+        add("head-to-head", "neutral", f"no meeting with {r['opp']} this season")
+    a = allowed(G, r["opp"], r["stat_key"])
+    if a:
+        lp = lean(a["per_game"], a["league"], 0.03)
+        word = "more than" if lp > 0 else "less than" if lp < 0 else "about"
+        add("matchup", vd(lp), f"{r['opp']} allows {a['per_game']:.1f} {LABEL[r['stat_key']]} a game to opposing skaters, {word} the league's "
+            f"{a['league']:.1f} (rank {a['rank']}/{a['teams']}, 1 = allows the most)")
+    else:
+        add("matchup", "neutral", "no opponent number for this stat")
+    ta = rs.get("toi_avg")
+    outs = sorted(G["game"]["out"].get(r["team"], set()))
+    if ta:
+        lv = lean(r["toi_proj"], ta, 0.05)
+        add("ice time", vd(lv) if r["stat_key"] != "pm" else "neutral",
+            f"projected {r['toi_proj']:.1f} min vs {ta:.1f} this season" + (f"; out for his team: {', '.join(outs[:4])}" if outs else ""))
+    else:
+        add("ice time", "neutral", "no ice-time history")
     if r.get("flags"):
         add("role", "against", "; ".join(r["flags"]))
     return out
@@ -616,7 +666,7 @@ def write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
     lines = [f"### {r.get('bet_id', '')}{r['player']} ({r['team']}) {r['side'].upper()} {r['line']} {LABEL[r['stat_key']]} — {r['game']}",
              f"**{r['p_final']:.1%} {r['confidence']}** · {verdict(r)}" + (f" · back-check: **{verified}**" if verified else ""),
              f"- Sources: DraftKings ladder {f(r['p_market'])}" + (f" (mean {r['dk_lambda']:.2f})" if r.get("dk_lambda") is not None else " (no DraftKings line)")
-             + f" · simulation {f(r['p_model'])}",
+             + f" · simulation {f(r['p_model'])} · this season {r['hist'][0]} over / {r['hist'][1]} under",
              f"- Simulation: median {r['median']:.1f}, 25–75th {r['q25']:.0f}–{r['q75']:.0f}, {r['toi_proj']:.1f} min projected"]
     if r.get("ml"):
         sc = ", ".join(f"{k} {v}" for k, v in r["ml"]["score"].items())
@@ -625,7 +675,7 @@ def write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
         lines.append("- Role flags: " + "; ".join(r["flags"]))
     if r.get("reasons"):
         mark = {"supports": "✓", "neutral": "–", "against": "✗"}
-        lines.append("- Reasons:" if r.get("ml") else "- Reasons (shown, not used to drop the leg):")
+        lines.append("- Reasons:" if r.get("ml") else "- Context check (shown, not used to drop the leg):")
         lines += [f"  - {mark[x['verdict']]} {x['name']}: {x['text']}" for x in r["reasons"]]
     if warns:
         lines.append("- Back-check warnings: " + "; ".join(warns))
