@@ -16,6 +16,7 @@ write-up. The fair test found they don't predict beyond the price (LESSONS L27):
 from __future__ import annotations
 
 import concurrent.futures as cf
+import collections
 import datetime as dt
 import json
 import os
@@ -644,7 +645,7 @@ def _season_usage(team: str, pid: str, before: str, _memo={}) -> float | None:
     return me / tot if tot else None
 
 
-def likely_order(rows: list[dict], ctx: dict, likely: dict, top: int = 5) -> list[dict]:
+def likely_order(rows: list[dict], ctx: dict, likely: dict, top: int | None = None, per_game: int = 99) -> list[dict]:
     """The most-likely-game list: each standard line compared with the player's line in that game's most likely
     simulated run. Kept only when the run's side agrees with the simulation's median (a one-run fluke is dropped) and
     with this season's record at the line; ranked by the calibrated probability for that side (High before Medium),
@@ -682,10 +683,12 @@ def likely_order(rows: list[dict], ctx: dict, likely: dict, top: int = 5) -> lis
     # the order comes from the calibrated probability (ranking by the run's gap rewarded its most extreme lines)
     rank = {"High": 0, "Medium": 1, "Low": 2}
     cand.sort(key=lambda r: (rank.get(r["confidence"], 3), -r["p_final"], -r["z_gap"]))
-    seen, out = set(), []
+    seen, out = collections.Counter(), []
     ctx["likely_dropped"] = []          # legs that ranked high enough but had a reason against them (for the report)
+    players = set()
     for r in cand:
-        if r["script"] in seen:
+        # every leg that passes (top=None), one per player; same-game legs are flagged, never two in one entry
+        if seen[r["script"]] >= per_game or (r["script"], r["player"]) in players:
             continue
         _likely_context(r, ctx)
         r["reasons"] = likely_reasons(r)
@@ -694,9 +697,10 @@ def likely_order(rows: list[dict], ctx: dict, likely: dict, top: int = 5) -> lis
             ctx.setdefault("likely_dropped", []).append({"player": r["player"], "team": r["team"], "side": r["side"], "line": r["line"],
                                                          "stat": LABEL[r["stat_key"]], "p": round(r["p_final"], 3), "against": against})
             continue
-        seen.add(r["script"])
+        seen[r["script"]] += 1
+        players.add((r["script"], r["player"]))
         out.append(r)
-        if len(out) == top:
+        if top and len(out) == top:
             break
     return out
 

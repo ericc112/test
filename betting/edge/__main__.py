@@ -450,7 +450,7 @@ def _board_picks(args, sport: str):
         picks = NP.pick_order(drows, args.top, cap)
         hist = NP.history_order(drows, store, args.top, per_game=cap)
         dropped = []
-        likely = NP.likely_order(drows, store, args.top, dropped, per_game=cap)
+        likely = NP.likely_order(drows, store, None, dropped, per_game=99)     # every leg that passes all its reasons
         for r in picks + hist:                   # the same reasons, marked, on the other two lists (shown, not used to drop legs)
             r["reasons"] = NP.reasons(r, store[r["event_id"]])
         D.append({"label": label, "rows": drows, "cap": cap, "model": picks, "history": hist, "likely": likely, "dropped": dropped})
@@ -581,7 +581,7 @@ def _nba_picks(args):
     ctx = N.build({N._us_date(p["start"]) for p in props if p.get("start")}, n=args.n)
     print(f"Finding the most likely game for {len(ctx['sims'])} games...")
     likely = N.run_likely(ctx, sorted(ctx["sims"]), n=args.n)
-    lk = N.likely_order(ok, ctx, likely, args.top)
+    lk = N.likely_order(ok, ctx, likely)          # every leg that passes all its reasons (one per player), not just five
     for r in lk:
         r["notes"] = "most-likely-game list; " + r["notes"]
     for r in picks + hist:               # the same reasons, marked, on the other two lists (shown, not used to drop legs)
@@ -676,13 +676,13 @@ def _nba_picks(args):
                  f"{NM.MIN_LEGS}+ graded legs or {NM.MIN_DAYS} days, on log loss and label calibration (python -m edge.nba_model report).", "",
                  "| p | conf | player | stat | side | line | verdict |", "|---|---|---|---|---|---|---|"]
         shsec += [f"| {r['p_final']:.1%} | {r['confidence']} | {r['player']} ({r['team']}) | {N.LABEL[r['stat_key']]} | {r['side']} | {r['line']} | {N.verdict(r)} |" for r in sp]
-    lsec = ["", "## Top 5 by the most likely game",
+    lsec = ["", f"## By the most likely game: every leg that passes ({len(lk)})",
             "Each game's most likely simulated run (the most common final score of the runs, then the run closest to every rotation player's "
             "typical line: the game the broadcast plays). A leg is listed when that run's line is on the same side of the PrizePicks line as the "
             "simulation's median and this season's record, and every reason shown (DraftKings' price, this season's count and average, the last 5, "
             "head-to-head count and per 36, what the opponent allows to his position and to all players, usage and minutes) supports the side or is "
             "neutral: any reason against it drops the leg, so the list can hold fewer than five. One run is a single draw, so the order comes from the "
-            "calibrated probability, one leg per game. The reasons make the list consistent, not more accurate: in the fair test they added no "
+            "calibrated probability; every passing leg is listed (one per player), so legs from the same game are flagged and never go in one entry together. The reasons make the list consistent, not more accurate: in the fair test they added no "
             "information beyond the price (LESSONS L27).", ""]
     drop = ctx.get("likely_dropped") or []
     lsec.append(f"Dropped for a reason against them: {len(drop)}" + (": " + "; ".join(

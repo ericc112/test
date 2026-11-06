@@ -221,7 +221,7 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="pk-cols">
       <div><h3>By the model <span class="note">(50,000-run simulation + DraftKings + this season)</span></h3><div class="pk-list" id="pkModel"></div></div>
       <div><h3>By history only <span class="note">(this season's record at the line, then last 5, then head-to-head)</span></h3><div class="pk-list" id="pkHist"></div></div>
-      <div><h3>By the most likely game <span class="note">(the most likely simulated game, the median, this season, DraftKings, head-to-head, the matchup and usage all support the side or are neutral; ranked by probability)</span></h3><div class="pk-list" id="pkLikely"></div></div>
+      <div><h3>By the most likely game <span class="note" id="pkLikelyNote">(every leg where the most likely simulated game, the median, this season, DraftKings, head-to-head, the matchup and usage all support the side or are neutral; ranked by probability; legs from the same game never go in one entry together)</span></h3><div class="pk-list" id="pkLikely"></div></div>
     </div>
     <div id="pkTrack"></div>
     <div class="note" id="pkNote"></div>
@@ -234,7 +234,7 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="pk-cols">
       <div><h3>By the model <span class="note">(simulation re-centred on DraftKings' line + the simulation + this season; High before Medium)</span></h3><div class="pk-list" id="nflList"></div></div>
       <div><h3>By history only <span class="note">(this season's record at the line, then the last 3)</span></h3><div class="pk-list" id="nflHist"></div></div>
-      <div><h3>By the most likely game <span class="note">(the most likely simulated game, the median, this season, DraftKings, the last 3, the matchup and usage all support the side or are neutral)</span></h3><div class="pk-list" id="nflLikely"></div></div>
+      <div><h3>By the most likely game <span class="note">(every leg where the most likely simulated game, the median, this season, DraftKings, the last 3, the matchup and usage all support the side or are neutral)</span></h3><div class="pk-list" id="nflLikely"></div></div>
     </div>
     <h3 id="nflGapTitle">PrizePicks lines that differ from DraftKings' <span class="note">(where an edge can come from; biggest gaps first)</span></h3>
     <div id="nflGaps" class="pk-gapbox"></div>
@@ -255,7 +255,7 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="pk-cols">
       <div><h3>By the model <span class="note">(player simulation + DraftKings' milestone ladders; High before Medium)</span></h3><div class="pk-list" id="nhlList"></div></div>
       <div><h3>By history only <span class="note">(this season's record at the line, then the last 5)</span></h3><div class="pk-list" id="nhlHist"></div></div>
-      <div><h3>By the most likely game <span class="note">(the most likely simulated game, the median, this season, DraftKings, the last 5, the matchup and ice time all support the side or are neutral)</span></h3><div class="pk-list" id="nhlLikely"></div></div>
+      <div><h3>By the most likely game <span class="note">(every leg where the most likely simulated game, the median, this season, DraftKings, the last 5, the matchup and ice time all support the side or are neutral)</span></h3><div class="pk-list" id="nhlLikely"></div></div>
     </div>
     <h3 id="nhlGapTitle">Lines DraftKings' ladder prices furthest from 50/50 <span class="note">(where an edge can come from)</span></h3>
     <div id="nhlGaps" class="pk-gapbox"></div>
