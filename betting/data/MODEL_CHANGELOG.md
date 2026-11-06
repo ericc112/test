@@ -37,3 +37,28 @@ Logic versions live in `data/nba_model.json`; `python -m edge.nba_model status |
 - Rollback: `python -m edge.nba_model rollback` restores v1.
 - Caveat recorded at promotion: the live evidence is one night (12 final games). A game-clustered bootstrap of the log-loss difference gives −0.0177 (95% CI −0.0371 to +0.0017); the new logic was better in 8 of 12 games. The promotion rule (200+ legs or 14 days) is met by leg count; the backtest (CI excluding zero) and the much smaller label gap carry the rest. Watch the next 3 nights; roll back if v2 trails v1's archived numbers.
 - With this promotion the simulation settings follow the logic version everywhere: pricing, the most-likely-game list and the Sim Lab export use the published logic's settings, and `edge verify` re-runs each leg under the version that priced it (`logic vN` in its notes).
+
+## 2026-11-06: tennis v1 (new sport: ATP + WTA point-by-point simulation)
+- **Data (real, no estimates):**
+  - Tennis Abstract jsfrags: last-52-weeks surface splits (SPW, RPW, ace %, DF %, matches with stats) and each player's last 20 matches;
+  - 282 players cached (137 ATP, 145 WTA);
+  - event context comes from both players' matches at the same event, or from a sourced entry in `data/tennis_events.json` (2026 WTA Finals: Indian Wells, hard, Nov 8–15, per Wikipedia).
+- **Model:**
+  - Barnett–Clarke matchup;
+  - every point played (tiebreak at 6-6, 10-point deciding-set tiebreak at Slams, best of 5 only at ATP Slams);
+  - day-to-day form measured from the real per-match stats: residual serve-rate variance after binomial noise and leave-one-out estimation error, plus the correlation of the two players' residuals. On matches before Sep 1 this came out as ATP sd 0.046 with ρ −0.80 (431 matches) and WTA sd 0.058 with ρ −0.78 (283 matches). Each run draws the day's rates; the rate-estimate uncertainty is drawn too.
+- **Walk-forward test** (matches Sep 1 – Nov 6, form measured only on earlier matches, 20-match histories):
+
+  | | Matches | Games MAE (model / base) | Line log loss at 21.5 (model / base) | Winner log loss (model / coin) |
+  |---|---|---|---|---|
+  | ATP | 440 | 5.30 / 5.36 | 0.672 / 0.674 | 0.669 / 0.693 |
+  | WTA | 302 | 4.87 / 4.95 | 0.673 / 0.677 | 0.653 / 0.693 |
+
+  - Three-set Brier is level with the base rate (0.234 vs 0.234).
+  - The plain fixed-rate model lost to the base rate on every measure: total games ran 0.9 (ATP) and 2.0 (WTA) too high, with too many three-setters and overconfident favourites. That is why form was added.
+- **Blend:**
+  - 0.2 model / 0.8 market, with Dabble total-games prices as the market, and no market means Low;
+  - legs with a thin sample (a player under 8 stats-covered matches) or an unconfirmed event stay off the lists, because the rates aren't adjusted for opponent level;
+  - a player with no stats-covered matches isn't priced.
+- **Known limits:** no opponent-level adjustment, and no market winner price in the feeds. Aces, double faults and break points won are excluded until real counts can grade them.
+- **Rollback:** `git revert` the commit (tennis is self-contained in `edge/tennis.py`).

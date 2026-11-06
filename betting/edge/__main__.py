@@ -424,8 +424,12 @@ BOARD_TEXT = {
            "that differ from DraftKings'. No locks: the NFL simulation alone has not beaten DraftKings' closing lines (README).",
     "tennis": "Each line is priced from a point-by-point simulation of the match: each player's serve and return points won on the "
               "surface (Tennis Abstract's last-52-weeks splits, real match counts), combined with the Barnett-Clarke method, every "
-              "service game and tiebreak played out. Dabble's price is the market where it posts the same prop (no sportsbook tennis "
-              "props in the feed); without it a leg stays Low. History, head-to-head and the matchup are reasons, not inputs. No locks.",
+              "service game and tiebreak played out, with day-to-day form measured from real matches (each run draws the day's "
+              "serve rates, the two players' swings correlated). Walk-forward test (Sep-Nov 2026, 742 matches, form measured on "
+              "earlier matches only): slightly better than the base rate on total games for both tours, well short of a market; so Dabble's price "
+              "carries 80% where it posts the prop, and a leg without one stays Low. Rates aren't adjusted for opponent level, so "
+              "legs with a thin sample (under 8 stats-covered matches) or an unconfirmed event are left off the lists. History, "
+              "head-to-head and the matchup are reasons, not inputs. No locks.",
     "nhl": "Each line is priced from a player simulation of the game (ice time, per-60 rates with last season as the prior, the "
            "opponent and DraftKings' total) and, for shots, points, assists and goals, DraftKings' de-vigged milestone ladder. The "
            "player model is new and untested against closing lines, so the market carries 80% of the weight, a missing market "

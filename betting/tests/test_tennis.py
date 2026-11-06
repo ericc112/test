@@ -79,5 +79,22 @@ class Grading(unittest.TestCase):
         self.assertIsNone(T.parse_score("6-3 2-1 RET"))
 
 
+class Form(unittest.TestCase):
+    def test_form_makes_matches_more_lopsided(self):
+        a = T.simulate(0.56, 0.56, 3, n=20000, seed=5)
+        b = T.simulate(0.56, 0.56, 3, n=20000, seed=5, form={"sd": 0.055, "rho": -0.8})
+        self.assertLess((b["sets"] == 3).mean(), (a["sets"] == 3).mean() - 0.05)
+        self.assertLess(b["games"].mean(), a["games"].mean())
+
+    def test_form_pulls_big_favourites_toward_even(self):
+        a = T.simulate(0.66, 0.52, 3, n=20000, seed=6)
+        b = T.simulate(0.66, 0.52, 3, n=20000, seed=6, form={"sd": 0.055, "rho": -0.8}, est=(0.0005, 0.0005))
+        self.assertLess(b["a_wins"].mean(), a["a_wins"].mean())
+        self.assertEqual((b["pa"], b["pb"]), (0.66, 0.52))     # the base rates are reported, not a draw
+
+    def test_points_per_game(self):
+        self.assertAlmostEqual(T._pts_per_game(0.5), 6.75, places=6)   # known value for p = 0.5
+
+
 if __name__ == "__main__":
     unittest.main()

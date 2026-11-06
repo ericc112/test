@@ -217,10 +217,23 @@ def matchup(ra: dict, rb: dict, avg: dict) -> tuple[float, float]:
 
 # ------------------------------------------------------------------ simulation
 def simulate(pa: float, pb: float, best_of: int = 3, n: int = N_SIMS, seed: int = 7, final_tb10: bool = False,
-             ace=(None, None), df=(None, None)) -> dict:
+             ace=(None, None), df=(None, None), form: dict | None = None, est=(0.0, 0.0)) -> dict:
     """Play n matches point by point. Returns per-run arrays: total games, games won by A and B, sets, tiebreaks,
-    first-set games, breaks by A and B, serve points by A and B, aces and double faults, and the winner."""
+    first-set games, breaks by A and B, serve points by A and B, aces and double faults, and the winner.
+
+    form = {"sd", "rho"} (from form_variation): each run draws the day's serve-point rates around pa / pb, the two
+    players' deviations correlated (a player who is on serves better and returns better, so the opponent serves
+    worse). est = (variance of the estimate of pa, of pb): the uncertainty in the rates themselves, drawn per run too."""
     rng = np.random.default_rng(seed)
+    p0a, p0b = pa, pb
+    if form or any(est):
+        sd, rho = (form["sd"], form["rho"]) if form else (0.0, 0.0)
+        z1, z2 = rng.standard_normal(n), rng.standard_normal(n)
+        ea = sd * z1
+        eb = sd * (rho * z1 + np.sqrt(1 - rho * rho) * z2)
+        ea = ea + np.sqrt(est[0]) * rng.standard_normal(n)
+        eb = eb + np.sqrt(est[1]) * rng.standard_normal(n)
+        pa, pb = np.clip(pa + ea, 0.30, 0.95), np.clip(pb + eb, 0.30, 0.95)
     need = best_of // 2 + 1
     sa = np.zeros(n, int); sb = np.zeros(n, int)                 # sets
     ga = np.zeros(n, int); gb = np.zeros(n, int)                 # games in the current set
@@ -284,11 +297,89 @@ def simulate(pa: float, pb: float, best_of: int = 3, n: int = N_SIMS, seed: int 
             ga = np.where(set_over, 0, ga); gb = np.where(set_over, 0, gb)
             done |= (sa == need) | (sb == need)
     out = {"games": GA + GB, "games_a": GA, "games_b": GB, "sets": sa + sb, "tiebreaks": tb, "first_set": first_set,
-           "breaks_a": brA, "breaks_b": brB, "sp_a": spA, "sp_b": spB, "a_wins": sa > sb, "pa": pa, "pb": pb}
+           "breaks_a": brA, "breaks_b": brB, "sp_a": spA, "sp_b": spB, "a_wins": sa > sb, "pa": p0a, "pb": p0b}
     for who, sp, a_, d_ in (("a", spA, ace[0], df[0]), ("b", spB, ace[1], df[1])):
         out[f"aces_{who}"] = rng.binomial(sp, a_) if a_ is not None else None
         out[f"dfs_{who}"] = rng.binomial(sp, d_) if d_ is not None else None
     return out
+
+
+# ------------------------------------------------------------------ match-to-match variation (measured)
+def _pts_per_game(p: float) -> float:
+    """Expected points in a service game with point-win probability p (closed form, deuce included)."""
+    q = 1 - p
+    e4, e5, e6 = p ** 4 + q ** 4, 4 * (p ** 4 * q + q ** 4 * p), 10 * (p ** 4 * q * q + q ** 4 * p * p)
+    return 4 * e4 + 5 * e5 + 6 * e6 + 20 * p ** 3 * q ** 3 * (6 + 2 / (p * p + q * q))
+
+
+_FORM = {}
+
+
+def form_variation(players: list[dict], tour: str, until: str | None = None) -> dict | None:
+    """How much a matchup's serve-point rates move from match to match, from real Tennis Abstract rows (matches
+    dated before `until`). For each match between two players with 5+ other matches, each side's SPW minus the
+    Barnett-Clarke expectation from both players' other matches; the residual variance minus the binomial noise
+    (serve points from the score) and the leave-one-out estimation error is the day-to-day variance; the covariance
+    of the two sides' residuals gives the correlation. Also returns the per-match variance of a rate (v_match), for
+    the estimation error of a player's average."""
+    key = (tour, until, len(players), sum(len(p["recent"]) for p in players))
+    if key in _FORM:
+        return _FORM[key]
+    rows = {}
+    for p in players:
+        if p["tour"] != tour:
+            continue
+        ok = [r for r in p["recent"] if r["spw"] is not None and r["rpw"] is not None and (until is None or r["date"] < until)]
+        if ok:
+            rows[p["slug"]] = ok
+    allr = [r for v in rows.values() for r in v]
+    if len(allr) < 100:
+        _FORM[key] = None
+        return None
+    t = float(np.mean([r["spw"] for r in allr] + [1 - r["rpw"] for r in allr]))
+    ra_, rb_, binom, est, seen = [], [], [], [], set()
+    for a, A in rows.items():
+        for r in A:
+            b = r["opp_slug"]
+            k = (r["date"], r["tourn"], tuple(sorted((a, b))))
+            if b not in rows or k in seen:
+                continue
+            seen.add(k)
+            sc = parse_score(r["score"])
+            if not sc:
+                continue
+            oa = [x for x in A if x is not r]
+            ob = [x for x in rows[b] if not (x["opp_slug"] == a and x["date"] == r["date"] and x["tourn"] == r["tourn"])]
+            if len(oa) < 5 or len(ob) < 5:
+                continue
+            sa, rA = np.mean([x["spw"] for x in oa]), np.mean([x["rpw"] for x in oa])
+            sb, rB = np.mean([x["spw"] for x in ob]), np.mean([x["rpw"] for x in ob])
+            xa, xb = r["spw"], 1 - r["rpw"]
+            ra_.append(xa - (sa - (rB - (1 - t))))
+            rb_.append(xb - (sb - (rA - (1 - t))))
+            g = sc["games"] / 2
+            binom.append((xa * (1 - xa) / (g * _pts_per_game(xa)) + xb * (1 - xb) / (g * _pts_per_game(xb))) / 2)
+            est.append((np.var([x["spw"] for x in oa]) / len(oa) + np.var([x["rpw"] for x in ob]) / len(ob)
+                        + np.var([x["spw"] for x in ob]) / len(ob) + np.var([x["rpw"] for x in oa]) / len(oa)) / 2)
+    if len(ra_) < 50:
+        _FORM[key] = None
+        return None
+    ra_, rb_ = np.array(ra_), np.array(rb_)
+    V = float((np.var(ra_) + np.var(rb_)) / 2)
+    var = max(V - float(np.mean(binom)) - float(np.mean(est)), 0.0)
+    rho = float(np.clip(np.cov(ra_, rb_)[0, 1] / var, -0.95, 0.0)) if var > 0 else 0.0
+    v_match = float(np.mean([np.var([r["spw"] for r in v]) for v in rows.values() if len(v) >= 5]))
+    out = {"sd": var ** 0.5, "rho": rho, "v_match": v_match, "matches": len(ra_), "until": until}
+    _FORM[key] = out
+    return out
+
+
+def est_var(form: dict | None, n_a_spw: float, n_b_rpw: float) -> float:
+    """Variance of the estimate of A's serve-point rate vs B: A's SPW average and B's RPW average, each a mean over
+    its matches (plus the tour-average prior's MIN_MS pseudo-matches)."""
+    if not form:
+        return 0.0
+    return form["v_match"] * (1 / (n_a_spw + MIN_MS) + 1 / (n_b_rpw + MIN_MS))
 
 
 # ------------------------------------------------------------------ walk-forward backtest
@@ -309,11 +400,14 @@ def _rates_from_rows(rows: list[dict], surface: str, avg_spw: float) -> dict | N
     return out
 
 
-def backtest(players: list[dict], since: str = "2026-05-01", n: int = 4000) -> dict:
+def backtest(players: list[dict], since: str = "2026-09-01", n: int = 4000, form_mode: str = "measured") -> dict:
     """Walk-forward on real results: every match (since `since`) between two fetched players, predicted only from
     rows dated before it, scored against the final score. Baselines use the same earlier rows: the empirical
-    distribution of total games for that tour and format, and a coin flip for the winner."""
+    distribution of total games for that tour and format, and a coin flip for the winner.
+    form_mode "measured": the day-to-day variation comes from form_variation() on matches before `since` only, so
+    the test matches never inform it; "none": fixed rates (the plain iid model), for comparison."""
     by_slug = {p["slug"]: p for p in players}
+    forms = {t: (form_variation(players, t, until=since) if form_mode == "measured" else None) for t in ("ATP", "WTA")}
     rows_all = [(p, r) for p in players for r in p["recent"]]
     seen, recs = set(), []
     for p, r in sorted(rows_all, key=lambda x: x[1]["date"]):
@@ -338,7 +432,9 @@ def backtest(players: list[dict], since: str = "2026-05-01", n: int = 4000) -> d
             continue
         bo = 5 if tour == "ATP" and any(s in r["tourn"].lower() for s in SLAMS) else 3
         pa, pb = matchup(ra, rb, {"spw": avg_spw})
-        s = simulate(pa, pb, bo, n=n, seed=len(recs) + 1, final_tb10=bo == 5 or any(x in r["tourn"].lower() for x in SLAMS))
+        fm = forms[tour]
+        s = simulate(pa, pb, bo, n=n, seed=len(recs) + 1, final_tb10=bo == 5 or any(x in r["tourn"].lower() for x in SLAMS),
+                     form=fm, est=(est_var(fm, ra["n"], rb["n"]), est_var(fm, rb["n"], ra["n"])))
         base_sc = [parse_score(x["score"]) for q in players if q["tour"] == tour for x in q["recent"]
                    if x["date"] < d and (5 if tour == "ATP" and any(z in x["tourn"].lower() for z in SLAMS) else 3) == bo]
         base_sc = [b for b in base_sc if b]
@@ -358,7 +454,7 @@ def backtest(players: list[dict], since: str = "2026-05-01", n: int = 4000) -> d
                      "p_3": float((s["sets"] == 3).mean()) if bo == 3 else None,
                      "base_3": float(np.mean([b["sets"] == 3 for b in base_sc])) if bo == 3 else None,
                      "over": {L: (float((s["games"] > L).mean()), float(np.mean(np.array(base) > L)), sc["games"] > L) for L in (19.5, 20.5, 21.5, 22.5, 23.5)}})
-    return {"records": recs, "summary": summarize(recs)}
+    return {"records": recs, "summary": summarize(recs), "form": forms, "since": since, "form_mode": form_mode}
 
 
 def summarize(recs: list[dict]) -> dict:
@@ -534,13 +630,22 @@ def cached_players() -> list[dict]:
     return out
 
 
+class NoStats(ValueError):
+    pass
+
+
 def game(pa: dict, pb: dict, start: str, players: list[dict] | None, dab: dict, n: int = N_SIMS) -> dict:
     ctx = _context(pa, pb, start)
     avg = tour_average(cached_players() or players or [pa, pb], pa["tour"], ctx["surface"])
     ra, rb = rates(pa, ctx["surface"], avg), rates(pb, ctx["surface"], avg)
+    for p, r in ((pa, ra), (pb, rb)):
+        if r["spw"] is None or r["rpw"] is None:   # no stats-covered match in 52 weeks: nothing real to simulate from
+            raise NoStats(f"{p['name']} has no matches with serve/return stats in the last 52 weeks on Tennis Abstract")
     p1, p2 = matchup(ra, rb, avg)
-    sim = simulate(p1, p2, ctx["best_of"], n=n, final_tb10=bool(ctx.get("slam")))
-    return {"a": pa, "b": pb, "ctx": ctx, "avg": avg, "ra": ra, "rb": rb, "sim": sim, "dabble": dab, "start": start}
+    fm = form_variation(cached_players() or players or [pa, pb], pa["tour"])
+    sim = simulate(p1, p2, ctx["best_of"], n=n, final_tb10=bool(ctx.get("slam")), form=fm,
+                   est=(est_var(fm, ra["ms"], rb["ms"]), est_var(fm, rb["ms"], ra["ms"])))
+    return {"a": pa, "b": pb, "ctx": ctx, "avg": avg, "ra": ra, "rb": rb, "sim": sim, "dabble": dab, "start": start, "form": fm}
 
 
 def price_board(props: list[dict], n: int = N_SIMS, log=print, store: dict | None = None) -> list[dict]:
@@ -571,7 +676,12 @@ def price_board(props: list[dict], n: int = N_SIMS, log=print, store: dict | Non
             rows += [{**p, "error": "players on different tours (name match?)"} for p in mine]
             continue
         log(f"  {a} vs {b} ({pa['tour']}): {len(mine)} lines, simulating...")
-        G = game(pa, pb, mine[0]["start"], everyone, dab, n)
+        try:
+            G = game(pa, pb, mine[0]["start"], everyone, dab, n)
+        except NoStats as e:
+            log(f"    not priced: {e}")
+            rows += [{**p, "error": str(e)} for p in mine]
+            continue
         eid = f"{pa['slug']}-{pb['slug']}-{mine[0]['start'][:10]}"
         if store is not None:
             store[eid] = G
@@ -653,14 +763,21 @@ def _take(cand, top, per_game, accept=None):
     return out
 
 
+def _rankable(r) -> bool:
+    """Lists rank only legs the data supports: both players with 8+ stats-covered matches and a confirmed event.
+    A thin sample (often lower-level 125 / Challenger / ITF opposition, which the rates don't adjust for) or an
+    unknown surface stays on the full board, unranked."""
+    return "error" not in r and not r.get("newcomer")
+
+
 def pick_order(rows, top=5, per_game=1):
-    return _take(sorted([r for r in rows if "error" not in r], key=lambda r: (RANK.get(r["confidence"], 3), -r["p_final"])), top, per_game)
+    return _take(sorted([r for r in rows if _rankable(r)], key=lambda r: (RANK.get(r["confidence"], 3), -r["p_final"])), top, per_game)
 
 
 def history_order(rows, store, top=5, min_games=5, per_game=1):
     cand = []
     for r in rows:
-        if "error" in r or not r.get("research"):
+        if not _rankable(r) or not r.get("research"):
             continue
         o, u, n = r["research"]["season"]
         if n < min_games or o == u:
@@ -690,7 +807,7 @@ def likely_order(rows, store, top=None, drop=None, per_game=99):
     runs = {e: most_likely_run(G) for e, G in store.items()}
     cand = []
     for r in rows:
-        if "error" in r or r["event_id"] not in runs or not r.get("research"):
+        if not _rankable(r) or r["event_id"] not in runs or not r.get("research"):
             continue
         G, L = store[r["event_id"]], runs[r["event_id"]]
         s = G["sim"]

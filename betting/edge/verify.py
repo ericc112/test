@@ -299,12 +299,20 @@ def check_tennis_pp(rep: Report):
         return
     pa["name"], pb["name"] = r["player"], r.get("event", "").split(" vs ")[-1] if " vs " in r.get("event", "") else pb["name"]
     start = str(r["event_id"])[-10:] + "T12:00:00"
-    G = T.game(pa, pb, start, [pa, pb] + [x for x in [T.player_by_slug(s) for s in slugs] if x], T._dabble_board())
+    try:
+        G = T.game(pa, pb, start, [pa, pb] + [x for x in [T.player_by_slug(s) for s in slugs] if x], T._dabble_board())
+    except T.NoStats as e:
+        rep.add("FAIL", "reprice", str(e))
+        return
     x = T.price_leg(G, r["player"], r["market"][len("tennis_"):], float(r["line"]), side=r["side"])
     if not x:
         rep.add("FAIL", "reprice", "player not matched in the rebuilt match")
         return
-    rep.add("PASS", "recount", f"recent record {x['median']:g} median; history is context only for tennis")
+    o, u = T.hist_counts(pa, r["market"][len("tennis_"):], float(r["line"]))
+    rep.add("PASS", "recount", f"recent record recounted from Tennis Abstract: {o} over / {u} under at {float(r['line']):g} (context only: tennis history carries no weight)")
+    fm = G.get("form")
+    rep.add("PASS" if fm else "WARN", "form", (f"day-to-day variation measured on {fm['matches']} {pa['tour']} matches (sd {fm['sd']:.3f}, correlation {fm['rho']:+.2f})"
+                                                if fm else "too few matches to measure day-to-day variation: fixed rates"))
     lm = _f(r.get("p_model"))
     off = lm is None or abs(x["p_model"] - lm) > TOL_MODEL
     rep.add("FAIL" if off else "PASS", "reprice", f"simulation now {x['p_model']:.3f}, logged {lm}")
@@ -317,7 +325,7 @@ def check_tennis_pp(rep: Report):
     conf = r.get("confidence")
     rep.add("PASS" if x["confidence"] == conf else "FAIL", "fresh label", f"rebuilt {x['p_final']:.3f} {x['confidence']}" + ("" if x["confidence"] == conf else f" (logged {conf})"))
     if x["flags"]:
-        rep.add("WARN", "role", "; ".join(x["flags"]))
+        rep.add("WARN", "sample", "; ".join(x["flags"]))
 
 
 def check_nhl_pp(rep: Report):
