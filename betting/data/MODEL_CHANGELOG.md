@@ -62,3 +62,27 @@ Logic versions live in `data/nba_model.json`; `python -m edge.nba_model status |
   - a player with no stats-covered matches isn't priced.
 - **Known limits:** no opponent-level adjustment, and no market winner price in the feeds. Aces, double faults and break points won are excluded until real counts can grade them.
 - **Rollback:** `git revert` the commit (tennis is self-contained in `edge/tennis.py`).
+
+## 2026-11-06: tennis v2 (deeper history, opponent-adjusted ratings, the market's winner price)
+- **Data:**
+  - TennisMyLife match database, 91,679 matches from 2018 on: ATP tour (with real match dates and minutes), ATP Challengers and WTA tour, each with both players' serve counts. Cross-checked against Tennis Abstract: identical serve counts on Fritz d. Fils.
+  - WTA 125 matches from the WTA's own feed, for thin WTA players.
+  - Tennis Explorer closing and current odds.
+  - Tennis Abstract stays the fallback.
+- **Walk-forward test** (tuned Jan 2025 – Aug 2026, scored Sep 1 – Nov 6 2026): `data/tennis_bt/factor_study.json` and `market_test.json`; code in `edge/tennis_factor_study.py`.
+
+  ATP, 1,723 matches:
+
+  | | Winner log loss | Games-won line log loss | Total games line log loss |
+  |---|---|---|---|
+  | Old (plain averages) | 0.669 | 0.686 | 0.695 |
+  | Opponent-adjusted ratings | 0.640 | 0.680 | 0.694 |
+  | + Elo | 0.632 | 0.682 | 0.698 |
+  | + market winner | 0.608 | 0.673 | 0.692 |
+
+  WTA, 350 matches: ratings 0.657 for the winner (old 0.666). Games won (0.667) and totals (0.692) were best on the ratings alone: the market and Elo didn't help there.
+- **Adopted** (`data/tennis_bt/decision.json`):
+  - opponent-adjusted ratings, half-life 730 days (ATP) / 365 days (WTA), ridge 400 points, form measured on the ratings' residuals;
+  - ATP games won and total games priced with the winner set to the market's price when Tennis Explorer lists the match.
+- **Not adopted:** Elo (the market beats it), fatigue (ATP +0.002 out of sample, WTA nothing; tuning terms under 1.5 SE), indoor and handedness (no change in point log-likelihood), heavier recency (180-day half-life was worse).
+- **Rollback:** delete `data/tennis_bt/decision.json` (no market anchoring) and set `tml_pair` to return None (the Tennis Abstract path).

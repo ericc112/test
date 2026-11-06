@@ -311,8 +311,11 @@ def check_tennis_pp(rep: Report):
     o, u = T.hist_counts(pa, r["market"][len("tennis_"):], float(r["line"]))
     rep.add("PASS", "recount", f"recent record recounted from Tennis Abstract: {o} over / {u} under at {float(r['line']):g} (context only: tennis history carries no weight)")
     fm = G.get("form")
-    rep.add("PASS" if fm else "WARN", "form", (f"day-to-day variation measured on {fm['matches']} {pa['tour']} matches (sd {fm['sd']:.3f}, correlation {fm['rho']:+.2f})"
+    rep.add("PASS" if fm else "WARN", "form", (f"rates: {G.get('source', 'Tennis Abstract')}; day-to-day variation sd {fm['sd']:.3f}, correlation {fm['rho']:+.2f}"
+                                                + (f" (measured on {fm['matches']} matches)" if fm.get("matches") else " (measured on the tuning period)")
                                                 if fm else "too few matches to measure day-to-day variation: fixed rates"))
+    if G.get("winner_market"):
+        rep.add("PASS", "winner price", f"market {G['winner_market'][1]}" + (" anchors this line" if T.sim_for(G, r["market"][len("tennis_"):]) is not G["sim"] else " (context: not used for this stat)"))
     lm = _f(r.get("p_model"))
     off = lm is None or abs(x["p_model"] - lm) > TOL_MODEL
     rep.add("FAIL" if off else "PASS", "reprice", f"simulation now {x['p_model']:.3f}, logged {lm}")

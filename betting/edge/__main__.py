@@ -422,14 +422,13 @@ BOARD_TEXT = {
            "better centre), the simulation's own number shrunk toward 50%, and this season's record, blended as `edge prob`. "
            "Where PrizePicks posts DraftKings' line the market says 50/50 (the feed has no prices), so the edge, if any, sits in lines "
            "that differ from DraftKings'. No locks: the NFL simulation alone has not beaten DraftKings' closing lines (README).",
-    "tennis": "Each line is priced from a point-by-point simulation of the match: each player's serve and return points won on the "
-              "surface (Tennis Abstract's last-52-weeks splits, real match counts), combined with the Barnett-Clarke method, every "
-              "service game and tiebreak played out, with day-to-day form measured from real matches (each run draws the day's "
-              "serve rates, the two players' swings correlated). Walk-forward test (Sep-Nov 2026, 742 matches, form measured on "
-              "earlier matches only): slightly better than the base rate on total games for both tours, well short of a market; so Dabble's price "
-              "carries 80% where it posts the prop, and a leg without one stays Low. Rates aren't adjusted for opponent level, so "
-              "legs with a thin sample (under 8 stats-covered matches) or an unconfirmed event are left off the lists. Recent record, "
-              "last 5 and head-to-head aren't used anywhere: on the same 742 matches none added anything beyond the simulation (L30). No locks.",
+    "tennis": "Each line is priced from a point-by-point simulation of the match. Serve and return ratings are solved jointly with every "
+              "opponent's, so 70% won against weak returners counts for less (TennisMyLife match database: ATP tour and Challengers, WTA tour; "
+              "WTA 125s from the WTA's own feed; Tennis Abstract when a player isn't covered), with day-to-day form measured from real matches. "
+              "ATP total-games and games-won lines move the simulation's winner to the market's price (Tennis Explorer) when the match is listed. "
+              "Walk-forward test, Sep-Nov 2026 (ATP 1,723 / WTA 350 matches): winner log loss ATP 0.669 -> 0.640 with the ratings, 0.608 with the "
+              "market; ATP games-won lines 0.686 -> 0.673; total games stayed near a coin flip for every version, so a total without Dabble's price "
+              "stays Low. Elo, fatigue, indoor/outdoor and handedness didn't improve the test and aren't used; nor are hit rates or head-to-head (L30). No locks.",
     "nhl": "Each line is priced from a player simulation of the game (ice time, per-60 rates with last season as the prior, the "
            "opponent and DraftKings' total) and, for shots, points, assists and goals, DraftKings' de-vigged milestone ladder. The "
            "player model is new and untested against closing lines, so the market carries 80% of the weight, a missing market "

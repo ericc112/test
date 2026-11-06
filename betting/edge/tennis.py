@@ -566,6 +566,12 @@ def _tilt_over(arr: np.ndarray, d_line: float, q: float, line: float) -> float:
     return anchored_count(arr.astype(float), d_line, line) if abs(d_line - line) > 1e-9 else q
 
 
+def sim_for(G: dict, stat: str) -> dict:
+    """The run a stat is priced from: the market-anchored run for the stats the test showed it helps (ATP games won and
+    total games, decision.json), the ratings' own run otherwise."""
+    return G["sim_win"] if G.get("sim_win") is not None and stat in G.get("anchor_props", []) else G["sim"]
+
+
 def price_leg(G: dict, name: str, stat: str, line: float, over_only: bool = False, side: str | None = None) -> dict | None:
     from .blend import final_probability, load_adjustments
     from .nba_pp import find_player
@@ -575,6 +581,7 @@ def price_leg(G: dict, name: str, stat: str, line: float, over_only: bool = Fals
         return None
     a_side = who["name"] == G["a"]["name"]
     s = G["sim"]
+    s = sim_for(G, stat)
     arr = {"games": s["games"], "sets": s["sets"], "tiebreaks": s["tiebreaks"], "first_set": s["first_set"],
            "games_won": s["games_a"] if a_side else s["games_b"]}[stat]
     over = float(np.mean(arr > line)); push = float(np.mean(arr == line)) if float(line).is_integer() else 0.0
@@ -640,17 +647,41 @@ class NoStats(ValueError):
 
 
 def game(pa: dict, pb: dict, start: str, players: list[dict] | None, dab: dict, n: int = N_SIMS) -> dict:
+    """One match: serve-point probabilities from the deeper history's opponent-adjusted ratings when both players are
+    covered (Tennis Abstract's 52-week splits otherwise), the simulation, and, where the walk-forward test showed it
+    helps (data/tennis_bt/decision.json), a second run whose serve-point gap is moved to the market's / Elo's winner
+    probability (same total, so the same expected length) for games-won lines."""
+    from . import tennis_hist as TH
     ctx = _context(pa, pb, start)
-    avg = tour_average(cached_players() or players or [pa, pb], pa["tour"], ctx["surface"])
-    ra, rb = rates(pa, ctx["surface"], avg), rates(pb, ctx["surface"], avg)
-    for p, r in ((pa, ra), (pb, rb)):
-        if r["spw"] is None or r["rpw"] is None:   # no stats-covered match in 52 weeks: nothing real to simulate from
-            raise NoStats(f"{p['name']} has no matches with serve/return stats in the last 52 weeks on Tennis Abstract")
-    p1, p2 = matchup(ra, rb, avg)
-    fm = form_variation(cached_players() or players or [pa, pb], pa["tour"])
-    sim = simulate(p1, p2, ctx["best_of"], n=n, final_tb10=bool(ctx.get("slam")), form=fm,
-                   est=(est_var(fm, ra["ms"], rb["ms"]), est_var(fm, rb["ms"], ra["ms"])))
-    return {"a": pa, "b": pb, "ctx": ctx, "avg": avg, "ra": ra, "rb": rb, "sim": sim, "dabble": dab, "start": start, "form": fm}
+    tp = tml_pair(pa, pb, ctx)
+    if tp:
+        p1, p2, fm = tp["p1"], tp["p2"], {"sd": tp["form"]["sd"], "rho": tp["form"]["rho"]}
+        ra, rb, avg = {"ms": tp["ms_a"]}, {"ms": tp["ms_b"]}, {"spw": tp["t"], "surface": ctx["surface"]}
+        sim = simulate(p1, p2, ctx["best_of"], n=n, final_tb10=bool(ctx.get("slam")), form=fm)
+        source = "opponent-adjusted ratings (TennisMyLife match database" + (", WTA 125s from the WTA feed" if pa["tour"] == "WTA" else "") + ")"
+    else:
+        avg = tour_average(cached_players() or players or [pa, pb], pa["tour"], ctx["surface"])
+        ra, rb = rates(pa, ctx["surface"], avg), rates(pb, ctx["surface"], avg)
+        for p, r in ((pa, ra), (pb, rb)):
+            if r["spw"] is None or r["rpw"] is None:   # no stats-covered match in 52 weeks: nothing real to simulate from
+                raise NoStats(f"{p['name']} has no matches with serve/return stats in the last 52 weeks on Tennis Abstract")
+        p1, p2 = matchup(ra, rb, avg)
+        fm = form_variation(cached_players() or players or [pa, pb], pa["tour"])
+        sim = simulate(p1, p2, ctx["best_of"], n=n, final_tb10=bool(ctx.get("slam")), form=fm,
+                       est=(est_var(fm, ra["ms"], rb["ms"]), est_var(fm, rb["ms"], ra["ms"])))
+        source = "Tennis Abstract 52-week splits"
+    G = {"a": pa, "b": pb, "ctx": ctx, "avg": avg, "ra": ra, "rb": rb, "sim": sim, "dabble": dab, "start": start, "form": fm,
+         "source": source, "elo": tp["elo"] if tp else None}
+    mk = market_winner(pa["name"], pb["name"], pa["tour"], start)
+    G["winner_market"] = mk
+    dec = (json.load(open(DECISION)).get(pa["tour"]) or {}) if os.path.exists(DECISION) else {}
+    G["anchor_props"] = []
+    if dec.get("anchor") == "market" and mk and tp:
+        d = float(TH.shift_to(np.array([p1]), np.array([p2]), mk[0], ctx["best_of"], fm["sd"], fm["rho"])[0])
+        G["sim_win"] = simulate(p1 + d, p2 - d, ctx["best_of"], n=n, final_tb10=bool(ctx.get("slam")), form=fm)
+        G["anchor_props"] = list(dec.get("props") or [])
+        G["win_model"] = float(TH.match_win_form(p1, p2, ctx["best_of"], fm["sd"], fm["rho"])[0])
+    return G
 
 
 def price_board(props: list[dict], n: int = N_SIMS, log=print, store: dict | None = None) -> list[dict]:
@@ -697,7 +728,9 @@ def price_board(props: list[dict], n: int = N_SIMS, log=print, store: dict | Non
                 rows.append({**p, "error": "player not matched"})
                 continue
             me, op = (pa, pb) if x["a_side"] else (pb, pa)
-            note = (f"tennis sim median {x['median']:.1f} (25-75th {x['q25']:.0f}-{x['q75']:.0f}); serve points won vs this opponent "
+            note = (f"tennis sim median {x['median']:.1f} (25-75th {x['q25']:.0f}-{x['q75']:.0f}); rates: {G.get('source', '')}"
+                    + (f"; winner price {G['winner_market'][1]}" + (" (anchors this line)" if sim_for(G, st) is not G["sim"] else "") if G.get("winner_market") else "")
+                    + "; serve points won vs this opponent "
                     f"{G['sim']['pa'] if x['a_side'] else G['sim']['pb']:.3f}, opponent {G['sim']['pb'] if x['a_side'] else G['sim']['pa']:.3f}; "
                     + (f"{G['ctx']['tourn']} ({G['ctx']['surface']}, best of {G['ctx']['best_of']})" if G["ctx"]["known"] else "event unknown")
                     + (f"; Dabble {x['dabble']['line']:g} at {x['dabble'].get('over')}/{x['dabble'].get('under')}" if x["dabble"] else "; no market price")
@@ -797,6 +830,9 @@ def likely_order(rows, store, top=None, drop=None, per_game=99):
             continue
         G, L = store[r["event_id"]], runs[r["event_id"]]
         s = G["sim"]
+        if sim_for(G, r["stat_key"]) is not G["sim"]:          # the market-anchored run has its own most likely match
+            s = G["sim_win"]
+            L = most_likely_run({**G, "sim": s})
         arr = {"games": s["games"], "sets": s["sets"], "tiebreaks": s["tiebreaks"], "first_set": s["first_set"],
                "games_won": s["games_a"] if r["a_side"] else s["games_b"]}[r["stat_key"]]
         val = float(arr[L["run"]])
@@ -842,13 +878,17 @@ def reasons(r: dict, G: dict) -> list[dict]:
         sc = ", ".join(f"{k} {v}" for k, v in ml["score"].items())
         add("most likely match", vd(cmp(ml["value"], r["line"])), f"{ml['value']:g} in the most likely match ({sc} games, {ml['sets']} sets) vs a {r['line']} line")
     s = G["sim"]
+    anchored = sim_for(G, r["stat_key"]) is not G["sim"]
+    s = sim_for(G, r["stat_key"])
+    mk_txt = f"; winner set to the market's price ({G['winner_market'][1]})" if anchored else ""
     if r["stat_key"] == "games_won":
         pw = float(s["a_wins"].mean()) if r["a_side"] else 1 - float(s["a_wins"].mean())
-        why = f"projected to win {pw:.0%} of the time"
+        why = f"projected to win {pw:.0%} of the time{mk_txt}"
     else:
         why = f"projected holds {_hold(s['pa']):.0%} and {_hold(s['pb']):.0%} vs a tour average of {_hold(G['avg']['spw']):.0%}"
         if G["ctx"]["best_of"] == 3 and r["stat_key"] != "first_set":
             why += f", three sets {float((s['sets'] == 3).mean()):.0%}"
+        why += mk_txt
     add("simulation", vd(cmp(r["median"], r["line"])), f"median {r['median']:g} (25-75th {r['q25']:.0f}-{r['q75']:.0f}); {why}")
     pk = r.get("p_market")
     if pk is None:
@@ -895,3 +935,124 @@ def write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
     if warns:
         lines.append("- Back-check warnings: " + "; ".join(warns))
     return "\n".join(lines)
+
+
+# ------------------------------------------------------------------ deeper history (TennisMyLife) and the market's winner price
+TML_DIR = os.path.join(HERE, ".cache", "tml")
+TE_DIR = os.path.join(HERE, ".cache", "tennis_odds")
+STUDY = os.path.join(HERE, "data", "tennis_bt", "factor_study.json")
+_TML = {}
+
+
+def tml_state(refresh: bool = True, wta_topup: tuple = ()) -> dict | None:
+    """TennisMyLife matches, today's serve / return ratings (the study's chosen settings), current Elo and a name index,
+    per tour. WTA players named in wta_topup also get their last year of WTA 125 matches from the WTA's feed (tour-level
+    files don't cover 125s). Cached for the process; the yearly and ongoing files refresh at most every 6 hours."""
+    from . import tennis_hist as TH
+    from .nba_pp import _norm
+    if _TML.get("day") == dt.date.today().isoformat() and set(wta_topup) <= set(_TML.get("topup", ())):
+        return _TML
+    try:
+        stale = not os.path.isdir(TML_DIR) or time.time() - min(os.path.getmtime(os.path.join(TML_DIR, f)) for f in os.listdir(TML_DIR)
+                                                                  if "ongoing" in f) > 6 * 3600
+    except ValueError:
+        stale = True
+    if refresh and stale:
+        try:
+            TH.download(TML_DIR)
+        except Exception as e:  # keep yesterday's files; say so in the leg's notes
+            _TML["download_error"] = str(e)[:120]
+    if not os.path.isdir(TML_DIR):
+        return None
+    study = json.load(open(STUDY)) if os.path.exists(STUDY) else {}
+    M = TH.load(TML_DIR)
+    topped = set(_TML.get("topup", ())) | set(wta_topup)
+    if topped:
+        from . import tennis_wta as TW
+        names = {}
+        for m in M:
+            if m["tour"] == "WTA":
+                names[_norm(m["w_name"])] = m["w"]; names[_norm(m["l_name"])] = m["l"]
+        seen = {(m["ev"], m["w"], m["l"]) for m in M}
+        for nm in sorted(topped):
+            try:
+                extra = TW.history(nm, os.path.join(HERE, ".cache", "wta"))
+            except Exception:
+                extra = []
+            for r in extra:                          # the same player under one id: TennisMyLife's where it knows her
+                r["w"] = names.get(_norm(r["w_name"]), r["w"]); r["l"] = names.get(_norm(r["l_name"]), r["l"])
+                if (r["ev"], r["w"], r["l"]) not in seen:
+                    seen.add((r["ev"], r["w"], r["l"])); M.append(r)
+        M.sort(key=lambda m: (m["start"], m["ro"], m["date"]))
+    asof = dt.date.today().toordinal() + 1
+    st = {"day": dt.date.today().isoformat(), "matches": M, "topup": tuple(sorted(topped))}
+    for tour in ("ATP", "WTA"):
+        ch = (study.get(tour) or {}).get("chosen") or {"H": 730, "lam": 400, "indoor": False, "hand": False}
+        obs = TH.observations(M, tour)
+        R = TH.Ratings(H=ch["H"], lam=ch["lam"], indoor=ch.get("indoor", False), hand=ch.get("hand", False)).fit(obs, asof)
+        _, E, Es, N = TH.elo_walk(M, tour)
+        names = {}
+        for m in M:
+            if m["tour"] == tour:
+                names[_norm(m["w_name"])] = (m["w"], m["w_hand"])
+                names[_norm(m["l_name"])] = (m["l"], m["l_hand"])
+        st[tour] = {"obs": obs, "R": R, "elo": (E, Es, N), "names": names, "study": study.get(tour) or {}}
+    _TML.clear(); _TML.update(st)
+    return _TML
+
+
+def market_winner(name_a: str, name_b: str, tour: str, start: str) -> tuple[float, str] | None:
+    """Tennis Explorer's de-vigged price that A beats B, from the match day's page (and the day before, for time
+    zones). None when the match isn't listed with odds."""
+    from . import tennis_market as TM
+    d0 = dt.date.fromisoformat(start[:10])
+    ka, kb = TM.surname_key(name_a.split()[-1]), TM.surname_key(name_b.split()[-1])
+    for d, up in ((d0, True), (d0, False), (d0 - dt.timedelta(days=1), True), (d0 + dt.timedelta(days=1), True)):
+        try:
+            rows = TM.day(d, tour, TE_DIR, max_age=1800, upcoming=up)
+        except Exception:
+            continue
+        for x in rows:
+            if not (x.get("o1") and x.get("o2") and x.get("p2")):
+                continue
+            k1, k2 = TM.surname_key(x["p1"]), TM.surname_key(x["p2"])
+            hit = lambda k, full: k == full or full.endswith(k) or k.endswith(full)
+            if hit(k1, ka) and hit(k2, kb):
+                return TM.fair(x["o1"], x["o2"]), f"{x['p1']} {x['o1']} / {x['p2']} {x['o2']}"
+            if hit(k1, kb) and hit(k2, ka):
+                return 1 - TM.fair(x["o1"], x["o2"]), f"{x['p1']} {x['o1']} / {x['p2']} {x['o2']}"
+    return None
+
+
+DECISION = os.path.join(HERE, "data", "tennis_bt", "decision.json")
+
+
+def tml_pair(pa: dict, pb: dict, ctx: dict) -> dict | None:
+    """Serve-point probabilities for this match from the opponent-adjusted ratings (both players must be in the deeper
+    history and the event confirmed), the tour's measured day-to-day form for those ratings, Elo's winner probability
+    and stats-covered matches in the last 52 weeks. None falls back to the Tennis Abstract rates."""
+    from .nba_pp import _norm
+    if not ctx.get("known"):
+        return None
+    st = tml_state(wta_topup=tuple(x["name"] for x in (pa, pb)) if pa["tour"] == "WTA" else ())
+    if not st or pa["tour"] not in st:
+        return None
+    T_ = st[pa["tour"]]
+    ia, ib = T_["names"].get(_norm(pa["name"])), T_["names"].get(_norm(pb["name"]))
+    if not ia or not ib:
+        return None
+    idx, R = T_["obs"]["idx"], T_["R"]
+    a, b = idx.get(ia[0]), idx.get(ib[0])
+    if a is None or b is None:
+        return None
+    surf = ctx["surface"] if ctx["surface"] in ("Hard", "Clay", "Grass") else "Hard"
+    indoor = None
+    p1 = R.p(a, b, surf, indoor, ia[1], ib[1])
+    p2 = R.p(b, a, surf, indoor, ib[1], ia[1])
+    obs, cut = T_["obs"], dt.date.today().toordinal() - 365
+    ms = lambda i: int(((obs["srv"] == i) & (obs["day"] >= cut)).sum())
+    E, Es, _ = T_["elo"]
+    ra = 0.5 * (E.get(ia[0], 1500) + Es.get((ia[0], surf), 1500)); rb = 0.5 * (E.get(ib[0], 1500) + Es.get((ib[0], surf), 1500))
+    form = (T_["study"].get("form") or {}).get("B1") or {"sd": 0.05, "rho": -0.8}
+    t = float(R.t[{"Hard": 0, "Clay": 1, "Grass": 2}[surf] * 2])
+    return {"p1": p1, "p2": p2, "form": form, "elo": 1 / (1 + 10 ** ((rb - ra) / 400)), "ms_a": ms(a), "ms_b": ms(b), "t": t}
