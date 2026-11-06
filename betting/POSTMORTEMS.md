@@ -2,6 +2,37 @@
 
 Every graded loss is examined here, including passes and Low-confidence legs. `python -m edge review` writes the diagnosis; `python -m edge tag ID "tag" --lesson "..."` confirms the cause. Tags: `variance`, `opportunity`, `correlated`, `role/lineup`, `model bias`, `market info`, `stale line`, `data error`, `format misread`.
 
+## 2026-11-05: 22 losses from 5 independent causes
+
+| # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
+|---|---|---|---|---|---|---|---|---|
+| 519 | Jase Richardson pr under 11.5 | 12.0 | 0.494 (Low) | pass | model 47% (against) | variance | **untagged** | root leg of a 7-leg script loss: #519, #577, #580, #584, #601, #602, #606; we priced this side at 49%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 521 | Yaxel Lendeborg pra under 30.5 | 31.0 | 0.5225 (Low) | pass | model 63%, market 50% (against) | model bias | **untagged** | root leg of a 10-leg script loss: #521, #522, #592, #595, #596, #597, #598, #599, #600, #611; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 522 | Brandin Podziemski pa over 19.5 | 12.0 | 0.511 (Low) | pass | model 56% | correlated | **untagged** | same game script as #521 (model bias); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 546 | Zay Flowers rec_yds over 47.5 | 6.0 | 0.5331 (Low) | pass | model 52%, market 50% (against), hist 86% | variance | **untagged** | root leg of a 3-leg script loss: #546, #565, #575; logged as a PASS: no money on it; reviewed for calibration |
+| 555 | Mitch Marner nhl_assists over 0.5 | 0.0 | 0.4978 (Low) | pass | model 48% (against), market 50% | variance | **untagged** | we priced this side at 50%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 562 | Vincent Trocheck nhl_sog over 1.5 | 1.0 | 0.5364 (Low) | pass | model 56%, market 53% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 565 | Joe Fagnano pass_td over 0.5 | 0.0 | 0.5384 (Low) | pass | model 57%, market 50% (against), hist 0% (against) | correlated | **untagged** | same game script as #546 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 575 | Zay Flowers rec_yds over 48.5 | 6.0 | 0.5325 (Low) | pass | model 52%, market 50% (against), hist 86% | correlated | **untagged** | same game script as #546 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 577 | Jalen Green pra over 22.5 | 9.0 | 0.5651 (Medium) | pass | model 62%, market 55% | correlated | **untagged** | same game script as #519 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 580 | Jalen Green pr over 19.5 | 6.0 | 0.5161 (Low) | pass | model 58% | correlated | **untagged** | same game script as #519 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 584 | Collin Gillespie ast over 3.5 | 2.0 | 0.566 (Medium) | lean | model 74%, market 52% | correlated | **untagged** | same game script as #519 (variance); own read: variance |
+| 592 | Draymond Green pa under 12.5 | 13.0 | 0.5366 (Low) | pass | model 59%, market 52% | correlated | **untagged** | same game script as #521 (model bias); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 595 | Stephen Curry pra over 35.5 | 34.0 | 0.5178 (Low) | pass | model 49% (against), market 52% | correlated | **untagged** | same game script as #521 (model bias); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 596 | Stephen Curry ast over 4.5 | 4.0 | 0.5121 (Low) | pass | model 40% (against), market 54% | correlated | **untagged** | same game script as #521 (model bias); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 597 | Stephen Curry reb over 3.5 | 1.0 | 0.5106 (Low) | pass | model 50%, market 51% | correlated | **untagged** | same game script as #521 (model bias); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 598 | Stephen Curry pa under 32.5 | 33.0 | 0.5069 (Low) | pass | model 53%, market 50% (against) | correlated | **untagged** | same game script as #521 (model bias); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 599 | Stephen Curry pr over 31.0 | 30.0 | 0.5063 (Low) | pass | model 49% (against), market 51% | correlated | **untagged** | same game script as #521 (model bias); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 600 | Stephen Curry pts under 27.5 | 29.0 | 0.501 (Low) | pass | model 51%, market 50% (against) | correlated | **untagged** | same game script as #521 (model bias); own read: model bias; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 601 | Devin Booker pts under 25.5 | 30.0 | 0.5179 (Low) | pass | model 50% (against), market 52% | correlated | **untagged** | same game script as #519 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 602 | Jalen Green pra over 23.0 | 9.0 | 0.5402 (Medium) | pass | model 61%, market 52% | correlated | **untagged** | same game script as #519 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 606 | Oso Ighodaro ast over 2.5 | 1.0 | 0.5729 (Low) | pass | model 74%, market 52% | correlated | **untagged** | same game script as #519 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 611 | Draymond Green pa under 11.5 | 13.0 | 0.4813 (Low) | pass | model 52%, market 47% (against) | correlated | **untagged** | same game script as #521 (model bias); own read: model bias; we priced this side at 48%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+
+Detail from the feeds:
+- #555 Mitch Marner: error=HTTPError
+- #562 Vincent Trocheck: error=HTTPError
+
 ## 2026-11-04: 163 losses from 14 independent causes
 
 | # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
