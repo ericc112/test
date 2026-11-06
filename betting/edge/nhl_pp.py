@@ -669,7 +669,8 @@ def reasons(r: dict, G: dict) -> list[dict]:
 def gap_rows(ok: list[dict]) -> list[dict]:
     """Where an edge can come from: lines DraftKings' ladder prices furthest from 50/50."""
     rs = sorted([r for r in ok if r.get("p_market") is not None], key=lambda r: -abs(r["p_market"] - 0.5))
-    return [{"player": r["player"], "stat": LABEL[r["stat_key"]], "pp": r["line"], "dk": f"mean {r['dk_lambda']:.2f}", "side": r["side"],
+    return [{"player": r["player"], "stat": LABEL[r["stat_key"]], "pp": r["line"],
+             "dk": f"mean {r['dk_lambda']:.2f}" if r.get("dk_lambda") is not None else f"Dabble {(r.get('dabble') or {}).get('line', '-'):g}", "side": r["side"],
              "p": round(r["p_final"], 4), "conf": r["confidence"], "game": r["game"]} for r in rs]
 
 
