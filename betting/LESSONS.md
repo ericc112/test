@@ -131,3 +131,6 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 
 ### Auto-learned 2026-11-05
 - 2 losses in nba:tpm:under share the cause 'model bias': write a checklist rule for it in the table above.
+
+### Auto-learned 2026-11-06
+- Segment nba:reb:over: results run above our probabilities; now auto-adjusting +0.15 logit.
