@@ -4,6 +4,15 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
+.pk-board { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; min-width: 0 }
+.pk-board .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 6px 0 }
+.pk-board .seg { flex-wrap: wrap } .pk-board .seg button small { opacity: .7; margin-left: 4px; font-weight: 500 }
+.pk-board input[type=search] { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; min-width: 0; width: 160px }
+.pk-board select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit }
+.pk-board table { width: 100%; min-width: 0; border-collapse: collapse; font-size: .86rem } .pk-board td, .pk-board th { padding: 6px 6px; border-bottom: 1px solid var(--line); text-align: right; vertical-align: top }
+.pk-board td, .pk-board th { white-space: normal } .pk-board .tbl-wrap { max-width: 100% } .pk-board td.l { font-family: var(--font-body, inherit) } .pk-board td.l, .pk-board th.l { text-align: left } .pk-board .sub { display: block; color: var(--muted); font-size: .76rem }
+.pk-board .more { margin-top: 8px }
+
 [hidden] { display: none !important; }   /* panels set display: grid; hidden must still hide them */
 /* Layout: broadcast scoreboard. A league rail on top, games down the left, one matchup "bug" with the
    run counter, then the distributions, the live game, players, and the honesty panel. */
@@ -164,7 +173,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
 .card-wrap { display: grid; gap: 8px; font-size: .86rem } .card-wrap table { min-width: 560px } .card-wrap .k { color: var(--muted) }
 .card-wrap ul { margin: 0; padding-left: 18px; display: grid; gap: 3px } .field.wide { grid-column: span 2 }
 .rs-hit { color: var(--good); font-weight: 600 } .rs-miss { color: var(--bad); font-weight: 600 }
-.picks { margin: 12px 0 } .picks > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px }
+.picks { margin: 12px 0; grid-template-columns: minmax(0, 1fr) } .picks > summary { list-style: none; cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px }
 .picks > summary::-webkit-details-marker { display: none } .pk-title { margin: 0; font-family: var(--font-display); font-size: 1.25rem }
 .pk-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px } .pk-cols h3 { margin: 0 0 8px } .pk-cols > div { min-width: 0 } .pk-gaps table { min-width: 0 } .pk-gaps td, .pk-gaps th { padding: 5px 6px } .pk-gaps td.l { white-space: normal } .pk-gapbox { max-width: 720px } #shopKind { flex-wrap: wrap } #shopPanel { min-width: 0; max-width: 100% } #shopPanel .tbl-wrap { max-width: 100% } #shopPanel td, #shopPanel th { white-space: normal } #shopPanel .row { flex-wrap: wrap; gap: 6px 12px } .pk-gaps .sub { display: block; color: var(--muted); font-family: var(--font-body, inherit); font-size: .78rem }
 .pk-list { display: grid; gap: 8px } .pk { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); padding: 10px 12px; display: grid; gap: 4px; font-size: .86rem; min-width: 0 }
@@ -225,6 +234,7 @@ table.dec, #factorTbl { min-width: 600px }
       <div><h3>By the most likely game <span class="note" id="pkLikelyNote">(every leg where the most likely simulated game, the median, this season, DraftKings, head-to-head, the matchup and usage all support the side or are neutral; ranked by probability; legs from the same game never go in one entry together)</span></h3><div class="pk-list" id="pkLikely"></div></div>
     </div>
     <div id="pkTrack"></div>
+    <div class="pk-board" id="pkBoard"></div>
     <div class="note" id="pkNote"></div>
   </details>
 
@@ -239,6 +249,7 @@ table.dec, #factorTbl { min-width: 600px }
     </div>
     <h3 id="nflGapTitle">PrizePicks lines that differ from DraftKings' <span class="note">(where an edge can come from; biggest gaps first)</span></h3>
     <div id="nflGaps" class="pk-gapbox"></div>
+    <div class="pk-board" id="nflBoard"></div>
     <div class="note" id="nflNote"></div>
   </details>
 
@@ -254,6 +265,7 @@ table.dec, #factorTbl { min-width: 600px }
     </div>
     <h3 id="nhlGapTitle">Lines DraftKings' ladder prices furthest from 50/50 <span class="note">(where an edge can come from)</span></h3>
     <div id="nhlGaps" class="pk-gapbox"></div>
+    <div class="pk-board" id="nhlBoard"></div>
     <div class="note" id="nhlNote"></div>
   </details>
 
@@ -267,6 +279,7 @@ table.dec, #factorTbl { min-width: 600px }
     </div>
     <h3 id="tennisGapTitle">Lines Dabble prices furthest from 50/50 <span class="note">(where an edge can come from)</span></h3>
     <div id="tennisGaps" class="pk-gapbox"></div>
+    <div class="pk-board" id="tennisBoard"></div>
     <div class="note" id="tennisNote"></div>
   </details>
 
@@ -1118,6 +1131,7 @@ onmessage = (e) => {
 <script src="nhl_picks.js"></script>
 <script src="shop.js"></script>
 <script src="tennis_picks.js"></script>
+<script src="boards.js"></script>
 <script>
 "use strict";
 const D = window.SIMLAB || { leagues: [], pulled: null };
@@ -1152,6 +1166,7 @@ function renderPicks() {
     <div class="note">${esc(r.verdict)}</div>
     ${r.warns && r.warns.length ? `<div class="pk-warn">${r.warns.map(esc).join("; ")}</div>` : ""}
   </div>`;
+  renderBoard("nba", $("pkBoard"));
   $("pkModel").innerHTML = (P.model || []).map((r) => card(r, false)).join("") || `<div class="note">No legs priced.</div>`;
   $("pkHist").innerHTML = (P.history || []).map((r) => card(r, true)).join("") || `<div class="note">No legs with 5+ games.</div>`;
   // most-likely-game cards: the run's box line, then why (usage, who's out, what the opponent allows to his position)
@@ -1208,6 +1223,45 @@ const SPORT_NOTE = {
 const BOX_LABEL = { pass_yds: "pass yds", rush_att: "car", rush_yds: "rush yds", targets: "tgt", receptions: "rec", rec_yds: "rec yds",
   toi: "min", sog: "SOG", hits: "hits", blocks: "blk", fow: "FOW", goals: "G", assists: "A" };
 // a league's PrizePicks picks (NFL, NHL): day tabs, then the model / history / most-likely lists and the market gaps
+// ---------- every priced leg, filtered by label (boards.js from `python -m edge boards --page boards.js`) ----------
+const BOARD = {};
+function renderBoard(sport, el) {
+  const B = window.SIMLAB_BOARDS, rows = B && B.sports && B.sports[sport];
+  if (!el) return;
+  if (!rows || !rows.length) { el.innerHTML = ""; return; }
+  const st = BOARD[sport] || (BOARD[sport] = { conf: null, type: "standard", sort: "p", q: "", n: 60 });
+  const types = [...new Set(rows.map((r) => r.type))];
+  if (!types.includes(st.type)) st.type = types.includes("standard") ? "standard" : types[0];
+  const inType = rows.filter((r) => st.type === "all" || r.type === st.type);
+  const cnt = (c) => inType.filter((r) => r.conf === c).length;
+  if (st.conf == null) st.conf = cnt("High") ? "High" : cnt("Medium") ? "Medium" : "Low";
+  const q = st.q.trim().toLowerCase();
+  let L = inType.filter((r) => (st.conf === "all" || r.conf === st.conf) && (!q || (r.player || "").toLowerCase().includes(q) || (r.game || "").toLowerCase().includes(q)));
+  const sorters = { p: (a, b) => b.p - a.p, plow: (a, b) => a.p - b.p, player: (a, b) => (a.player || "").localeCompare(b.player || ""),
+                    start: (a, b) => String(a.start || "").localeCompare(String(b.start || "")) };
+  L.sort(sorters[st.sort] || sorters.p);
+  const pc = (v) => v == null ? "—" : Math.round(100 * v) + "%";
+  const status = (r) => r.verified ? `<span class="pill ${/NOT/.test(r.verified) ? "no" : "ok"}">${esc(r.verified)}</span>${(r.warns || []).length ? `<span class="sub">${r.warns.map(esc).join("; ")}</span>` : ""}`
+    : r.id ? `<span class="sub">logged #${esc(r.id)}, not back-checked</span>` : `<span class="sub">price only</span>`;
+  const seg = (key, opts) => `<div class="seg" role="group" data-k="${key}">${opts.map(([v, lab, n]) => `<button type="button" data-v="${v}" aria-pressed="${st[key] === v}">${esc(lab)}${n != null ? `<small>${n}</small>` : ""}</button>`).join("")}</div>`;
+  const typeName = { standard: "Standard", goblin: "Goblin", demon: "Demon", all: "All lines" };
+  el.innerHTML = `<h3>Every priced leg, by label <span class="note">(${rows.length.toLocaleString()} lines · ${esc(B.date)})</span></h3>
+    <div class="row">${seg("conf", [["High", "High", cnt("High")], ["Medium", "Medium", cnt("Medium")], ["Low", "Low", cnt("Low")], ["all", "All", inType.length]])}
+      ${types.length > 1 ? seg("type", [...types.map((t) => [t, typeName[t] || t, rows.filter((r) => r.type === t).length]), ["all", "All lines", rows.length]]) : ""}</div>
+    <div class="row"><label class="note">Sort <select data-k="sort"><option value="p"${st.sort === "p" ? " selected" : ""}>Probability, high first</option><option value="plow"${st.sort === "plow" ? " selected" : ""}>Probability, low first</option><option value="player"${st.sort === "player" ? " selected" : ""}>Player A–Z</option><option value="start"${st.sort === "start" ? " selected" : ""}>Start time</option></select></label>
+      <input type="search" placeholder="Player or team" value="${esc(st.q)}" data-k="q" aria-label="Search player or team"></div>
+    ${L.length ? `<div class="tbl-wrap"><table><thead><tr><th class="l">Player · line</th><th>p</th><th class="l">Back-check</th></tr></thead><tbody>${
+      L.slice(0, st.n).map((r) => `<tr><td class="l"><b>${esc(r.player)}</b> ${esc(r.side.toUpperCase())} ${r.line} ${esc(r.stat)}<span class="sub">${esc(r.game || r.team || "")} · ${esc(typeName[r.type] || r.type)}${r.be ? ` · break-even ${pc(r.be)}` : " · payout not published"} · sim ${pc(r.model)} · market ${pc(r.market)}</span></td>
+        <td><b>${(100 * r.p).toFixed(1)}%</b><span class="sub">${esc(r.conf)}</span></td><td class="l">${status(r)}</td></tr>`).join("")}</tbody></table></div>
+      ${L.length > st.n ? `<button type="button" class="chip more" data-more="1">Show ${Math.min(60, L.length - st.n)} more of ${L.length - st.n}</button>` : ""}`
+      : `<div class="note">No ${st.conf === "all" ? "" : esc(st.conf) + " "}${st.type === "all" ? "" : esc((typeName[st.type] || st.type).toLowerCase()) + " "}legs${q ? ` matching “${esc(st.q)}”` : ""}.</div>`}
+    <div class="note">Every line the pricer scored, not picks: only a leg marked VERIFIED passed <span class="num">edge verify</span>; anything else needs it before you use it.${types.includes("goblin") ? " Goblins and demons: PrizePicks doesn't publish their payouts, so their break-even is unknown and they never count as entry legs; a goblin is easy to label High (the probability is capped at 70%) because its line is set low." : ""}</div>`;
+  el.querySelectorAll(".seg").forEach((g) => g.querySelectorAll("button").forEach((b) => { b.onclick = () => { st[g.dataset.k] = b.dataset.v; st.n = 60; renderBoard(sport, el); }; }));
+  const sel = el.querySelector("select"); if (sel) sel.onchange = () => { st.sort = sel.value; renderBoard(sport, el); };
+  const inp = el.querySelector("input[type=search]");
+  if (inp) inp.oninput = () => { st.q = inp.value; st.n = 60; const pos = inp.selectionStart; renderBoard(sport, el); const ni = el.querySelector("input[type=search]"); ni.focus(); try { ni.setSelectionRange(pos, pos); } catch (e) {} };
+  const more = el.querySelector("[data-more]"); if (more) more.onclick = () => { st.n += 60; renderBoard(sport, el); };
+}
 function renderSportPicks(pre) {
   const P = window[`SIMLAB_${pre.toUpperCase()}_PICKS`]; if (!P || !$(pre + "PicksPanel")) return;
   const pc = (v) => v == null ? "—" : Math.round(100 * v) + "%";
@@ -1247,6 +1301,7 @@ function renderSportPicks(pre) {
     <div class="note">${esc(r.verdict)}</div>
     ${r.warns && r.warns.length ? `<div class="pk-warn">${r.warns.map(esc).join("; ")}</div>` : ""}
   </div>`;
+  renderBoard(pre, $(pre + "Board"));
   $(pre + "List").innerHTML = (D0.model || D0.picks || []).map((r) => card(r, "model")).join("") || `<div class="note">No lines priced.</div>`;
   if ($(pre + "Hist")) $(pre + "Hist").innerHTML = (D0.history || []).map((r) => card(r, "history")).join("") || `<div class="note">No lines with enough games.</div>`;
   const dr = D0.likely_dropped || [];

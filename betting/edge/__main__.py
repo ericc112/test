@@ -170,6 +170,9 @@ def main(argv=None):
     nhp.add_argument("--no-verify", action="store_true")
     nhp.add_argument("--out", default=None)
     nhp.add_argument("--page", help="also write the picks for the Sim Lab page here (nhl_picks.js)")
+    bd = sub.add_parser("boards", help="every priced leg of the day per sport, for the Sim Lab label filter")
+    bd.add_argument("--page", required=True, help="write window.SIMLAB_BOARDS here (boards.js)")
+    bd.add_argument("--date", default=None)
     shp = sub.add_parser("shop")
     shp.add_argument("--leagues", default="NBA,NFL,NHL")
     shp.add_argument("--page", help="also write the Sim Lab line-shop data here (shop.js)")
@@ -365,6 +368,17 @@ def main(argv=None):
     elif args.cmd == "simlab":
         from . import simlab
         print(simlab.export(args.out, nfl_week=args.week, backtest_weeks=None if args.no_backtest else (3, 8)))
+    elif args.cmd == "boards":
+        import collections
+        import json as _json
+        from . import boards as BD
+        res = BD.export(args.date)
+        with open(args.page, "w") as f:
+            f.write("window.SIMLAB_BOARDS = " + _json.dumps(res, separators=(",", ":")) + ";\n")
+        for sp, rows in res["sports"].items():
+            c = collections.Counter((r["type"], r["conf"]) for r in rows)
+            print(f"{sp}: {len(rows)} priced legs; " + ", ".join(f"{t} {k} {n}" for (t, k), n in sorted(c.items())))
+        print(f"Page data: {args.page}")
     elif args.cmd == "shop":
         from . import shop as SH
         res = SH.run(tuple(x.strip().upper() for x in args.leagues.split(",")))
