@@ -101,15 +101,14 @@ class PricingCorrectness(unittest.TestCase):
 
 
 class Reasons(unittest.TestCase):
-    """Every reason on a most-likely-game card must support the pick or be neutral."""
+    """Only reasons that make a difference: the most likely game, the simulation's median, DraftKings and the risks.
+    Hit rates, last 5, head-to-head, what the opponent allows and usage are not reasons (L27, L30)."""
 
     def leg(self, **kw):
-        pa = lambda per, lg, rank: {"per_game": per, "league_per_game": lg, "rank": rank, "all": 110.0, "league": 113.0}
         r = {"side": "over", "line": 9.5, "proj": 14, "q25": 10, "q75": 19, "p_market": None, "dk": None, "stat_key": "pra",
              "opp_espn": "TOR", "pos": "F", "ml": {"value": 12, "gap": 2.5},
-             "research": {"season": [5, 1, 6], "season_avg": 15.0, "last5": [4, 1, 5], "last_games": [26, 7, 19, 10, 12],
-                          "h2h": [0, 0, 0], "per36": 24.5, "h2h_per36": None},
-             "pos_allows": {"pts": pa(38.1, 43.1, 25), "reb": pa(15.4, 18.9, 26), "ast": pa(5.9, 8.1, 29)},
+             "research": {"season": [0, 6, 6], "season_avg": 5.0, "last5": [0, 5, 5], "last_games": [3, 4, 5, 6, 2],
+                          "h2h": [0, 4, 4], "per36": 9.0, "h2h_per36": 6.0},
              "usage": {"tonight": 0.07, "season": 0.067, "min_tonight": 22.0, "min_season": 22.0, "out": []}}
         r.update(kw)
         return r
@@ -117,24 +116,22 @@ class Reasons(unittest.TestCase):
     def verdicts(self, r):
         return {x["name"]: x["verdict"] for x in N.likely_reasons(r)}
 
-    def test_tough_matchup_is_against_an_over(self):
+    def test_only_tested_reasons(self):
         v = self.verdicts(self.leg())
-        self.assertEqual(v["matchup"], "against")       # allows ~15% less than average to forwards
-        self.assertEqual(v["this season"], "supports")
-        self.assertEqual(v["head-to-head"], "neutral")  # no meetings: nothing to read
+        self.assertEqual(set(v), {"most likely game", "simulation median", "DraftKings"})
+        self.assertNotIn("against", v.values())     # a cold season / last 5 / head-to-head no longer counts against
 
-    def test_average_matchup_is_neutral_and_mixed_h2h_is_against(self):
-        pa = {"pts": {"per_game": 43.0, "league_per_game": 43.1, "rank": 13, "all": 112.0, "league": 113.0}}
-        r = self.leg(pos_allows=pa, research={**self.leg()["research"], "h2h": [2, 3, 5], "h2h_per36": 26.0})
-        v = self.verdicts(r)
-        self.assertEqual(v["matchup"], "neutral")
-        self.assertEqual(v["head-to-head"], "against")  # 2 over / 3 under: the count leans under even with a higher per 36
+    def test_market_and_risks_against(self):
+        v = self.verdicts(self.leg(p_market=0.44, newcomer=True, usage={"self_absent": True}))
+        self.assertEqual((v["DraftKings"], v["role"], v["availability"]), ("against", "against", "against"))
 
-    def test_market_and_usage_against(self):
-        v = self.verdicts(self.leg(p_market=0.44, usage={"tonight": 0.07, "season": 0.07, "min_tonight": 18.0, "min_season": 22.0, "out": []}))
-        self.assertEqual(v["DraftKings"], "against")
-        self.assertEqual(v["usage"], "against")         # fewer minutes at the same usage: less volume for an over
-        self.assertEqual(self.verdicts(self.leg(side="under", line=20.5, proj=16, ml={"value": 14, "gap": -6.5}))["matchup"], "supports")
+    def test_tennis_reasons(self):
+        from edge import tennis as T
+        s = T.simulate(0.64, 0.62, 3, n=2000, seed=1)
+        G = {"sim": s, "avg": {"spw": 0.63}, "ctx": {"best_of": 3}}
+        r = {"side": "under", "line": 22.5, "median": 22.0, "q25": 19, "q75": 27, "p_market": None, "stat_key": "games", "a_side": True, "flags": []}
+        v = {x["name"]: x["verdict"] for x in T.reasons(r, G)}
+        self.assertEqual(v, {"simulation": "supports", "market": "neutral"})
 
 
 class VerifyFreshness(unittest.TestCase):

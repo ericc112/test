@@ -447,7 +447,12 @@ def backtest(players: list[dict], since: str = "2026-09-01", n: int = 4000, form
         bpmf = bpmf / bpmf.sum()
         g = min(sc["games"], 79)
         won = r["won"]
-        recs.append({"date": d, "tour": tour, "bo": bo, "surface": surf, "games": sc["games"], "sets": sc["sets"],
+        prior_a = [x for x in sorted(p["recent"], key=lambda x: x["date"]) if x["date"] < d and parse_score(x["score"])]
+        prior_b = [x for x in sorted(o["recent"], key=lambda x: x["date"]) if x["date"] < d and parse_score(x["score"])]
+        hist = lambda rows: [(parse_score(x["score"])["games"], _stat(parse_score(x["score"]), "games_won", x["won"]), x["won"], x["opp_slug"]) for x in rows]
+        detail = {"pmf_games": np.bincount(s["games"], minlength=80)[:80].tolist(), "pmf_gw": np.bincount(s["games_a"], minlength=40)[:40].tolist(),
+                  "hist_a": hist(prior_a), "hist_b": hist(prior_b), "opp_a": o["slug"], "won_a": won, "gw_a": sc["games_w"] if won else sc["games_l"]}
+        recs.append({"date": d, "tour": tour, "bo": bo, "surface": surf, "games": sc["games"], "sets": sc["sets"], **detail,
                      "model_mean": float(s["games"].mean()), "base_mean": float(np.mean(base)),
                      "logp_model": float(np.log(pmf[g])), "logp_base": float(np.log(bpmf[g])),
                      "p_win": float(s["a_wins"].mean()), "won": won,
@@ -774,25 +779,6 @@ def pick_order(rows, top=5, per_game=1):
     return _take(sorted([r for r in rows if _rankable(r)], key=lambda r: (RANK.get(r["confidence"], 3), -r["p_final"])), top, per_game)
 
 
-def history_order(rows, store, top=5, min_games=5, per_game=1):
-    cand = []
-    for r in rows:
-        if not _rankable(r) or not r.get("research"):
-            continue
-        o, u, n = r["research"]["season"]
-        if n < min_games or o == u:
-            continue
-        side = "over" if o > u else "under"
-        if side == "under" and r.get("over_only"):
-            continue
-        k = 0 if side == "over" else 1
-        rate = lambda t: t[k] / t[2] if t[2] else 0.0
-        x = r if side == r["side"] else {**r, **price_leg(store[r["event_id"]], r["player"], r["stat_key"], r["line"], side=side)}
-        cand.append({**x, "method": "history", "hist_rank": (rate(r["research"]["season"]), rate(r["research"]["last5"]), n)})
-    cand.sort(key=lambda r: tuple(-v for v in r["hist_rank"]))
-    return _take(cand, top, per_game)
-
-
 def most_likely_run(G: dict) -> dict:
     """The most common final scoreline in games (A's games, B's games, sets), then the run with it."""
     s = G["sim"]
@@ -820,9 +806,6 @@ def likely_order(rows, store, top=None, drop=None, per_game=99):
         side = "over" if gap > 0 else "under"
         if (side == "under" and r.get("over_only")) or (r["median"] - r["line"]) * gap <= 0:
             continue
-        o, u, n = r["research"]["season"]
-        if n < 3 or (o if side == "over" else u) < (u if side == "over" else o):
-            continue
         x = r if side == r["side"] else {**r, **price_leg(G, r["player"], r["stat_key"], r["line"], side=side)}
         if x["p_final"] < 0.5:
             continue
@@ -844,57 +827,34 @@ def _hold(p: float) -> float:
     return p ** 4 * (1 + 4 * q + 10 * q * q) + 20 * p ** 3 * q ** 3 * p * p / (1 - 2 * p * q)
 
 
-def tour_three_set_rate(G: dict) -> float | None:
-    rows = [r for p in (G["a"], G["b"]) for r in p["recent"]]
-    sc = [parse_score(r["score"]) for r in rows]
-    sc = [x for x in sc if x]
-    return float(np.mean([x["sets"] == 3 for x in sc])) if len(sc) >= 10 else None
-
-
 def reasons(r: dict, G: dict) -> list[dict]:
-    over = r["side"] == "over"
-    sgn = 1 if over else -1
-    rs = r.get("research") or {}
+    """The reasons that make a difference: the most likely match, the simulation (its median, with the projected holds
+    or win chance that drive it), Dabble's price, and the sample flag. Recent record, last 5, head-to-head and average
+    games in earlier matches are not reasons: on 742 walk-forward matches none added information beyond the
+    simulation (LESSONS L30)."""
+    sgn = 1 if r["side"] == "over" else -1
     vd = lambda lean: "neutral" if lean == 0 else "supports" if lean == sgn else "against"
     cmp = lambda a, b: (a > b) - (a < b)
-    comb = lambda *v: "against" if "against" in v else "supports" if "supports" in v else "neutral"
     out = []
     add = lambda name, verdict, text: out.append({"name": name, "verdict": verdict, "text": text})
     ml = r.get("ml")
     if ml:
         sc = ", ".join(f"{k} {v}" for k, v in ml["score"].items())
         add("most likely match", vd(cmp(ml["value"], r["line"])), f"{ml['value']:g} in the most likely match ({sc} games, {ml['sets']} sets) vs a {r['line']} line")
-    add("simulation median", vd(cmp(r["median"], r["line"])), f"median {r['median']:g} (25-75th {r['q25']:.0f}-{r['q75']:.0f})")
+    s = G["sim"]
+    if r["stat_key"] == "games_won":
+        pw = float(s["a_wins"].mean()) if r["a_side"] else 1 - float(s["a_wins"].mean())
+        why = f"projected to win {pw:.0%} of the time"
+    else:
+        why = f"projected holds {_hold(s['pa']):.0%} and {_hold(s['pb']):.0%} vs a tour average of {_hold(G['avg']['spw']):.0%}"
+        if G["ctx"]["best_of"] == 3 and r["stat_key"] != "first_set":
+            why += f", three sets {float((s['sets'] == 3).mean()):.0%}"
+    add("simulation", vd(cmp(r["median"], r["line"])), f"median {r['median']:g} (25-75th {r['q25']:.0f}-{r['q75']:.0f}); {why}")
     pk = r.get("p_market")
     if pk is None:
         add("market", "neutral", "no Dabble price for this line")
     else:
         add("market", "supports" if pk >= 0.52 else "against" if pk <= 0.48 else "neutral", f"Dabble {pk:.0%} for this side at this line")
-    o, u, n = rs.get("season", [0, 0, 0]); avg = rs.get("season_avg")
-    add("recent record", comb(vd(cmp(o, u)), vd(cmp(avg, r["line"])) if avg is not None else "neutral"),
-        f"{o} over / {u} under in their last {n} completed matches" + (f", average {avg:.1f}" if avg is not None else ""))
-    lo, lu, _ = rs.get("last5", [0, 0, 0]); la = rs.get("last5_avg")
-    add("last 5", comb(vd(cmp(lo, lu)), vd(cmp(la, r["line"])) if la is not None else "neutral"),
-        f"{lo} over / {lu} under" + (f" ({', '.join(f'{v:g}' for v in rs.get('last_games', []))})" if rs.get("last_games") else ""))
-    h = rs.get("h2h", [0, 0, 0])
-    if h[2]:
-        add("head-to-head", comb(vd(cmp(h[0], h[1])), vd(cmp(rs.get("h2h_avg"), r["line"]))),
-            f"{h[0]} over / {h[1]} under in {h[2]} recent meetings with {r['opp']} (average {rs['h2h_avg']:.1f})")
-    else:
-        add("head-to-head", "neutral", f"no recent meeting with {r['opp']}")
-    s = G["sim"]
-    ha, hb, ht = _hold(s["pa"]), _hold(s["pb"]), _hold(G["avg"]["spw"])
-    p3 = float((s["sets"] == 3).mean()) if G["ctx"]["best_of"] == 3 else None
-    t3 = tour_three_set_rate(G)
-    if r["stat_key"] in ("games", "sets", "tiebreaks", "first_set"):
-        lean_h = 1 if (ha + hb) / 2 > ht + 0.02 else -1 if (ha + hb) / 2 < ht - 0.02 else 0
-        lean_3 = 0 if p3 is None or t3 is None else (1 if p3 > t3 + 0.03 else -1 if p3 < t3 - 0.03 else 0)
-        add("matchup", comb(vd(lean_h), vd(lean_3) if r["stat_key"] != "first_set" else "neutral"),
-            f"projected holds {ha:.0%} and {hb:.0%} vs a tour average of {ht:.0%}"
-            + (f"; three sets {p3:.0%} vs {t3:.0%} in their recent matches" if p3 is not None and t3 is not None else ""))
-    else:
-        pw = float(s["a_wins"].mean()) if r["a_side"] else 1 - float(s["a_wins"].mean())
-        add("matchup", vd(1 if pw > 0.55 else -1 if pw < 0.45 else 0), f"projected to win {pw:.0%} of the time")
     if r.get("flags"):
         add("sample", "against", "; ".join(r["flags"]))
     return out
@@ -921,7 +881,7 @@ def write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
     f = lambda v: "-" if v is None else f"{v:.0%}"
     lines = [f"### {r.get('bet_id', '')}{r['player']} ({r['team']}) {r['side'].upper()} {r['line']} {LABEL[r['stat_key']]} — {r['game']}",
              f"**{r['p_final']:.1%} {r['confidence']}** · {verdict(r)}" + (f" · back-check: **{verified}**" if verified else ""),
-             f"- Sources: simulation {f(r['p_model'])} · Dabble {f(r['p_market'])} · recent record {r['hist'][0]} over / {r['hist'][1]} under",
+             f"- Sources: simulation {f(r['p_model'])} · Dabble {f(r['p_market'])}",
              f"- Simulation: median {r['median']:g}, 25–75th {r['q25']:.0f}–{r['q75']:.0f}"]
     if r.get("ml"):
         sc = ", ".join(f"{k} {v}" for k, v in r["ml"]["score"].items())
@@ -930,7 +890,7 @@ def write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
         lines.append("- Flags: " + "; ".join(r["flags"]))
     if r.get("reasons"):
         mark = {"supports": "✓", "neutral": "–", "against": "✗"}
-        lines.append("- Reasons:" if r.get("ml") else "- Context check (shown, not used to drop the leg):")
+        lines.append("- Reasons:" if r.get("ml") else "- Reasons (shown, not used to drop the leg):")
         lines += [f"  - {mark[x['verdict']]} {x['name']}: {x['text']}" for x in r["reasons"]]
     if warns:
         lines.append("- Back-check warnings: " + "; ".join(warns))
