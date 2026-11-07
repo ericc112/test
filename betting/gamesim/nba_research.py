@@ -48,7 +48,9 @@ class Research:
             season = nba.season_of(g["date"])
             for s_, o_ in (("home", "away"), ("away", "home")):
                 team, opp = g[s_], g[o_]
-                al = {"date": g["date"], "season": season, "min": 0.0, **{st: 0.0 for st in STATS},
+                ob = (g.get("box") or {}).get(o_)              # the opponent's team totals: possessions `team` defended
+                poss = nba.poss(ob, None) if ob and ob.get("fga") else 0.0
+                al = {"date": g["date"], "season": season, "min": 0.0, "poss": poss, **{st: 0.0 for st in STATS},
                       "pos": {p: {"min": 0.0, **{st: 0.0 for st in STATS}} for p in POS}}
                 for r in box[g[o_]]:
                     if r["dnp"] or r["min"] <= 0:
@@ -76,10 +78,14 @@ class Research:
             for season in {a["season"] for a in rows}:
                 R = [a for a in rows if a["season"] == season]
                 arr = lambda f: np.cumsum([0.0] + [f(a) for a in R])
-                self._cum[(team, season)] = {"dates": [a["date"] for a in R],
-                                             None: {"min": arr(lambda a: a["min"]), **{st: arr(lambda a, st=st: a[st]) for st in STATS}},
+                # per-100 sums count only games whose team totals give possessions ("<stat>@p" and "poss")
+                self._cum[(team, season)] = {"dates": [a["date"] for a in R], "poss": arr(lambda a: a["poss"]),
+                                             None: {"min": arr(lambda a: a["min"]), **{st: arr(lambda a, st=st: a[st]) for st in STATS},
+                                                    **{st + "@p": arr(lambda a, st=st: a[st] if a["poss"] else 0.0) for st in STATS}},
                                              **{p: {"min": arr(lambda a, p=p: a["pos"][p]["min"]),
-                                                    **{st: arr(lambda a, p=p, st=st: a["pos"][p][st]) for st in STATS}} for p in POS}}
+                                                    **{st: arr(lambda a, p=p, st=st: a["pos"][p][st]) for st in STATS},
+                                                    **{st + "@p": arr(lambda a, p=p, st=st: a["pos"][p][st] if a["poss"] else 0.0) for st in STATS}}
+                                                for p in POS}}
         self._memo = {}
 
     # ---------------------------------------------------------------- pieces
@@ -87,8 +93,9 @@ class Research:
         return [e for e in self.logs.get(pid, []) if e["date"] < before]
 
     def opp_allowed(self, opp: str, st: str, before: str, pos: str | None = None) -> dict:
-        """What `opp` allowed this season before `before`, per game and per opposing player-minute, against the league;
-        with `pos`, to that position only. Rank 1 = allows the most per game."""
+        """What `opp` allowed this season before `before`, per game, per 100 possessions it defended (FGA - OREB + TOV
+        + 0.44 FTA from the opponent's team totals: pace taken out) and per opposing player-minute, against the league;
+        with `pos`, to that position only. Rank 1 = allows the most per game (`rank_100`: per 100 possessions)."""
         key = (opp, st, before, pos)
         if key in self._memo:
             return self._memo[key]
@@ -97,17 +104,23 @@ class Research:
         def agg(team):
             c = self._cum.get((team, season))
             if not c:
-                return {"games": 0, "per_game": None, "per_min": None, "min": 0.0, "sum": 0.0}
+                return {"games": 0, "per_game": None, "per_min": None, "per_100": None, "min": 0.0, "sum": 0.0, "poss": 0.0, "sum_p": 0.0}
             i = bisect.bisect_left(c["dates"], before)
             s, m = float(c[pos][st][i]), float(c[pos]["min"][i])
-            return {"games": i, "per_game": s / i if i else None, "per_min": s / m if m else None, "min": m, "sum": s}
+            sp, ps = float(c[pos][st + "@p"][i]), float(c["poss"][i])
+            return {"games": i, "per_game": s / i if i else None, "per_min": s / m if m else None, "min": m, "sum": s,
+                    "per_100": 100 * sp / ps if ps else None, "poss": ps, "sum_p": sp}
         me = agg(opp)
         allt = {t: agg(t) for t, ss in self._cum if ss == season}
         lg_s = sum(v["sum"] for v in allt.values()); lg_m = sum(v["min"] for v in allt.values())
         lg_g = sum(v["games"] for v in allt.values())
+        lg_sp = sum(v["sum_p"] for v in allt.values()); lg_ps = sum(v["poss"] for v in allt.values())
         ranked = sorted((v["per_game"] for v in allt.values() if v["per_game"] is not None), reverse=True)
+        r100 = sorted((v["per_100"] for v in allt.values() if v["per_100"] is not None), reverse=True)
         out = {**me, "league_per_game": lg_s / lg_g if lg_g else None, "league_per_min": lg_s / lg_m if lg_m else None,
-               "rank": (ranked.index(me["per_game"]) + 1) if me["per_game"] is not None else None, "teams": len(ranked)}
+               "league_per_100": 100 * lg_sp / lg_ps if lg_ps else None,
+               "rank": (ranked.index(me["per_game"]) + 1) if me["per_game"] is not None else None, "teams": len(ranked),
+               "rank_100": (r100.index(me["per_100"]) + 1) if me["per_100"] is not None else None}
         self._memo[key] = out
         return out
 
@@ -165,7 +178,9 @@ class Research:
         for st in STATS:
             a = self.opp_allowed(team, st, before)
             out[st] = {"per_game": a["per_game"], "league": a["league_per_game"], "rank": a["rank"], "teams": a["teams"], "games": a["games"],
-                       "pos": {p: {k: self.opp_allowed(team, st, before, p)[k] for k in ("per_game", "league_per_game", "rank")} for p in POS}}
+                       "per_100": a["per_100"], "league_100": a["league_per_100"], "rank_100": a["rank_100"],
+                       "pos": {p: {k: self.opp_allowed(team, st, before, p)[k]
+                                   for k in ("per_game", "league_per_game", "rank", "per_100", "league_per_100", "rank_100")} for p in POS}}
         return out
 
     # ---------------------------------------------------------------- factors for the simulation

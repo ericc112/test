@@ -804,7 +804,7 @@ def availability_shift(vals: dict, absent: set) -> dict:
     for pid, v in vals["players"].items():
         d = v["value"] * ((1.0 if pid in absent else 0.0) - v["missed_share"])
         if abs(d) > 0.05:
-            rows.append({"name": v["name"], "value": round(v["value"], 2), "missed_share": round(v["missed_share"], 2),
+            rows.append({"id": pid, "name": v["name"], "value": round(v["value"], 2), "missed_share": round(v["missed_share"], 2),
                          "out_tonight": pid in absent, "shift": round(d, 2)})
         tot += d
     return {"lost": tot, "rows": sorted(rows, key=lambda r: -abs(r["shift"]))}

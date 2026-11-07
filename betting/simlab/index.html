@@ -4,6 +4,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
+.rot summary { cursor: pointer; color: var(--muted); font-size: .82rem } .rot-t { min-width: 0; font-size: .8rem; margin-top: 4px } .rot-t td, .rot-t th { padding: 3px 6px; white-space: normal } .rot-t .l { text-align: left }
+.pk-held { font-size: .8rem; color: var(--warn) }
+
 /* visual pick cards: probability meters, game log against the line, simulated distribution */
 .vz { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin: 4px 0 2px; min-width: 0 } .vz > * { min-width: 0 } .pk-list > .pk, .pk { min-width: 0 }
 .vz-prob { display: grid; grid-template-columns: minmax(0, max-content) minmax(48px, 1fr) 3.4em; gap: 4px 8px; align-items: center; font-size: .8rem; min-width: 0 } .vz-prob .k { min-width: 0; overflow-wrap: anywhere; line-height: 1.15 }
@@ -1197,9 +1200,12 @@ function renderPicks() {
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
     ${viz(r, { book: (r.dk && r.dk.book) || "DraftKings", extra: "min" })}
     ${hist ? `<div><span class="k">History</span> <b>${cnt(r.season, r.side)}</b> this season · <b>${cnt(r.last5, r.side)}</b> last 5 · <b>${r.h2h && r.h2h[2] ? cnt(r.h2h, r.side) : "—"}</b> vs ${esc(r.opp)}</div>` : ""}
-    <div><span class="k">Sources</span> simulation ${pc(r.model)} · ${esc((r.dk && r.dk.book) || "DraftKings")} ${pc(r.market)}${r.dk ? ` (${r.dk.line} at ${esc(r.dk.over || "?")}/${esc(r.dk.under || "?")})` : " (not posted)"} · this season ${pc(r.hist)} (${r.hist_n})</div>
-    <div><span class="k">Simulation</span> median ${r.median} (25–75th ${r.q25}–${r.q75}), mean ${r.mean}, ${r.minutes} min</div>
-    <div>${research(r)}</div>
+    ${(r.held || []).length ? `<div class="pk-held">Held at ${esc(r.conf)}: ${r.held.map(esc).join("; ")}</div>` : ""}
+    ${nbaMarketSteps(r)}
+    <div><span class="k">Simulation</span> median ${r.median} (25–75th ${r.q25}–${r.q75}), mean ${r.mean}</div>
+    ${nbaRole(r)}
+    ${(() => { const h = (r.reasons || []).find((x) => x.name === "history"); return h ? `<div><span class="k">History</span> ${esc(h.text)}</div>` : `<div>${research(r)}</div>`; })()}
+    ${nbaRotation(r)}
     ${why(r, "Context check (✓ supports, – neutral, ✗ against; shown, not used to drop the leg)")}
     <div class="note">${esc(r.verdict)}</div>
     ${r.warns && r.warns.length ? `<div class="pk-warn">${r.warns.map(esc).join("; ")}</div>` : ""}
@@ -1210,13 +1216,19 @@ function renderPicks() {
   // most-likely-game cards: the run's box line, then why (usage, who's out, what the opponent allows to his position)
   const lcard = (r) => { const ml = r.ml || {}, b = ml.line || {}, u = r.usage || {};
     const pa = Object.entries(r.pos_allows || {}).filter(([, v]) => v && v.per_game != null)
-      .map(([k, v]) => `${esc(k)} ${v.per_game.toFixed(1)} to ${esc(r.pos)}s (rank ${v.rank}/30, league ${v.league_per_game.toFixed(1)})`).join(" · ");
+      .map(([k, v]) => v.per_100 != null && v.league_per_100
+        ? `${esc(k)} ${v.per_100.toFixed(1)} per 100 possessions to ${esc(r.pos)}s (rank ${v.rank_100 || v.rank}/30, league ${v.league_per_100.toFixed(1)}; ${v.per_game.toFixed(1)} a game)`
+        : `${esc(k)} ${v.per_game.toFixed(1)} to ${esc(r.pos)}s (rank ${v.rank}/30, league ${v.league_per_game.toFixed(1)})`).join(" · ");
     return `<div class="pk">
     <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)}</span></div>
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
     ${viz(r, { book: (r.dk && r.dk.book) || "DraftKings", extra: "min" })}
     <div><span class="k">Most likely game</span> ${esc(ml.away || "")} ${ml.score ? ml.score[1] : ""}–${ml.score ? ml.score[0] : ""} ${esc(ml.home || "")}: <b>${Math.round(b.pts || 0)} pts / ${Math.round(b.reb || 0)} reb / ${Math.round(b.ast || 0)} ast / ${Math.round(b.tpm || 0)} 3PM</b> in ${Math.round(b.min || 0)} min (${ml.gap > 0 ? "+" : ""}${Math.round(ml.gap || 0)} vs the line)</div>
-    <div><span class="k">Simulation</span> median ${r.median} (25–75th ${r.q25}–${r.q75}) · <span class="k">Sources</span> simulation ${pc(r.model)} · DraftKings ${pc(r.market)} · this season ${pc(r.hist)} (${r.hist_n})</div>
+    <div><span class="k">Simulation</span> median ${r.median} (25–75th ${r.q25}–${r.q75})</div>
+    ${(r.held || []).length ? `<div class="pk-held">Held at ${esc(r.conf)}: ${r.held.map(esc).join("; ")}</div>` : ""}
+    ${nbaMarketSteps(r)}
+    ${nbaRole(r)}
+    ${nbaRotation(r)}
     ${(r.reasons || []).length ? why(r, "Reasons (each one supports the pick or is neutral)") : `<div>${research(r)}</div>
     ${u.tonight != null ? `<div><span class="k">Usage</span> ${Math.round(100 * u.tonight)}% of team possessions tonight${u.season != null ? ` vs ${Math.round(100 * u.season)}% this season` : ""}${u.min_tonight && u.min_season ? `, ${Math.round(u.min_tonight)} min vs ${Math.round(u.min_season)}` : ""}${(u.out || []).length ? ` · out: ${u.out.map((o) => esc(o.name)).join(", ")}` : ""}</div>` : ""}
     ${pa ? `<div><span class="k">${esc(r.opp)} allows</span> ${pa}</div>` : ""}`}
@@ -1333,6 +1345,51 @@ document.addEventListener("click", (e) => { const b = e.target.closest("[data-vz
   VZ[box.dataset.vz].tab = b.dataset.vzTab; const old = box.querySelector(".vz-log"); if (old) { const t = document.createElement("div"); t.innerHTML = vzLog(box.dataset.vz); old.replaceWith(t.firstElementChild); } });
 const vzShow = (e) => { const b = e.target.closest && e.target.closest(".vz-bar"); if (!b) return; const rd = b.closest(".vz-log").querySelector(".vz-read"); if (rd) rd.textContent = b.dataset.tip; };
 document.addEventListener("pointerover", vzShow); document.addEventListener("focusin", vzShow);
+// ---------- NBA card detail: market steps, second book, role and minutes, redistribution (user audit 2026-11-06) ----------
+function nbaMarketSteps(r) {
+  const d = r.dk, pc = (v) => v == null ? "—" : (100 * v).toFixed(0) + "%";
+  if (!d) return `<div><span class="k">Market</span> no DraftKings or Dabble line for this player and stat: the card can't be High</div>`;
+  const qs = d.q == null ? null : (r.side === "under" ? 1 - d.q : d.q);
+  const same = Math.abs(d.line - r.line) < 1e-9;
+  let html = `<div><span class="k">Market</span> ${esc(d.book)} ${d.line} at ${esc(String(d.over))}/${esc(String(d.under))} → no-vig <b>${pc(qs)}</b> ${esc(r.side)} at ${d.line}${same ? "" : ` → carried along the simulated shape to ${r.line}: <b>${pc(r.market)}</b> ${esc(r.side)}`}</div>`;
+  const gap = Math.abs(d.line - r.line);
+  if (r.dk2) { const q2 = r.dk2.carried == null ? null : (r.side === "under" ? 1 - r.dk2.carried : r.dk2.carried);
+    html += `<div><span class="k">Second book</span> ${esc(r.dk2.book)} ${r.dk2.line} at ${esc(String(r.dk2.over))}/${esc(String(r.dk2.under))} → <b>${pc(q2)}</b> ${esc(r.side)} at ${r.line}</div>`; }
+  else if (gap >= 2) html += `<div class="pk-warn">Single-sourced gap: PrizePicks ${r.line} is ${gap} from ${esc(d.book)}'s ${d.line} and no second book posts this line</div>`;
+  const be = r.odds_type === "standard" ? "2-pick power break-even 57.7%" : "payout not published";
+  let t = null; try { const dd = new Date(r.pulled); if (!isNaN(dd)) t = dd.toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + " ET"; } catch (e) {}
+  html += `<div class="note">PrizePicks ${esc(r.odds_type || "standard")} line ${r.line} (${be})${t ? ` · lines pulled ${esc(t)}` : ""}</div>`;
+  return html;
+}
+function nbaRole(r) {
+  const ro = r.role; if (!ro) return "";
+  const l5 = (ro.last5_min || []).length ? ro.last5_min.reduce((a, b) => a + b, 0) / ro.last5_min.length : null;
+  const tailP = r.model == null ? null : 1 - r.model;
+  const thr = r.side === "under" ? Math.floor(r.line) + 1 : Math.ceil(r.line) - 1;
+  const inj = (r.team_injuries || []).filter((i) => !/^active$/i.test(i.status || ""));
+  return `<div><span class="k">Role</span> ${ro.starter ? "starter" : "bench"} · <b>${ro.min.toFixed(0)}</b> min projected (±${ro.min_sd.toFixed(0)}) · season ${ro.season_min.toFixed(0)}${l5 != null ? ` · last 5 ${l5.toFixed(0)}` : ""}</div>
+    ${inj.length ? `<div><span class="k">Injury report</span> ${inj.map((i) => `${esc(i.name)} <b>${esc(i.status)}</b>`).join(" · ")}</div>` : ""}
+    ${tailP != null ? `<div><span class="k">Tail</span> ${r.side === "under" ? `${thr}+` : `${thr} or fewer`} ${esc(r.stat)} in <b>${(100 * tailP).toFixed(0)}%</b> of simulated games (the loss side)${r.p_home != null ? ` · ${esc(r.game)}: home wins ${(100 * r.p_home).toFixed(0)}%` : ""}</div>` : ""}`;
+}
+function nbaRotation(r) {
+  const R = r.rotation || []; if (!R.length) return "";
+  const outs = (r.outs || []).map((o) => esc(o.name)).join(", ");
+  const mx = Math.max(...R.map((x) => Math.max(x.min, x.season)), 1);
+  const row = (x) => { const d = x.min - x.season, me = x.name === r.player;
+    return `<tr${me ? ' style="font-weight:700"' : ""}><td class="l">${esc(x.name)}${x.starter ? ' <span class="sub" style="display:inline">S</span>' : ""}</td><td>${x.min.toFixed(0)}</td><td>${x.season.toFixed(0)}</td><td style="color:${d >= 2 ? "var(--good)" : d <= -2 ? "var(--bad)" : "var(--muted)"}">${d >= 0 ? "+" : ""}${d.toFixed(0)}</td></tr>`; };
+  return `<details class="rot"><summary>Minutes tonight vs season${outs ? ` · out: ${outs}` : ""}</summary>
+    <table class="rot-t"><thead><tr><th class="l">${esc(r.team)}</th><th>Tonight</th><th>Season</th><th>±</th></tr></thead><tbody>${R.map(row).join("")}</tbody></table>
+    <div class="note">The simulation's projected minutes with tonight's injury report applied: where the absent players' minutes went. S = starter.</div>${nbaWithWithout(r)}</details>`;
+}
+// his games this season with and without each teammate out tonight (box scores; small samples flagged)
+function nbaWithWithout(r) {
+  const W = (r.with_without || []).filter((w) => w.with && w.without); if (!W.length) return "";
+  const cell = (h) => h.n ? `${h.n} g · ${h.min.toFixed(1)} min · ${h.avg.toFixed(1)}` : "none";
+  return `<table class="rot-t" style="margin-top:8px"><thead><tr><th class="l">${esc(r.player)}: ${esc(r.stat)}</th><th>With</th><th>Without</th></tr></thead><tbody>${
+    W.map((w) => `<tr><td class="l">${esc(w.name)}</td><td>${cell(w.with)}</td><td>${cell(w.without)}</td></tr>`).join("")}</tbody></table>
+    <div class="note">This season's games split by whether that player played (games · his minutes · his average). ${
+      W.some((w) => Math.min(w.with.n, w.without.n) < 5) ? "Fewer than 5 games on one side: a hint, not a measurement." : ""}</div>`;
+}
 // ---------- every priced leg, filtered by label (boards.js from `python -m edge boards --page boards.js`) ----------
 const BOARD = {};
 function renderBoard(sport, el) {
@@ -2126,8 +2183,12 @@ function nbaResearch() {
   const oa = (sd.opp_allowed || {})[side] || {}, pos = rs.pos;
   let allow = "";
   if (h < 4 && oa[keys[h]] && oa[keys[h]].per_game != null) { const a = oa[keys[h]], pp = pos && a.pos ? a.pos[pos] : null;
-    allow = `${opp} allows <b>${a.per_game.toFixed(1)}</b> ${lab} a game to opposing players: rank ${a.rank} of ${a.teams} (1 = most), league average ${a.league.toFixed(1)}, ${a.games} games.` +
-      (pp && pp.per_game != null ? ` To ${{ G: "guards", F: "forwards", C: "centres" }[pos]}: ${pp.per_game.toFixed(1)} (rank ${pp.rank}; league ${pp.league_per_game.toFixed(1)}).` : ""); }
+    const posName = { G: "guards", F: "forwards", C: "centres" }[pos];
+    allow = (a.per_100 != null && a.league_100
+      ? `${opp} allows <b>${a.per_100.toFixed(1)}</b> ${lab} per 100 possessions to opposing players: rank ${a.rank_100 || a.rank} of ${a.teams} (1 = most), league ${a.league_100.toFixed(1)}; ${a.per_game.toFixed(1)} a game, ${a.games} games.`
+      : `${opp} allows <b>${a.per_game.toFixed(1)}</b> ${lab} a game to opposing players: rank ${a.rank} of ${a.teams} (1 = most), league average ${a.league.toFixed(1)}, ${a.games} games.`) +
+      (pp && pp.per_100 != null && pp.league_per_100 ? ` To ${posName}: ${pp.per_100.toFixed(1)} per 100 (rank ${pp.rank_100 || pp.rank}; league ${pp.league_per_100.toFixed(1)}; ${pp.per_game.toFixed(1)} a game).`
+       : pp && pp.per_game != null ? ` To ${posName}: ${pp.per_game.toFixed(1)} (rank ${pp.rank}; league ${pp.league_per_game.toFixed(1)}).` : ""); }
   else if (h === 4 && oa.pts && oa.pts.per_game != null) { const t = ["pts", "reb", "ast"].reduce((s, k) => s + oa[k].per_game, 0), lgv = ["pts", "reb", "ast"].reduce((s, k) => s + oa[k].league, 0);
     allow = `${opp} allows ${t.toFixed(1)} points + rebounds + assists a game to opposing players (league average ${lgv.toFixed(1)}).`; }
   const f = p.h2h ? (h < 4 ? p.h2h[keys[h]] : null) : null;

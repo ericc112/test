@@ -120,15 +120,26 @@ class Reasons(unittest.TestCase):
     def test_tough_matchup_is_against_an_over(self):
         v = self.verdicts(self.leg())
         self.assertEqual(v["matchup"], "against")       # allows ~15% less than average to forwards
-        self.assertEqual(v["this season"], "supports")
-        self.assertEqual(v["head-to-head"], "neutral")  # no meetings: nothing to read
+        self.assertEqual(v["history"], "supports")          # one history line (season, last 5, h2h count once)
+        self.assertNotIn("head-to-head", v)
 
     def test_average_matchup_is_neutral_and_mixed_h2h_is_against(self):
         pa = {"pts": {"per_game": 43.0, "league_per_game": 43.1, "rank": 13, "all": 112.0, "league": 113.0}}
         r = self.leg(pos_allows=pa, research={**self.leg()["research"], "h2h": [2, 3, 5], "h2h_per36": 26.0})
         v = self.verdicts(r)
         self.assertEqual(v["matchup"], "neutral")
-        self.assertEqual(v["head-to-head"], "against")  # 2 over / 3 under: the count leans under even with a higher per 36
+        self.assertEqual(v["history"], "supports")
+
+    def test_matchup_reads_per_100_possessions(self):
+        # a fast team allows more per game (43.5 vs 43.1) but less per 100 possessions (38.5 vs 41.5): pace taken out, it's tougher
+        pa = {"pts": {"per_game": 43.5, "league_per_game": 43.1, "rank": 12, "per_100": 38.5, "league_per_100": 41.5, "rank_100": 21,
+                      "all": 117.0, "league": 113.0, "all_100": 108.0, "league_all_100": 110.0}}
+        r = self.leg(stat_key="pts", pos_allows=pa)
+        m = next(x for x in N.likely_reasons(r) if x["name"] == "matchup")
+        self.assertEqual(m["verdict"], "against")
+        self.assertIn("38.5 pts per 100 possessions to Fs", m["text"])
+        self.assertIn("ranks pts 21/30", m["text"])
+        self.assertIn("43.5 a game", m["text"])
 
     def test_market_and_usage_against(self):
         v = self.verdicts(self.leg(p_market=0.44, usage={"tonight": 0.07, "season": 0.07, "min_tonight": 18.0, "min_season": 22.0, "out": []}))
@@ -195,6 +206,32 @@ class MarketFallback(unittest.TestCase):
             self.assertEqual(raw["line"], 7.0)
         finally:
             nba_pp._DABBLE.clear()
+
+
+class HistoryLine(unittest.TestCase):
+    """User audit 2026-11-06: one history line, trend next to the count, head-to-head only on comparable minutes."""
+
+    def test_cmb_under(self):
+        r = {"side": "under", "line": 14.5, "opp_espn": "MIL", "role": {"min": 22.0},
+             "research": {"season": [2, 6, 8], "season_avg": 9.6, "last5": [2, 3, 5], "last_games": [10, 15, 4, 18, 13],
+                          "per36": 15.7, "h2h_games": [["2026-01-01", 6, 15], ["2026-02-01", 8, 17], ["2026-03-01", 9, 20]]}}
+        v, text = N.history_line(r)
+        self.assertEqual(v, "supports")
+        self.assertIn("last 5: 3/5 under, avg 12.0, up from 9.6", text)
+        self.assertIn("not counted", text)                 # 17 min a game vs 22 projected
+        self.assertIn("6/8 under this season", text)
+
+
+class WithWithout(unittest.TestCase):
+    def test_split_by_teammate_played(self):
+        log = [["2026-10-22", "X", 1, 24, 10, 5, 2, 1], ["2026-10-24", "X", 1, 22, 8, 4, 1, 0], ["2026-10-26", "X", 0, 31, 16, 7, 3, 2]]
+        w = N.with_without({"research": {"log": log}}, "pr", {"Kawhi Leonard": ["2026-10-22", "2026-10-24"], "Bench Guy": []},
+                           [{"name": "Bench Guy", "value": 0.4}, {"name": "Kawhi Leonard", "value": 3.1}])
+        self.assertEqual(w[0]["name"], "Kawhi Leonard")                     # most valuable first
+        self.assertEqual(w[0]["with"], {"n": 2, "min": 23.0, "avg": 13.5})
+        self.assertEqual(w[0]["without"], {"n": 1, "min": 31.0, "avg": 23.0})
+        self.assertEqual(w[1]["with"]["n"], 0)                              # never played: every game is "without"
+        self.assertEqual(N.with_without({"research": {"log": log}}, "pr", None, []), [])
 
 
 class SideNumbers(unittest.TestCase):

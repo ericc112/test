@@ -199,7 +199,94 @@
    "shadow_wins": true
   }
  },
- "shadow": null,
+ "shadow": {
+  "version": 3,
+  "name": "v3 candidate: v2 + shrink to the market when simulation and market are more than 8 points apart (user audit 2026-11-06)",
+  "params": {
+   "bias": "table",
+   "blend": {
+    "intercept": 0.0,
+    "w_model": 0.2,
+    "w_market": 0.8,
+    "w_hist": 0.0
+   },
+   "history": "off",
+   "recal": null,
+   "gates": {
+    "high": 0.62,
+    "medium": 0.54,
+    "max_spread_high": 0.16,
+    "min_hist_n_high": 0,
+    "no_market_min_hist_n": 99999
+   },
+   "high_thin": null,
+   "entry": "se1",
+   "push": "exclusive",
+   "sim": {
+    "minutes_alpha": 1.0,
+    "swing_rho": 0.8
+   },
+   "bias_table": {
+    "pts": {
+     "all": -0.15,
+     "top5": -0.184,
+     "bench": -0.078
+    },
+    "reb": {
+     "all": -0.01,
+     "top5": 0.008,
+     "bench": -0.045
+    },
+    "ast": {
+     "all": -0.217,
+     "top5": -0.246,
+     "bench": -0.113
+    },
+    "tpm": {
+     "all": -0.134,
+     "top5": -0.146,
+     "bench": -0.102
+    },
+    "pra": {
+     "all": -0.199,
+     "top5": -0.218,
+     "bench": -0.139
+    },
+    "pr": {
+     "all": -0.138,
+     "top5": -0.15,
+     "bench": -0.112
+    },
+    "pa": {
+     "all": -0.23,
+     "top5": -0.257,
+     "bench": -0.139
+    },
+    "ra": {
+     "all": -0.144,
+     "top5": -0.148,
+     "bench": -0.122
+    }
+   },
+   "blend_ci": {
+    "w_model": [
+     0.11073979184197677,
+     0.3464615556725401
+    ]
+   },
+   "missing_market": "neutral",
+   "cap": 0.7,
+   "se_w": 0.1,
+   "disagree": {
+    "gap": 0.08,
+    "margin": 0.0
+   }
+  },
+  "since": "2026-11-06",
+  "backtest_evidence": {
+   "note": "no backtest yet: scored live against v2 on graded legs (200+ legs or 14 days, log loss and label calibration)"
+  }
+ },
  "history": [
   {
    "version": 1,

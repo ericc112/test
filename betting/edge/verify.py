@@ -79,6 +79,7 @@ def expected(r: dict, adj: dict):
         p_, c_ = nba_pp.recompute(pm, pk, ph, int(_f(r.get("hist_n")) or 0), r.get("segment", ""), lg_)
         if "role unconfirmed" in (r.get("notes") or ""):
             c_ = "Low"
+        c_, _ = nba_pp.gate_label(c_, pm, pk, r.get("notes") or "", r.get("market", ""))     # High needs agreement
         e = type(e)(p=p_, confidence=c_, agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
     elif r.get("sport") == "tennis":
         from . import tennis as T
@@ -503,7 +504,19 @@ def check_nba(rep: Report, adj: dict):
         age = (now - last).total_seconds() / 60
         if (tip - now).total_seconds() / 60 <= 60 and age > STALE_MIN:
             rep.add("FAIL", "freshness", f"market and injury data pulled {age:.0f} min ago, inside the last hour before tip: re-price (edge verify --fix)")
-    mk_, _ = nba_pp.market_for(ctx["eng"]["sides"][str(r["event_id"])]["players"].get("lines"), str(r["player_id"]), r["player"], stat, line)
+    mks_, _ = nba_pp.markets_for(ctx["eng"]["sides"][str(r["event_id"])]["players"].get("lines"), str(r["player_id"]), r["player"], stat, line)
+    mk_ = mks_[0] if mks_ else None
+    if mk_ and abs(mk_["line"] - line) >= nba_pp.GAP_2ND:     # a big gap from the book needs a second book that agrees
+        h_ = sim["hist"][stat]
+        if len(mks_) < 2:
+            rep.add("WARN" if getattr(rep, "locked", False) else "FAIL", "second book",
+                    f"PrizePicks {line} is {abs(mk_['line'] - line):g} from {mk_['book']}'s {mk_['line']} and no second book posts it: not verified on one source")
+        else:
+            m2 = mks_[1]
+            q2 = m2["q"] if abs(m2["line"] - line) < 1e-9 else nba_pp.market_at(h_, m2["line"], m2["q"], line)[0]
+            s2 = q2 if side == "over" else 1 - q2
+            rep.add("PASS" if s2 >= 0.5 else ("WARN" if getattr(rep, "locked", False) else "FAIL"), "second book",
+                    f"{m2['book']} {m2['line']} at {m2['over']}/{m2['under']}: {s2:.0%} for the {side} at {line}" + ("" if s2 >= 0.5 else " (disagrees)"))
     pk = None
     if mk_:                                    # the same market the pricer uses: DraftKings, else Dabble
         q = mk_["q"] if abs(mk_["line"] - line) < 1e-9 else nba_pp.market_at(sim["hist"][stat], mk_["line"], mk_["q"], line)[0]
@@ -514,6 +527,10 @@ def check_nba(rep: Report, adj: dict):
         rep.add("WARN", "market", f"{bk} now {'none' if pk is None else f'{pk:.3f}'} (logged {lk}): the line or price moved, re-price before publishing")
     ph_l, n_l = (None, 0) if hist_off else (ph, o + u)        # history only if the leg's logic uses it
     fp, fc = nba_pp.recompute(pm, pk, ph_l, n_l, r.get("segment", ""), logic)     # the fresh label under the leg's own logic
+    if "role unconfirmed" in (r.get("notes") or ""):
+        fc = "Low"
+    notes_now = (r.get("notes") or "") + (f"; minutes gap: {w}" if w and "minutes gap:" not in (r.get("notes") or "") else "")
+    fc, _ = nba_pp.gate_label(fc, pm, pk, notes_now, stat)
     rep.fresh = {"p_model": round(pm, 3), "p_market": "" if pk is None else round(pk, 3), "p_hist": "" if ph_l is None else round(ph_l, 3),
                  "hist_n": n_l, "p_final": round(fp, 4), "confidence": fc,
                  "side_note": f"fresh {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%MZ}: simulation re-run, {o + u} games of history"}

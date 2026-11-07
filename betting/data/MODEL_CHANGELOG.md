@@ -86,3 +86,23 @@ Logic versions live in `data/nba_model.json`; `python -m edge.nba_model status |
   - ATP games won and total games priced with the winner set to the market's price when Tennis Explorer lists the match.
 - **Not adopted:** Elo (the market beats it), fatigue (ATP +0.002 out of sample, WTA nothing; tuning terms under 1.5 SE), indoor and handedness (no change in point log-likelihood), heavier recency (180-day half-life was worse).
 - **Rollback:** delete `data/tennis_bt/decision.json` (no market anchoring) and set `tml_pair` to return None (the Tennis Abstract path).
+
+## 2026-11-06: NBA labels and display after the user's audit (Collin Murray-Boyles card)
+- **High means agreement** (live, at the user's direction; `gate_label` in `edge/nba_pp.py`, applied by the pricer and by `verify`). A High leg needs all of:
+  - a market price;
+  - simulation and market within 5 points (`AGREE_MAX`);
+  - tonight's tilt in that stat inside `TILT_MAX`, or a logged cause;
+  - minutes confirmed (no L28 minutes gap);
+  - a PrizePicks line 2+ points from DraftKings' (`GAP_2ND`) confirmed by a second book (Dabble).
+
+  Any miss holds the leg at Medium, and the card lists the reasons. Probabilities are unchanged: this moves labels only.
+- **Second-book check in `verify`:** a not-started leg whose line is 2+ points from DraftKings' FAILs with no second book or with one that disagrees on the side; a started leg gets a WARN.
+- **Display follows the gate:** the card's label is the gated label. The market block shows the DraftKings conversion in steps (book line and price, de-vigged, carried to the PrizePicks line), the second book, the role (starter, projected minutes vs season and last 5), tonight's rotation against season minutes (who absorbs an injured starter's minutes), and the team's injuries.
+- **One history line:** season and last 5 (average and trend) merged into one minutes-weighted reason; H2H counts only when those games' minutes are within 15% of tonight's projection.
+- **Shadow v3 registered, not live** (`data/nba_model.json` → `shadow`): v2 plus shrinking to the market when simulation and market are more than 8 points apart. It changes probabilities, so under the user's rule it is scored live against v2 and adopted only after beating it on 200+ graded legs or 14 days, on log loss and label calibration.
+- **Pre-tip lineup lock:** the scheduled re-check runs at 6:31, 7:31 and 9:31 pm ET, about 30 minutes before tip-off windows.
+- **Not done yet:** opponent points allowed to forwards per 100 possessions (the engine doesn't carry team defensive possessions by position), and a with/without sample for an injured starter (the rotation table shows tonight's redistribution instead).
+- **Rollback:**
+  - set `AGREE_MAX = 1.0` and `GAP_2ND = 99` in `edge/nba_pp.py` (labels revert to the blend gates);
+  - set `"shadow": null` in `data/nba_model.json` (drops v3);
+  - `git revert` the commit for the display.

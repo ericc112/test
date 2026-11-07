@@ -285,6 +285,10 @@ def nba_engine(nba_games: list[dict], today: dt.date | None = None) -> dict:
                                                                 "left": [n for n, _ in v["left"][:2]]} for t, v in prior.items()},
                           "games": [R["teams"].get(g["home"], {}).get("games", 0), R["teams"].get(g["away"], {}).get("games", 0)],
                           "availability": {s_: {"points": round(det[s_]["points"], 2), "rows": det[s_]["rows"][:6]} for s_ in ("home", "away")},
+                          # dates this season each player out tonight played for the team (the with/without split on the pick card)
+                          "out_played": {s_: {r_["name"]: sorted({e["date"][:10] for e in RS.logs.get(r_.get("id"), [])
+                                                                  if e["date"] < cut_g and e["team"] == g[s_] and gnba.season_of(e["date"][:10]) == y})
+                                              for r_ in det[s_]["rows"] if r_.get("out_tonight")} for s_ in ("home", "away")},
                           "no_availability": {"home": {k: round(v, 4) for k, v in gnba.side(R, g["home"], g["away"], True).items()},
                                               "away": {k: round(v, 4) for k, v in gnba.side(R, g["away"], g["home"], False).items()}}}
     for g in nba_games:                                   # player layer: rotation, per-minute rates, injury report
