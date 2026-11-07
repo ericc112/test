@@ -156,3 +156,42 @@ class TennisReasons(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MatchSimulator(unittest.TestCase):
+    """The Sim Lab's tennis match simulator (edge/tennis_watch.py data, index.html worker engine)."""
+
+    def test_tennis_explorer_names(self):
+        from edge.tennis_watch import _te_name
+        self.assertEqual(_te_name("Davidovich Fokina A."), ("davidovichfokina", "a"))
+        self.assertEqual(_te_name("Rybakina E."), ("rybakina", "e"))
+        self.assertEqual(_te_name("Montes-De La Torre I."), ("montesdelatorre", "i"))
+
+    def test_surface_falls_back_to_hard_unconfirmed(self):
+        import datetime as dt
+        from edge.tennis_watch import _surface
+        st = {"matches": [{"tour": "ATP", "date": 20261105, "tname": "Montevideo", "surface": "Clay"}]}
+        self.assertEqual(_surface(st, "ATP", "Montevideo challenger", dt.date(2026, 11, 7))[:2], ("Clay", True))
+        self.assertEqual(_surface(st, "ATP", "Nowhere Open", dt.date(2026, 11, 7))[:2], ("Hard", False))
+
+    def test_engine_matches_exact_odds_and_flags(self):
+        import shutil, subprocess, json as js, os
+        if not shutil.which("node"):
+            self.skipTest("node not installed")
+        html = os.path.join(os.path.dirname(__file__), "..", "simlab", "index.html")
+        code = r"""
+const fs=require('fs'),vm=require('vm');const h=fs.readFileSync(process.argv[1],'utf8');
+const src=h.match(/<script type="text\/plain" id="workerSrc">([\s\S]*?)<\/script>/)[1];
+const c={postMessage:()=>{},setTimeout:(f)=>f(),console,Math,Float64Array,Int32Array,Uint32Array,Uint8Array,Array,Object,JSON,Date,Map};vm.createContext(c);
+vm.runInContext(src+';this.__x={tnSolver,tnMatch,seed};',c);const W=c.__x;
+const L=W.tnSolver(0.66,0.62,3,false),pre=0.5*(L({sa:0,sb:0,ga:0,gb:0,srv:0,tb:false,x:0,y:0})+L({sa:0,sb:0,ga:0,gb:0,srv:1,tb:false,x:0,y:0}));
+W.seed(3);let aw=0,n=60000,bad=0,badSet=0,lastLp=[];for(let i=0;i<n;i++){const log=i<400?[]:null;const r=W.tnMatch([0.66,0.62],3,false,log,i<400?L:null);if(r.w===0)aw++;
+ for(const [a,b] of r.sets){if(!((a===7&&(b===5||b===6))||(b===7&&(a===5||a===6))||(a===6&&b<=4)||(b===6&&a<=4)))badSet++;}
+ if(log){const pts=log.filter(e=>e.k==='pt'||e.k==='tb');lastLp.push(Math.abs(pts[pts.length-1].lp-(r.w===0?1:0)));
+  for(let k=0;k<log.length;k++){const e=log[k];if(e.flag!=='match point')continue;const conv=(e.a?0:1)===e.fp;const end=log.slice(k+1).find(x=>x.k==='pt'||x.k==='tb'||x.k==='end');if(conv!==(end&&end.k==='end'))bad++;}}}
+console.log(JSON.stringify({pre,sim:aw/n,badSet,bad,lastLp:Math.max(...lastLp)}));"""
+        out = js.loads(subprocess.run(["node", "-e", code, html], capture_output=True, text=True, check=True).stdout)
+        self.assertAlmostEqual(out["pre"], out["sim"], delta=0.006)        # exact chance vs 60,000 simulated matches
+        self.assertEqual(out["badSet"], 0)                                   # every set score is a real one
+        self.assertEqual(out["bad"], 0)                                      # match point "converted" only when the match ends
+        self.assertLess(out["lastLp"], 1e-9)                                 # the live line ends at 100% / 0%

@@ -195,6 +195,40 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
 .td-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px }
 .td-item { display: flex; justify-content: space-between; gap: 8px; border: 1px solid var(--line); border-radius: 7px; padding: 5px 8px; font-size: .84rem; background: var(--surface-2) }
 .note { font-size: .84rem; color: var(--muted); max-width: 75ch }
+.tn-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin }
+.tn-m { flex: 0 0 auto; width: 230px; text-align: left; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 8px 10px; display: grid; gap: 2px }
+.tn-m[aria-current="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink) }
+.tn-m .nm { font-weight: 700; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.tn-m .ev, .tn-m .when { font-size: .74rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.tn-badge { font-size: .66rem; font-weight: 700; letter-spacing: .05em; border-radius: 4px; padding: 0 5px; margin-right: 4px; border: 1px solid var(--line); color: var(--muted) }
+.tn-head { display: grid; gap: 6px }
+.tn-vs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; font-family: var(--font-display); font-weight: 800; font-size: 1.6rem; line-height: 1.1 }
+.tn-vs .a { color: var(--home) } .tn-vs .b { color: var(--away) } .tn-vs .v { font-size: 1rem; color: var(--muted); font-weight: 600 }
+.tn-meter { display: grid; gap: 4px }
+.tn-meter .bar2 { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--line) }
+.tn-meter .bar2 i:first-child { background: var(--home) } .tn-meter .bar2 i:last-child { background: var(--away) }
+.tn-meter .lab { display: flex; justify-content: space-between; font-size: .8rem; font-family: var(--font-data) }
+.tn-meter .lab span:last-child { white-space: nowrap; padding-left: 8px }
+.tn-board { background: #0f1d2c; color: #f4f7fa; border-radius: 10px; padding: 10px 12px; font-family: var(--font-data); display: grid; gap: 5px; max-width: 560px }
+.tn-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) repeat(var(--sets, 3), 26px) 32px 42px; align-items: center; gap: 6px; font-size: 1.02rem; border-left: 4px solid; padding-left: 6px }
+.tn-row.a { border-color: var(--home) } .tn-row.b { border-color: var(--away) }
+.tn-row .nm { font-family: var(--font-display); font-weight: 700; font-size: 1.12rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.tn-srv i { width: 9px; height: 9px; border-radius: 50%; background: #e8d33a; display: block }
+.tn-set { text-align: center; opacity: .55 } .tn-set.won { opacity: 1; font-weight: 700 } .tn-set sup { font-size: .62em; margin-left: 1px }
+.tn-gm { text-align: center; font-weight: 800; background: rgba(255, 255, 255, .13); border-radius: 4px }
+.tn-pt { text-align: center; font-weight: 800; color: #111; border-radius: 4px; min-height: 1.4em } .tn-pt.on { background: #e8d33a }
+.tn-status { font-size: .8rem; color: #e8d33a; min-height: 1.15em; letter-spacing: .03em }
+.tn-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px }
+@media (max-width: 760px) { .tn-grid { grid-template-columns: minmax(0, 1fr) } .tn-row { grid-template-columns: 10px minmax(0, 1fr) repeat(var(--sets, 3), 22px) 28px 38px; font-size: .95rem } }
+#tnCourt { height: 210px; background: transparent }
+.tn-log .b { color: var(--bad); font-weight: 700 } .tn-log .k { font-weight: 700 }
+.tn-sets { display: grid; gap: 5px }
+.tn-bar { display: grid; grid-template-columns: minmax(96px, max-content) minmax(0, 1fr) 52px; align-items: center; gap: 8px; font-size: .84rem; font-family: var(--font-data) }
+.tn-bar i { height: 14px; border-radius: 3px; display: block; min-width: 2px }
+.tn-lines { width: 100%; border-collapse: collapse; font-size: .86rem }
+.tn-lines th, .tn-lines td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line) }
+.tn-lines td.n { font-family: var(--font-data); text-align: right }
+
 .pl-cell b { display: block; font-variant-numeric: tabular-nums } .pl-cell small { color: var(--muted); font-family: var(--font-data); font-size: .72rem; white-space: nowrap }
 #nbaPlTbl { min-width: 560px } #nbaSrcTbl { min-width: 620px } .pl-name { min-width: 150px; text-align: left; font-family: var(--font-body); font-weight: 600 } .pl-name small { color: var(--muted); margin-left: 4px } .flag { display: inline-block; font-size: .68rem; padding: 0 5px; border-radius: 4px; margin-left: 4px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap }
 .flag.w { border-color: var(--warn); color: var(--warn) }
@@ -308,6 +342,44 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="pk-board" id="nhlBoard"></div>
     <div class="note" id="nhlNote"></div>
   </details>
+
+  <section class="panel" id="tennisSim" hidden aria-label="Tennis match simulator">
+    <div class="row"><h2>Tennis match simulator</h2><span class="spacer"></span><span class="note" id="tnMeta"></span></div>
+    <div class="row"><div class="seg" role="group" aria-label="Tour" id="tnTour"></div><span class="note" id="tnCount"></span></div>
+    <div class="tn-list" id="tnList" role="list"></div>
+    <div class="tn-head" id="tnHead"></div>
+    <div class="row">
+      <span class="label">Serve rates</span>
+      <div class="seg" role="group" aria-label="Serve rates" id="tnRates">
+        <button data-v="ratings" aria-pressed="true">Ratings</button><button data-v="market" aria-pressed="false">Matched to the market price</button></div>
+      <span class="note" id="tnRatesNote"></span>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="tnWatchBtn">Watch a match</button>
+      <button class="btn" id="tnPause" disabled>Pause</button>
+      <button class="btn" id="tnSkip" disabled>Skip to the end</button>
+      <span class="label">Speed</span>
+      <div class="seg" role="group" aria-label="Watch speed" id="tnSpeed">
+        <button data-sp="1" aria-pressed="false">1×</button><button data-sp="4" aria-pressed="true">4×</button><button data-sp="20" aria-pressed="false">20×</button></div>
+    </div>
+    <div class="tn-board" id="tnBoard" aria-live="polite"></div>
+    <div class="tn-grid">
+      <div class="chart"><h3>Court</h3><canvas id="tnCourt" aria-label="Who is serving and who won the point"></canvas>
+        <div class="legend" id="tnCourtLeg"></div></div>
+      <div class="chart"><h3>Win probability, point by point</h3><canvas id="tnWp" aria-label="Chance the first player wins, after every point"></canvas>
+        <div class="legend" id="tnWpLeg"></div></div>
+    </div>
+    <div class="log tn-log" id="tnLog"></div>
+    <div class="counter"><span class="odo" id="tnOdo">0</span><span class="label">of 50,000 matches simulated</span><span class="spacer"></span><span class="note" id="tnRunNote"></span></div>
+    <div class="bar"><i id="tnBarFill"></i></div>
+    <div class="tiles" id="tnTiles"></div>
+    <div class="charts">
+      <div class="chart"><h3 id="tnDistTitle">Total games</h3><canvas id="tnDist" aria-label="Distribution of total games"></canvas><div class="legend" id="tnDistLeg"></div></div>
+      <div class="chart"><h3>Set scores</h3><div class="tn-sets" id="tnSets"></div></div>
+    </div>
+    <div id="tnLines"></div>
+    <p class="note" id="tnHonest"></p>
+  </section>
 
   <details class="panel picks" id="tennisPicksPanel" hidden open>
     <summary><h2 class="pk-title">Tennis PrizePicks picks (ATP + WTA)</h2><span class="note" id="tennisMeta"></span></summary>
@@ -1061,7 +1133,96 @@ function nhlEventGame(C, st, log, _tk, cap) {
 const ENGINES = { nflpbp: nflPlayGame, nbaposs: nbaPossGame, nhlev: nhlEventGame };
 
 // ---------- message loop ----------
-let current = 0, plCurrent = 0, likelyCurrent = 0;
+// ---------- Tennis: point by point (each player's chance to win a point on serve, the server alternating by game) ----------
+// m = {pa, pb, sd, rho, best_of, tb10} from edge/tennis_watch.py: serve-point probabilities against this opponent
+// (opponent-adjusted ratings) and the tour's measured day-to-day form: each run draws the day's rates, the two players'
+// deviations correlated (rho < 0: one on top of his game means the other serves worse).
+function tnDraw(m, shift) {
+  const z1 = normal(), z2 = normal(), sd = m.sd || 0, rho = m.rho || 0, d = shift || 0;
+  const cl = (x) => Math.min(0.95, Math.max(0.3, x));
+  return [cl(m.pa + d + sd * z1), cl(m.pb - d + sd * (rho * z1 + Math.sqrt(1 - rho * rho) * z2))];
+}
+// Exact chance A wins from any score, for fixed serve-point rates (the live line on the watch view).
+function tnSolver(pa, pb, bo, tb10) {
+  const need = (bo >> 1) + 1, P = [pa, pb], mT = new Map(), mS = new Map(), mM = new Map();
+  const game = (ps, x, y) => { if (x >= 4 && x - y >= 2) return 1; if (y >= 4 && y - x >= 2) return 0;
+    if (x >= 3 && y >= 3) { const d = ps * ps / (ps * ps + (1 - ps) * (1 - ps)); return x === y ? d : x > y ? ps + (1 - ps) * d : ps * d; }
+    return ps * game(ps, x + 1, y) + (1 - ps) * game(ps, x, y + 1); };
+  const tbSrv = (k, first) => (((k + 1) >> 1) % 2 === 0 ? first : 1 - first);
+  const tb = (x, y, first, T) => {                         // A's chance to win a tiebreak from x-y (A's points first)
+    if ((x >= T || y >= T) && Math.abs(x - y) >= 2) return x > y ? 1 : 0;
+    if (x >= T - 1 && y >= T - 1 && x === y) { const a = pa * (1 - pb), b = (1 - pa) * pb; return a / (a + b); }   // each serves one of the next two
+    const key = ((x * 64 + y) * 2 + first) * 16 + T; if (mT.has(key)) return mT.get(key);
+    const s = tbSrv(x + y, first), w = s === 0 ? pa : 1 - pb, v = w * tb(x + 1, y, first, T) + (1 - w) * tb(x, y + 1, first, T);
+    mT.set(key, v); return v; };
+  const setOver = (a, b) => (a >= 6 || b >= 6) && Math.abs(a - b) >= 2 || a === 7 || b === 7;
+  const setEnd = (ga, gb, srv, dec) => {                   // [A wins & A serves next set, A & B next, B & A next, B & B next]
+    const key = ((ga * 8 + gb) * 2 + srv) * 2 + (dec ? 1 : 0); if (mS.has(key)) return mS.get(key);
+    let out;
+    if (ga === 6 && gb === 6) { const t = tb(0, 0, srv, tb10 && dec ? 10 : 7), nx = 1 - srv; out = [0, 0, 0, 0]; out[nx] += t; out[2 + nx] += 1 - t; }
+    else { const h = game(P[srv], 0, 0), aw = srv === 0 ? h : 1 - h; out = [0, 0, 0, 0];
+      for (const [w, pr] of [[0, aw], [1, 1 - aw]]) { const a = ga + (w === 0), b = gb + (w === 1);
+        if (setOver(a, b)) out[w * 2 + (1 - srv)] += pr; else { const r = setEnd(a, b, 1 - srv, dec); for (let i = 0; i < 4; i++) out[i] += pr * r[i]; } } }
+    mS.set(key, out); return out; };
+  const match = (sa, sb, srv) => { if (sa >= need) return 1; if (sb >= need) return 0;
+    const key = (sa * 8 + sb) * 2 + srv; if (mM.has(key)) return mM.get(key);
+    const e = setEnd(0, 0, srv, sa === need - 1 && sb === need - 1);
+    const v = e[0] * match(sa + 1, sb, 0) + e[1] * match(sa + 1, sb, 1) + e[2] * match(sa, sb + 1, 0) + e[3] * match(sa, sb + 1, 1);
+    mM.set(key, v); return v; };
+  const after = (sa, sb, ga, gb, nx, dec) => { const e = setEnd(ga, gb, nx, dec);
+    return e[0] * match(sa + 1, sb, 0) + e[1] * match(sa + 1, sb, 1) + e[2] * match(sa, sb + 1, 0) + e[3] * match(sa, sb + 1, 1); };
+  // st = {sa, sb, ga, gb, srv, tb, x, y, first}: in a game x/y are the server's/receiver's points; in a tiebreak, A's/B's
+  return (st) => { const dec = st.sa === need - 1 && st.sb === need - 1;
+    if (st.tb) { const t = tb(st.x, st.y, st.first, tb10 && dec ? 10 : 7), nx = 1 - st.first; return t * match(st.sa + 1, st.sb, nx) + (1 - t) * match(st.sa, st.sb + 1, nx); }
+    const h = game(P[st.srv], st.x, st.y), aw = st.srv === 0 ? h : 1 - h;
+    const cont = (a, b) => setOver(a, b) ? (a > b ? match(st.sa + 1, st.sb, 1 - st.srv) : match(st.sa, st.sb + 1, 1 - st.srv)) : after(st.sa, st.sb, a, b, 1 - st.srv, dec);
+    return aw * cont(st.ga + 1, st.gb) + (1 - aw) * cont(st.ga, st.gb + 1); };
+}
+// One match at the day's rates p = [A, B]. With log, one entry per point: who served, who won it, the score after it,
+// what the point was (break point, set point, match point: for the receiver or the leader) and, with live, A's chance.
+function tnMatch(p, bo, tb10, log, live) {
+  const need = (bo >> 1) + 1, sets = []; let sa = 0, sb = 0, srv = rnd() < 0.5 ? 0 : 1, GA = 0, GB = 0, tbs = 0, brA = 0, brB = 0, pts = 0, fs = 0;
+  let lp = null;
+  const lg = (o) => { if (log) { o.sets = sets.map((x) => x.slice()); o.sa = sa; o.sb = sb; if (live && o.st) lp = live(o.st); o.lp = lp; log.push(o); } };
+  while (sa < need && sb < need) {
+    let ga = 0, gb = 0; const dec = sa === need - 1 && sb === need - 1;
+    for (;;) {
+      if (ga === 6 && gb === 6) {
+        const T = tb10 && dec ? 10 : 7, first = srv; let x = 0, y = 0, k = 0;
+        while (!((x >= T || y >= T) && Math.abs(x - y) >= 2)) {
+          const s = ((k + 1) >> 1) % 2 === 0 ? first : 1 - first, won = rnd() < p[s], aPt = s === 0 ? won : !won;
+          const setPt = (x >= T - 1 && x > y) || (y >= T - 1 && y > x), lead0 = x > y, mp = setPt && ((x > y && sa === need - 1) || (y > x && sb === need - 1));
+          if (aPt) x++; else y++; k++; pts++;
+          lg({ k: "tb", srv: s, a: aPt ? 1 : 0, ga, gb, x, y, first, T, flag: mp ? "match point" : setPt ? "set point" : "", fp: setPt ? (lead0 ? 0 : 1) : -1,
+               st: { sa, sb, ga, gb, tb: true, x, y, first } });
+        }
+        if (x > y) ga++; else gb++; tbs++; srv = 1 - first;
+        lg({ k: "set", w: x > y ? 0 : 1, ga, gb, tbScore: [x, y], st: null });
+        break;
+      }
+      let x = 0, y = 0;                                    // server's points, receiver's points
+      while (!((x >= 4 || y >= 4) && Math.abs(x - y) >= 2)) {
+        const bp = y >= 3 && y > x, rcv = 1 - srv, gpLead = (x >= 3 && x > y);
+        const setPt = (who) => { const a = ga + (who === 0), b = gb + (who === 1); return (a >= 6 || b >= 6) && Math.abs(a - b) >= 2 || a === 7 || b === 7; };
+        const sp = (bp && setPt(rcv)) || (gpLead && setPt(srv)), win = bp ? rcv : srv, fp = bp ? rcv : sp ? srv : -1;
+        const mp = sp && ((win === 0 && sa === need - 1) || (win === 1 && sb === need - 1));
+        const won = rnd() < p[srv]; if (won) x++; else y++; pts++;
+        lg({ k: "pt", srv, a: (srv === 0) === won ? 1 : 0, ga, gb, x, y, flag: mp ? "match point" : sp ? "set point" : bp ? "break point" : "", fp,
+             st: { sa, sb, ga, gb, srv, tb: false, x, y } });
+      }
+      const held = x > y, aWon = srv === 0 ? held : !held;
+      if (aWon) ga++; else gb++; if (!held) { if (srv === 0) brB++; else brA++; }
+      lg({ k: "game", srv, held, w: aWon ? 0 : 1, ga, gb, x, y, st: null });
+      srv = 1 - srv;
+      if ((ga >= 6 || gb >= 6) && Math.abs(ga - gb) >= 2) { lg({ k: "set", w: ga > gb ? 0 : 1, ga, gb, st: null }); break; }
+    }
+    if (!sets.length) fs = ga + gb;
+    sets.push([ga, gb]); GA += ga; GB += gb; if (ga > gb) sa++; else sb++;
+  }
+  if (log) log.push({ k: "end", w: sa > sb ? 0 : 1, sets: sets.map((x) => x.slice()), sa, sb });
+  return { w: sa > sb ? 0 : 1, sets, games: [GA, GB], tbs, breaks: [brA, brB], pts, first: fs };
+}
+let current = 0, plCurrent = 0, likelyCurrent = 0, tnCurrent = 0;
 onmessage = (e) => {
   const m = e.data;
   if (m.cmd === "nfl" || m.cmd === "run" || (m.cmd === "eng" && m.track)) current = m.id;        // a new run supersedes the old one; other asks don't
@@ -1175,6 +1336,32 @@ onmessage = (e) => {
         players: t.ps.map((p, i) => ({ name: p.name, mean: Array.from(t.sum.slice(i * NBN, (i + 1) * NBN), (x) => x / tk.sims), hist: Array.from(t.hist.slice(i * NBHW, (i + 1) * NBHW)) })) })) });
     };
     step();
+  } else if (m.cmd === "tennis_run") {
+    // 50,000 matches: winner, set scores, total games, each player's games, tiebreaks, first-set games
+    const M = m.m, n = m.n, id = m.id; tnCurrent = id; seed(m.seed || 2026); let k = 0;
+    const A = { n: 0, aw: 0, straight: 0, tb: 0, fsA: 0, sets: {}, tot: new Array(80).fill(0), gA: new Array(45).fill(0), gB: new Array(45).fill(0),
+                first: new Array(14).fill(0), nsets: new Array(6).fill(0), ntb: new Array(6).fill(0), brA: 0, brB: 0, pts: 0, conv: [] };
+    const step = () => {
+      if (tnCurrent !== id) return;
+      const end = Math.min(n, k + 2500);
+      for (; k < end; k++) {
+        const r = tnMatch(tnDraw(M, m.shift), M.best_of || 3, !!M.tb10, null, null);
+        A.n++; if (r.w === 0) A.aw++; if (r.sets.every((x) => (x[0] > x[1]) === (r.w === 0))) A.straight++; if (r.tbs) A.tb++;
+        if (r.sets[0][0] > r.sets[0][1]) A.fsA++;
+        const ka = r.sets.filter((x) => x[0] > x[1]).length, key = `${ka}-${r.sets.length - ka}`; A.sets[key] = (A.sets[key] || 0) + 1;
+        A.tot[Math.min(79, r.games[0] + r.games[1])]++; A.gA[Math.min(44, r.games[0])]++; A.gB[Math.min(44, r.games[1])]++;
+        A.first[Math.min(13, r.first)]++; A.nsets[r.sets.length]++; A.ntb[Math.min(5, r.tbs)]++; A.brA += r.breaks[0]; A.brB += r.breaks[1]; A.pts += r.pts;
+      }
+      A.conv.push([A.n, A.aw / A.n]);
+      postMessage({ id, kind: k < n ? "progress" : "done", agg: A });
+      if (k < n) setTimeout(step, 0);
+    };
+    step();
+  } else if (m.cmd === "tennis_watch") {
+    seed(m.seed || ((Date.now() ^ 0x5bd1e995) >>> 0)); const M = m.m, d = m.shift || 0;
+    const day = tnDraw(M, d), log = [], live = tnSolver(M.pa + d, M.pb - d, M.best_of || 3, !!M.tb10);
+    const r = tnMatch(day, M.best_of || 3, !!M.tb10, log, live);
+    postMessage({ id: m.id, kind: "watch", log, day, final: r, pre: live({ sa: 0, sb: 0, ga: 0, gb: 0, srv: 0, tb: false, x: 0, y: 0 }) * 0.5 + live({ sa: 0, sb: 0, ga: 0, gb: 0, srv: 1, tb: false, x: 0, y: 0 }) * 0.5 });
   } else if (m.cmd === "watch") {
     const out = [0, 0, 0, 0], log = []; simOne(m.model, m.p, { f: 1, sh: 0, sa: 0, half: 0 }, out, log);
     postMessage({ id: m.id, kind: "watch", log, final: [out[0], out[1]] });
@@ -1409,6 +1596,234 @@ function nbaWithWithout(r) {
     <div class="note">This season's games split by whether that player played (games · his minutes · his average). ${
       W.some((w) => Math.min(w.with.n, w.without.n) < 5) ? "Fewer than 5 games on one side: a hint, not a measurement." : ""}</div>`;
 }
+// ---------- Tennis match simulator (D.tennis from edge/tennis_watch.py; engine tnMatch / tnSolver in the worker) ----------
+const TN = { tour: "all", id: null, rates: null, speed: 4, watch: null, agg: null, runId: 0, shown: false };
+const tnAll = () => (D.tennis && D.tennis.matches) || [];
+const tnList = () => tnAll().filter((m) => TN.tour === "all" || m.tour === TN.tour);
+const tnGood = (m) => !m.thin && !/futures|utr|itf/i.test(m.tourn || "");       // default to a well-covered tour or Challenger match
+const tnCur = () => tnAll().find((m) => m.id === TN.id) || tnList().find(tnGood) || tnList()[0] || null;
+const tnSur = (n) => { const w = String(n || "").split(" "); return w.length > 1 ? w.slice(1).join(" ") : n; };
+const tnShift = (m) => (TN.rates === "market" && m.shift != null ? m.shift : 0);
+const tnPts = (v, o) => v >= 3 && o >= 3 ? (v === o ? "40" : v > o ? "AD" : "40") : ["0", "15", "30", "40"][Math.min(v, 3)];
+function tnBind() {
+  $("tnRates").querySelectorAll("button").forEach((b) => b.onclick = () => { if (b.disabled) return; TN.rates = b.dataset.v; tnStopWatch(); tnRatesSeg(); tnRenderHead(); tnResetBoard(); tnRun(); });
+  $("tnSpeed").querySelectorAll("button").forEach((b) => b.onclick = () => { TN.speed = Number(b.dataset.sp); $("tnSpeed").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); });
+  $("tnWatchBtn").onclick = tnWatch; $("tnPause").onclick = tnPauseClick; $("tnSkip").onclick = tnSkipClick;
+}
+function tnEnter() {
+  if (!TN.shown) { TN.shown = true; tnBind(); tnRenderTours(); tnRenderList(); tnSelect(tnCur() && tnCur().id); }
+}
+function tnLeave() { tnStopWatch(); TN.runId++; }
+function tnRenderTours() {
+  const M = tnAll(), c = (t) => M.filter((m) => t === "all" || m.tour === t).length;
+  $("tnTour").innerHTML = [["all", "All"], ["ATP", "ATP"], ["WTA", "WTA"]].map(([v, lab]) => `<button type="button" data-v="${v}" aria-pressed="${TN.tour === v}">${lab}<small> ${c(v)}</small></button>`).join("");
+  $("tnTour").querySelectorAll("button").forEach((b) => b.onclick = () => { TN.tour = b.dataset.v; tnRenderTours(); tnRenderList(); const L = tnList(); if (L.length && !L.find((m) => m.id === TN.id)) tnSelect((L.find(tnGood) || L[0]).id); });
+  const T = D.tennis || {}; $("tnMeta").textContent = T.pulled ? `Tennis Explorer schedule and odds, pulled ${new Date(T.pulled).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "";
+  $("tnCount").textContent = T.note || "";
+}
+function tnRenderList() {
+  const L = tnList(), el = $("tnList");
+  if (!L.length) { el.innerHTML = `<div class="note">No ${TN.tour === "all" ? "" : TN.tour + " "}matches with enough data in the next two days.</div>`; return; }
+  el.innerHTML = L.map((m) => { const t = new Date(m.start);
+    return `<button type="button" class="tn-m" role="listitem" data-id="${esc(m.id)}" aria-current="${m.id === TN.id}">
+      <span class="nm">${esc(tnSur(m.a))} v ${esc(tnSur(m.b))}</span>
+      <span class="ev"><span class="tn-badge">${esc(m.tour)}</span>${esc(m.event || m.tourn || "")}</span>
+      <span class="when">${t.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}${m.market_a != null ? ` · market ${Math.round(100 * m.market_a)}–${Math.round(100 * (1 - m.market_a))}` : ""}</span></button>`; }).join("");
+  el.querySelectorAll(".tn-m").forEach((b) => b.onclick = () => tnSelect(b.dataset.id));
+}
+function tnSelect(id) {
+  const m = tnAll().find((x) => x.id === id) || tnList().find(tnGood) || tnList()[0]; if (!m) { $("tnHead").innerHTML = ""; return; }
+  tnStopWatch(); TN.id = m.id; TN.rates = m.anchor_default && m.shift != null ? "market" : "ratings";
+  $("tnList").querySelectorAll(".tn-m").forEach((b) => b.setAttribute("aria-current", String(b.dataset.id === m.id)));
+  tnRenderHead(); tnRatesSeg(); tnResetBoard(); tnRun();
+}
+function tnRatesSeg() {
+  const m = tnCur(); if (!m) return;
+  $("tnRates").querySelectorAll("button").forEach((b) => { b.setAttribute("aria-pressed", String(b.dataset.v === TN.rates)); b.disabled = b.dataset.v === "market" && m.shift == null; });
+  const d = tnShift(m);
+  $("tnRatesNote").textContent = m.shift == null ? "No market price listed for this match: ratings only." :
+    TN.rates === "market" ? `Serve rates moved ${d >= 0 ? "+" : ""}${(100 * d).toFixed(1)} / ${d >= 0 ? "−" : "+"}${Math.abs(100 * d).toFixed(1)} points so the winner chance equals the market's (same total, so the same expected length).` +
+      (m.tour === "ATP" ? " The tennis pricer does this for ATP games lines (it tested better)." : " The tennis pricer doesn't for WTA (it didn't test better there).")
+    : "Opponent-adjusted ratings only." + (m.anchor_default ? " The tennis pricer matches ATP rates to the market for games lines." : "");
+}
+function tnRenderHead() {
+  const m = tnCur(); if (!m) return; const d = tnShift(m), pa = m.pa + d, pb = m.pb - d;
+  const t = new Date(m.start), pc = (v) => v == null ? "—" : Math.round(100 * v) + "%";
+  const meter = (lab, p) => p == null ? "" : `<div class="tn-meter"><div class="lab"><span>${esc(lab)}</span><span>${pc(p)} – ${pc(1 - p)}</span></div><div class="bar2"><i style="width:${100 * p}%"></i><i style="width:${100 * (1 - p)}%"></i></div></div>`;
+  $("tnHead").innerHTML = `<div class="tn-vs"><span class="a">${esc(m.a)}</span><span class="v">v</span><span class="b">${esc(m.b)}</span></div>
+    <div class="meta"><span><span class="tn-badge">${esc(m.tour)}</span>${esc(m.event || m.tourn || "")}</span><span>${esc(m.surface)}${m.surface_confirmed ? "" : " (not confirmed: November events are on hard courts)"}</span><span>best of ${m.best_of}</span>
+      <span>${t.toLocaleString([], { weekday: "long", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span></div>
+    <div class="note">Serve points won against this opponent: ${esc(tnSur(m.a))} <b>${(100 * pa).toFixed(1)}%</b>, ${esc(tnSur(m.b))} <b>${(100 * pb).toFixed(1)}%</b>
+      (holds about ${(100 * tnHold(pa)).toFixed(0)}% and ${(100 * tnHold(pb)).toFixed(0)}% of service games). Stats-covered matches in 52 weeks: ${m.ms_a} and ${m.ms_b}${m.thin ? " — thin: treat the numbers loosely" : ""}.</div>
+    ${meter("Ratings (opponent-adjusted, with day-to-day form)", m.win_model)}${meter(`Market (Tennis Explorer ${m.odds[0]} / ${m.odds[1]}, no vig)`, m.market_a)}${meter("Elo", m.elo_a)}`;
+}
+function tnHold(p) { const d = p * p / (p * p + (1 - p) * (1 - p)); return p ** 4 * (1 + 4 * (1 - p) + 10 * (1 - p) ** 2) + 20 * p ** 3 * (1 - p) ** 3 * d; }
+// ---------- watch ----------
+function tnStopWatch() { const w = TN.watch; if (w) { clearTimeout(w.timer); cancelAnimationFrame(w.raf || 0); } TN.watch = null; $("tnPause").disabled = true; $("tnSkip").disabled = true; $("tnPause").textContent = "Pause"; }
+function tnResetBoard() { const m = tnCur(); if (!m) return; tnBoard({ sets: [], sa: 0, sb: 0, st: null }, null, ""); $("tnLog").innerHTML = ""; tnCourt(null); TN.wp = []; tnDrawWp(); }
+function tnWatch() {
+  const m = tnCur(); if (!m) return; tnStopWatch(); tnResetBoard();
+  ask({ cmd: "tennis_watch", m, shift: tnShift(m) }, (msg) => {
+    TN.watch = { log: msg.log, i: 0, paused: false, timer: null, day: msg.day, final: msg.final, pre: msg.pre, nPts: msg.log.filter((e) => e.k === "pt" || e.k === "tb").length, pt: 0 };
+    TN.wp = [{ i: 0, p: msg.pre }]; $("tnPause").disabled = false; $("tnSkip").disabled = false; tnStep();
+  });
+}
+function tnPauseClick() { const w = TN.watch; if (!w) return; w.paused = !w.paused; $("tnPause").textContent = w.paused ? "Resume" : "Pause"; if (!w.paused) tnStep(); }
+function tnSkipClick() { const w = TN.watch; if (!w) return; while (w.i < w.log.length) tnApply(w.log[w.i++], false); tnStopWatch(); }
+function tnStep() {
+  const w = TN.watch; if (!w || w.paused) return;
+  if (w.i >= w.log.length) { tnStopWatch(); return; }
+  let e = w.log[w.i++]; tnApply(e, true);
+  while (w.i < w.log.length && !(w.log[w.i].k === "pt" || w.log[w.i].k === "tb")) tnApply(w.log[w.i++], true);
+  w.timer = setTimeout(tnStep, 900 / TN.speed);
+}
+function tnApply(e, anim) {
+  const w = TN.watch, m = tnCur(); if (!w || !m) return; const nm = [tnSur(m.a), tnSur(m.b)];
+  const add = (html) => { const d = document.createElement("div"); d.innerHTML = html; $("tnLog").prepend(d); };
+  const tag = () => `<span class="t">${e.sets.map((x) => x.join("-")).concat([`${e.ga}-${e.gb}`]).join(" ")}</span>`;
+  if (e.k === "pt" || e.k === "tb") {
+    w.pt++; if (e.lp != null) TN.wp.push({ i: w.pt, p: e.lp, set: e.sets.length });
+    const winner = e.a ? 0 : 1, srvWon = (e.srv === 0) === !!e.a;
+    const conv = e.flag && winner === e.fp, other = (k) => nm[1 - k];
+    const what = !e.flag ? "" : e.flag === "break point" ? (conv ? `${nm[e.fp]} converts break point` : `break point saved by ${other(e.fp)}`)
+      : e.flag === "set point" ? (conv ? `${nm[e.fp]} converts set point` : `set point saved by ${other(e.fp)}`)
+      : (conv ? `${nm[e.fp]} converts match point` : `match point saved by ${other(e.fp)}`);
+    if (e.flag) add(`${tag()}<span${conv ? (e.flag === "break point" ? ' class="b"' : ' class="k"') : ""}>${esc(what.charAt(0).toUpperCase() + what.slice(1))}</span>`);
+    const status = `SET ${e.sets.length + 1}${e.k === "tb" ? " · TIEBREAK" : ""}${what ? " · " + what.toUpperCase() : ""}`;
+    tnBoard(e, e, status);
+    if (anim) tnCourtAnim(e); else tnCourt(e);
+    tnDrawWp();
+  } else if (e.k === "game") {
+    const rp = e.held ? Math.min(e.y, 3) : Math.min(e.x, 3);
+    add(e.held ? `${tag()}<span>${esc(nm[e.srv])} holds${e.x >= 4 && e.y >= 3 ? " after deuce" : ` to ${["love", "15", "30", "40"][rp]}`}</span>`
+      : `${tag()}<span class="b">BREAK — ${esc(nm[1 - e.srv])} breaks ${esc(nm[e.srv])}</span>`);
+  } else if (e.k === "set") {
+    add(`<span class="t">Set ${e.sets.length + 1}</span><span class="k">${esc(nm[e.w])} takes it ${e.w === 0 ? `${e.ga}-${e.gb}` : `${e.gb}-${e.ga}`}${e.tbScore ? ` (tiebreak ${Math.max(...e.tbScore)}-${Math.min(...e.tbScore)})` : ""}</span>`);
+  } else if (e.k === "end") {
+    const day = w.day; tnBoard({ sets: e.sets, sa: e.sa, sb: e.sb, st: null, end: true }, null, `Final — ${nm[e.w]} wins`);
+    add(`<span class="t">Final</span><span class="k">${esc(nm[e.w])} wins ${e.sets.map((x) => e.w === 0 ? x.join("-") : `${x[1]}-${x[0]}`).join(", ")}</span>`);
+    add(`<span class="t">On the day</span><span>this run drew ${esc(nm[0])} serving at ${(100 * day[0]).toFixed(1)}% (estimate ${(100 * (m.pa + tnShift(m))).toFixed(1)}%) and ${esc(nm[1])} at ${(100 * day[1]).toFixed(1)}% (${(100 * (m.pb - tnShift(m))).toFixed(1)}%): form swings like this are part of every run.</span>`);
+    tnDrawWp();
+  }
+}
+function tnBoard(state, e, status) {
+  const m = tnCur(); if (!m) return; const nS = m.best_of, sets = state.sets || [];
+  const cur = e && !state.end ? [e.ga, e.gb] : null, done = sets.length;
+  let pA = "", pB = "";
+  if (e && !state.end) {
+    const fin = e.k === "pt" && (e.x >= 4 || e.y >= 4) && Math.abs(e.x - e.y) >= 2;
+    if (e.k === "tb") { pA = String(e.x); pB = String(e.y); }
+    else if (!fin) { const a = e.srv === 0 ? e.x : e.y, b = e.srv === 0 ? e.y : e.x; pA = tnPts(a, b); pB = tnPts(b, a); }
+  }
+  const srv = e ? (e.k === "tb" ? ((((e.x + e.y) + 1) >> 1) % 2 === 0 ? e.first : 1 - e.first) : e.srv) : -1;
+  const row = (k) => { const cells = [];
+    for (let i = 0; i < nS; i++) { const x = sets[i];
+      if (x) { const mine = x[k], oth = x[1 - k], tbL = (x[0] === 7 && x[1] === 6) || (x[0] === 6 && x[1] === 7);
+        cells.push(`<span class="tn-set${mine > oth ? " won" : ""}">${mine}${tbL && mine === 6 ? "<sup>tb</sup>" : ""}</span>`); }
+      else cells.push(`<span class="tn-set"></span>`); }
+    return `<div class="tn-row ${k ? "b" : "a"}"><span class="tn-srv">${srv === k ? "<i></i>" : ""}</span><span class="nm">${esc(tnSur(k ? m.b : m.a))}</span>${cells.join("")}
+      <span class="tn-gm">${cur ? cur[k] : ""}</span><span class="tn-pt${(k ? pB : pA) !== "" ? " on" : ""}">${k ? pB : pA}</span></div>`; };
+  $("tnBoard").style.setProperty("--sets", nS);
+  $("tnBoard").innerHTML = row(0) + row(1) + `<div class="tn-status">${esc(status || "")}</div>`;
+}
+function tnCourtColors(surface) { return surface === "Clay" ? ["#b5562f", "#c86a40"] : surface === "Grass" ? ["#3d7a36", "#4c8d43"] : ["#2f5d8a", "#3a6fa3"]; }
+function tnCourt(e, prog) {
+  const m = tnCur(); if (!m) return; const { x, w, h } = setupCanvas($("tnCourt"));
+  const [outC, inC] = tnCourtColors(m.surface); x.fillStyle = outC; x.fillRect(0, 0, w, h);
+  const cw = Math.min(w - 40, h * 2.05), ch = cw / 2.17, X0 = (w - cw) / 2, Y0 = (h - ch) / 2;
+  x.fillStyle = inC; x.fillRect(X0, Y0, cw, ch);
+  x.strokeStyle = "rgba(255,255,255,.92)"; x.lineWidth = 2; x.strokeRect(X0, Y0, cw, ch);
+  const sy = ch * (1.37 / 10.97), svc = cw * (6.4 / 23.77);              // singles sidelines, service line distance from the net
+  x.beginPath(); x.moveTo(X0, Y0 + sy); x.lineTo(X0 + cw, Y0 + sy); x.moveTo(X0, Y0 + ch - sy); x.lineTo(X0 + cw, Y0 + ch - sy);
+  x.moveTo(X0 + cw / 2 - svc, Y0 + sy); x.lineTo(X0 + cw / 2 - svc, Y0 + ch - sy); x.moveTo(X0 + cw / 2 + svc, Y0 + sy); x.lineTo(X0 + cw / 2 + svc, Y0 + ch - sy);
+  x.moveTo(X0 + cw / 2 - svc, Y0 + ch / 2); x.lineTo(X0 + cw / 2 + svc, Y0 + ch / 2); x.stroke();
+  x.strokeStyle = "#f4f7fa"; x.lineWidth = 3; x.beginPath(); x.moveTo(X0 + cw / 2, Y0 - 8); x.lineTo(X0 + cw / 2, Y0 + ch + 8); x.stroke();
+  const colA = tok("--home"), colB = tok("--away");
+  if (!e) { x.fillStyle = "#fff"; x.font = "13px " + tok("--font-data"); const t = "Press Watch a match"; x.fillText(t, (w - x.measureText(t).width) / 2, Y0 + ch / 2 - 10); return; }
+  // who serves the point that was just played, and from which side (deuce court on even points)
+  const k = e.k === "tb" ? e.x + e.y - 1 : e.x + e.y - 1, srv = e.k === "tb" ? ((((k + 1) >> 1) % 2 === 0) ? e.first : 1 - e.first) : e.srv;
+  const deuce = k % 2 === 0, aRight = srv === 0;
+  // A plays the left end, B the right. Deuce court: the server's right (A: lower half, B: upper half)
+  const sx = srv === 0 ? X0 - 6 : X0 + cw + 6, syy = srv === 0 ? (deuce ? Y0 + ch * 0.7 : Y0 + ch * 0.3) : (deuce ? Y0 + ch * 0.3 : Y0 + ch * 0.7);
+  const rx = srv === 0 ? X0 + cw + 2 : X0 - 2, ry = srv === 0 ? (deuce ? Y0 + ch * 0.3 : Y0 + ch * 0.7) : (deuce ? Y0 + ch * 0.7 : Y0 + ch * 0.3);
+  const bx = srv === 0 ? X0 + cw / 2 + svc * 0.75 : X0 + cw / 2 - svc * 0.75, by = ry;
+  const dot = (px, py, c, r) => { x.fillStyle = c; x.beginPath(); x.arc(px, py, r, 0, 7); x.fill(); x.strokeStyle = "#fff"; x.lineWidth = 2; x.stroke(); };
+  dot(sx, syy, srv === 0 ? colA : colB, 9); dot(rx, ry, srv === 0 ? colB : colA, 9);
+  const p = prog == null ? 1 : prog, t1 = Math.min(1, p / 0.45);
+  const ballX = p < 0.45 ? sx + (bx - sx) * t1 : bx + (rx - bx) * Math.min(1, (p - 0.45) / 0.3), ballY = p < 0.45 ? syy + (by - syy) * t1 : by + (ry - by) * Math.min(1, (p - 0.45) / 0.3);
+  if (p < 0.8) { x.fillStyle = "#e8d33a"; x.beginPath(); x.arc(ballX, ballY, 4.5, 0, 7); x.fill(); }
+  if (p >= 0.75) { const win = e.a ? 0 : 1, nm = tnSur(win ? m.b : m.a); x.font = "700 15px " + tok("--font-display");
+    const txt = `Point ${nm}${e.flag ? " · " + e.flag : ""}`, tw = x.measureText(txt).width, px0 = win ? X0 + cw * 0.75 - tw / 2 : X0 + cw * 0.25 - tw / 2;
+    x.fillStyle = "rgba(15,29,44,.82)"; x.fillRect(px0 - 8, Y0 + 6, tw + 16, 24); x.fillStyle = win ? colB : colA; x.fillText(txt, px0, Y0 + 23); }
+  $("tnCourtLeg").innerHTML = `<span><i style="background:var(--home)"></i>${esc(tnSur(m.a))}</span><span><i style="background:var(--away)"></i>${esc(tnSur(m.b))}</span><span>Serve from the ${deuce ? "deuce" : "ad"} court. The engine plays points, not rallies: only who won each point is simulated.</span>`;
+}
+function tnCourtAnim(e) {
+  const w = TN.watch; const dur = Math.max(120, 750 / TN.speed), t0 = performance.now();
+  const f = (t) => { if (TN.watch !== w) return; const p = Math.min(1, (t - t0) / dur); tnCourt(e, p); if (p < 1) w.raf = requestAnimationFrame(f); };
+  w.raf = requestAnimationFrame(f);
+}
+function tnDrawWp() {
+  const m = tnCur(); if (!m) return; const { x, w, h } = setupCanvas($("tnWp")); const pad = { l: 40, r: 10, t: 10, b: 22 };
+  const A = tok("--home"), B = tok("--away"), muted = tok("--muted"), line = tok("--line"), pts = TN.wp || [], tot = (TN.watch && TN.watch.nPts) || Math.max(1, pts.length ? pts[pts.length - 1].i : 1);
+  const X = (i) => pad.l + (w - pad.l - pad.r) * i / Math.max(tot, 1), Y = (p) => pad.t + (h - pad.t - pad.b) * (1 - p);
+  x.font = "11px " + tok("--font-data"); x.strokeStyle = line; x.fillStyle = muted;
+  [0, 0.25, 0.5, 0.75, 1].forEach((p) => { x.beginPath(); x.moveTo(pad.l, Y(p)); x.lineTo(w - pad.r, Y(p)); x.stroke(); x.fillText(Math.round(100 * p) + "%", 2, Y(p) + 4); });
+  if (pts.length < 2) { x.fillText("Watch a match: the chance " + tnSur(m.a) + " wins, after every point", pad.l + 8, Y(0.5) - 6); }
+  else {
+    let lastSet = 0; pts.forEach((q) => { if (q.set != null && q.set > lastSet) { lastSet = q.set; x.strokeStyle = line; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(X(q.i), pad.t); x.lineTo(X(q.i), h - pad.b); x.stroke(); x.setLineDash([]); x.fillStyle = muted; x.fillText("set " + (q.set + 1), X(q.i) + 3, h - 6); } });
+    for (const [col, above] of [[A, true], [B, false]]) {
+      x.save(); x.beginPath(); x.rect(pad.l, above ? pad.t : Y(0.5), w, above ? Y(0.5) - pad.t : h - pad.b - Y(0.5)); x.clip();
+      x.fillStyle = col; x.globalAlpha = 0.18; x.beginPath(); x.moveTo(X(pts[0].i), Y(0.5)); pts.forEach((q) => x.lineTo(X(q.i), Y(q.p))); x.lineTo(X(pts[pts.length - 1].i), Y(0.5)); x.closePath(); x.fill();
+      x.globalAlpha = 1; x.strokeStyle = col; x.lineWidth = 2; x.beginPath(); pts.forEach((q, j) => j ? x.lineTo(X(q.i), Y(q.p)) : x.moveTo(X(q.i), Y(q.p))); x.stroke(); x.restore();
+    }
+    const q = pts[pts.length - 1]; x.fillStyle = q.p >= 0.5 ? A : B; x.beginPath(); x.arc(X(q.i), Y(q.p), 4, 0, 7); x.fill();
+    x.fillStyle = tok("--ink"); x.fillText(`${tnSur(q.p >= 0.5 ? m.a : m.b)} ${Math.round(100 * Math.max(q.p, 1 - q.p))}%`, Math.min(X(q.i) + 6, w - 110), Math.max(Y(q.p) - 6, 12));
+  }
+  $("tnWpLeg").innerHTML = `<span><i style="background:var(--home)"></i>${esc(tnSur(m.a))} ahead</span><span><i style="background:var(--away)"></i>${esc(tnSur(m.b))} ahead</span><span>Exact chance from each score at the pre-match serve rates.</span>`;
+}
+// ---------- 50,000 matches ----------
+function tnRun() {
+  const m = tnCur(); if (!m) return; const my = ++TN.runId; $("tnOdo").textContent = "0"; $("tnBarFill").style.width = "0%";
+  $("tnRunNote").textContent = `Each run draws both players' form for the day (sd ${(100 * m.sd).toFixed(1)} points, correlation ${Number(m.rho).toFixed(2)}), then plays every point.`;
+  ask({ cmd: "tennis_run", m, shift: tnShift(m), n: N, seed: 2026 }, (msg) => { if (my !== TN.runId) return; TN.agg = msg.agg; tnResults(); });
+}
+function tnResults() {
+  const m = tnCur(), A = TN.agg; if (!m || !A) return; const n = A.n || 1, nm = [tnSur(m.a), tnSur(m.b)];
+  $("tnOdo").textContent = A.n.toLocaleString(); $("tnBarFill").style.width = (100 * A.n / N) + "%";
+  const mean = (h) => h.reduce((s, c, i) => s + c * i, 0) / n, med = (h) => { let c = 0; for (let i = 0; i < h.length; i++) { c += h[i]; if (c >= n / 2) return i; } return 0; };
+  const tile = (cls, lab, big, sub) => `<div class="tile ${cls}"><span class="label">${lab}</span><span class="big">${big}</span><span class="sub">${sub || ""}</span></div>`;
+  $("tnTiles").innerHTML = [tile("home", `${esc(nm[0])} wins`, fmtPct(A.aw / n), `fair ${fair(A.aw / n)}`), tile("away", `${esc(nm[1])} wins`, fmtPct(1 - A.aw / n), `fair ${fair(1 - A.aw / n)}`),
+    tile("", "Straight sets", fmtPct(A.straight / n), `${m.best_of === 3 ? "2-0 either way" : "3-0 either way"}`), tile("", "A tiebreak", fmtPct(A.tb / n), "at least one"),
+    tile("", "Total games", mean(A.tot).toFixed(1), `median ${med(A.tot)}`), tile("", "Games won", `${mean(A.gA).toFixed(1)}–${mean(A.gB).toFixed(1)}`, `${esc(nm[0])}–${esc(nm[1])}`),
+    tile("", `First set ${esc(nm[0])}`, fmtPct(A.fsA / n), `breaks a match ${(A.brA / n).toFixed(1)}–${(A.brB / n).toFixed(1)}`)].join("");
+  const keys = Object.keys(A.sets).sort((p, q) => { const [a1, b1] = p.split("-").map(Number), [a2, b2] = q.split("-").map(Number); return (b1 - a1) - (b2 - a2); });
+  const mx = Math.max(...Object.values(A.sets), 1);
+  $("tnSets").innerHTML = keys.map((k) => { const [a, b] = k.split("-").map(Number), wA = a > b, v = A.sets[k] / n;
+    return `<div class="tn-bar"><span>${esc(wA ? nm[0] : nm[1])} ${wA ? `${a}-${b}` : `${b}-${a}`}</span><i style="width:${100 * A.sets[k] / mx}%;background:var(${wA ? "--home" : "--away"})"></i><span>${fmtPct(v)}</span></div>`; }).join("");
+  const tl = (m.lines || []).find((l) => /^total games$/i.test(l.stat || ""));
+  tnDrawDist(A.tot, tl ? tl.line : null);
+  // PrizePicks lines on this match, priced by these runs
+  const over = (h, L) => { let o = 0, u = 0; h.forEach((c, i) => { if (i > L) o += c; else if (i < L) u += c; }); return [o / Math.max(o + u, 1), u / Math.max(o + u, 1)]; };
+  const hist = (l) => { const s = (l.stat || "").toLowerCase(), who = tnSur(l.player || "").toLowerCase();
+    if (/games won/.test(s)) return who && tnSur(m.b).toLowerCase().includes(who.split(" ").pop()) ? A.gB : A.gA;
+    if (/1st set/.test(s)) return A.first; if (/tie ?break/.test(s)) return A.ntb; if (/sets/.test(s)) return A.nsets; if (/games/.test(s)) return A.tot; return null; };
+  const rows = (m.lines || []).map((l) => { const h = hist(l); if (!h) return ""; const [o, u] = over(h, l.line);
+    return `<tr><td>${esc(l.player || "")}</td><td>${esc(l.stat)} ${l.line}</td><td class="n">${fmtPct(o)}</td><td class="n">${fmtPct(u)}</td><td>${l.p != null ? `${esc(l.side)} ${fmtPct(l.p)} <span class="pill ${esc(l.conf)}">${esc(l.conf)}</span>` : "—"}</td></tr>`; }).join("");
+  $("tnLines").innerHTML = rows ? `<h3>PrizePicks lines on this match</h3><div class="tbl-wrap"><table class="tn-lines"><thead><tr><th>Player</th><th>Line</th><th class="n">Over here</th><th class="n">Under here</th><th>Published by the pricer</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="note">"Here" is this page's simulation alone. The published number blends it with Dabble's price and passed the back-check; only that one is a pick.</p>` : "";
+  $("tnHonest").textContent = `How good is this? On ${m.tour} matches from September on, the ratings picked winners at a log loss of ${m.tour === "ATP" ? "0.640" : "0.657"} (a coin flip is 0.693); the market's price was better (ATP 0.608). Total games were close to unpredictable (0.69 log loss at the line). Watch it for the shape of a match, not as a forecast that beats the odds.`;
+}
+function tnDrawDist(h, line) {
+  const { x, w, h: H } = setupCanvas($("tnDist")); const pad = { l: 34, r: 10, t: 10, b: 24 };
+  let lo = h.findIndex((c) => c > 0), hi = h.length - 1; while (hi > 0 && !h[hi]) hi--; if (lo < 0) return; lo = Math.max(0, lo - 1); hi = Math.min(h.length - 1, hi + 1);
+  const n = h.reduce((s, c) => s + c, 0) || 1, mx = Math.max(...h) / n, bw = (w - pad.l - pad.r) / (hi - lo + 1), acc = tok("--accent"), muted = tok("--muted");
+  x.font = "11px " + tok("--font-data"); x.strokeStyle = tok("--line"); x.fillStyle = muted;
+  for (let i = 0; i <= 4; i++) { const y = pad.t + (H - pad.t - pad.b) * i / 4; x.beginPath(); x.moveTo(pad.l, y); x.lineTo(w - pad.r, y); x.stroke(); x.fillText((100 * mx * (1 - i / 4)).toFixed(0) + "%", 0, y + 4); }
+  for (let v = lo; v <= hi; v++) { const p = h[v] / n, bh = (H - pad.t - pad.b) * p / mx; x.fillStyle = line != null && v > line ? acc : muted; x.fillRect(pad.l + (v - lo) * bw + 0.5, H - pad.b - bh, Math.max(1, bw - 1), bh);
+    if ((v - lo) % Math.max(1, Math.round((hi - lo) / 8)) === 0) { x.fillStyle = muted; x.fillText(String(v), pad.l + (v - lo) * bw + bw / 2 - 6, H - 6); } }
+  if (line != null) { const px = pad.l + (line - lo + 0.5) * bw; x.strokeStyle = tok("--ink"); x.setLineDash([4, 3]); x.beginPath(); x.moveTo(px, pad.t); x.lineTo(px, H - pad.b); x.stroke(); x.setLineDash([]); x.fillStyle = tok("--ink"); x.fillText(`PrizePicks ${line}`, Math.min(px + 4, w - 100), pad.t + 10); }
+  $("tnDistLeg").innerHTML = line != null ? `<span><i style="background:var(--accent)"></i>Over ${line}</span><span><i style="background:var(--muted)"></i>Under</span>` : `<span>No PrizePicks total-games line posted for this match.</span>`;
+}
 // ---------- every priced leg, filtered by label (boards.js from `python -m edge boards --page boards.js`) ----------
 const BOARD = {};
 function renderBoard(sport, el) {
@@ -1540,6 +1955,8 @@ function syncPicks() {
   const tv = state.view === "tennis";
   const lay = document.querySelector(".layout"); if (lay) lay.hidden = tv;
   if ($("tennisPicksPanel")) $("tennisPicksPanel").hidden = !(tv && window.SIMLAB_TENNIS_PICKS);
+  if ($("tennisSim")) { const on = tv && !!(D.tennis && D.tennis.matches && D.tennis.matches.length); $("tennisSim").hidden = !on;
+    if (on && typeof tnEnter === "function") setTimeout(tnEnter, 0); else if (!on && typeof tnLeave === "function") tnLeave(); }
   const k = state.custom || tv ? null : (league() || {}).key;
   if ($("picksPanel")) $("picksPanel").hidden = !(window.SIMLAB_PICKS && k === "nba");
   if ($("nflPicksPanel")) $("nflPicksPanel").hidden = !(window.SIMLAB_NFL_PICKS && k === "nfl");
@@ -1647,9 +2064,10 @@ function renderRail() {
   D.leagues.forEach((lg, i) => { const b = document.createElement("button"); b.className = "chip"; b.setAttribute("aria-pressed", String(!state.custom && i === state.lg));
     b.setAttribute("aria-pressed", String(!state.custom && !state.view && i === state.lg));
     b.innerHTML = `${esc(lg.label)}<small>${lg.games.length}</small>`; b.onclick = () => { state.view = null; state.lg = i; state.gi = 0; state.custom = false; renderRail(); renderGames(); selectGame(); }; r.appendChild(b); });
-  if (window.SIMLAB_TENNIS_PICKS) {            // tennis has no game simulator on this page: its chip opens the tennis picks
+  const tnN = (D.tennis && D.tennis.matches || []).length;
+  if (window.SIMLAB_TENNIS_PICKS || tnN) {      // tennis: the match simulator (ATP + WTA) and the tennis picks
     const tb = document.createElement("button"); tb.className = "chip"; tb.setAttribute("aria-pressed", String(state.view === "tennis"));
-    const tp = window.SIMLAB_TENNIS_PICKS; tb.innerHTML = `Tennis<small>${tp.games || ""}</small>`;
+    const tp = window.SIMLAB_TENNIS_PICKS || {}; tb.innerHTML = `Tennis<small>${tnN || tp.games || ""}</small>`;
     tb.onclick = () => { state.view = "tennis"; state.custom = false; renderRail(); }; r.appendChild(tb);
   }
   const c = document.createElement("button"); c.className = "chip"; c.setAttribute("aria-pressed", String(state.custom)); c.textContent = "Any game (custom)";
