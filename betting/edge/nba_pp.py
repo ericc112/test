@@ -26,6 +26,8 @@ import unicodedata
 
 import numpy as np
 
+from gamesim.data import slate_today
+
 from . import viz as _viz
 
 from .blend import HERE
@@ -270,7 +272,7 @@ def snapshot_dk(eng: dict, games: list[dict]):
     closing line can be read back for closing line value."""
     now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
     os.makedirs(SNAP_DIR, exist_ok=True)
-    with open(os.path.join(SNAP_DIR, f"{dt.date.today().isoformat()}.jsonl"), "a") as f:
+    with open(os.path.join(SNAP_DIR, f"{slate_today()}.jsonl"), "a") as f:
         for g in games:
             lines = ((eng["sides"].get(g["id"]) or {}).get("players") or {}).get("lines") or {}
             if lines:

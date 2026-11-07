@@ -73,6 +73,12 @@ def cutoff(day: str) -> str:
     return f"{day}T10:00Z"
 
 
+def slate_today() -> str:
+    """Today's slate as a US date (YYYY-MM-DD), the same 10-hour shift as us_day: the server clock is UTC, so from 7 pm
+    ET (EST) a plain date.today() already reads tomorrow and filed the evening's NBA/NFL slate under the wrong day."""
+    return us_day(dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M"))
+
+
 def now_cutoff() -> str:
     """Cutoff for today's slate: all games of earlier US days, including last night's (which carry today's UTC date)."""
     return cutoff(us_day(dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M")))

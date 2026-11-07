@@ -1238,7 +1238,8 @@ function renderPicks() {
   </div>`; };
   const drop = P.likely_dropped || [];
   $("pkLikely").innerHTML = ((P.likely || []).map(lcard).join("") || `<div class="note">No leg tonight where the most likely game, the simulation's median, this season and every other reason agree.</div>`)
-    + (drop.length ? `<div class="note">Dropped for a reason against them (${drop.length}): ${drop.map((d) => `${esc(d.player)} ${esc(d.side)} ${d.line} ${esc(d.stat)} (${esc(d.against.join(", "))})`).join("; ")}</div>` : "");
+    + (drop.length ? `<div class="note">Dropped for a reason against them (${drop.length}): ${drop.map((d) => `${esc(d.player)} ${esc(d.side)} ${d.line} ${esc(d.stat)} (${esc(d.against.join(", "))})`).join("; ")}</div>` : "")
+    + ((P.withdrawn || []).length ? `<div class="note">Withdrawn, failed the back-check (not published): ${P.withdrawn.map(esc).join("; ")}</div>` : "");
   // logic versions, track record, closing line value and tonight's tilt (written by nba-picks)
   const pct1 = (v) => v == null ? "—" : (100 * v).toFixed(1) + "%";
   const tr = P.track || {}, cl = P.clv || {}, tl = P.tilt || {};

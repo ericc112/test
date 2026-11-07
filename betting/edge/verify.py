@@ -629,6 +629,7 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
         if sport != "nfl" or "prizepicks" in (row.get("book") or "").lower():   # a DraftKings NFL leg: check_nfl reads that board
             check_offered(rep)
     repriced = any(n == "reprice" and st == "PASS" for st, n, _ in rep.checks)
-    if row.get("date") and row["date"] < dt.date.today().isoformat() and not repriced:
+    from gamesim.data import slate_today
+    if row.get("date") and row["date"] < slate_today() and not repriced:
         rep.add("WARN", "freshness", f"priced on {row['date']} and not re-run today: odds, lineups and lines may have moved")
     return rep

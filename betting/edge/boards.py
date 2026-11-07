@@ -46,7 +46,8 @@ def _verified(date: str) -> dict:
 
 
 def export(date: str | None = None) -> dict:
-    date = date or dt.date.today().isoformat()
+    from gamesim.data import slate_today
+    date = date or slate_today()
     bets = list(csv.DictReader(open(os.path.join(HERE, "data", "bets.csv"))))
     key = lambda e, p, l, s: (str(e), str(p).lower(), round(float(l), 2), s)
     logged = {}

@@ -62,7 +62,7 @@ def log_pp(rows: list[dict], action: dict | None = None, refresh: bool = False) 
                     b["action"] = action[id(r)]
             out.append((seen[k], False))
             continue
-        bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": r["sport"], "event": f"{r['team']} vs {r['opp']}",
+        bets.append({"id": str(nid), "date": _slate(), "sport": r["sport"], "event": f"{r['team']} vs {r['opp']}",
                      "event_id": r["event_id"], "player": r["player"], "player_id": r["player_id"], "market": r["market_key"],
                      "line": r["line"], "side": r["side"], "book": f"PrizePicks {r['odds_type']}", "p_model": "" if r["p_model"] is None else round(r["p_model"], 3),
                      "p_market": "" if r["p_market"] is None else round(r["p_market"], 3), "p_hist": "" if r["p_hist"] is None else round(r["p_hist"], 3),
@@ -474,7 +474,7 @@ def _board_picks(args, sport: str):
     lab = lambda r: NP.LABEL[r.get("stat_key") or r["market_key"]]
     import gzip
     os.makedirs(os.path.join(HERE, "data", f"{sport}_boards"), exist_ok=True)
-    with gzip.open(os.path.join(HERE, "data", f"{sport}_boards", f"{dt.date.today().isoformat()}.json.gz"), "wt") as f:   # the full priced board
+    with gzip.open(os.path.join(HERE, "data", f"{sport}_boards", f"{_slate()}.json.gz"), "wt") as f:   # the full priced board
         json.dump([{k: r.get(k) for k in ("player", "team", "stat", "line", "side", "p_final", "confidence", "p_model", "p_market", "dk_line",
                                           "dk_lambda", "median", "event_id", "player_id", "game", "start", "odds_type")} for r in ok], f, default=float)
     D = []
@@ -524,7 +524,7 @@ def _board_picks(args, sport: str):
                 "book": "Dabble" if sport != "tennis" and r.get("dabble") and r.get("dk_line") is None and r.get("dk_lambda") is None else None,
                 "book_line": (r.get("dabble") or {}).get("line") if sport != "tennis" else None,
                 "games": rs.get("games"), "extra": rs.get("extra"), "dist": r.get("dist"), "opp": r.get("opp")}
-    today = dt.date.today().isoformat()
+    today = _slate()
     sections, days_out = [], []
     for d in D:
         pg_d = {"label": d["label"], "games": sorted({r["game"] for r in d["rows"]}), "lines": len(d["rows"]), "per_game": d["cap"],
@@ -581,6 +581,13 @@ def _board_picks(args, sport: str):
     print(f"Report: {out}")
 
 
+
+def _slate() -> str:
+    """The slate's US date (gamesim.data.slate_today): file names and ledger dates follow the US evening, not UTC."""
+    from gamesim.data import slate_today
+    return slate_today()
+
+
 def _nba_picks(args):
     """Price tonight's NBA PrizePicks board, keep the best legs (one per game) by the model and, for comparison, by
     history alone, back-check each, write the report (markdown) and the page data (JSON + picks.js)."""
@@ -603,7 +610,7 @@ def _nba_picks(args):
     from .nba_clv import clv as nba_clv
     rows = N.price_nba(props, n=args.n)                       # the CURRENT logic: the only one published
     ok = [r for r in rows if "error" not in r]
-    today = dt.date.today().isoformat()
+    today = _slate()
     shadow = NM.params("shadow")
     rows_sh, ok_sh = [], []
     if shadow:                                                # the SHADOW logic scores the same board, never published
@@ -662,7 +669,7 @@ def _nba_picks(args):
         print(rep.text())
         return rep.verdict, [f"{n}: {d}" for st, n, d in rep.checks if st != "PASS"]
 
-    blocks, hblocks, lblocks, page = [], [], [], {"model": [], "history": [], "likely": []}
+    blocks, hblocks, lblocks, page = [], [], [], {"model": [], "history": [], "likely": [], "withdrawn": []}
     for lst, out, key, writer in ((picks, blocks, "model", N.write_up), (hist, hblocks, "history", N.history_write_up),
                                   (lk, lblocks, "likely", N.likely_write_up)):
         for r in lst:
@@ -670,6 +677,11 @@ def _nba_picks(args):
             if id(r) in ids:
                 r["bet_id"] = f"#{ids[id(r)]} "
             out.append(writer(r, ver, warns))
+            if str(ver).startswith("NOT"):          # NOT VERIFIED is not published (CLAUDE.md): kept in the report, off the page
+                w = f"#{ids.get(id(r))} {r['player']} {r['side']} {r['line']} {N.LABEL[r['stat_key']]}"
+                if w not in page["withdrawn"]:
+                    page["withdrawn"].append(w)
+                continue
             page[key].append(N.page_row(r, ver, warns, ids.get(id(r))))
     bias = N.model_market_bias(ok)
     n_std = sum(r["odds_type"] == "standard" for r in ok)
@@ -730,6 +742,8 @@ def _nba_picks(args):
     lsec.append(f"Dropped for a reason against them: {len(drop)}" + (": " + "; ".join(
         f"{d['player']} {d['side']} {d['line']} {d['stat']} ({d['p']:.0%}; against: {', '.join(d['against'])})" for d in drop) if drop else "") + "")
     lsec.append("")
+    if page["withdrawn"]:
+        head += [f"**Withdrawn (NOT VERIFIED, not published):** {'; '.join(page['withdrawn'])}. Their write-ups stay below for the record.", ""]
     report = ("\n".join(head) + "\n## Top 5 by the model\n\n" + "\n\n".join(blocks) + "\n" + "\n".join(tail) + "\n" + "\n".join(hsec) + "\n"
               + "\n\n".join(hblocks) + "\n" + "\n".join(lsec) + "\n" + "\n\n".join(lblocks) + "\n\n" + NR.markdown(track, clv_s, tilt_s) + "\n" + "\n".join(shsec) + "\n")
     out = args.out or os.path.join(HERE, "data", "picks", f"{today}-nba.md")
@@ -819,7 +833,7 @@ def _nfl(args):
             if k in seen or "not priced" in " ".join(x["flags"]):
                 continue
             vol = x.get("volume")
-            bets.append({"id": str(nid), "date": dt.date.today().isoformat(), "sport": "nfl", "event": ev, "event_id": g["event_id"],
+            bets.append({"id": str(nid), "date": _slate(), "sport": "nfl", "event": ev, "event_id": g["event_id"],
                          "player": x["player"], "player_id": x["player_id"], "market": x["market"], "line": x["line"], "side": x["side"],
                          "book": "DraftKings line (no price)", "p_model": x["p_model"], "p_market": "",
                          "p_hist": "" if x["p_hist"] is None else x["p_hist"], "hist_n": x["hist_n"], "p_final": x["p_final"],

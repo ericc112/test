@@ -311,3 +311,19 @@ class DabbleValue(unittest.TestCase):
         # DraftKings 51% over 3 threes (push excluded): over 3.5 needs 4+, well under 51%
         self.assertTrue(0.35 < shop.prob_at(0.51, 3.0, 3.5, ("three-made",)) < 0.45)
         self.assertAlmostEqual(shop.prob_at(0.6, 19.5, 19.5, ("points",)), 0.6, places=3)
+
+
+class SlateDate(unittest.TestCase):
+    """After 7 pm ET the UTC clock reads tomorrow; files and ledger dates must stay on the US slate."""
+
+    def test_evening_and_late_west_coast_stay_on_the_slate(self):
+        from unittest import mock
+        import datetime as dt
+        from gamesim import data as D
+        for utc, want in (("2026-11-07T00:31", "2026-11-06"), ("2026-11-07T06:30", "2026-11-06"), ("2026-11-06T17:00", "2026-11-06")):
+            class Fake(dt.datetime):
+                @classmethod
+                def now(cls, tz=None, _t=utc):
+                    return dt.datetime.strptime(_t, "%Y-%m-%dT%H:%M").replace(tzinfo=dt.timezone.utc)
+            with mock.patch.object(D.dt, "datetime", Fake):
+                self.assertEqual(D.slate_today(), want, utc)
