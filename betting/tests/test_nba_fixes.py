@@ -334,3 +334,37 @@ class SlateDate(unittest.TestCase):
                     return dt.datetime.strptime(_t, "%Y-%m-%dT%H:%M").replace(tzinfo=dt.timezone.utc)
             with mock.patch.object(D.dt, "datetime", Fake):
                 self.assertEqual(D.slate_today(), want, utc)
+
+
+class SimStudy(unittest.TestCase):
+    """2026-11-07 simulation study: headroom minutes sharing and the assist-share fix."""
+
+    def test_headroom_fills_rotation_before_stars(self):
+        from gamesim import nba as G
+        raw = [36.0, 34.0, 30.0, 18.0, 15.0, 12.0, 10.0, 8.0]          # 163 minutes: a starter's 77 are free
+        ceil = [40.0, 39.0, 37.0, 34.0, 32.0, 28.0, 24.0, 20.0]   # room for the 77
+        x = G.allocate_headroom(raw, ceil)
+        self.assertAlmostEqual(sum(x), 240.0, places=6)
+        self.assertTrue(all(v <= c + 1e-9 for v, c in zip(x, ceil)))
+        self.assertLess(x[0] - raw[0], x[3] - raw[3])                 # the star gains less than the rotation player
+        alpha = G.allocate_minutes(raw, alpha=1.0)
+        self.assertLess(x[0], alpha[0])                               # proportional scaling pushes the star higher
+        self.assertEqual(G.allocate_headroom([50.0] * 5 + [10.0], [52.0] * 6), G.allocate_minutes([50.0] * 5 + [10.0]))  # surplus: unchanged rule
+
+    def test_assist_fix_restores_the_high_usage_share(self):
+        import shutil, subprocess, json as js, os
+        if not shutil.which("node"):
+            self.skipTest("node not installed")
+        html = os.path.join(os.path.dirname(__file__), "..", "simlab", "index.html")
+        code = r"""
+const fs=require('fs'),vm=require('vm');const h=fs.readFileSync(process.argv[1],'utf8');
+const src=h.match(/<script type="text\/plain" id="workerSrc">([\s\S]*?)<\/script>/)[1];
+const c={postMessage:()=>{},setTimeout:(f)=>f(),console,Math,Float64Array,Int32Array,Uint32Array,Uint8Array,Array,Object,JSON};vm.createContext(c);
+vm.runInContext(src+';this.__f=nbAstFix;',c);
+const z=(a)=>Float64Array.from(a);const t={n:3,w2m:z([4,3,3]),w3m:z([0,0,0]),wa:z([5,3,2]),am:z([0,0,0]),at:z([0,0,0]),ax:z([0,0,0]),ae:z([0,0,0])};
+c.__f(t);const A=[...t.wa],S=A.reduce((a,b)=>a+b,0),ms=[0.4,0.3,0.3];
+const e=A.map((x,i)=>ms.reduce((s,m,j)=>j===i?s:s+m*x/(S-A[j]),0));console.log(JSON.stringify({e,tgt:[0.5,0.3,0.2],w:A}));"""
+        out = js.loads(subprocess.run(["node", "-e", code, html], capture_output=True, text=True, check=True).stdout)
+        for e, t in zip(out["e"], out["tgt"]):
+            self.assertAlmostEqual(e, t, places=3)                   # expected assist shares now match the rates
+        self.assertGreater(out["w"][0] / sum(out["w"]), 0.5)          # the main shooter's weight is raised above his 50% rate share

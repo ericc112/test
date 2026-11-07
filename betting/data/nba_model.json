@@ -201,7 +201,7 @@
  },
  "shadow": {
   "version": 3,
-  "name": "v3 candidate: v2 + shrink to the market when simulation and market are more than 8 points apart (user audit 2026-11-06)",
+  "name": "v3 candidate: v2 + shrink to the market past an 8-point disagreement (user audit) + headroom minutes sharing + assist-share fix (simulation study 2026-11-07)",
   "params": {
    "bias": "table",
    "blend": {
@@ -224,7 +224,10 @@
    "push": "exclusive",
    "sim": {
     "minutes_alpha": 1.0,
-    "swing_rho": 0.8
+    "swing_rho": 0.8,
+    "minutes_share": "headroom",
+    "minutes_pad": 3.0,
+    "ast_fix": 1
    },
    "bias_table": {
     "pts": {
@@ -284,7 +287,56 @@
   },
   "since": "2026-11-06",
   "backtest_evidence": {
-   "note": "no backtest yet: scored live against v2 on graded legs (200+ legs or 14 days, log loss and label calibration)"
+   "note": "simulation pieces on the 2026-27 corpus (95 games to Nov 5, 6,431 DraftKings lines; data/nba_bt/corpus_x_*.json.gz); the disagreement shrink has no backtest yet. Adopted only after beating v2 live (200+ graded legs or 14 days, log loss and label calibration).",
+   "minutes_box_fair_test": {
+    "starters_mae_2025_26": [
+     5.13,
+     4.77
+    ],
+    "starters_mae_2026_27": [
+     4.7,
+     4.38
+    ],
+    "all_mae_2026_27": [
+     5.0,
+     4.92
+    ]
+   },
+   "corpus": {
+    "minutes_mae": [
+     4.77,
+     4.61
+    ],
+    "top5_ast_per36_sim_vs_actual": {
+     "before": [
+      4.19,
+      4.46
+     ],
+     "after": [
+      4.34,
+      4.46
+     ]
+    },
+    "carry_logloss_per_line_diff_headroom": [
+     -0.0119,
+     [
+      -0.0265,
+      -0.0005
+     ]
+    ],
+    "blend_logloss": {
+     "v2": 0.6868,
+     "v3_sim": 0.6872,
+     "ci_diff": [
+      -0.0003,
+      0.0011
+     ]
+    },
+    "sim_logloss": {
+     "v2": 0.7046,
+     "v3_sim": 0.7038
+    }
+   }
   }
  },
  "history": [

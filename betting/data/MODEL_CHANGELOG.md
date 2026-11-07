@@ -106,3 +106,24 @@ Logic versions live in `data/nba_model.json`; `python -m edge.nba_model status |
   - set `AGREE_MAX = 1.0` and `GAP_2ND = 99` in `edge/nba_pp.py` (labels revert to the blend gates);
   - set `"shadow": null` in `data/nba_model.json` (drops v3);
   - `git revert` the commit for the display.
+
+## 2026-11-07: NBA simulation study (headroom minutes, assist-share fix) → shadow v3
+Prompted by the user ("maybe the simulation needs to be better") after Keyonte George's reb + ast under (a 53% Low leg, simulation 62%) went 7 in the first quarter.
+- **Where the simulation stands** (corpus `data/nba_bt/corpus_x_base.json.gz`: 95 games to Nov 5, 6,431 DraftKings lines, every game re-simulated with only what was known before it):
+  - On its own it loses to a coin flip at DraftKings' line: log loss 0.705 (DraftKings 0.689, coin 0.693), calibration slope 0.28.
+  - It still adds information beyond the price: 0.21 ± 0.05 on its logit difference, which is the 0.2 weight the published blend already gives it. The blend scores 0.687, slightly better than DraftKings.
+  - Its spread is calibrated (randomized PIT sd 0.285 vs 0.289 uniform); the earlier "too wide" reading was a whole-number artifact. The weak part is location, not spread.
+  - Known minutes would cut its points error 17% (rebounds 12%, assists 8%); minutes miss by 4.8 on average.
+- **Headroom minutes sharing** (`MINUTES_SHARE = "headroom"`): minutes freed by absences go to players in proportion to their room below their own ceiling (last-10 high + 3) instead of scaling everyone, so stars near their usual load barely move.
+  - Box-score fair test, tuned on 2025-26 and scored on 2026-27: starters' minutes MAE 5.13 → 4.77 and 4.70 → 4.38.
+  - Corpus: minutes MAE 4.77 → 4.61, and moving DraftKings' price to lines 1–5 points away (the PrizePicks case) improves by 0.012 log loss per line (game-bootstrap CI −0.027 to −0.001). The main-line blend doesn't change (+0.0003, CI −0.0004 to +0.001).
+- **Assist-share fix** (`AST_FIX`, worker `nbAstFix`): assists can't go to the shooter, so drawing them in proportion to per-minute rates undercounted high-usage players and overcounted the bench.
+  - Starters' simulated assists per 36: 4.19 → 4.34 (actual 4.46); bench 3.32 → 3.09 (actual 3.17).
+  - Simulation log loss on assist lines −0.004. The blend is unchanged.
+- **Not adopted:**
+  - smaller role swing (PIT showed the spread was already right; simulation log loss worse);
+  - smaller minutes spread (no change);
+  - a longer minutes window (better on 2025-26, worse on 2026-27);
+  - more weight on last season's rates (250/500/1000 minutes: points worse, rebounds and assists within noise).
+- **Status:** both pieces are in **shadow v3**, alongside the disagreement shrink. The live logic is unchanged. v3 is promoted only after beating v2 on 200+ graded legs or 14 days, on log loss and label calibration. The shadow re-simulates with its own settings, which adds about 8 minutes to each `nba-picks` run.
+- **Rollback:** `"shadow": null` in `data/nba_model.json`. Both switches default off in `gamesim/nba.py`.
