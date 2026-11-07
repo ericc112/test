@@ -38,7 +38,8 @@ PARTS = {"pts": ("pts",), "reb": ("reb",), "ast": ("ast",), "tpm": ("tpm",), "pr
          "pr": ("pts", "reb"), "pa": ("pts", "ast"), "ra": ("reb", "ast")}
 KNOBS = {"minutes_alpha": "MINUTES_ALPHA", "prior_min": "PLAYER_PRIOR_MIN", "injury_beta": "INJURY_BETA", "player_w": "PLAYER_RATING_W",
          "comeback_sd": "COMEBACK_SD", "shock": "PLAYER_SHOCK", "min_sd_scale": "MIN_SD_SCALE", "swing_rho": "SWING_RHO",
-         "minutes_share": "MINUTES_SHARE", "minutes_pad": "MINUTES_PAD", "ast_fix": "AST_FIX"}
+         "minutes_share": "MINUTES_SHARE", "minutes_pad": "MINUTES_PAD", "ast_fix": "AST_FIX",
+         "team_market_w": "TEAM_MARKET_W"}
 
 
 def imp(a) -> float | None:
@@ -164,6 +165,8 @@ def day_inputs(day: str, G: list, PT: dict, PRt, RS, games: list) -> dict:
         if PRt and prf["n_games"] >= 100:
             pm = PRt.margin(prf, PRt.lineup_played(g["id"], g["home"], cut), PRt.lineup_played(g["id"], g["away"], cut), g["neutral"])
             H, A, _ = gnba.with_player_ratings(H, A, R, pm["margin"])
+        ln = g.get("line") or {}
+        H, A, _ = gnba.anchor_to_market(H, A, R, ln.get("spread_home"), ln.get("total"))
         out[g["id"]] = {"R": _R_export(R, G, cut), "sides": {"home": H, "away": A}, "pl": [prof["home"], prof["away"]]}
     return out
 

@@ -867,6 +867,37 @@ def shift_offense(s: dict, R: dict, points: float) -> dict:
     return at(target / slope if slope else 0.0)
 
 
+# Team-level market anchor (2026-11-07). On 973 games of 2025-26 the engine's expected margin missed by 14.35 points
+# (RMSE) and DraftKings' spread by 14.11; totals 19.52 vs 18.46; the best blend weight on the market was 1.0 for both.
+# OKC @ MEM on 2026-11-06 is the case: eight games of results rated Memphis +6.9 per 100 and OKC +1.8, the engine had
+# Memphis by 4 (61%), the market had OKC by 4.5, OKC won by 31. With TEAM_MARKET_W set, each side's make rates are moved
+# so the expected margin and total sit that far toward the pre-tip line (pace stays the engine's); the player layer then
+# plays out the market's game script. None = off (under test: player-prop corpus before adoption).
+TEAM_MARKET_W = None
+
+
+def expected_points(H: dict, A: dict, R: dict) -> tuple[float, float]:
+    pace = R["league"]["pace"] + (H.get("pace_off", 0.0) + A.get("pace_off", 0.0)) / 2
+    return pace * ppp_expected(H, R.get("and1", 0.0)), pace * ppp_expected(A, R.get("and1", 0.0))
+
+
+def anchor_to_market(H: dict, A: dict, R: dict, spread_home, total, w: float | None = None) -> tuple:
+    """Shift both offenses so the expected home margin and total move a weight `w` toward the market's
+    (-spread_home, total). Returns (H, A, detail) unchanged when the weight or a line is missing."""
+    w = TEAM_MARKET_W if w is None else w
+    if not w or spread_home is None or total is None:
+        return H, A, None
+    h0, a0 = expected_points(H, A, R)
+    T = w * float(total) + (1 - w) * (h0 + a0)
+    M = w * (-float(spread_home)) + (1 - w) * (h0 - a0)
+    th, ta = (T + M) / 2, (T - M) / 2
+    for _ in range(3):                                   # shift_offense is linearized: a few passes close the gap
+        h, a = expected_points(H, A, R)
+        H, A = shift_offense(H, R, th - h), shift_offense(A, R, ta - a)
+    h1, a1 = expected_points(H, A, R)
+    return H, A, {"w": w, "model": [round(h0, 1), round(a0, 1)], "market": [round(th, 1), round(ta, 1)], "after": [round(h1, 1), round(a1, 1)]}
+
+
 def absent_tonight(lg: str, games: list[dict], team: str, before: str, out_names: set) -> set:
     """Live availability: players listed Out or Doubtful, plus players from the rating sample who are no longer on the
     roster (missing from the team's latest box score altogether, e.g. traded). A player on the latest box who sat

@@ -163,6 +163,7 @@ class VerifyFreshness(unittest.TestCase):
         from edge.blend import load_adjustments
         lg = nba_model.params_for(2)
         p, c = nba_pp.recompute(0.70, 0.55, None, 0, "nba:pts:under", lg)
+        c, _ = nba_pp.gate_label(c, 0.70, 0.55, "edge pp; logic v2", "pts")      # as the pricer logs it (High = agreement)
         row = {"id": "1", "player": "X", "sport": "nba", "status": "pending", "segment": "nba:pts:under", "p_model": "0.70",
                "p_market": "0.55", "p_hist": "", "hist_n": "0", "p_final": f"{p:.4f}", "confidence": c,
                "notes": "edge pp; logic v2", "event_id": "", "market": "pts"}
@@ -368,3 +369,36 @@ const e=A.map((x,i)=>ms.reduce((s,m,j)=>j===i?s:s+m*x/(S-A[j]),0));console.log(J
         for e, t in zip(out["e"], out["tgt"]):
             self.assertAlmostEqual(e, t, places=3)                   # expected assist shares now match the rates
         self.assertGreater(out["w"][0] / sum(out["w"]), 0.5)          # the main shooter's weight is raised above his 50% rate share
+
+
+class TeamMarketAnchor(unittest.TestCase):
+    """OKC @ MEM 2026-11-06: eight games of results had Memphis by 7; the market had OKC by 4.5."""
+
+    def test_anchor_moves_margin_and_total_to_the_line(self):
+        from gamesim import nba as G
+        R = {"league": {"pace": 99.0}, "and1": 0.02}
+        side = lambda p2, p3: {"three": 0.4, "p2": p2, "p3": p3, "to": 0.13, "ft_rate": 0.12, "ftp": 0.78, "orb": 0.25, "pace_off": 0.0}
+        H, A = side(0.56, 0.38), side(0.52, 0.35)
+        h0, a0 = G.expected_points(H, A, R)
+        self.assertGreater(h0 - a0, 3)                                 # the ratings like the home side
+        H2, A2, det = G.anchor_to_market(H, A, R, spread_home=4.5, total=224.5, w=1.0)
+        h1, a1 = G.expected_points(H2, A2, R)
+        self.assertAlmostEqual(h1 - a1, -4.5, delta=0.2)
+        self.assertAlmostEqual(h1 + a1, 224.5, delta=0.3)
+        self.assertEqual(G.anchor_to_market(H, A, R, None, 224.5, 1.0)[0], H)   # no line: unchanged
+        self.assertEqual(G.anchor_to_market(H, A, R, 4.5, 224.5, None)[0], H) if G.TEAM_MARKET_W is None else None
+
+
+class SimAudit(unittest.TestCase):
+    def test_summary_counts_and_flags(self):
+        from edge import sim_audit as SA
+        T = [{"game": "OKC @ MEM", "p_home": 0.61, "mk_home": 0.39, "home_won": False, "margin": -31, "total": 225, "spread": 4.5, "mk_total": 224.5, "sim_margin": 4.0, "sim_total": 223},
+             {"game": "WSH @ ATL", "p_home": 0.75, "mk_home": 0.73, "home_won": True, "margin": 7, "total": 271, "spread": -8.5, "mk_total": 228.5, "sim_margin": 7.0, "sim_total": 230}]
+        M = [{"game": "TOR @ MIL", "name": "Alijah Martin", "side": "away", "proj": 9.7, "act": 31.0, "kind": "", "outs_on_team": 3},
+             {"game": "PHI @ CLE", "name": "Jarrett Allen", "side": "home", "proj": 21.0, "act": 0.0, "kind": "late scratch", "outs_on_team": 1}]
+        rep = SA.summarize("2026-11-06", T, M, [], "test")
+        self.assertEqual(rep["team"]["sim_winners"], 1); self.assertEqual(rep["team"]["market_winners"], 2)
+        self.assertEqual([d["game"] for d in rep["team"]["disagreements"]], ["OKC @ MEM"])
+        self.assertIn("Jarrett Allen", rep["minutes"]["late_scratches"][0])
+        self.assertIn("Alijah Martin", rep["minutes"]["biggest_misses"][0])
+        self.assertIn("Winners:** simulation 1 of 2", SA.markdown(rep))

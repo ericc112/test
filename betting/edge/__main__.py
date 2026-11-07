@@ -170,6 +170,8 @@ def main(argv=None):
     nhp.add_argument("--no-verify", action="store_true")
     nhp.add_argument("--out", default=None)
     nhp.add_argument("--page", help="also write the picks for the Sim Lab page here (nhl_picks.js)")
+    sa = sub.add_parser("sim-audit", help="where the NBA simulation went wrong last night (team, minutes, rates) and the patterns that repeat")
+    sa.add_argument("--date", default=None, help="US slate date (default: the last finished slate)")
     bd = sub.add_parser("boards", help="every priced leg of the day per sport, for the Sim Lab label filter")
     bd.add_argument("--page", required=True, help="write window.SIMLAB_BOARDS here (boards.js)")
     bd.add_argument("--date", default=None)
@@ -407,6 +409,10 @@ def main(argv=None):
     elif args.cmd == "tennis-picks":
         args.week = None
         _board_picks(args, "tennis")
+    elif args.cmd == "sim-audit":
+        from . import sim_audit as SA
+        d = args.date or (dt.date.fromisoformat(_slate()) - dt.timedelta(days=1)).isoformat()
+        print(SA.markdown(SA.audit(d), SA.findings()))
     elif args.cmd == "tag":
         if L.base_tag(args.reason) not in R.TAGS:
             print(f"note: '{args.reason}' is not a standard tag ({', '.join(R.TAGS)}); recorded anyway")

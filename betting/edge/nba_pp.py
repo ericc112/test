@@ -208,7 +208,7 @@ def run_sims(eng: dict, gids: list[str], n: int = N_SIMS, workers: int = 4) -> d
 
 SIM_KNOBS = {"minutes_alpha": "MINUTES_ALPHA", "swing_rho": "SWING_RHO", "shock": "PLAYER_SHOCK", "prior_min": "PLAYER_PRIOR_MIN",
              "min_sd_scale": "MIN_SD_SCALE", "minutes_share": "MINUTES_SHARE", "minutes_pad": "MINUTES_PAD",
-             "ast_fix": "AST_FIX"}
+             "ast_fix": "AST_FIX", "team_market_w": "TEAM_MARKET_W"}
 
 
 def nba_model_params(version: int | None = None) -> dict:
@@ -262,6 +262,11 @@ def _build(dates, gids, n, simkey) -> dict:
     eng = simlab.nba_engine(games, today) if games else {"sides": {}, "R": {}}
     snapshot_dk(eng, games)
     sims = run_sims(eng, [g["id"] for g in games], n=n) if games else {}
+    if simkey == tuple(sorted(current_sim().items())):      # the published logic's run (not a shadow's): keep it for the nightly audit
+        try:
+            save_pretip(eng, games, sims)
+        except Exception:
+            pass
     _MEMO[key] = {"games": {g["id"]: g for g in games}, "eng": eng, "sims": sims, "pulled": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ")}
     return _MEMO[key]
 
@@ -279,6 +284,48 @@ def snapshot_dk(eng: dict, games: list[dict]):
             lines = ((eng["sides"].get(g["id"]) or {}).get("players") or {}).get("lines") or {}
             if lines:
                 f.write(json.dumps({"at": now, "gid": g["id"], "start": g["start"], "lines": lines}) + "\n")
+
+
+PRETIP_DIR = os.path.join(HERE, "data", "nba_pretip")
+
+
+def save_pretip(eng: dict, games: list[dict], sims: dict) -> None:
+    """Each game's last pre-tip prediction (data/nba_pretip/<US date>.json, one entry per game, overwritten only
+    while the game hasn't started): win chance, expected score, the market line, who was ruled out, and every
+    player's projected minutes and simulated averages. edge/sim_audit.py compares it with the box score."""
+    now = dt.datetime.now(dt.timezone.utc)
+    by_day = {}
+    for g in games:
+        start = dt.datetime.fromisoformat(g["start"].replace("Z", "+00:00"))
+        sim, sd = sims.get(g["id"]), eng["sides"].get(g["id"])
+        if not sim or not sd or start <= now:
+            continue
+        players = {}
+        for side in ("home", "away"):
+            prof = {p["id"]: p for p in ((sd.get("players") or {}).get(side) or {}).get("players", [])}
+            for pid, sp in sim.get("players", {}).items():
+                if sp.get("side") != side:
+                    continue
+                h = sp.get("hist") or {}
+                avg = lambda k: round(mean(h[k]), 2) if h.get(k) and sum(h[k]) else None
+                pr = prof.get(pid) or {}
+                players[pid] = {"name": sp.get("name"), "side": side, "min_proj": round(float(pr.get("min") or 0), 1),
+                                "min_raw": round(float(pr.get("min_raw") or 0), 1), "starter_last": bool(pr.get("starter")),
+                                "season_min": (pr.get("season") or {}).get("min"),
+                                **{k: avg(k) for k in ("min", "pts", "reb", "ast", "tpm")}}
+        outs = {side: [r["name"] for r in ((sd.get("availability") or {}).get(side) or {}).get("rows", []) if r.get("out_tonight")] for side in ("home", "away")}
+        rec = {"gid": g["id"], "home": g["home"], "away": g["away"], "start": g["start"], "pulled": now.strftime("%Y-%m-%dT%H:%MZ"),
+               "p_home": sim.get("p_home"), "mean_home": sim.get("mean_home"), "mean_away": sim.get("mean_away"),
+               "spread": g.get("spread"), "total": g.get("total"), "ml_home": g.get("ml_home"), "ml_away": g.get("ml_away"),
+               "outs": outs, "injuries": [{"name": i["name"], "team": i.get("team"), "status": i.get("status")} for i in (sd.get("players") or {}).get("injuries", [])],
+               "market_anchor": sd.get("market_anchor"), "players": players}
+        by_day.setdefault(_us_date(g["start"]), {})[g["id"]] = rec
+    os.makedirs(PRETIP_DIR, exist_ok=True)
+    for day, recs in by_day.items():
+        path = os.path.join(PRETIP_DIR, f"{day}.json")
+        cur = json.load(open(path)) if os.path.exists(path) else {}
+        cur.update(recs)
+        json.dump(cur, open(path, "w"), default=float)
 
 
 def _us_date(iso: str) -> str:

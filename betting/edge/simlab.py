@@ -282,8 +282,9 @@ def nba_engine(nba_games: list[dict], today: dt.date | None = None) -> dict:
             pr_det = {"players_margin": round(pm["margin"], 2), "model_margin": round(model_m, 2), "w": gnba.PLAYER_RATING_W,
                       "shift": round(shift, 2), "home_edge": round(pm["h"], 2), "games_fitted": prf["n_games"],
                       "lineups": {"home": top("home"), "away": top("away")}}
+        H, A, anchor = gnba.anchor_to_market(H, A, R, g.get("spread"), g.get("total"))   # TEAM_MARKET_W (off unless a logic sets it)
         sides[g["id"]] = {"home": {k: round(v, 4) for k, v in H.items()}, "away": {k: round(v, 4) for k, v in A.items()},
-                          "player_ratings": pr_det,
+                          "player_ratings": pr_det, "market_anchor": anchor,
                           # what each side's opponent allows (for the research card): per game, rank, by position
                           "opp_allowed": {s_: RS.allowed_summary(opp_of[s_], cut_g) for s_ in ("home", "away")},
                           "prior": None if not prior else {t: {"net_last": round(v["net_last"], 2), "roster_delta": round(v["roster_delta"], 2),
