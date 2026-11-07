@@ -145,3 +145,7 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 - Segment nba:pts:under: results run above our probabilities; now auto-adjusting +0.22 logit.
 - Segment nba:ast:under: results run above our probabilities; now auto-adjusting +0.20 logit.
 - Segment nba:ra:over: results run below our probabilities; now auto-adjusting -0.29 logit.
+
+### Auto-learned 2026-11-07
+- 2 losses in nba:pr:under share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 2 losses in nba:pra:over share the cause 'opportunity': write a checklist rule for it in the table above.
