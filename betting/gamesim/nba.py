@@ -520,6 +520,7 @@ MINUTES_WHEN_PLAYING = True   # chance he plays x minutes when he plays (see pla
 PLAYER_PRIOR_MIN = 100.0  # minutes of the player's own last-season per-minute rates in his prior (else team average)
 PLAYER_SHOCK = 0.30       # per-player per-game role swing (log SD): ~20% of results outside the 10-90% range (was 29%); retuned after the minutes fix
 SWING_RHO = 0.0           # share of the role swing common to shots, boards and assists (Fix 6; 0 = independent, under test)
+AST_FIX = False           # assist weights corrected for "no assist to the shooter" (simlab worker nbAstFix; under test 2026-11-07)
 
 
 def season_player_totals(lg: str, games: list[dict], before: str = "2099-01-01") -> dict:
@@ -718,7 +719,7 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
         for p, m in zip(players, alloc):
             p["min"] = m
     players.sort(key=lambda p: -p["min"])
-    return {"players": players, "games": len(boxes), "ast_rate": T["ast"] / max(T["fgm"], 1), "shock": PLAYER_SHOCK, "swing_rho": SWING_RHO,
+    return {"players": players, "games": len(boxes), "ast_rate": T["ast"] / max(T["fgm"], 1), "shock": PLAYER_SHOCK, "swing_rho": SWING_RHO, "ast_fix": AST_FIX,
             "garbage": PLAYER_GARBAGE}
 
 

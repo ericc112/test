@@ -207,7 +207,8 @@ def run_sims(eng: dict, gids: list[str], n: int = N_SIMS, workers: int = 4) -> d
 
 
 SIM_KNOBS = {"minutes_alpha": "MINUTES_ALPHA", "swing_rho": "SWING_RHO", "shock": "PLAYER_SHOCK", "prior_min": "PLAYER_PRIOR_MIN",
-             "min_sd_scale": "MIN_SD_SCALE", "minutes_share": "MINUTES_SHARE", "minutes_pad": "MINUTES_PAD"}
+             "min_sd_scale": "MIN_SD_SCALE", "minutes_share": "MINUTES_SHARE", "minutes_pad": "MINUTES_PAD",
+             "ast_fix": "AST_FIX"}
 
 
 def nba_model_params(version: int | None = None) -> dict:

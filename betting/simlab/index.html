@@ -882,7 +882,8 @@ function nbaTracker(PL, rc) {
     // assisted share: team AST/FGM split so made 3s are assisted more often than 2s (about 1.28x the team rate)
     const f3 = mAll > 0 ? m3 / mAll : 0.33, r = pr.ast_rate || 0.62, a3 = Math.min(0.95, 1.28 * r);
     const a2 = Math.min(0.95, Math.max(0.2, (r - f3 * a3) / Math.max(1 - f3, 0.1)));
-    return { ps, n, a2, a3, sig: pr.shock || 0, rho: pr.swing_rho || 0, m: z(), w2m: z(), w2x: z(), w3m: z(), w3x: z(), wft: z(), wa: z(), wo: z(), wd: z(), wt: z(), tmp: z(),
+    return { ps, n, a2, a3, sig: pr.shock || 0, rho: pr.swing_rho || 0, afx: pr.ast_fix ? 1 : 0, ax: z(), ae: z(), am: z(), at: z(),
+             m: z(), w2m: z(), w2x: z(), w3m: z(), w3x: z(), wft: z(), wa: z(), wo: z(), wd: z(), wt: z(), tmp: z(),
              cur: new Float64Array(n * NBN), sum: new Float64Array(n * NBN), hist: new Int32Array(n * NBHW), team: 0 };
   });
   // garbage time: when a 4th-quarter lead passes a + b x minutes left, each team's top five hand most of their role
@@ -920,9 +921,26 @@ function nbBegin(tk) {
       t.w2m[i] = vs * m * p.fga2 * p.p2; t.w2x[i] = vs * m * p.fga2 * (1 - p.p2); t.w3m[i] = vs * m * p.fga3 * p.p3; t.w3x[i] = vs * m * p.fga3 * (1 - p.p3);
       t.wft[i] = vs * m * p.fta; t.wa[i] = va * m * p.ast; t.wo[i] = vr * m * p.oreb; t.wd[i] = vr * m * p.dreb; t.wt[i] = m * p.tov; t.cur[i * NBN + NB.min] = m;
     }
+    if (t.afx) nbAstFix(t);
     if (t.base) for (const k in t.base) t.base[k].set(t[k]);
   }
   tk.garb = false; tk.gsec = 0;
+}
+// assists can't go to the shooter, so a player who takes many of the team's shots loses the chance on his own makes;
+// his per-minute assist rate already reflects that, so drawing assists in proportion to it undercounts high-usage
+// players and overcounts the bench. Adjust the weights so each player's expected share of the team's assists equals
+// his share of the rates (fixed point over who made the shot).
+function nbAstFix(t) {
+  const n = t.n; let M = 0, A = 0;
+  for (let i = 0; i < n; i++) { t.am[i] = t.w2m[i] + t.w3m[i]; M += t.am[i]; A += t.wa[i]; }
+  if (!(M > 0 && A > 0)) return;
+  for (let i = 0; i < n; i++) { t.am[i] /= M; t.at[i] = t.wa[i] / A; t.ax[i] = t.at[i]; }
+  for (let it = 0; it < 6; it++) {
+    let X = 0; for (let i = 0; i < n; i++) X += t.ax[i];
+    for (let i = 0; i < n; i++) { let e = 0; for (let j = 0; j < n; j++) if (j !== i) e += t.am[j] * t.ax[i] / Math.max(X - t.ax[j], 1e-12); t.ae[i] = e; }
+    for (let i = 0; i < n; i++) if (t.ae[i] > 0) t.ax[i] *= t.at[i] / t.ae[i];
+  }
+  for (let i = 0; i < n; i++) t.wa[i] = t.ax[i] * A;
 }
 function nbFT(tk, o, made, tries) {
   const t = tk.T[o]; for (let i = 0; i < t.n; i++) { const f = t.ps[i].ftp; t.tmp[i] = t.wft[i] * Math.pow(f, made) * Math.pow(1 - f, tries - made); }

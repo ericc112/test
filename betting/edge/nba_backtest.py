@@ -38,7 +38,7 @@ PARTS = {"pts": ("pts",), "reb": ("reb",), "ast": ("ast",), "tpm": ("tpm",), "pr
          "pr": ("pts", "reb"), "pa": ("pts", "ast"), "ra": ("reb", "ast")}
 KNOBS = {"minutes_alpha": "MINUTES_ALPHA", "prior_min": "PLAYER_PRIOR_MIN", "injury_beta": "INJURY_BETA", "player_w": "PLAYER_RATING_W",
          "comeback_sd": "COMEBACK_SD", "shock": "PLAYER_SHOCK", "min_sd_scale": "MIN_SD_SCALE", "swing_rho": "SWING_RHO",
-         "minutes_share": "MINUTES_SHARE", "minutes_pad": "MINUTES_PAD"}
+         "minutes_share": "MINUTES_SHARE", "minutes_pad": "MINUTES_PAD", "ast_fix": "AST_FIX"}
 
 
 def imp(a) -> float | None:
