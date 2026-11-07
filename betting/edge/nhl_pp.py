@@ -452,6 +452,13 @@ def price_board(props: list[dict], n: int = N_SIMS, log=print, store: dict | Non
         prof = {t: profiles(t, before, g["out"].get(t, set())) for t in (g["home"], g["away"])}
         log(f"  {g['away']} @ {g['home']}: {len(mine)} lines, simulating...")
         G = {"game": g, "sim": simulate(g, prof, tf, n), "ladders": dk_ladders(g["id"]), "hist": before, "tf": tf}
+        try:                                       # the Winners tab: this game's projected winner and score (pre-tip only)
+            from . import winners as W
+            T = G["sim"]["teams"]
+            W.save("nhl", g["id"], g["home"], g["away"], g["date"], T[g["home"]]["goals"], T[g["away"]]["goals"],
+                   g.get("ml_home"), g.get("ml_away"), None, g.get("total"))
+        except Exception:
+            pass
         if store is not None:
             store[g["id"]] = G
         for p in mine:

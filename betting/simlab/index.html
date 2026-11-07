@@ -245,6 +245,23 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
 .tn-cmp td.l { width: 34%; color: var(--muted) } .tn-cmp td.v { width: 9%; font-family: var(--font-data); text-align: center; white-space: nowrap }
 .tn-cmp .mb { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; display: flex }
 .tn-cmp .mb.a { justify-content: flex-end } .tn-cmp .mb.a i { background: var(--home) } .tn-cmp .mb.b i { background: var(--away) } .tn-cmp .mb i { display: block; height: 100% }
+.wn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px }
+.wn-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; background: var(--surface) }
+.wn-card.dis { border-color: var(--accent) }
+.wn-top { display: flex; justify-content: space-between; gap: 8px; font-size: .76rem; color: var(--muted) }
+.wn-teams { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 10px; align-items: baseline; font-family: var(--font-display); font-size: 1.15rem }
+.wn-teams .w { font-weight: 800 } .wn-teams .l { font-weight: 600; color: var(--muted) }
+.wn-teams .pj, .wn-teams .fn { font-family: var(--font-data); font-size: .9rem; text-align: right }
+.wn-teams .fn { font-weight: 700 }
+.wn-head { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0 10px; font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted) }
+.wn-head span:not(:first-child) { text-align: right }
+.wn-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line) }
+.wn-bar i:first-child { background: var(--away) } .wn-bar i:last-child { background: var(--home) }
+.wn-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .8rem; align-items: center }
+.wn-res { font-weight: 700; border-radius: 999px; padding: 1px 8px; font-size: .74rem }
+.wn-res.ok { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good) }
+.wn-res.no { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad) }
+.wn-res.pd { background: var(--surface-2); color: var(--muted) }
 .tn-lines { width: 100%; border-collapse: collapse; font-size: .86rem }
 .tn-lines th, .tn-lines td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line) }
 .tn-lines td.n { font-family: var(--font-data); text-align: right }
@@ -367,6 +384,14 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="pk-board" id="nhlBoard"></div>
     <div class="note" id="nhlNote"></div>
   </details>
+
+  <section class="panel" id="winnersPanel" hidden aria-label="Projected winners">
+    <div class="row"><h2>Projected winners</h2><span class="spacer"></span><span class="note" id="wnMeta"></span></div>
+    <div class="tiles" id="wnTiles"></div>
+    <div class="row"><div class="seg" role="group" aria-label="Night" id="wnNights"></div><div class="seg" role="group" aria-label="Sport" id="wnSport"></div></div>
+    <div class="wn-grid" id="wnList"></div>
+    <p class="note" id="wnNote"></p>
+  </section>
 
   <section class="panel" id="tennisSim" hidden aria-label="Tennis match simulator">
     <div class="row"><h2>Tennis match simulator</h2><span class="spacer"></span><span class="note" id="tnMeta"></span></div>
@@ -1712,6 +1737,49 @@ function tnRenderScout() {
     + `<details><summary class="note">Every number side by side (bars: percentile against the top 150)</summary><div class="tbl-wrap"><table class="tn-cmp"><tbody>${rows}</tbody></table></div></details>`
     + `<p class="note">Read from the Match Charting Project (volunteers chart every shot of a match from video; Tennis Abstract, CC BY-NC-SA 4.0) and every recorded match's serve and return stats in the last 52 weeks. Tested on matches from September on (data/tennis_bt/style_test.json): style matchups added a small but real improvement for ATP (big servers win slightly fewer serve points than the ratings say against strong first-serve returners) and nothing for WTA, so most of how a player plays is already in the opponent-adjusted serve and return numbers. Shown as context; not in the win probability.</p>`;
 }
+
+// ---------- Winners tab: the simulation's projected winner and score for every game, night by night (edge/winners.py) ----------
+const WN = { night: null, sport: "all" };
+function renderWinners() {
+  const W = D.winners; if (!W || !$("winnersPanel")) return;
+  const nights = W.nights || [], pct = (a) => a[0] + a[1] ? Math.round(100 * a[0] / (a[0] + a[1])) + "%" : "—";
+  const rec = (a) => `${a[0]}-${a[1]}`;
+  const lastDone = nights.find((n) => n.sim[0] + n.sim[1] > 0);
+  const tile = (cls, lab, big, sub) => `<div class="tile ${cls}"><span class="label">${lab}</span><span class="big">${big}</span><span class="sub">${sub}</span></div>`;
+  $("wnTiles").innerHTML = [tile("home", "Simulation, all tracked games", rec(W.record.sim), `${pct(W.record.sim)} of winners right`),
+    tile("", "Betting favorite, same games", rec(W.record.market), `${pct(W.record.market)} of winners right`),
+    lastDone ? tile("", `Last night (${new Date(lastDone.date + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })})`, rec(lastDone.sim), `favorite ${rec(lastDone.market)}`) : ""].join("");
+  $("wnMeta").textContent = W.pulled ? `updated ${new Date(W.pulled).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}` : "";
+  if (!WN.night || !nights.find((n) => n.date === WN.night)) WN.night = (nights.find((n) => n.date === SLATE) || nights.find((n) => n.games.some((g) => !g.final)) || nights[0] || {}).date;
+  const lab = (d) => d === SLATE ? "Tonight" : new Date(d + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  $("wnNights").innerHTML = nights.map((n) => `<button type="button" data-d="${n.date}" aria-pressed="${n.date === WN.night}">${esc(lab(n.date))}<small> ${n.sim[0] + n.sim[1] ? rec(n.sim) : n.games.length}</small></button>`).join("");
+  $("wnNights").querySelectorAll("button").forEach((b) => b.onclick = () => { WN.night = b.dataset.d; renderWinners(); });
+  const N0 = nights.find((n) => n.date === WN.night) || { games: [] };
+  const sports = ["all", ...new Set(N0.games.map((g) => g.sport))];
+  if (!sports.includes(WN.sport)) WN.sport = "all";
+  $("wnSport").innerHTML = sports.length > 2 ? sports.map((sp) => `<button type="button" data-s="${sp}" aria-pressed="${sp === WN.sport}">${sp === "all" ? "All" : sp.toUpperCase()}</button>`).join("") : "";
+  $("wnSport").querySelectorAll("button").forEach((b) => b.onclick = () => { WN.sport = b.dataset.s; renderWinners(); });
+  const G = N0.games.filter((g) => WN.sport === "all" || g.sport === WN.sport);
+  $("wnList").innerHTML = G.map((g) => {
+    const ph = g.p_home, hFav = ph != null && ph > 0.5, winP = ph == null ? null : Math.max(ph, 1 - ph);
+    const mFavHome = g.market_home != null ? g.market_home > 0.5 : null, dis = ph != null && mFavHome != null && hFav !== mFavHome;
+    const t = g.start ? new Date(g.start) : null, live = !g.final && t && Date.now() > t.getTime();
+    const res = g.final ? (g.sim_right ? `<span class="wn-res ok">✓ right</span>` : `<span class="wn-res no">✗ wrong</span>`) : `<span class="wn-res pd">${live ? "in progress" : "to play"}</span>`;
+    const row = (team, home) => { const isW = ph != null && (home ? hFav : !hFav); const pj = g.proj ? Math.round(g.proj[home ? 1 : 0]) : "—"; const fn = g.final ? g.final[home ? 1 : 0] : "";
+      return `<span class="${isW ? "w" : "l"}">${esc(team)}${isW ? " ◂" : ""}</span><span class="pj">${pj}</span><span class="fn">${fn}</span>`; };
+    return `<div class="wn-card${dis ? " dis" : ""}">
+      <div class="wn-top"><span><span class="tn-badge">${esc(g.sport.toUpperCase())}</span>${t ? esc(t.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })) : ""}</span>${res}</div>
+      <div class="wn-head"><span>Team</span><span>Projected</span><span>Final</span></div>
+      <div class="wn-teams">${row(g.away, false)}${row(g.home, true)}</div>
+      ${ph != null ? `<div class="wn-bar" title="Simulation: ${esc(g.away)} ${Math.round(100 * (1 - ph))}% / ${esc(g.home)} ${Math.round(100 * ph)}%"><i style="width:${100 * (1 - ph)}%"></i><i style="width:${100 * ph}%"></i></div>` : ""}
+      <div class="wn-meta"><span>Simulation: <b>${esc(hFav ? g.home : g.away)} ${winP != null ? Math.round(100 * winP) + "%" : ""}</b></span>
+        ${g.market_home != null ? `<span>Favorite: ${esc(mFavHome ? g.home : g.away)} ${Math.round(100 * Math.max(g.market_home, 1 - g.market_home))}%</span>` : `<span class="note">no market price saved</span>`}
+        ${dis ? `<span class="wn-res pd" style="color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 25%,transparent)">disagrees with the market</span>` : ""}
+        ${g.final && g.market_right != null ? `<span class="note">favorite ${g.market_right ? "✓" : "✗"}</span>` : ""}</div></div>`; }).join("") || `<div class="note">No projections saved for this night.</div>`;
+  $("wnNote").textContent = "The simulation's pick is the side it gives over 50% from its last pre-tip run; the projected score is its average result (the most common final is close to it). "
+    + "NBA comes from the possession engine's own team ratings; the NHL and NFL simulations start from the betting line, so their winners mostly follow the favorite. "
+    + "Earlier nights rebuilt from saved boards carry the win chance only (no projected score). Picking winners is not the same as beating the price: the favorite's record is shown for that reason.";
+}
 function tnHold(p) { const d = p * p / (p * p + (1 - p) * (1 - p)); return p ** 4 * (1 + 4 * (1 - p) + 10 * (1 - p) ** 2) + 20 * p ** 3 * (1 - p) ** 3 * d; }
 // ---------- watch ----------
 function tnStopWatch() { const w = TN.watch; if (w) { clearTimeout(w.timer); cancelAnimationFrame(w.raf || 0); } TN.watch = null; $("tnPause").disabled = true; $("tnSkip").disabled = true; $("tnPause").textContent = "Pause"; }
@@ -2095,12 +2163,13 @@ function renderShop() {
 function fmtKick(iso) { if (!iso) return ""; const t = new Date(iso); return isNaN(t) ? "" : t.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }); }
 // each league's picks show with that league: NBA picks in the NBA section, NFL in NFL, NHL in NHL
 function syncPicks() {
-  const tv = state.view === "tennis";
-  const lay = document.querySelector(".layout"); if (lay) lay.hidden = tv;
+  const tv = state.view === "tennis", wv = state.view === "winners";
+  const lay = document.querySelector(".layout"); if (lay) lay.hidden = tv || wv;
+  if ($("winnersPanel")) { $("winnersPanel").hidden = !wv; if (wv) renderWinners(); }
   if ($("tennisPicksPanel")) $("tennisPicksPanel").hidden = !(tv && window.SIMLAB_TENNIS_PICKS);
   if ($("tennisSim")) { const on = tv && !!(D.tennis && D.tennis.matches && D.tennis.matches.length); $("tennisSim").hidden = !on;
     if (on && typeof tnEnter === "function") setTimeout(tnEnter, 0); else if (!on && typeof tnLeave === "function") tnLeave(); }
-  const k = state.custom || tv ? null : (league() || {}).key;
+  const k = state.custom || tv || wv ? null : (league() || {}).key;
   if ($("picksPanel")) $("picksPanel").hidden = !(window.SIMLAB_PICKS && k === "nba");
   if ($("nflPicksPanel")) $("nflPicksPanel").hidden = !(window.SIMLAB_NFL_PICKS && k === "nfl");
   if ($("nhlPicksPanel")) $("nhlPicksPanel").hidden = !(window.SIMLAB_NHL_PICKS && k === "nhl");
@@ -2212,6 +2281,11 @@ function renderRail() {
     const tb = document.createElement("button"); tb.className = "chip"; tb.setAttribute("aria-pressed", String(state.view === "tennis"));
     const tp = window.SIMLAB_TENNIS_PICKS || {}; tb.innerHTML = `Tennis<small>${tnN || tp.games || ""}</small>`;
     tb.onclick = () => { state.view = "tennis"; state.custom = false; renderRail(); }; r.appendChild(tb);
+  }
+  if (D.winners && (D.winners.nights || []).length) {   // the Winners tab
+    const wb = document.createElement("button"); wb.className = "chip"; wb.setAttribute("aria-pressed", String(state.view === "winners"));
+    const R0 = D.winners.record || { sim: [0, 0] }; wb.innerHTML = `Winners<small>${R0.sim[0]}-${R0.sim[1]}</small>`;
+    wb.onclick = () => { state.view = "winners"; state.custom = false; renderRail(); }; r.appendChild(wb);
   }
   const c = document.createElement("button"); c.className = "chip"; c.setAttribute("aria-pressed", String(state.custom)); c.textContent = "Any game (custom)";
   c.onclick = () => { state.view = null; openCustom(); }; r.appendChild(c);

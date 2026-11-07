@@ -179,6 +179,12 @@ def price_board(props: list[dict], n: int = 50000, season: int = 2026, week: int
             continue
         if store is not None:
             store[ev["id"]] = res
+        try:                                       # the Winners tab: this game's projected winner and score (pre-tip only)
+            from . import winners as W
+            T = res["sim"]["teams"]
+            W.save("nfl", ev["id"], ev["home_abbr"], ev["away_abbr"], ev["date"], T[ev["home"]]["points"], T[ev["away"]]["points"])
+        except Exception:
+            pass
         for p in mine:
             m = STATS[p["stat"]]
             x = price_leg(res, p["player"], m, p["line"], p.get("over_only", False))
