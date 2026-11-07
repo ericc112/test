@@ -1,0 +1,79 @@
+{
+ "ATP": {
+  "tune_rows": 12586,
+  "test_rows": 3807,
+  "terms": {
+   "match stats (everyone)": {
+    "coef_per_sd": {
+     "ace_x_return1": -0.00137,
+     "second_x_return2": 0.00042,
+     "firstin_x_return2": 0.00048,
+     "df_x_return2": 0.00099
+    },
+    "test_ll_per_point": 2.4e-05,
+    "ci95": [
+     8e-06,
+     3.9e-05
+    ],
+    "test_se_gain": 1.1e-05,
+    "rows_fully_covered": 3674
+   },
+   "plus charted (top players)": {
+    "coef_per_sd": {
+     "ace_x_return1": -0.00128,
+     "second_x_return2": 0.00047,
+     "firstin_x_return2": 0.00052,
+     "df_x_return2": 0.001,
+     "shortwin_x_shortwin": -0.00056,
+     "long_x_long": -0.0008
+    },
+    "test_ll_per_point": 2.3e-05,
+    "ci95": [
+     8e-06,
+     3.8e-05
+    ],
+    "test_se_gain": 1.06e-05,
+    "rows_fully_covered": 466
+   }
+  }
+ },
+ "WTA": {
+  "tune_rows": 3246,
+  "test_rows": 679,
+  "terms": {
+   "match stats (everyone)": {
+    "coef_per_sd": {
+     "ace_x_return1": 0.00118,
+     "second_x_return2": 0.00024,
+     "firstin_x_return2": -0.00426,
+     "df_x_return2": -0.00233
+    },
+    "test_ll_per_point": -3.2e-05,
+    "ci95": [
+     -0.00013,
+     6.4e-05
+    ],
+    "test_se_gain": -1.52e-05,
+    "rows_fully_covered": 638
+   },
+   "plus charted (top players)": {
+    "coef_per_sd": {
+     "ace_x_return1": 0.00186,
+     "second_x_return2": 0.00029,
+     "firstin_x_return2": -0.0042,
+     "df_x_return2": -0.00225,
+     "shortwin_x_shortwin": -0.00315,
+     "long_x_long": -0.00092
+    },
+    "test_ll_per_point": -6e-06,
+    "ci95": [
+     -0.00012,
+     9.1e-05
+    ],
+    "test_se_gain": -2.4e-06,
+    "rows_fully_covered": 242
+   }
+  }
+ },
+ "_note": "Positive test_ll_per_point = style terms improved the point-level fit beyond the ratings on matches the terms weren't fitted on. A term is worth adopting only if the 95% interval excludes zero."
+}

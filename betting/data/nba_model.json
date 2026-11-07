@@ -1,0 +1,360 @@
+{
+ "current": {
+  "version": 2,
+  "name": "v2 candidate (minutes^1.0, shared swing .8, segment bias, market-dominant blend, derived gates, SE entry)",
+  "params": {
+   "sim": {
+    "minutes_alpha": 1.0,
+    "swing_rho": 0.8
+   },
+   "bias": "table",
+   "bias_table": {
+    "pts": {
+     "all": -0.15,
+     "top5": -0.184,
+     "bench": -0.078
+    },
+    "reb": {
+     "all": -0.01,
+     "top5": 0.008,
+     "bench": -0.045
+    },
+    "ast": {
+     "all": -0.217,
+     "top5": -0.246,
+     "bench": -0.113
+    },
+    "tpm": {
+     "all": -0.134,
+     "top5": -0.146,
+     "bench": -0.102
+    },
+    "pra": {
+     "all": -0.199,
+     "top5": -0.218,
+     "bench": -0.139
+    },
+    "pr": {
+     "all": -0.138,
+     "top5": -0.15,
+     "bench": -0.112
+    },
+    "pa": {
+     "all": -0.23,
+     "top5": -0.257,
+     "bench": -0.139
+    },
+    "ra": {
+     "all": -0.144,
+     "top5": -0.148,
+     "bench": -0.122
+    }
+   },
+   "blend": {
+    "intercept": 0.0,
+    "w_model": 0.2,
+    "w_market": 0.8,
+    "w_hist": 0.0
+   },
+   "blend_ci": {
+    "w_model": [
+     0.11073979184197677,
+     0.3464615556725401
+    ]
+   },
+   "history": "off",
+   "missing_market": "neutral",
+   "recal": null,
+   "cap": 0.7,
+   "gates": {
+    "high": 0.62,
+    "medium": 0.54,
+    "max_spread_high": 0.16,
+    "min_hist_n_high": 0,
+    "no_market_min_hist_n": 99999
+   },
+   "entry": "se1",
+   "se_w": 0.1,
+   "push": "exclusive"
+  },
+  "since": "2026-11-05",
+  "backtest_evidence": {
+   "corpus": "walk-forward 2026-10-25..11-02, live-like availability, 4,801 held-out legs (data/nba_bt/final_eval.json)",
+   "logloss_selected": [
+    0.6908378077671773,
+    0.6863245948130448
+   ],
+   "brier_selected": [
+    0.2487967026558354,
+    0.24660997726008627
+   ],
+   "logloss_over": {
+    "before": 0.6908378077671773,
+    "after": 0.6863763902831964,
+    "market": 0.6875868366393822
+   },
+   "after_vs_before": {
+    "mean": -0.004461417483980874,
+    "ci95": [
+     -0.006526755894954256,
+     -0.0024379895648026294
+    ]
+   },
+   "after_vs_market": {
+    "mean": -0.0012104463561858803,
+    "ci95": [
+     -0.0026145046282530144,
+     0.00024041031556068748
+    ]
+   },
+   "info_weight": {
+    "b": 0.22860067375725845,
+    "ci95": [
+     0.11073979184197677,
+     0.3464615556725401
+    ],
+    "market_slope": 1.0234327350944281,
+    "intercept": -0.12770151502695495
+   },
+   "labels_after": {
+    "Low": {
+     "n": 3562,
+     "pred": 0.5215872090444298,
+     "real": 0.5244244806288602,
+     "gap": 0.0028372715844303675
+    },
+    "Medium": {
+     "n": 1137,
+     "pred": 0.570308382469246,
+     "real": 0.6033421284080914,
+     "gap": 0.03303374593884545
+    },
+    "High": {
+     "n": 102,
+     "pred": 0.646685601649224,
+     "real": 0.6274509803921569,
+     "gap": -0.019234621257067097
+    }
+   },
+   "labels_before": {
+    "Low": {
+     "n": 3902,
+     "pred": 0.5393843178960865,
+     "real": 0.5151204510507432,
+     "gap": -0.024263866845343318
+    },
+    "Medium": {
+     "n": 899,
+     "pred": 0.617820184727426,
+     "real": 0.5895439377085651,
+     "gap": -0.02827624701886089
+    }
+   },
+   "mae": {
+    "line": 3.82805665486357,
+    "sim_before": 3.9567144761508013,
+    "sim_after": 3.9475864611539264,
+    "median_before": 3.952509893772131,
+    "median_after": 3.924807331805874
+   }
+  },
+  "live_evidence": {
+   "legs": 848,
+   "days": 1,
+   "cur": {
+    "logloss": 0.7121272649833567,
+    "brier": 0.2588015612382075,
+    "labels": {
+     "Medium": {
+      "n": 130,
+      "pred": 0.6389469230769231,
+      "real": 0.43846153846153846
+     },
+     "Low": {
+      "n": 718,
+      "pred": 0.5512378830083565,
+      "real": 0.5194986072423399
+     }
+    },
+    "label_gap": 0.11611233019070066
+   },
+   "sh": {
+    "logloss": 0.6944613590929176,
+    "brier": 0.25065401096698114,
+    "labels": {
+     "Medium": {
+      "n": 79,
+      "pred": 0.5523455696202532,
+      "real": 0.46835443037974683
+     },
+     "Low": {
+      "n": 769,
+      "pred": 0.5172224967490248,
+      "real": 0.5136540962288687
+     }
+    },
+    "label_gap": 0.04377976988033119
+   },
+   "eligible": true,
+   "shadow_wins": true
+  }
+ },
+ "shadow": {
+  "version": 3,
+  "name": "v3 candidate: v2 + shrink to the market past an 8-point disagreement (user audit) + headroom minutes sharing + assist-share fix (simulation study 2026-11-07)",
+  "params": {
+   "bias": "table",
+   "blend": {
+    "intercept": 0.0,
+    "w_model": 0.2,
+    "w_market": 0.8,
+    "w_hist": 0.0
+   },
+   "history": "off",
+   "recal": null,
+   "gates": {
+    "high": 0.62,
+    "medium": 0.54,
+    "max_spread_high": 0.16,
+    "min_hist_n_high": 0,
+    "no_market_min_hist_n": 99999
+   },
+   "high_thin": null,
+   "entry": "se1",
+   "push": "exclusive",
+   "sim": {
+    "minutes_alpha": 1.0,
+    "swing_rho": 0.8,
+    "minutes_share": "headroom",
+    "minutes_pad": 3.0,
+    "ast_fix": 1
+   },
+   "bias_table": {
+    "pts": {
+     "all": -0.15,
+     "top5": -0.184,
+     "bench": -0.078
+    },
+    "reb": {
+     "all": -0.01,
+     "top5": 0.008,
+     "bench": -0.045
+    },
+    "ast": {
+     "all": -0.217,
+     "top5": -0.246,
+     "bench": -0.113
+    },
+    "tpm": {
+     "all": -0.134,
+     "top5": -0.146,
+     "bench": -0.102
+    },
+    "pra": {
+     "all": -0.199,
+     "top5": -0.218,
+     "bench": -0.139
+    },
+    "pr": {
+     "all": -0.138,
+     "top5": -0.15,
+     "bench": -0.112
+    },
+    "pa": {
+     "all": -0.23,
+     "top5": -0.257,
+     "bench": -0.139
+    },
+    "ra": {
+     "all": -0.144,
+     "top5": -0.148,
+     "bench": -0.122
+    }
+   },
+   "blend_ci": {
+    "w_model": [
+     0.11073979184197677,
+     0.3464615556725401
+    ]
+   },
+   "missing_market": "neutral",
+   "cap": 0.7,
+   "se_w": 0.1,
+   "disagree": {
+    "gap": 0.08,
+    "margin": 0.0
+   }
+  },
+  "since": "2026-11-06",
+  "backtest_evidence": {
+   "note": "simulation pieces on the 2026-27 corpus (95 games to Nov 5, 6,431 DraftKings lines; data/nba_bt/corpus_x_*.json.gz); the disagreement shrink has no backtest yet. Adopted only after beating v2 live (200+ graded legs or 14 days, log loss and label calibration).",
+   "minutes_box_fair_test": {
+    "starters_mae_2025_26": [
+     5.13,
+     4.77
+    ],
+    "starters_mae_2026_27": [
+     4.7,
+     4.38
+    ],
+    "all_mae_2026_27": [
+     5.0,
+     4.92
+    ]
+   },
+   "corpus": {
+    "minutes_mae": [
+     4.77,
+     4.61
+    ],
+    "top5_ast_per36_sim_vs_actual": {
+     "before": [
+      4.19,
+      4.46
+     ],
+     "after": [
+      4.34,
+      4.46
+     ]
+    },
+    "carry_logloss_per_line_diff_headroom": [
+     -0.0119,
+     [
+      -0.0265,
+      -0.0005
+     ]
+    ],
+    "blend_logloss": {
+     "v2": 0.6868,
+     "v3_sim": 0.6872,
+     "ci_diff": [
+      -0.0003,
+      0.0011
+     ]
+    },
+    "sim_logloss": {
+     "v2": 0.7046,
+     "v3_sim": 0.7038
+    }
+   }
+  }
+ },
+ "history": [
+  {
+   "version": 1,
+   "name": "v1 (2026-11-04)",
+   "params": {
+    "bias": "night_flat",
+    "blend": null,
+    "history": "raw",
+    "recal": null,
+    "gates": null,
+    "high_thin": null,
+    "entry": "flat2",
+    "push": "half"
+   },
+   "since": "2026-11-04",
+   "retired": "2026-11-05"
+  }
+ ]
+}
