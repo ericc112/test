@@ -222,6 +222,13 @@ class HistoryLine(unittest.TestCase):
         self.assertIn("6/8 under this season", text)
 
 
+class SecondBookGate(unittest.TestCase):
+    def test_disagreeing_second_book_holds_high(self):
+        c, held = N.gate_label("High", 0.66, 0.64, "DraftKings 8.5 ...; second book disagrees: Dabble 49% for the over at 10.5", "pts")
+        self.assertEqual(c, "Medium")
+        self.assertIn("the second book prices the other side", held)
+
+
 class WithWithout(unittest.TestCase):
     def test_split_by_teammate_played(self):
         log = [["2026-10-22", "X", 1, 24, 10, 5, 2, 1], ["2026-10-24", "X", 1, 22, 8, 4, 1, 0], ["2026-10-26", "X", 0, 31, 16, 7, 3, 2]]

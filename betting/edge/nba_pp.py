@@ -412,6 +412,8 @@ def gate_label(conf: str, pm, pk, notes: str, stat: str) -> tuple[str, list[str]
         held.append("minutes not confirmed (L28)")
     if "single-sourced gap" in (notes or ""):
         held.append("the PrizePicks line's gap from the book is confirmed by only one book")
+    if "second book disagrees" in (notes or ""):
+        held.append("the second book prices the other side")
     return ("Medium" if held else conf), held
 
 def recompute(pm, pk, ph, hist_n: int, segment: str, logic: dict) -> tuple[float, str]:
@@ -584,6 +586,11 @@ def price_nba(props: list[dict], n: int = N_SIMS, logic: dict | None = None) -> 
         mg = minutes_gap(best["side"], pl.get("min"), [r_[3] for r_ in ((pl.get("research") or {}).get("log") or [])[-5:]])
         if mg:
             note += f"; minutes gap: {mg}"
+        d2 = extra_by_id.get(id(p), {}).get("dk2")
+        if dk and abs(dk["line"] - line) >= GAP_2ND and d2 and d2.get("carried") is not None:
+            s2 = d2["carried"] if best["side"] == "over" else 1 - d2["carried"]
+            if s2 < 0.5:                       # the second book prices the other side: the gap isn't confirmed (verify FAILs it too)
+                note += f"; second book disagrees: {d2['book']} {s2:.0%} for the {best['side']} at {line}"
         conf, held = gate_label(conf, best["pm"], best["pk"], note, stat)
         if held:
             note += "; High held at Medium: " + ", ".join(held)
