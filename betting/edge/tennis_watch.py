@@ -119,6 +119,18 @@ def _short_wta(st: dict, rows: list[dict], pp: dict) -> list[str]:
     return names
 
 
+def _scout(scout, ia, na, ib, nb):
+    """Both players' scouting cards and the matchup notes (edge/tennis_scout.py), or None."""
+    if not scout:
+        return None
+    from . import tennis_scout as TS
+    try:
+        ca, cb = scout.card(ia, na), scout.card(ib, nb)
+        return {"a": TS.compact(ca), "b": TS.compact(cb), "matchup": TS.matchup(ca, cb)}
+    except Exception:
+        return None
+
+
 def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
     from . import tennis as T, tennis_hist as TH, tennis_market as TM
     now = now or dt.datetime.now(dt.timezone.utc)
@@ -143,8 +155,18 @@ def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
         log(f"  tennis watch: WTA 125 top-up for {len(short)} player(s): {', '.join(short[:6])}{'...' if len(short) > 6 else ''}")
         st = T.tml_state(wta_topup=tuple(short)) or st
     out, skipped = [], {"ATP": 0, "WTA": 0}
+    from . import tennis_scout as TS
+    try:
+        TS.download()                       # the Match Charting Project files (weekly)
+    except Exception as e:
+        log(f"  tennis watch: charting files not refreshed ({type(e).__name__})")
     for tour in ("ATP", "WTA"):
         T_ = st[tour]
+        try:
+            scout = TS.Scout(st, tour)
+        except Exception as e:
+            scout = None
+            log(f"  tennis watch: {tour} scouting not built ({type(e).__name__}: {str(e)[:60]})")
         idx, full = _index(st, tour)
         oi, R = T_["obs"]["idx"], T_["R"]
         obs, cut = T_["obs"], dt.date.today().toordinal() - 365
@@ -195,7 +217,7 @@ def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
                             "odds": [x.get("o1"), x.get("o2")], "market_a": round(fair, 4) if fair else None,
                             "shift": round(shift, 4) if shift is not None else None, "anchor_default": bool(anchor and fair),
                             "win_model": round(win_model, 4), "elo_a": round(1 / (1 + 10 ** ((rb - ra) / 400)), 4),
-                            "lines": pp.get(k2, [])})
+                            "lines": pp.get(k2, []), "scout": _scout(scout, ia, na, ib, nb)})
     out.sort(key=lambda m: (m["start"], m["tour"]))
     note = (f"{len(out)} matches simulated; not simulated (players without enough stats-covered matches in 52 weeks, "
             f"mostly Futures, UTR and ITF): ATP {skipped['ATP']}, WTA {skipped['WTA']}")

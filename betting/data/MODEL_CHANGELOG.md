@@ -127,3 +127,21 @@ Prompted by the user ("maybe the simulation needs to be better") after Keyonte G
   - more weight on last season's rates (250/500/1000 minutes: points worse, rebounds and assists within noise).
 - **Status:** both pieces are in **shadow v3**, alongside the disagreement shrink. The live logic is unchanged. v3 is promoted only after beating v2 on 200+ graded legs or 14 days, on log loss and label calibration. The shadow re-simulates with its own settings, which adds about 8 minutes to each `nba-picks` run.
 - **Rollback:** `"shadow": null` in `data/nba_model.json`. Both switches default off in `gamesim/nba.py`.
+
+## 2026-11-07: tennis scouting cards (how each player plays) and the style-matchup test
+Prompted by the user: "you are only looking at the data and numbers but not truly understanding each player and how they play... you need to watch and study."
+- **Study sources** (real records, nothing typed from memory):
+  - the Match Charting Project: volunteers chart every shot of a match from video (Tennis Abstract, CC BY-NC-SA 4.0). It covers rally lengths won, net points, forehand and backhand winners and errors, slice and drop shots, serve direction and damage, return depth and in-play rate, and points won in three shots or fewer. Coverage is deep for top players (Alcaraz 85 charted matches since Sep 2024, Rybakina 57) and thin below tour level;
+  - every match's serve line in the TennisMyLife database (aces, double faults, first serve in and won, second serve won, return points won against first and second serves, break points, tiebreaks), plus WTA 125s from the WTA feed.
+- **Cards** (`edge/tennis_scout.py`, shown on the Sim Lab tennis simulator):
+  - a style label only when the numbers are clear;
+  - a read of what stands out (75th percentile and up, or 25th and down, against the tour's current top 150, with minimum samples);
+  - opponent-adjusted serve and return from the ratings;
+  - the level the numbers came from;
+  - factual matchup notes;
+  - every number side by side.
+- **Style-matchup test** (`edge/tennis_style_test.py` → `data/tennis_bt/style_test.json`): interaction terms fitted on Jan–Aug 2026 (ratings cut 1 Jan) and scored on September onward (ratings cut 1 Sep), against the ratings' serve-point predictions.
+  - ATP: small but real, +0.000024 log likelihood per point (CI +0.000008 to +0.000039, 3,807 serve rows). The main term: big servers win fewer serve points than the ratings say against strong first-serve returners, about 0.14 points per 100 per SD × SD.
+  - WTA: nothing (−0.000032, CI −0.00013 to +0.00006).
+  - Charted terms (first-strike vs return in-play, long-rally win rates): nothing extra, but only 466 ATP and 242 WTA test rows had charted data for both players.
+- **Status:** context only; the win probability is unchanged. The ATP term is a candidate for the tennis model's next version if it holds as the test window grows.

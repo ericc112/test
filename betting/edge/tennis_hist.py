@@ -91,6 +91,9 @@ def load(folder: str, years=range(2018, 2027)) -> list[dict]:
             for s in ("w", "l"):
                 sv, a, b = _int(r[f"{s}_svpt"]), _int(r[f"{s}_1stWon"]), _int(r[f"{s}_2ndWon"])
                 m[f"{s}_n"], m[f"{s}_k"] = (sv, a + b) if sv and a is not None and b is not None and sv >= 10 else (None, None)
+            m["w_ht"], m["l_ht"] = _int(r.get("winner_ht")), _int(r.get("loser_ht"))
+            if m["w_n"] and m["l_n"]:            # the rest of the serve line, for scouting profiles (edge/tennis_scout.py)
+                m["raw"] = {f"{s}_{k}": r.get(f"{s}_{k}") for s in ("w", "l") for k in ("ace", "df", "svpt", "1stIn", "1stWon", "2ndWon", "SvGms", "bpSaved", "bpFaced")}
             rows.append(m)
     start = {}
     for m in rows:

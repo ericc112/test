@@ -205,3 +205,36 @@ console.log(JSON.stringify({pre,sim:aw/n,badSet,bad,lastLp:Math.max(...lastLp)})
                 {"p1": "Combs E.", "p2": "Liu K.", "tourn": "Hilton Head Island ITF"}]
         pp = {frozenset({"combs", "liu"}): [{"player": "Ellie Combs"}]}
         self.assertEqual(_short_wta(st, rows, pp), ["Alexandra Shubladze"])      # 3 matches: topped up; Liu has 14; ITF skipped
+
+
+class Scouting(unittest.TestCase):
+    """Scouting cards (edge/tennis_scout.py): every line is a number from a real record, with a percentile."""
+
+    def test_reads_only_clear_strengths_and_weaknesses(self):
+        from edge import tennis_scout as TS
+        stats = {"ace_pct": {"v": 0.12, "pct": 0.93}, "return_rating": {"v": -0.005, "pct": 0.12}, "serve_rating": {"v": 0.085, "pct": 0.98},
+                 "aggression": {"v": 0.2, "pct": 0.5}}
+        self.assertEqual(TS.style_label(stats), "serve-first")
+        self.assertEqual(TS.style_label({"serve_rating": {"v": 0.07, "pct": 0.95}, "return_rating": {"v": 0.09, "pct": 0.99}}), "elite on serve and return")
+        self.assertIsNone(TS.style_label({"serve_rating": {"v": 0.0, "pct": 0.5}}))
+
+    def test_features_need_samples(self):
+        from edge import tennis_scout as TS
+        f = TS.features({"svpt": 120, "ace": 20, "in1": 70, "won1": 50, "won2": 20, "nk_sv": 120, "nk_svw": 70, "nk_rt": 120, "nk_rtw": 50, "matches": 3}, None)
+        self.assertIsNone(f.get("spw"))               # under 400 serve points: no serve line
+        self.assertNotIn("ace_pct", f)                 # no full serve line either
+
+    def test_names_and_ordinals(self):
+        from edge import tennis_scout as TS
+        self.assertEqual(TS.surname("Luca Van Assche"), "Van Assche")
+        self.assertEqual([TS.ordinal(k) for k in (1, 2, 3, 11, 12, 13, 21, 92, 100)], ["1st", "2nd", "3rd", "11th", "12th", "13th", "21st", "92nd", "100th"])
+
+    def test_matchup_notes_pair_real_numbers(self):
+        from edge import tennis_scout as TS
+        a = {"name": "Ben Shelton", "hand": "L", "levels": {"G": 10}, "stats": {"ace_pct": {"v": 0.12, "pct": 0.9}, "long_won": {"v": 0.46, "pct": 0.2}}}
+        b = {"name": "Luca Van Assche", "hand": "R", "levels": {"C": 30, "250": 10}, "stats": {"ret_inplay": {"v": 0.75, "pct": 0.6}, "long_won": {"v": 0.53, "pct": 0.8}}}
+        notes = TS.matchup(a, b)
+        self.assertTrue(any("Shelton's serve (12.0% aces" in x for x in notes))
+        self.assertTrue(any("Long rallies (7+ shots) favour Van Assche" in x for x in notes))
+        self.assertTrue(any("Van Assche has played mostly below tour level" in x for x in notes))
+        self.assertTrue(any("left-handed" in x for x in notes))
