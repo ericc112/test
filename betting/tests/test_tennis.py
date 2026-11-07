@@ -282,3 +282,33 @@ class WinnersScoreline(unittest.TestCase):
         self.assertTrue(f["m2"]["ret"])                                  # one set each short of two, long past start: retirement
         self.assertEqual(f["m2"]["winner"], "b")
         self.assertNotIn("m3", f)
+
+
+class ResultsPageTables(unittest.TestCase):
+    """Tennis Explorer pages for today carry a second dated table (the previous day's results under today's, or the
+    previous day's unfinished matches above today's schedule): only the requested date's table is read."""
+
+    ROW = ('<tr class="one bott"><td class="first time">{t}</td><td class="t-name"><a href="/player/{a}/">{A}</a></td>'
+           '<td class="result">2</td><td class="score">6</td><td class="score">6</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>'
+           '<td class="coursew">1.50</td><td class="course">2.50</td></tr>'
+           '<tr class="one"><td class="t-name"><a href="/player/{b}/">{B}</a></td><td class="result">0</td><td class="score">3</td>'
+           '<td class="score">4</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>')
+    HEAD = '<tr class="head flags"><td>{e}</td><td>S</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>H</td><td>A</td></tr>'
+
+    def page(self, tables):
+        body = "".join(f'<span>{lab}</span> &laquo; previous day | today | next day &raquo; <table class="result">'
+                       + self.HEAD.format(e=ev) + self.ROW.format(t=t, a=a, A=A, b=b, B=B) + "</table>"
+                       for lab, ev, t, a, A, b, B in tables)
+        side = ('<div>This week\'s tournaments</div><table class="result">' + self.HEAD.format(e="X")
+                + self.ROW.format(t="10:00", a="zz", A="Zed Z.", b="yy", B="Why Y.") + "</table>")
+        return '<div id="center">' + body + "</div>" + side
+
+    def test_only_the_requested_day(self):
+        from edge import tennis_market as TM
+        s = self.page([("07. 11. 2026", "Hong Kong WTA", "07:10", "liu-1", "Liu C.", "shub-2", "Shubladze A."),
+                       ("06. 11. 2026", "Hong Kong WTA", "07:10", "liu-1", "Liu C.", "sonm-3", "Sonmez Z.")])
+        r = TM.parse(s, "2026-11-07", "WTA")
+        self.assertEqual([(x["slug1"], x["slug2"]) for x in r], [("liu-1", "shub-2")])
+        self.assertEqual(r[0]["tourn"], "Hong Kong WTA")
+        self.assertEqual([x["slug2"] for x in TM.parse(s, "2026-11-06", "WTA")], ["sonm-3"])
+        self.assertEqual(TM.parse(s, "2026-11-05", "WTA"), [])         # the side column's table is never read

@@ -178,3 +178,15 @@ Prompted by the user after OKC @ MEM ("why did the simulation have MEM winning..
 - `winners.py` grades them against Tennis Explorer's results pages (matched on both players' page ids; a match short of
   the set count 5+ hours after its start counts as a retirement).
 - No pricing or label change. Rollback: drop the tennis branch from `winners.export` and the `save_winners` call.
+
+## 2026-11-07: Tennis Explorer parser reads one dated table (bug fix)
+- Today's results page carries the previous day's results in a second table, and today's schedule page carries the
+  previous day's unfinished matches in a table above it. `tennis_market.parse` read every table on the page and dated
+  all rows by the page, so on today's pages yesterday's matches came back as today's (and the side column's tables
+  were scanned too). It now reads only the table labelled with the requested date (`_day_tables`; test added).
+- Affected: pages for the current day only (past days' pages have one table). The simulator's list could carry a few
+  of the previous day's late matches dated today; market prices were unaffected (same match, same odds). Backtests
+  used past days' pages. The Nov 8 Winners file had no such entries (checked: same matches after the fix).
+- `tennis_recon.rebuild(slate)`: walk-forward rebuild of a past slate's winners (ratings refitted without any match
+  from the slate on, removed by player pair because the database dates matches by event start). Labelled as a rebuild,
+  kept out of the Winners record. Nov 6: data/tennis_bt/recon_2026-11-06.json.

@@ -43,11 +43,34 @@ def _odds(x: str):
         return None
 
 
+def _day_tables(s: str, date: str) -> list[str]:
+    """The page's match tables for `date` only. A page can carry two dated tables (checked 2026-11-07: today's results
+    page adds the previous day's results under it; today's schedule puts the previous day's unfinished matches above
+    it), each under a "DD. MM. YYYY" label; the side columns (this week's tournaments, interesting matches) are cut off.
+    With no labels at all (a layout change), the first table only."""
+    c = s.find('id="center"')
+    e = s.find("This week's tournaments", max(c, 0))
+    body = s[max(c, 0): e if e > 0 else len(s)]
+    want = dt.date.fromisoformat(date).strftime("%d. %m. %Y")
+    parts = re.split(r"(\d\d\. \d\d\. \d{4})", body)
+    if len(parts) == 1:
+        i = body.find('class="result')
+        return [body[i: body.find("</table>", i)]] if i >= 0 else []
+    return [parts[k + 1] for k in range(1, len(parts) - 1, 2) if parts[k] == want]
+
+
 def parse(s: str, date: str, tour: str) -> list[dict]:
     """Matches on a results page: tournament, both players (as listed, the winner first once played), sets, games and
-    the two closing odds (H for the first-listed player)."""
+    the two closing odds (H for the first-listed player). Only the table dated `date` (see _day_tables)."""
+    out = []
+    for seg in _day_tables(s, date):
+        out += _rows(seg, date, tour)
+    return out
+
+
+def _rows(s: str, date: str, tour: str) -> list[dict]:
     out, tourn, pend = [], None, None
-    i = s.find('class="result')
+    i = max(s.find('class="result'), 0)
     for row in re.findall(r"<tr[^>]*>(.*?)</tr>", s[i:], re.S):
         c = _cells(row)
         if not c:
