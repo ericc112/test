@@ -1930,6 +1930,43 @@ async function rfClick() {
     })[code] || `Couldn't start the refresh (${code || "unknown error"}).`;
   } finally { rfBusy = false; btn.disabled = false; }
 }
+
+// ---------- never show a finished slate as if it were current ----------
+// The page only changes when a refresh republishes it, so on load it drops what's already over: finished games from
+// the game lists, the tennis simulator and the all-legs filter; a pick list from an earlier slate; picks whose game
+// was played. SLATE is the US slate day with the pricer's rule (10 hours behind UTC: a 10:30 pm PT tip stays on its day).
+const SLATE = new Date(Date.now() - 10 * 3600e3).toISOString().slice(0, 10), OVER_MS = 4 * 3600e3;
+const isOver = (iso) => { const t = new Date(iso).getTime(); return !isNaN(t) && Date.now() - t > OVER_MS; };
+const STALE = {};
+function pruneStale() {
+  (D.leagues || []).forEach((lg) => { lg.games = (lg.games || []).filter((g) => g.status !== "final" && !isOver(g.start)); });
+  if (D.tennis && D.tennis.matches) D.tennis.matches = D.tennis.matches.filter((m) => !isOver(m.start));
+  const B = window.SIMLAB_BOARDS;
+  if (B && B.sports) for (const k of Object.keys(B.sports)) B.sports[k] = (B.sports[k] || []).filter((r) => !(r.start && isOver(r.start)));
+  const P = window.SIMLAB_PICKS;                         // NBA: one slate per file
+  if (P && P.date && P.date < SLATE) { STALE.nba = P.date; P.model = []; P.history = []; P.likely = []; P.entry = null; P.likely_dropped = []; P.withdrawn = []; P.next = []; }
+  for (const [key, g] of [["nfl", "SIMLAB_NFL_PICKS"], ["nhl", "SIMLAB_NHL_PICKS"], ["tennis", "SIMLAB_TENNIS_PICKS"]]) {
+    const Q = window[g]; if (!Q) continue;
+    let gone = 0; const L = ["model", "picks", "history", "likely"];
+    const prune = (o) => { for (const k of L) if (Array.isArray(o[k])) { const n = o[k].length; o[k] = o[k].filter((r) => !(r.start && isOver(r.start))); gone += n - o[k].length; } };
+    if (Array.isArray(Q.days)) {
+      Q.days.forEach(prune);
+      const all = Q.days.length; Q.days = Q.days.filter((d) => L.some((k) => (d[k] || []).length));
+      if (!Q.days.length) Q.days = [{ label: "No games left", games: [], model: [], history: [], likely: [], likely_dropped: [] }];
+      if (Q.days.length < all || gone) STALE[key] = { gone, date: Q.date, empty: Q.days[0].label === "No games left" };
+    } else { prune(Q); if (gone) STALE[key] = { gone, date: Q.date }; }
+  }
+}
+function staleNotes() {
+  const btn = "Press <b>Refresh picks &amp; status</b> at the top for the latest.";
+  if (STALE.nba && $("pkEntry")) $("pkEntry").innerHTML = `<div class="pk-warn">These were the picks for ${esc(STALE.nba)}: those games are over, so they're hidden. ${btn}</div>`;
+  for (const k of ["nfl", "nhl", "tennis"]) {
+    const s = STALE[k], el = $(k + "Entry"); if (!s || !el) continue;
+    el.insertAdjacentHTML("afterbegin", `<div class="pk-warn">${s.empty ? `Every game on this list (priced ${esc(s.date || "")}) has been played.` : `${s.gone} pick${s.gone === 1 ? "" : "s"} from games already played ${s.gone === 1 ? "is" : "are"} hidden.`} ${btn}</div>`);
+  }
+  if (D.pulled && new Date(D.pulled).getTime() < Date.now() - 18 * 3600e3 && $("refreshNote") && !$("refreshNote").textContent)
+    $("refreshNote").textContent = "This page hasn't been refreshed today.";
+}
 // ---------- every priced leg, filtered by label (boards.js from `python -m edge boards --page boards.js`) ----------
 const BOARD = {};
 function renderBoard(sport, el) {
@@ -3359,6 +3396,8 @@ $("bcLikelyBtn").onclick = () => bcStart("likely");
 
 $("pulled").textContent = D.pulled ? `Lines and injuries as of ${new Date(D.pulled).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "No data file loaded: use Any game (custom).";
 rfInit();
+pruneStale();
 renderRail(); renderHonest(); renderPicks(); renderNflPicks(); renderSportPicks("nhl"); renderSportPicks("tennis"); syncPicks();
+staleNotes();
 if (D.leagues.length && D.leagues[0].games.length) { renderGames(); selectGame(); } else openCustom();
 </script>
