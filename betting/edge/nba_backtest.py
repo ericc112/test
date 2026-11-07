@@ -37,7 +37,8 @@ STATS = ("pts", "reb", "ast", "tpm", "pra", "pr", "pa", "ra")
 PARTS = {"pts": ("pts",), "reb": ("reb",), "ast": ("ast",), "tpm": ("tpm",), "pra": ("pts", "reb", "ast"),
          "pr": ("pts", "reb"), "pa": ("pts", "ast"), "ra": ("reb", "ast")}
 KNOBS = {"minutes_alpha": "MINUTES_ALPHA", "prior_min": "PLAYER_PRIOR_MIN", "injury_beta": "INJURY_BETA", "player_w": "PLAYER_RATING_W",
-         "comeback_sd": "COMEBACK_SD", "shock": "PLAYER_SHOCK", "min_sd_scale": "MIN_SD_SCALE", "swing_rho": "SWING_RHO"}
+         "comeback_sd": "COMEBACK_SD", "shock": "PLAYER_SHOCK", "min_sd_scale": "MIN_SD_SCALE", "swing_rho": "SWING_RHO",
+         "minutes_share": "MINUTES_SHARE", "minutes_pad": "MINUTES_PAD"}
 
 
 def imp(a) -> float | None:
@@ -269,7 +270,8 @@ def build(cfg: dict, n: int = 5000, tag: str = "base", season=("20261018", "2026
                              "p_over": po, "p_under": pu, "p_push": pp, "sim_mean": hmean(h), "sim_med": quant(h, 0.5),
                              "sim_q25": quant(h, 0.25), "sim_q75": quant(h, 0.75), "sim_sd": hsd(h),
                              "proj_min": pmin, "sim_min": sp["min"], "act_min": a["min"], "y": y, "top5": pid in top5, "starter": a["starter"],
-                             "hist_o": ho, "hist_u": hu, "hist_wo": hwo, "hist_wu": hwu, "hist_n": len(vals), "corr_pa": sp["corr_pa"]})
+                             "hist_o": ho, "hist_u": hu, "hist_wo": hwo, "hist_wu": hwu, "hist_n": len(vals), "corr_pa": sp["corr_pa"],
+                             "h": [int(c) for c in h][:max((i for i, c in enumerate(h) if c), default=0) + 1]})   # the simulated counts (shape tests)
     res = {"tag": tag, "cfg": cfg, "n": n, "legs": legs, "players": players, "teams": teams, "built": time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime())}
     os.makedirs(OUT, exist_ok=True)
     json.dump(res, gzip.open(os.path.join(OUT, f"corpus_{tag}.json.gz"), "wt"), default=float)
@@ -282,9 +284,10 @@ if __name__ == "__main__":
     ap.add_argument("--tag", default="base")
     ap.add_argument("--n", type=int, default=5000)
     ap.add_argument("--set", nargs="*", default=[])
+    ap.add_argument("--end", default="20261103", help="last game day (YYYYMMDD) in the corpus")
     a = ap.parse_args()
     cfg = {}
     for kv in a.set:
         k, v = kv.split("=")
         cfg[k] = float(v) if v.replace(".", "", 1).replace("-", "", 1).isdigit() else v
-    build(cfg, n=a.n, tag=a.tag)
+    build(cfg, n=a.n, tag=a.tag, season=("20261018", a.end))

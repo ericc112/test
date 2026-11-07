@@ -550,6 +550,32 @@ MINUTES_ALPHA = 0.8
 MIN_SD_SCALE = 1.0
 
 
+# How minutes freed by absences are shared (2026-11-07 fair test on box scores, tuned on 2025-26, scored on 2026-27):
+# "alpha" scales everyone by minutes^MINUTES_ALPHA; "headroom" lets each player rise only toward his own ceiling (his
+# high in his last 10 games + MINUTES_PAD), so stars already near their usual load barely move and the rotation
+# players below theirs absorb the minutes. Starters' minutes MAE 5.13 -> 4.77 (2025-26) and 4.70 -> 4.38 (2026-27).
+MINUTES_SHARE = "alpha"
+MINUTES_PAD = 3.0
+
+
+def allocate_headroom(raw: list[float], ceil: list[float], total: float = 240.0, cap: float = 42.0) -> list[float]:
+    """Fill the gap to `total` in proportion to each player's room below his ceiling; a surplus (or everyone at his
+    ceiling) falls back to allocate_minutes."""
+    s = sum(raw)
+    if s <= 0 or s >= total:
+        return allocate_minutes(raw)
+    c = [min(cap, max(m, x)) for m, x in zip(raw, ceil)]
+    x, need = list(raw), total - s
+    for _ in range(20):
+        room = [max(ci - v, 0.0) for ci, v in zip(c, x)]
+        R = sum(room)
+        if need <= 1e-6 or R <= 0:
+            break
+        x = [min(ci, v + need * r / R) for ci, v, r in zip(c, x, room)]
+        need = total - sum(x)
+    return allocate_minutes(x, alpha=1.0) if need > 1e-6 else x
+
+
 def allocate_minutes(raw: list[float], alpha: float | None = None, total: float = 240.0, cap: float = 42.0) -> list[float]:
     a = MINUTES_ALPHA if alpha is None else alpha
     w = [max(m, 0.0) ** a for m in raw]
@@ -676,6 +702,7 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
         players.append({"id": pid, "name": a["name"], "pos": a["pos"], "min": a["proj"], "min_sd": float(MIN_SD_SCALE * max(3.0, np.std(a["mins"]) if len(a["mins"]) > 1 else 5.0)),
                         "season": {k: (round(v, 2) if isinstance(v, float) else v) for k, v in season.items()},
                         "games": len(a["mins"]), "starter": a["starter"], "returning": a["returning"],
+                        "min_ceil": (max(a["mins"][-10:]) if a["mins"] else 0.0) + MINUTES_PAD,
                         # head-to-head multipliers (nba_research.H2H_COEF): usage x pts factor, 3PA x 3PM factor
                         "fga2": fga2 * f_pts, "fga3": rate("tpa") * f_tpm, "fta": rate("fta") * f_pts, "ast": rate("ast") * f_ast,
                         "oreb": rate("oreb") * f_reb, "dreb": rate("dreb") * f_reb,
@@ -684,7 +711,10 @@ def player_profiles(lg: str, games: list[dict], team: str, before: str, out_name
     for p in players:
         p["min_raw"] = p["min"]
     if players:
-        alloc = allocate_minutes([p["min"] for p in players])
+        if MINUTES_SHARE == "headroom":
+            alloc = allocate_headroom([p["min"] for p in players], [p["min_ceil"] for p in players])
+        else:
+            alloc = allocate_minutes([p["min"] for p in players])
         for p, m in zip(players, alloc):
             p["min"] = m
     players.sort(key=lambda p: -p["min"])
