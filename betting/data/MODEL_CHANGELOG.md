@@ -145,3 +145,26 @@ Prompted by the user: "you are only looking at the data and numbers but not trul
   - WTA: nothing (−0.000032, CI −0.00013 to +0.00006).
   - Charted terms (first-strike vs return in-play, long-rally win rates): nothing extra, but only 466 ATP and 242 WTA test rows had charted data for both players.
 - **Status:** context only; the win probability is unchanged. The ATP term is a candidate for the tennis model's next version if it holds as the test window grows.
+
+## 2026-11-07: nightly simulation audit; team-level market anchor (shadow)
+Prompted by the user after OKC @ MEM ("why did the simulation have MEM winning... learn from each night's losses, see where the simulation went wrong compared to actual and keep injecting fixes").
+- **Why Memphis:** with eight games each, this season's results rated Memphis +6.9 and OKC +1.8 per 100 possessions.
+  - Team strength alone made Memphis a 7.2-point home favourite. Absences were a wash (two out on each side). The player ratings trimmed it to Memphis by 4.3 (61%).
+  - DraftKings had OKC by 4.5, and OKC won by 31.
+  - The preseason prior that would have helped is off (it was tested on Nov 3 and didn't hold up).
+- **Team-level market anchor** (`TEAM_MARKET_W`, `gamesim.nba.anchor_to_market`): moves each side's make rates so the expected margin and total sit on DraftKings' pre-tip line; pace stays the engine's.
+  - On 973 games of 2025-26 the market's margin missed by 14.11 against the engine's 14.35, and totals by 18.46 against 19.52. The best blend weight was 1.0 for both.
+  - Player-prop corpus (6,431 lines, 95 games of 2026-27): no measurable change (simulation 0.7046 → 0.7048, blend 0.6868 → 0.6869, carried prices unchanged).
+  - **Status:** in shadow v3, so tonight's runs score it live. Game-level win chances become the market's by construction.
+- **Nightly audit** (`edge sim-audit`, `edge/sim_audit.py`). Every published-logic run saves each game's last pre-tip prediction (`data/nba_pretip/`). The next day the audit compares:
+  - winners and margins against the market;
+  - late scratches and surprise minutes;
+  - the biggest minutes misses;
+  - per-minute production by role.
+
+  `findings()` names the patterns that repeat across nights and ties each one to a switch. A fix goes through a walk-forward test and then shadow, never straight into a published number. Data bugs are fixed directly. The audit is part of the on-demand Refresh routine.
+- **Nov 6 audit** (from the saved boards):
+  - winners: simulation 8/9, market 8/9 (they split the two disagreements);
+  - 5 late scratches;
+  - 8 surprise-minutes players, mostly Boston's 39-point win at Charlotte;
+  - biggest minutes misses: Brandon Miller (projected 40, played 14), Leaky Black (13 → 40) and Alijah Martin (10 → 31).

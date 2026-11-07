@@ -201,7 +201,7 @@
  },
  "shadow": {
   "version": 3,
-  "name": "v3 candidate: v2 + shrink to the market past an 8-point disagreement (user audit) + headroom minutes sharing + assist-share fix (simulation study 2026-11-07)",
+  "name": "v3 candidate: v2 + shrink to the market past an 8-point disagreement (user audit) + headroom minutes sharing + assist-share fix + team margin and total anchored to DraftKings' line (simulation study 2026-11-07)",
   "params": {
    "bias": "table",
    "blend": {
@@ -227,7 +227,8 @@
     "swing_rho": 0.8,
     "minutes_share": "headroom",
     "minutes_pad": 3.0,
-    "ast_fix": 1
+    "ast_fix": 1,
+    "team_market_w": 1.0
    },
    "bias_table": {
     "pts": {
@@ -335,6 +336,37 @@
     "sim_logloss": {
      "v2": 0.7046,
      "v3_sim": 0.7038
+    }
+   },
+   "team_market_anchor": {
+    "why": "OKC @ MEM 2026-11-06: eight games of results rated MEM +6.9 / OKC +1.8 per 100; engine MEM by 4 (61%), market OKC by 4.5, OKC won by 31",
+    "game_level_2025_26": {
+     "games": 973,
+     "margin_rmse": {
+      "engine": 14.35,
+      "market": 14.11
+     },
+     "total_rmse": {
+      "engine": 19.52,
+      "market": 18.46
+     },
+     "best_market_weight": 1.0
+    },
+    "props_corpus_2026_27": {
+     "legs": 6431,
+     "sim_ll": [
+      0.7046,
+      0.7048
+     ],
+     "blend_ll": [
+      0.6868,
+      0.6869
+     ],
+     "carry_ll": [
+      0.5408,
+      0.5409
+     ],
+     "verdict": "no measurable change on props"
     }
    }
   }
