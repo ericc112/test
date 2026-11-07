@@ -1765,18 +1765,20 @@ function renderWinners() {
     const mFavHome = g.market_home != null ? g.market_home > 0.5 : null, dis = ph != null && mFavHome != null && hFav !== mFavHome;
     const t = g.start ? new Date(g.start) : null, live = !g.final && t && Date.now() > t.getTime();
     const res = g.final ? (g.sim_right ? `<span class="wn-res ok">✓ right</span>` : `<span class="wn-res no">✗ wrong</span>`) : `<span class="wn-res pd">${live ? "in progress" : "to play"}</span>`;
-    const row = (team, home) => { const isW = ph != null && (home ? hFav : !hFav); const pj = g.proj ? Math.round(g.proj[home ? 1 : 0]) : "—"; const fn = g.final ? g.final[home ? 1 : 0] : "";
+    const row = (team, home) => { const isW = ph != null && (home ? hFav : !hFav); const pj = g.proj ? g.proj[home ? 1 : 0].toFixed(1) : "—"; const fn = g.final ? g.final[home ? 1 : 0] : "";
       return `<span class="${isW ? "w" : "l"}">${esc(team)}${isW ? " ◂" : ""}</span><span class="pj">${pj}</span><span class="fn">${fn}</span>`; };
     return `<div class="wn-card${dis ? " dis" : ""}">
       <div class="wn-top"><span><span class="tn-badge">${esc(g.sport.toUpperCase())}</span>${t ? esc(t.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })) : ""}</span>${res}</div>
-      <div class="wn-head"><span>Team</span><span>Projected</span><span>Final</span></div>
+      <div class="wn-head"><span>Team</span><span>Avg score</span><span>Final</span></div>
       <div class="wn-teams">${row(g.away, false)}${row(g.home, true)}</div>
       ${ph != null ? `<div class="wn-bar" title="Simulation: ${esc(g.away)} ${Math.round(100 * (1 - ph))}% / ${esc(g.home)} ${Math.round(100 * ph)}%"><i style="width:${100 * (1 - ph)}%"></i><i style="width:${100 * ph}%"></i></div>` : ""}
+      ${g.proj ? (() => { const m = g.proj[1] - g.proj[0], lead = m >= 0 ? g.home : g.away, am = Math.abs(m);
+        return `<div class="note" style="font-size:.78rem">${am < 0.05 ? "Dead even on average" : `${esc(lead)} by ${am.toFixed(1)} on average`}${winP != null && winP < 0.53 ? ": a coin flip" : ""}. Every simulated game has a winner (overtime until decided).</div>`; })() : ""}
       <div class="wn-meta"><span>Simulation: <b>${esc(hFav ? g.home : g.away)} ${winP != null ? Math.round(100 * winP) + "%" : ""}</b></span>
         ${g.market_home != null ? `<span>Favorite: ${esc(mFavHome ? g.home : g.away)} ${Math.round(100 * Math.max(g.market_home, 1 - g.market_home))}%</span>` : `<span class="note">no market price saved</span>`}
         ${dis ? `<span class="wn-res pd" style="color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 25%,transparent)">disagrees with the market</span>` : ""}
         ${g.final && g.market_right != null ? `<span class="note">favorite ${g.market_right ? "✓" : "✗"}</span>` : ""}</div></div>`; }).join("") || `<div class="note">No projections saved for this night.</div>`;
-  $("wnNote").textContent = "The simulation's pick is the side it gives over 50% from its last pre-tip run; the projected score is its average result (the most common final is close to it). "
+  $("wnNote").textContent = "The simulation's pick is the side it gives over 50% from its last pre-tip run. The score shown is the average of all 50,000 runs, not one game: every run has a winner (NBA overtime until decided), so a close game can average out nearly level. "
     + "NBA comes from the possession engine's own team ratings; the NHL and NFL simulations start from the betting line, so their winners mostly follow the favorite. "
     + "Earlier nights rebuilt from saved boards carry the win chance only (no projected score). Picking winners is not the same as beating the price: the favorite's record is shown for that reason.";
 }
