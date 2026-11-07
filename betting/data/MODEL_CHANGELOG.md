@@ -168,3 +168,13 @@ Prompted by the user after OKC @ MEM ("why did the simulation have MEM winning..
   - 5 late scratches;
   - 8 surprise-minutes players, mostly Boston's 39-point win at Charlotte;
   - biggest minutes misses: Brandon Miller (projected 40, played 14), Leaky Black (13 → 40) and Alijah Martin (10 → 31).
+
+## 2026-11-07: tennis on the Winners tab (display only)
+- `tennis_watch.scoreline`: exact distribution of final scorelines at fixed serve-point rates (game, set and tiebreak
+  recursions; coin toss for first serve). Its win chance matches `tennis_hist.match_win` (tested).
+- `tennis_watch.save_winners`: before the first serve, each match's win chance (day-to-day form included; ATP matched
+  to the price as the simulator's default, WTA ratings only), the projected winner's most likely exact scoreline, the
+  set split and average games, plus the ratings-only win chance. Written to data/winners/tennis/<CET date>.json.
+- `winners.py` grades them against Tennis Explorer's results pages (matched on both players' page ids; a match short of
+  the set count 5+ hours after its start counts as a retirement).
+- No pricing or label change. Rollback: drop the tennis branch from `winners.export` and the `save_winners` call.

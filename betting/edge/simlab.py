@@ -192,16 +192,16 @@ def export(path: str, nfl_week: int | None = None, backtest_weeks: tuple = (3, 8
         data["backtest"] = {"weeks": list(backtest_weeks), "n": s["n"],
                             "by_market": {k: {kk: _r(vv, 3) for kk, vv in v.items()} for k, v in s["by_market"].items()},
                             "calibration": [[lo, min(hi, 1.0), n, _r(pm, 3), _r(hit, 3)] for lo, hi, n, pm, hit in s["calibration"]]}
-    try:                                   # the Winners tab: projected winners and scores, night by night
-        from . import winners
-        data["winners"] = winners.export()
-    except Exception as e:
-        data["winners"] = {"nights": [], "note": f"winners not loaded ({type(e).__name__}: {str(e)[:80]})"}
     try:                                   # tennis match simulator (ATP + WTA): never sinks the rest of the export
         from . import tennis_watch
         data["tennis"] = tennis_watch.export()
     except Exception as e:
         data["tennis"] = {"matches": [], "note": f"tennis matches not loaded ({type(e).__name__}: {str(e)[:80]})"}
+    try:                                   # the Winners tab: projected winners and scores, night by night (after tennis, which saves its projections)
+        from . import winners
+        data["winners"] = winners.export()
+    except Exception as e:
+        data["winners"] = {"nights": [], "note": f"winners not loaded ({type(e).__name__}: {str(e)[:80]})"}
     with open(path, "w") as f:
         f.write("window.SIMLAB = " + json.dumps(data, separators=(",", ":"), default=lambda o: o.tolist() if isinstance(o, np.ndarray) else str(o)) + ";\n")
     return {"path": path, "nfl_week": nfl_week, "games": {lg["key"]: len(lg["games"]) for lg in data["leagues"]},

@@ -258,7 +258,7 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
 .wn-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line) }
 .wn-bar i:first-child { background: var(--away) } .wn-bar i:last-child { background: var(--home) }
 .wn-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .8rem; align-items: center }
-.wn-res { font-weight: 700; border-radius: 999px; padding: 1px 8px; font-size: .74rem }
+.wn-res { font-weight: 700; border-radius: 999px; padding: 1px 8px; font-size: .74rem; white-space: nowrap; align-self: start }
 .wn-res.ok { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good) }
 .wn-res.no { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad) }
 .wn-res.pd { background: var(--surface-2); color: var(--muted) }
@@ -390,7 +390,7 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="tiles" id="wnTiles"></div>
     <div class="row"><div class="seg" role="group" aria-label="Night" id="wnNights"></div><div class="seg" role="group" aria-label="Sport" id="wnSport"></div></div>
     <div class="wn-grid" id="wnList"></div>
-    <p class="note" id="wnNote"></p>
+    <p class="note" id="wnNote" style="white-space:pre-line"></p>
   </section>
 
   <section class="panel" id="tennisSim" hidden aria-label="Tennis match simulator">
@@ -1761,6 +1761,7 @@ function renderWinners() {
   $("wnSport").querySelectorAll("button").forEach((b) => b.onclick = () => { WN.sport = b.dataset.s; renderWinners(); });
   const G = N0.games.filter((g) => WN.sport === "all" || g.sport === WN.sport);
   $("wnList").innerHTML = G.map((g) => {
+    if (g.sport === "tennis") return wnTennis(g);
     const ph = g.p_home, hFav = ph != null && ph > 0.5, winP = ph == null ? null : Math.max(ph, 1 - ph);
     const mFavHome = g.market_home != null ? g.market_home > 0.5 : null, dis = ph != null && mFavHome != null && hFav !== mFavHome;
     const t = g.start ? new Date(g.start) : null, live = !g.final && t && Date.now() > t.getTime();
@@ -1778,9 +1779,38 @@ function renderWinners() {
         ${g.market_home != null ? `<span>Favorite: ${esc(mFavHome ? g.home : g.away)} ${Math.round(100 * Math.max(g.market_home, 1 - g.market_home))}%</span>` : `<span class="note">no market price saved</span>`}
         ${dis ? `<span class="wn-res pd" style="color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 25%,transparent)">disagrees with the market</span>` : ""}
         ${g.final && g.market_right != null ? `<span class="note">favorite ${g.market_right ? "✓" : "✗"}</span>` : ""}</div></div>`; }).join("") || `<div class="note">No projections saved for this night.</div>`;
-  $("wnNote").textContent = "The simulation's pick is the side it gives over 50% from its last pre-tip run. The score shown is the average of all 50,000 runs, not one game: every run has a winner (NBA overtime until decided), so a close game can average out nearly level. "
+  $("wnNote").textContent = "The simulation's pick is the side it gives over 50% from its last pre-tip run (tennis: its last run before the first serve)."
+    + " Tennis: the win chance includes day-to-day form; the score is the projected winner's single most likely exact scoreline, worked out exactly from both players' serve-point rates (no single scoreline is likely: even the top one is usually under 10%), with the straight-sets / three-sets split and average games. ATP rates are matched to the betting price, as the simulator does by default; WTA uses ratings only.\n"
+    + "Team sports: the score shown is the average of all 50,000 runs, not one game: every run has a winner (NBA overtime until decided), so a close game can average out nearly level. "
     + "NBA comes from the possession engine's own team ratings; the NHL and NFL simulations start from the betting line, so their winners mostly follow the favorite. "
     + "Earlier nights rebuilt from saved boards carry the win chance only (no projected score). Picking winners is not the same as beating the price: the favorite's record is shown for that reason.";
+}
+function wnTennis(g) {
+  const pa = g.p_home == null ? null : 1 - g.p_home, aFav = pa != null && pa > 0.5, winP = pa == null ? null : Math.max(pa, 1 - pa);
+  const ma = g.market_home == null ? null : 1 - g.market_home, mFavA = ma == null ? null : ma > 0.5, dis = pa != null && mFavA != null && aFav !== mFavA;
+  const t = g.start ? new Date(g.start) : null, live = !g.final && t && Date.now() > t.getTime();
+  const res = g.final ? (g.sim_right ? `<span class="wn-res ok">✓ right</span>` : `<span class="wn-res no">✗ wrong</span>`) : `<span class="wn-res pd">${live ? "in progress" : "to play"}</span>`;
+  const short = (n) => { const w = String(n || "").split(" "); return w.length > 1 ? w[0][0] + ". " + w.slice(1).join(" ") : n; };
+  const row = (name, isA) => { const isW = pa != null && (isA ? aFav : !aFav), won = g.final && (g.final_winner === (isA ? "a" : "b"));
+    const pj = g.proj ? g.proj[isA ? 0 : 1].toFixed(1) : "—", fn = g.final ? g.final[isA ? 0 : 1] : "";
+    return `<span class="${isW ? "w" : "l"}">${esc(name)}${isW ? " ◂" : ""}</span><span class="pj">${pj}</span><span class="fn">${fn}${won ? " ✓" : ""}</span>`; };
+  const fav = aFav ? g.away : g.home, S = g.sets || {}, bo3 = (g.best_of || 3) === 3;
+  const straight = aFav ? S[bo3 ? "2-0" : "3-0"] : S[bo3 ? "0-2" : "0-3"], longest = aFav ? S[bo3 ? "2-1" : "3-2"] : S[bo3 ? "1-2" : "2-3"];
+  const exact = g.final && g.line && g.final_line && !g.ret && g.final_line === g.line && g.sim_right;
+  return `<div class="wn-card${dis ? " dis" : ""}">
+    <div class="wn-top"><span><span class="tn-badge">${esc(g.tour || "TENNIS")}</span>${esc(g.event || "")}${g.surface ? " · " + esc(g.surface) : ""}${t ? " · " + esc(t.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })) : ""}</span>${res}</div>
+    <div class="wn-head"><span>Player</span><span>Avg games</span><span>Sets</span></div>
+    <div class="wn-teams">${row(g.away, true)}${row(g.home, false)}</div>
+    ${pa != null ? `<div class="wn-bar" title="Simulation: ${esc(g.away)} ${Math.round(100 * pa)}% / ${esc(g.home)} ${Math.round(100 * (1 - pa))}%"><i style="width:${100 * pa}%"></i><i style="width:${100 * (1 - pa)}%"></i></div>` : ""}
+    ${g.line ? `<div style="font-size:.86rem">Projected score: <b>${esc(short(fav))} ${esc(g.line)}</b> <span class="note">(${(100 * (g.line_p || 0)).toFixed(1)}%, the most likely exact score)</span></div>` : ""}
+    ${straight != null ? `<div class="note" style="font-size:.78rem">${esc(short(fav))} in straight sets ${Math.round(100 * straight)}% · in ${bo3 ? "three" : "five"} sets ${Math.round(100 * (longest || 0))}%${winP != null && winP < 0.55 ? " · close to a coin flip" : ""}</div>` : ""}
+    ${g.rates === "market" && g.p_home_ratings != null ? (() => { const r = 1 - g.p_home_ratings, rA = r > 0.5;
+      return `<div class="note" style="font-size:.78rem">Matched to the betting price (the ATP default). Player ratings alone: ${esc(short(rA ? g.away : g.home))} ${Math.round(100 * Math.max(r, 1 - r))}%${rA !== aFav ? " (the other side)" : ""}.</div>`; })() : ""}
+    ${g.final ? `<div style="font-size:.86rem">Final: <b>${esc(short(g.final_winner === "a" ? g.away : g.home))} ${esc(g.final_line || "")}</b>${exact ? ` <span class="wn-res ok">exact score ✓</span>` : ""}</div>` : ""}
+    <div class="wn-meta"><span>Simulation: <b>${esc(fav)} ${winP != null ? Math.round(100 * winP) + "%" : ""}</b></span>
+      ${ma != null ? `<span>Favorite: ${esc(mFavA ? g.away : g.home)} ${Math.round(100 * Math.max(ma, 1 - ma))}%</span>` : `<span class="note">no price listed</span>`}
+      ${dis ? `<span class="wn-res pd" style="color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 25%,transparent)">disagrees with the market</span>` : ""}
+      ${g.final && g.market_right != null ? `<span class="note">favorite ${g.market_right ? "✓" : "✗"}</span>` : ""}</div></div>`;
 }
 function tnHold(p) { const d = p * p / (p * p + (1 - p) * (1 - p)); return p ** 4 * (1 + 4 * (1 - p) + 10 * (1 - p) ** 2) + 20 * p ** 3 * (1 - p) ** 3 * d; }
 // ---------- watch ----------

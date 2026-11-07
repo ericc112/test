@@ -214,13 +214,119 @@ def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
                             "start": start.isoformat(), "a": na, "b": nb, "a_te": x["p1"], "b_te": x["p2"],
                             "pa": round(p1, 4), "pb": round(p2, 4), "sd": form["sd"], "rho": form["rho"],
                             "ms_a": msa, "ms_b": msb, "thin": min(msa, msb) < THIN_MS,
-                            "odds": [x.get("o1"), x.get("o2")], "market_a": round(fair, 4) if fair else None,
+                            "slugs": [x.get("slug1"), x.get("slug2")], "odds": [x.get("o1"), x.get("o2")], "market_a": round(fair, 4) if fair else None,
                             "shift": round(shift, 4) if shift is not None else None, "anchor_default": bool(anchor and fair),
                             "win_model": round(win_model, 4), "elo_a": round(1 / (1 + 10 ** ((rb - ra) / 400)), 4),
                             "lines": pp.get(k2, []), "scout": _scout(scout, ia, na, ib, nb)})
     out.sort(key=lambda m: (m["start"], m["tour"]))
+    try:
+        save_winners(out)
+    except Exception as e:
+        log(f"  tennis watch: winners not saved ({type(e).__name__})")
     note = (f"{len(out)} matches simulated; not simulated (players without enough stats-covered matches in 52 weeks, "
             f"mostly Futures, UTR and ITF): ATP {skipped['ATP']}, WTA {skipped['WTA']}")
     log("  tennis watch: " + note)
     return {"matches": out, "pulled": now.strftime("%Y-%m-%dT%H:%MZ"), "note": note, "skipped": skipped,
             "decision": {t: (dec.get(t) or {}).get("anchor") for t in ("ATP", "WTA")}}
+
+# ------------------------------------------------------------------ projected scoreline (the Winners tab)
+def _hold(p: float) -> float:
+    d = p * p / (p * p + (1 - p) * (1 - p))
+    return p ** 4 * (1 + 4 * (1 - p) + 10 * (1 - p) ** 2) + 20 * p ** 3 * (1 - p) ** 3 * d
+
+
+def _tiebreak(pa: float, pb: float, first: int) -> float:
+    """A's chance to win a 7-point tiebreak, `first` (0 = A) serving the first point, then two each."""
+    from functools import lru_cache
+    @lru_cache(None)
+    def f(x, y):
+        if (x >= 7 or y >= 7) and abs(x - y) >= 2:
+            return 1.0 if x > y else 0.0
+        if x >= 6 and y >= 6 and x == y:
+            a, b = pa * (1 - pb), (1 - pa) * pb
+            return a / (a + b)
+        k = x + y
+        s = first if ((k + 1) // 2) % 2 == 0 else 1 - first
+        w = pa if s == 0 else 1 - pb
+        return w * f(x + 1, y) + (1 - w) * f(x, y + 1)
+    return f(0, 0)
+
+
+def _sets(pa: float, pb: float, first: int) -> dict:
+    """{(games A, games B, who serves the next set's first game): probability} for one set."""
+    hA, hB = _hold(pa), _hold(pb)
+    out, frontier = {}, {(0, 0, first): 1.0}
+    while frontier:
+        nxt = {}
+        for (a, b, srv), pr in frontier.items():
+            if a == 6 and b == 6:
+                t = _tiebreak(pa, pb, srv)
+                for key, q in (((7, 6, 1 - srv), t), ((6, 7, 1 - srv), 1 - t)):
+                    out[key] = out.get(key, 0) + pr * q
+                continue
+            aw = hA if srv == 0 else 1 - hB
+            for (na, nb), q in (((a + 1, b), aw), ((a, b + 1), 1 - aw)):
+                done = (na >= 6 or nb >= 6) and abs(na - nb) >= 2 or na == 7 or nb == 7
+                key = (na, nb, 1 - srv)
+                (out if done else nxt)[key] = (out if done else nxt).get(key, 0) + pr * q
+        frontier = nxt
+    return out
+
+
+def scoreline(pa: float, pb: float, best_of: int = 3) -> dict:
+    """Exact distribution of final scorelines at fixed serve-point rates (coin toss for the first server): the most
+    likely scoreline overall and for each player as the winner, the chance each wins, and expected games."""
+    need = best_of // 2 + 1
+    lines = {}
+    def go(sa, sb, srv, score, pr):
+        if sa == need or sb == need:
+            lines[tuple(score)] = lines.get(tuple(score), 0) + pr
+            return
+        for (a, b, nxt), q in _sets(pa, pb, srv).items():
+            go(sa + (a > b), sb + (b > a), nxt, score + [(a, b)], pr * q)
+    for first in (0, 1):
+        go(0, 0, first, [], 0.5)
+    win_a = sum(p for sc, p in lines.items() if sum(a > b for a, b in sc) == need)
+    best = lambda cond: max(((sc, p) for sc, p in lines.items() if cond(sc)), key=lambda x: x[1], default=(None, 0))
+    a_line, a_p = best(lambda sc: sum(a > b for a, b in sc) == need)
+    b_line, b_p = best(lambda sc: sum(b > a for a, b in sc) == need)
+    games = (sum(p * sum(a for a, _ in sc) for sc, p in lines.items()), sum(p * sum(b for _, b in sc) for sc, p in lines.items()))
+    sets = {}
+    for sc, p in lines.items():
+        k = f"{sum(a > b for a, b in sc)}-{sum(b > a for a, b in sc)}"
+        sets[k] = sets.get(k, 0) + p
+    fmt = lambda sc, flip=False: ", ".join(f"{b}-{a}" if flip else f"{a}-{b}" for a, b in sc) if sc else None
+    return {"p_a": win_a, "line_a": fmt(a_line), "line_a_p": a_p, "line_b": fmt(b_line), "line_b_p": b_p,
+            "line_b_w": fmt(b_line, True), "sets": {k: round(v, 4) for k, v in sorted(sets.items(), reverse=True)},
+            "games": [round(games[0], 1), round(games[1], 1)]}
+
+
+def save_winners(matches: list[dict], now=None) -> None:
+    """Each upcoming match's projected winner and scoreline for the Winners tab (data/winners/tennis/<date>.json, by
+    the match's Central European date), at the rates the simulator shows by default (matched to the market where the
+    pricer does that: ATP)."""
+    import datetime as _dt
+    from .winners import WIN_DIR
+    now = now or _dt.datetime.now(_dt.timezone.utc)       # `now`: the time the projection was made (only later starts kept)
+    by_day = {}
+    for m in matches:
+        start = _dt.datetime.fromisoformat(m["start"])
+        if start <= now:
+            continue
+        d = m["shift"] if (m.get("anchor_default") and m.get("shift") is not None) else 0.0
+        sl = scoreline(m["pa"] + d, m["pb"] - d, m.get("best_of", 3))
+        win = m["win_model"] if not d else (m.get("market_a") or sl["p_a"])
+        a_wins = win > 0.5
+        by_day.setdefault(start.astimezone(TE_TZ).date().isoformat(), {})[m["id"]] = {
+            "gid": m["id"], "sport": "tennis", "tour": m["tour"], "event": m.get("event") or m.get("tourn"), "away": m["a"], "home": m["b"],
+            "a_te": m.get("a_te"), "b_te": m.get("b_te"), "start": m["start"], "pulled": now.strftime("%Y-%m-%dT%H:%MZ"),
+            "slugs": m.get("slugs"), "best_of": m.get("best_of", 3), "surface": m.get("surface"),
+            "p_a": round(float(win), 4), "p_a_ratings": m.get("win_model"), "market_a": m.get("market_a"), "winner": "a" if a_wins else "b",
+            "line": sl["line_a"] if a_wins else sl["line_b_w"],            # the projected winner's most likely scoreline, winner's games first
+            "line_p": round(sl["line_a_p"] if a_wins else sl["line_b_p"], 3), "sets": sl["sets"], "games": sl["games"],
+            "rates": "market" if d else "ratings"}
+    for day, recs in by_day.items():
+        dd = os.path.join(WIN_DIR, "tennis"); os.makedirs(dd, exist_ok=True)
+        path = os.path.join(dd, f"{day}.json")
+        cur = json.load(open(path)) if os.path.exists(path) else {}
+        cur.update(recs); json.dump(cur, open(path, "w"))

@@ -238,3 +238,47 @@ class Scouting(unittest.TestCase):
         self.assertTrue(any("Long rallies (7+ shots) favour Van Assche" in x for x in notes))
         self.assertTrue(any("Van Assche has played mostly below tour level" in x for x in notes))
         self.assertTrue(any("left-handed" in x for x in notes))
+
+
+class WinnersScoreline(unittest.TestCase):
+    """The Winners tab's tennis projection: exact scoreline distribution and grading against Tennis Explorer results."""
+
+    def test_scoreline_matches_match_win(self):
+        from edge import tennis_hist as TH
+        from edge.tennis_watch import scoreline
+        for pa, pb in ((0.6653, 0.6142), (0.60, 0.66), (0.64, 0.64)):
+            r = scoreline(pa, pb)
+            self.assertAlmostEqual(r["p_a"], float(TH.match_win(np.array([pa]), np.array([pb]), 3)[0]), places=3)
+            self.assertAlmostEqual(sum(r["sets"].values()), 1.0, places=3)
+            self.assertAlmostEqual(r["sets"]["2-0"] + r["sets"]["2-1"], r["p_a"], places=3)
+        r = scoreline(0.64, 0.64)
+        self.assertAlmostEqual(r["p_a"], 0.5, places=6)                 # level players: a coin flip either way
+        self.assertEqual(r["line_a"], r["line_b_w"])                     # same scoreline from each winner's side
+        r = scoreline(0.60, 0.66)
+        self.assertEqual(r["line_b"], "4-6, 4-6")
+        self.assertEqual(r["line_b_w"], "6-4, 6-4")                      # B's line written winner first
+
+    def test_set_cells(self):
+        from edge.winners import _set_games
+        self.assertEqual([_set_games(x) for x in ("6", "7", "65", "63", "0")], [6, 7, 6, 6, 0])
+
+    def test_finals_from_results(self):
+        import datetime as dt
+        from edge import tennis_market as TM, winners as W
+        rows = [{"slug1": "eala", "slug2": "liu-53de8", "s1": "2", "s2": "1", "g1": ["4", "7", "6"], "g2": ["6", "65", "3"], "o1": 1.5, "o2": 2.6},
+                {"slug1": "pontjo", "slug2": "weight", "s1": "1", "s2": "0", "g1": ["6", "2"], "g2": ["2", "1"], "o1": 3.4, "o2": 1.3}]
+        recs = {"m1": {"tour": "WTA", "slugs": ["liu-53de8", "eala"], "start": "2026-01-02T08:00:00+01:00", "best_of": 3},
+                "m2": {"tour": "ATP", "slugs": ["weight", "pontjo"], "start": "2026-01-02T09:00:00+01:00", "best_of": 3},
+                "m3": {"tour": "ATP", "slugs": ["nobody", "else"], "start": "2026-01-02T09:00:00+01:00", "best_of": 3}}
+        old = TM.day
+        TM.day = lambda d, tour, cache, max_age=0, upcoming=False: rows if d == dt.date(2026, 1, 2) else []
+        try:
+            f = W._tennis_finals("2026-01-02", recs)
+        finally:
+            TM.day = old
+        self.assertEqual(f["m1"]["winner"], "b")                         # Eala was player B and is listed first
+        self.assertEqual(f["m1"]["line"], "4-6, 7-6, 6-3")               # winner's games first, tiebreak cell read as 6
+        self.assertEqual(f["m1"]["sets_won"], [1, 2])
+        self.assertTrue(f["m2"]["ret"])                                  # one set each short of two, long past start: retirement
+        self.assertEqual(f["m2"]["winner"], "b")
+        self.assertNotIn("m3", f)
