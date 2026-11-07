@@ -92,6 +92,10 @@ button { cursor: pointer }
 .brand h1 b { color: var(--accent); font-weight: 800 }
 .brand p { margin: 0; color: var(--muted) }
 .pulled { font-size: .8rem; color: var(--muted) }
+.refresh { display: grid; gap: 4px; justify-items: end; text-align: right; max-width: 460px }
+.refresh .rf-note { font-size: .8rem; max-width: 46ch }
+@media (max-width: 640px) { .refresh { justify-items: start; text-align: left } }
+
 
 /* league rail */
 .rail { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin }
@@ -310,7 +314,12 @@ table.dec, #factorTbl { min-width: 600px }
       <h1>Sim Lab <b>50K</b></h1>
       <p>50,000 simulated games, run in your browser.</p>
     </div>
-    <div class="pulled" id="pulled"></div>
+    <div class="refresh">
+      <div class="pulled" id="pulled"></div>
+      <div class="rf-row"><button class="btn primary" id="refreshBtn" type="button" hidden>Refresh picks &amp; status</button></div>
+      <div class="note rf-note" id="refreshNote" aria-live="polite"></div>
+      <div class="pulled" id="freshness"></div>
+    </div>
   </header>
 
   <nav class="rail" id="rail" aria-label="Leagues"></nav>
@@ -1870,6 +1879,57 @@ function tnDrawDist(h, line) {
   if (line != null) { const px = pad.l + (line - lo + 0.5) * bw; x.strokeStyle = tok("--ink"); x.setLineDash([4, 3]); x.beginPath(); x.moveTo(px, pad.t); x.lineTo(px, H - pad.b); x.stroke(); x.setLineDash([]); x.fillStyle = tok("--ink"); x.fillText(`PrizePicks ${line}`, Math.min(px + 4, w - 100), pad.t + 10); }
   $("tnDistLeg").innerHTML = line != null ? `<span><i style="background:var(--accent)"></i>Over ${line}</span><span><i style="background:var(--muted)"></i>Under</span>` : `<span>No PrizePicks total-games line posted for this match.</span>`;
 }
+
+// ---------- Refresh: wakes the Claude session that builds this page (its on-demand refresh task) ----------
+// The page can't price anything itself; the button fires the session's stored refresh task through the viewer's
+// Claude Code Remote connector. Claude then grades finished games, re-prices every sport, back-checks the picks and
+// republishes this page. Nothing the viewer types is sent: the task's instructions are stored with it.
+const REFRESH_TRIGGER = "trig_01ET7Q2em8yELDGM8g6pdzWS", REFRESH_SERVER = "Claude Code Remote";
+let rfMcp = null, rfBusy = false;
+function rfFreshness() {
+  const f = (iso) => { const d = new Date(iso); return isNaN(d) ? null : d.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }); };
+  const parts = [["NBA picks", window.SIMLAB_PICKS], ["NHL", window.SIMLAB_NHL_PICKS], ["NFL", window.SIMLAB_NFL_PICKS], ["Tennis picks", window.SIMLAB_TENNIS_PICKS], ["Tennis matches", D.tennis]]
+    .filter(([, x]) => x && x.pulled && f(x.pulled)).map(([lab, x]) => `${lab} ${f(x.pulled)}`);
+  $("freshness").textContent = parts.length ? "Priced: " + parts.join(" · ") : "";
+}
+async function rfInit() {
+  rfFreshness();
+  const c = window.claude;
+  rfMcp = c && typeof c.use === "function" ? await c.use("mcp").catch(() => null) : null;
+  const btn = $("refreshBtn");
+  if (!rfMcp) { $("refreshNote").textContent = "Refresh works when this page is open on claude.ai."; return; }
+  let ok = true;
+  try { const L = await rfMcp.listTools(REFRESH_SERVER); const sv = (L.servers || [])[0]; ok = !!(sv && (sv.tools || []).some((t) => t.name === "fire_trigger")); } catch (e) { ok = true; }   // a failed list: let the click report the real code
+  btn.hidden = false;
+  if (!ok) { btn.disabled = true; $("refreshNote").textContent = "Refresh needs the Claude Code Remote connector with routine controls (claude.ai Settings → Connectors)."; return; }
+  btn.onclick = rfClick;
+}
+async function rfClick() {
+  if (rfBusy || !rfMcp) return;
+  const btn = $("refreshBtn"), note = $("refreshNote"), t = (ms) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  let last = 0; try { last = Number(localStorage.getItem("simlab_refresh_at")) || 0; } catch (e) {}
+  if (Date.now() - last < 3 * 60 * 1000) { note.textContent = `Already requested at ${t(last)}. A refresh takes about 20–30 minutes; reload the page once it's republished.`; return; }
+  rfBusy = true; btn.disabled = true; note.textContent = "Asking Claude to refresh…";
+  try {
+    await rfMcp.callTool(REFRESH_SERVER, "fire_trigger", { trigger_id: REFRESH_TRIGGER, text: "Refresh requested from the Sim Lab page's button." });
+    try { localStorage.setItem("simlab_refresh_at", String(Date.now())); } catch (e) {}
+    note.textContent = `Refresh started at ${t(Date.now())}. Claude grades finished games, re-prices every sport, back-checks the picks and republishes this page: about 20–30 minutes. Reload then.`;
+  } catch (e) {
+    const code = e && e.code;
+    note.textContent = ({
+      needs_reauth: "Reconnect Claude Code Remote in claude.ai Settings → Connectors, then press Refresh again.",
+      server_not_connected: "Add the Claude Code Remote connector in claude.ai Settings → Connectors to use Refresh.",
+      selection_required: "claude.ai needs you to choose which Claude Code Remote connector to use; then press Refresh again.",
+      not_in_manifest: "Claude Code Remote isn't allowed for this page: allow it in the page's Permissions menu, then press Refresh again.",
+      blocked_by_policy: "Your organization's policy doesn't allow starting a refresh from a page.",
+      approval_required: "Refresh needs your approval: press it again and allow it when claude.ai asks.",
+      tool_error: `Claude couldn't start the refresh: ${(e && e.message) || "the task reported an error"}.`,
+      server_unavailable: "The connector didn't answer, so the refresh may or may not have started. Check back in a few minutes before pressing again.",
+      upstream_error: "The connector didn't answer, so the refresh may or may not have started. Check back in a few minutes before pressing again.",
+      not_granted: "Refresh isn't available in this view.", capability_disabled: "Refresh isn't available in this view.",
+    })[code] || `Couldn't start the refresh (${code || "unknown error"}).`;
+  } finally { rfBusy = false; btn.disabled = false; }
+}
 // ---------- every priced leg, filtered by label (boards.js from `python -m edge boards --page boards.js`) ----------
 const BOARD = {};
 function renderBoard(sport, el) {
@@ -3298,6 +3358,7 @@ $("bcNew").onclick = () => bcStart("random");
 $("bcLikelyBtn").onclick = () => bcStart("likely");
 
 $("pulled").textContent = D.pulled ? `Lines and injuries as of ${new Date(D.pulled).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "No data file loaded: use Any game (custom).";
+rfInit();
 renderRail(); renderHonest(); renderPicks(); renderNflPicks(); renderSportPicks("nhl"); renderSportPicks("tennis"); syncPicks();
 if (D.leagues.length && D.leagues[0].games.length) { renderGames(); selectGame(); } else openCustom();
 </script>
