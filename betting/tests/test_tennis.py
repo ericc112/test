@@ -195,3 +195,13 @@ console.log(JSON.stringify({pre,sim:aw/n,badSet,bad,lastLp:Math.max(...lastLp)})
         self.assertEqual(out["badSet"], 0)                                   # every set score is a real one
         self.assertEqual(out["bad"], 0)                                      # match point "converted" only when the match ends
         self.assertLess(out["lastLp"], 1e-9)                                 # the live line ends at 100% / 0%
+
+    def test_wta_topup_names_short_tour_players_not_itf(self):
+        import numpy as np
+        from edge.tennis_watch import _short_wta
+        st = {"matches": [{"tour": "WTA", "w": "1", "l": "2", "w_name": "Alexandra Shubladze", "l_name": "Claire Liu", "w_hand": "R", "l_hand": "R"}],
+              "WTA": {"obs": {"idx": {"1": 0, "2": 1}, "srv": np.array([0] * 3 + [1] * 14), "day": np.array([10 ** 7] * 17)}}}
+        rows = [{"p1": "Shubladze A.", "p2": "Liu C.", "tourn": "Hong Kong WTA"},
+                {"p1": "Combs E.", "p2": "Liu K.", "tourn": "Hilton Head Island ITF"}]
+        pp = {frozenset({"combs", "liu"}): [{"player": "Ellie Combs"}]}
+        self.assertEqual(_short_wta(st, rows, pp), ["Alexandra Shubladze"])      # 3 matches: topped up; Liu has 14; ITF skipped

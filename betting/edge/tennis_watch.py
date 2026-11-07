@@ -91,6 +91,34 @@ def _pp_lines(day: dt.date) -> dict:
     return out
 
 
+def _short_wta(st: dict, rows: list[dict], pp: dict) -> list[str]:
+    """Full names of WTA players in these schedule rows with fewer than MIN_MS stats-covered matches in 52 weeks in the
+    database (or not in it, when the PrizePicks board names them), for the WTA 125 top-up."""
+    idx, full = _index(st, "WTA")
+    T_ = st["WTA"]; oi, obs, cut = T_["obs"]["idx"], T_["obs"], dt.date.today().toordinal() - 365
+    board = {}
+    for lines in pp.values():
+        for l in lines:
+            if l.get("player"):
+                w = _ascii(l["player"]).split()
+                if len(w) >= 2:
+                    board[(re.sub(r"[^a-z]", "", w[-1]), w[0][0])] = l["player"]
+    names = []
+    for x in rows:
+        if not x.get("p2") or re.search(r"\b(itf|utr)\b", _ascii(x.get("tourn") or "")):   # WTA 125s exist only for tour-level players
+            continue
+        for nm in (x["p1"], x["p2"]):
+            key, ini = _te_name(nm)
+            cand = idx.get((key, ini)) or []
+            best = max((int(((obs["srv"] == oi[pid]) & (obs["day"] >= cut)).sum()) for pid, _ in cand if pid in oi), default=None)
+            if best is not None and best >= MIN_MS:
+                continue
+            full_name = next((full[pid] for pid, _ in cand if pid in full), None) or board.get((key, ini))
+            if full_name and full_name not in names:
+                names.append(full_name)
+    return names
+
+
 def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
     from . import tennis as T, tennis_hist as TH, tennis_market as TM
     now = now or dt.datetime.now(dt.timezone.utc)
@@ -100,6 +128,20 @@ def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
     dec = json.load(open(T.DECISION)) if os.path.exists(T.DECISION) else {}
     d0 = now.astimezone(TE_TZ).date()
     pp = _pp_lines(d0)
+    sched = {}
+    for tour in ("ATP", "WTA"):
+        for k in range(days):
+            d = d0 + dt.timedelta(days=k)
+            try:
+                sched[(tour, d)] = TM.day(d, tour, T.TE_DIR, max_age=1800, upcoming=True)
+            except Exception as e:
+                log(f"  tennis watch: {tour} {d} not read ({type(e).__name__})")
+    # WTA players short of matches in the tour-level database: add their WTA 125 matches from the WTA's feed, as the
+    # tennis pricer does (tennis.tml_state wta_topup); full names from the database or the PrizePicks board
+    short = _short_wta(st, [x for (t, _), rows in sched.items() if t == "WTA" for x in rows], pp)
+    if short:
+        log(f"  tennis watch: WTA 125 top-up for {len(short)} player(s): {', '.join(short[:6])}{'...' if len(short) > 6 else ''}")
+        st = T.tml_state(wta_topup=tuple(short)) or st
     out, skipped = [], {"ATP": 0, "WTA": 0}
     for tour in ("ATP", "WTA"):
         T_ = st[tour]
@@ -111,11 +153,7 @@ def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
         anchor = (dec.get(tour) or {}).get("anchor") == "market"
         for k in range(days):
             d = d0 + dt.timedelta(days=k)
-            try:
-                rows = TM.day(d, tour, T.TE_DIR, max_age=1800, upcoming=True)
-            except Exception as e:
-                log(f"  tennis watch: {tour} {d} not read ({type(e).__name__})")
-                continue
+            rows = sched.get((tour, d)) or []
             for x in rows:
                 if not x.get("p2") or not re.match(r"^\d\d:\d\d$", x.get("time") or ""):
                     continue
