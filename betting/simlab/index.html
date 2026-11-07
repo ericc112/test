@@ -44,7 +44,7 @@
 .vz-dist .cap { font-size: .76rem; color: var(--muted) } .vz-dist .cap b { color: var(--ink) }
 .vz h4 { margin: 0; font-family: var(--font-display); font-size: .86rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted) }
 
-.pk-board { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; min-width: 0 }
+.pk-board { border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 4px; min-width: 0 }
 .pk-board .row { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 6px 0 }
 .pk-board .seg { flex-wrap: wrap } .pk-board .seg button small { opacity: .7; margin-left: 4px; font-weight: 500 }
 .pk-board input[type=search] { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; min-width: 0; width: 160px }
@@ -343,6 +343,7 @@ table.dec, #factorTbl { min-width: 600px }
 
   <details class="panel picks" id="picksPanel" hidden open>
     <summary><h2 class="pk-title">Tonight's NBA PrizePicks top 5</h2><span class="note" id="pkMeta"></span></summary>
+    <div class="pk-board" id="pkBoard"></div>
     <div class="note" id="pkEntry"></div>
     <div class="pk-cols">
       <div><h3>By the model <span class="note">(50,000-run simulation + DraftKings + this season)</span></h3><div class="pk-list" id="pkModel"></div></div>
@@ -350,12 +351,12 @@ table.dec, #factorTbl { min-width: 600px }
       <div><h3>By the most likely game <span class="note" id="pkLikelyNote">(every leg where the most likely simulated game, the median, this season, DraftKings, head-to-head, the matchup and usage all support the side or are neutral; ranked by probability; legs from the same game never go in one entry together)</span></h3><div class="pk-list" id="pkLikely"></div></div>
     </div>
     <div id="pkTrack"></div>
-    <div class="pk-board" id="pkBoard"></div>
     <div class="note" id="pkNote"></div>
   </details>
 
   <details class="panel picks" id="nflPicksPanel" hidden open>
     <summary><h2 class="pk-title">This week's NFL PrizePicks picks</h2><span class="note" id="nflMeta"></span></summary>
+    <div class="pk-board" id="nflBoard"></div>
     <div class="row"><div class="seg" role="group" aria-label="Kickoff day" id="nflDays"></div><span class="note" id="nflDayNote"></span></div>
     <div class="note" id="nflEntry"></div>
     <div class="pk-cols">
@@ -365,13 +366,13 @@ table.dec, #factorTbl { min-width: 600px }
     </div>
     <h3 id="nflGapTitle">PrizePicks lines that differ from DraftKings' <span class="note">(where an edge can come from; biggest gaps first)</span></h3>
     <div id="nflGaps" class="pk-gapbox"></div>
-    <div class="pk-board" id="nflBoard"></div>
     <div class="note" id="nflNote"></div>
   </details>
 
 
   <details class="panel picks" id="nhlPicksPanel" hidden open>
     <summary><h2 class="pk-title">Tonight's NHL PrizePicks picks</h2><span class="note" id="nhlMeta"></span></summary>
+    <div class="pk-board" id="nhlBoard"></div>
     <div class="row"><div class="seg" role="group" aria-label="Game day" id="nhlDays"></div><span class="note" id="nhlDayNote"></span></div>
     <div class="note" id="nhlEntry"></div>
     <div class="pk-cols">
@@ -381,7 +382,6 @@ table.dec, #factorTbl { min-width: 600px }
     </div>
     <h3 id="nhlGapTitle">Lines DraftKings' ladder prices furthest from 50/50 <span class="note">(where an edge can come from)</span></h3>
     <div id="nhlGaps" class="pk-gapbox"></div>
-    <div class="pk-board" id="nhlBoard"></div>
     <div class="note" id="nhlNote"></div>
   </details>
 
@@ -434,6 +434,7 @@ table.dec, #factorTbl { min-width: 600px }
 
   <details class="panel picks" id="tennisPicksPanel" hidden open>
     <summary><h2 class="pk-title">Tennis PrizePicks picks (ATP + WTA)</h2><span class="note" id="tennisMeta"></span></summary>
+    <div class="pk-board" id="tennisBoard"></div>
     <div class="row"><div class="seg" role="group" aria-label="Match day" id="tennisDays"></div><span class="note" id="tennisDayNote"></span></div>
     <div class="note" id="tennisEntry"></div>
     <div class="pk-cols">
@@ -442,7 +443,6 @@ table.dec, #factorTbl { min-width: 600px }
     </div>
     <h3 id="tennisGapTitle">Lines Dabble prices furthest from 50/50 <span class="note">(where an edge can come from)</span></h3>
     <div id="tennisGaps" class="pk-gapbox"></div>
-    <div class="pk-board" id="tennisBoard"></div>
     <div class="note" id="tennisNote"></div>
   </details>
 
@@ -2043,7 +2043,7 @@ function renderBoard(sport, el) {
   const B = window.SIMLAB_BOARDS, rows = B && B.sports && B.sports[sport];
   if (!el) return;
   if (!rows || !rows.length) { el.innerHTML = ""; return; }
-  const st = BOARD[sport] || (BOARD[sport] = { conf: null, type: "standard", sort: "p", q: "", n: 60 });
+  const st = BOARD[sport] || (BOARD[sport] = { conf: null, type: "standard", sort: "p", q: "", n: 15 });
   const types = [...new Set(rows.map((r) => r.type))];
   if (!types.includes(st.type)) st.type = types.includes("standard") ? "standard" : types[0];
   const inType = rows.filter((r) => st.type === "all" || r.type === st.type);
