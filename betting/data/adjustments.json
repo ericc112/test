@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-06",
+  "updated": "2026-11-07",
   "blend_prior": {
     "intercept": 0.0,
     "w_model": 0.45,
@@ -35,9 +35,27 @@
     "mlb:batter_hrr:under": -0.076,
     "cs2:cs_kills_m12:over": -0.128,
     "cfb:rec_yds:over": 0.073,
-    "nba:ast:over": -0.069,
-    "nba:reb:over": 0.151,
-    "nba:pra:under": 0.107
+    "nba:ast:over": -0.174,
+    "nba:pr:under": 0.079,
+    "nba:reb:over": -0.021,
+    "nba:pra:under": 0.026,
+    "nba:pa:over": 0.008,
+    "nhl:nhl_toi:over": -0.071,
+    "nhl:nhl_sog:over": -0.064,
+    "nhl:nhl_hits:under": -0.084,
+    "nhl:nhl_points:under": -0.203,
+    "nba:pra:over": -0.276,
+    "nba:pr:over": 0.045,
+    "nba:reb:under": 0.026,
+    "nba:pa:under": -0.385,
+    "nba:pts:under": 0.222,
+    "nba:ast:under": 0.2,
+    "nba:tpm:over": 0.014,
+    "nba:ra:under": 0.137,
+    "nba:ra:over": -0.286,
+    "nba:pts:over": 0.088,
+    "nhl:nhl_toi:under": 0.132,
+    "nhl:nhl_sog:under": -0.082
   },
   "avoid_segments": [
     "cs2:cs_kills_m12:under"
@@ -81,6 +99,28 @@
     "nba:reb:under|model bias",
     "nba:tpm:under|model bias"
   ],
-  "blend_by_sport": {},
-  "blend_by_sport_fit": {}
+  "blend_by_sport": {
+    "nba": {
+      "intercept": -0.0311,
+      "w_model": 0.295,
+      "w_market": 0.4807,
+      "w_hist": 0.2307,
+      "se": {
+        "intercept": 0.1105,
+        "w_model": 0.1613,
+        "w_market": 0.1906,
+        "w_hist": 0.1906
+      }
+    }
+  },
+  "blend_by_sport_fit": {
+    "nba": {
+      "date": "2026-11-07",
+      "n_fit": 372,
+      "window": [
+        "2026-11-05",
+        "2026-11-06"
+      ]
+    }
+  }
 }

@@ -136,3 +136,12 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 
 ### Auto-learned 2026-11-06
 - Segment nba:reb:over: results run above our probabilities; now auto-adjusting +0.15 logit.
+
+### Auto-learned 2026-11-07
+- Segment nba:reb:over: results run below our probabilities; now auto-adjusting -0.02 logit.
+- Segment nhl:nhl_points:under: results run below our probabilities; now auto-adjusting -0.20 logit.
+- Segment nba:pra:over: results run below our probabilities; now auto-adjusting -0.28 logit.
+- Segment nba:pa:under: results run below our probabilities; now auto-adjusting -0.39 logit.
+- Segment nba:pts:under: results run above our probabilities; now auto-adjusting +0.22 logit.
+- Segment nba:ast:under: results run above our probabilities; now auto-adjusting +0.20 logit.
+- Segment nba:ra:over: results run below our probabilities; now auto-adjusting -0.29 logit.
