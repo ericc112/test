@@ -264,6 +264,16 @@ def check_cs2(rep: Report, adj: dict):
             f"model now {pm:.2f}, logged {lm}" + (" (event under way: live data, pre-game number stands)" if off and getattr(rep, "locked", False) else ""))
 
 
+APP_BOOKS = ("prizepicks", "underdog")      # pick'em apps: an NFL leg on one is priced off DraftKings' line, not as a DraftKings line
+
+
+def _app_book(row: dict) -> bool:
+    """A pick'em app line (PrizePicks, Underdog): re-priced the way the app pricer prices it (simulation re-centred on
+    DraftKings' current line), not checked as a DraftKings line. Underdog has no public board, so 'offered' is a WARN
+    to confirm the line on screen (check_offered)."""
+    return any(b in (row.get("book") or "").lower() for b in APP_BOOKS)
+
+
 def check_nfl(rep: Report, adj: dict):
     """Re-run the simulator (same seed, fresh lines and injury report), recount history at this line, and
     confirm DraftKings still posts this line (the NFL feed has lines but no prices)."""
@@ -272,7 +282,7 @@ def check_nfl(rep: Report, adj: dict):
     if getattr(rep, "locked", False):
         rep.add("WARN", "offered", "game under way or over: pick is locked; audit only (never rewritten)")
     res = nfl.price_game(str(r["event_id"]), n=50000)
-    if "prizepicks" in (r.get("book") or "").lower():
+    if _app_book(r):
         return check_nfl_pp(rep, res)
     hit = [x for x in res["rows"] if str(x["player_id"]) == str(r["player_id"]) and x["market"] == r["market"]]
     if not hit:
@@ -626,7 +636,7 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
                 rep.add("WARN", "recount", f"no automatic recount for {sport} yet: recount history by hand before publishing")
         except Exception as e:
             rep.add("FAIL", "recount", f"back-check crashed ({type(e).__name__}: {str(e)[:60]}): not verified")
-        if sport != "nfl" or "prizepicks" in (row.get("book") or "").lower():   # a DraftKings NFL leg: check_nfl reads that board
+        if sport != "nfl" or _app_book(row):     # a DraftKings NFL leg: check_nfl reads that board
             check_offered(rep)
     repriced = any(n == "reprice" and st == "PASS" for st, n, _ in rep.checks)
     from gamesim.data import slate_today

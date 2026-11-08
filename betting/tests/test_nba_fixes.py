@@ -402,3 +402,24 @@ class SimAudit(unittest.TestCase):
         self.assertIn("Jarrett Allen", rep["minutes"]["late_scratches"][0])
         self.assertIn("Alijah Martin", rep["minutes"]["biggest_misses"][0])
         self.assertIn("Winners:** simulation 1 of 2", SA.markdown(rep))
+
+
+class AppBookRouting(unittest.TestCase):
+    """An NFL leg on a pick'em app (PrizePicks or Underdog) is re-priced off DraftKings' line by the app pricer, not
+    read as a DraftKings line (an Underdog line of 39.5 against DraftKings' 26.5 is not 'the line moved')."""
+
+    def test_app_books(self):
+        from edge import verify as V
+        self.assertTrue(V._app_book({"book": "PrizePicks goblin"}))
+        self.assertTrue(V._app_book({"book": "Underdog"}))
+        self.assertFalse(V._app_book({"book": "DraftKings"}))
+        self.assertFalse(V._app_book({}))
+
+    def test_underdog_offered_is_a_warning(self):
+        from edge import verify as V
+        rep = V.Report({"book": "Underdog", "player": "X", "line": 39.5, "side": "under", "start": "2099-01-01T00:00Z"})
+        rep.locked = False
+        V.check_offered(rep)
+        st, name, detail = rep.checks[-1]
+        self.assertEqual((st, name), ("WARN", "offered"))
+        self.assertIn("confirm line 39.5", detail)
