@@ -190,3 +190,8 @@ Prompted by the user after OKC @ MEM ("why did the simulation have MEM winning..
 - `tennis_recon.rebuild(slate)`: walk-forward rebuild of a past slate's winners (ratings refitted without any match
   from the slate on, removed by player pair because the database dates matches by event start). Labelled as a rebuild,
   kept out of the Winners record. Nov 6: data/tennis_bt/recon_2026-11-06.json.
+
+## 2026-11-08: v2 -> v3 (v3 candidate: v2 + shrink to the market past an 8-point disagreement (user audit) + headroom minutes sharing + assist-share fix + team margin and total anchored to DraftKings' line (simulation study 2026-11-07))
+- Live shadow evidence: 1763 graded legs over 3 days; log loss current 0.7046162811418407 vs new 0.692446773975993; label gap 0.07085387252988204 -> 0.029324013265939253
+- Backtest evidence: {"note": "simulation pieces on the 2026-27 corpus (95 games to Nov 5, 6,431 DraftKings lines; data/nba_bt/corpus_x_*.json.gz); the disagreement shrink has no backtest yet. Adopted only after beating v2 live (200+ graded legs or 14 days, log loss and label calibration).", "minutes_box_fair_test": {"starters_mae_2025_26": [5.13, 4.77], "starters_mae_2026_27": [4.7, 4.38], "all_mae_2026_27": [5.0, 4.92]}, "corpus": {"minutes_mae": [4.77, 4.61], "top5_ast_per36_sim_vs_actual": {"before": [4.19, 4.46], "after": [4.34, 4.46]}, "carry_logloss_per_line_diff_headroom": [-0.0119, [-0.0265, -0.0005]], "b
+- Rollback: `python -m edge.nba_model rollback` restores v2.
