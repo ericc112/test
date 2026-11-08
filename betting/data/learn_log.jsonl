@@ -68,3 +68,5 @@
 {"at": "2026-11-08T16:32Z", "kind": "outcome_bias", "key": "nhl:nhl_sog:under", "before": -0.082, "after": -0.148, "window": ["2026-10-12", "2026-11-07"], "n": 862}
 {"at": "2026-11-08T16:32Z", "kind": "outcome_bias", "key": "nhl:nhl_pm:under", "before": null, "after": 0.111, "window": ["2026-10-12", "2026-11-07"], "n": 862}
 {"at": "2026-11-08T16:32Z", "kind": "outcome_bias", "key": "nba:tpm:under", "before": null, "after": 0.138, "window": ["2026-10-12", "2026-11-07"], "n": 862}
+{"at": "2026-11-08T20:45Z", "kind": "outcome_bias", "key": "nfl:receptions:under", "before": null, "after": 0.14, "window": ["2026-10-12", "2026-11-08"], "n": 930}
+{"at": "2026-11-08T20:45Z", "kind": "outcome_bias", "key": "nfl:rec_yds:under", "before": null, "after": 0.201, "window": ["2026-10-12", "2026-11-08"], "n": 930}

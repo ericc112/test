@@ -2,6 +2,37 @@
 
 Every graded loss is examined here, including passes and Low-confidence legs. `python -m edge review` writes the diagnosis; `python -m edge tag ID "tag" --lesson "..."` confirms the cause. Tags: `variance`, `opportunity`, `correlated`, `role/lineup`, `model bias`, `market info`, `stale line`, `data error`, `format misread`.
 
+## 2026-11-08: 23 losses from 1 independent causes
+
+| # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
+|---|---|---|---|---|---|---|---|---|
+| 1528 | Tee Higgins rec_yds over 76.5 | 32.0 | 0.5145 (Low) | pass | none logged | variance | **untagged** | root leg of a 23-leg script loss: #1528, #1529, #1531, #1545, #1547, #1548, #1549, #1551, #1552, #1554, #1556, #1557, #1566, #1568, #1569, #1570, #1576, #1577, #1579, #1583, #1585, #1589, #1599; logged as a PASS: no money on it; reviewed for calibration |
+| 1529 | Ja'Marr Chase rec_yds under 76.5 | 155.0 | 0.5261 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 1531 | Michael Penix Jr. pass_yds over 222.5 | 162.0 | 0.5183 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 1545 | Chase Brown rush_yds under 49.5 | 57.0 | 0.5071 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 1547 | Joe Burrow rush_yds over 14.5 | 7.0 | 0.4134 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; we priced this side at 41%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 1548 | Khalil Herbert rush_yds over 7.5 | 7.0 | 0.5319 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 1549 | Michael Penix Jr. rush_yds under 4.5 | 50.0 | 0.5143 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 1551 | Ja'Marr Chase rec_yds under 76.5 | 155.0 | 0.5261 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 1552 | Tee Higgins rec_yds over 76.5 | 32.0 | 0.5145 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 1554 | Jahan Dotson rec_yds over 29.5 | 16.0 | 0.5124 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 1556 | Bijan Robinson rec_yds under 24.5 | 47.0 | 0.5113 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 1557 | Chase Brown rec_yds over 24.5 | 18.0 | 0.493 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; we priced this side at 49%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 1566 | Michael Penix Jr. pass_td over 1.5 | 1.0 | 0.5047 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 1568 | Michael Penix Jr. completions over 20.5 | 20.0 | 0.4891 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; we priced this side at 49%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 1569 | Ja'Marr Chase receptions under 6.5 | 10.0 | 0.5299 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 1570 | Tee Higgins receptions over 5.5 | 5.0 | 0.5032 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 1576 | Jahan Dotson receptions under 1.5 | 2.0 | 0.4959 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; we priced this side at 50%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 1577 | Olamide Zaccheaus receptions over 1.5 | 1.0 | 0.4691 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; we priced this side at 47%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 1579 | Dohnte Meyers receptions under 1.5 | 2.0 | 0.5102 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 1583 | Charlie Woerner receptions under 0.5 | 1.0 | 0.5141 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 1585 | Chase Brown rush_rec_yds under 69.5 | 75.0 | 0.4587 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; we priced this side at 46%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 1589 | Michael Penix Jr. pass_yds over 222.5 | 162.0 | 0.5183 (Low) | pass | none logged | correlated | **untagged** | same game script as #1528 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 1599 | Samaje Perine rush_rec_yds under 39.5 | 43.0 | 0.6377 (Medium) | lean | model 57%, market 69%, hist 71% | correlated | variance | same game script as #1528 (variance); own read: variance |
+
+Lessons:
+- #1599: 4 carries for 9 yds through three quarters, then 7 for 34 in the 4th with CIN up 14-17 and Chase Brown resting: the flagged worst case (CIN up 14+, 24% of runs, under 59% there). Backup-RB unders carry garbage-time risk when his team is favored
+
 ## 2026-11-07: 92 losses from 14 independent causes
 
 | # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
@@ -127,7 +158,7 @@ Detail from the feeds:
 - #1490 Nick Suzuki: error=HTTPError
 - #1492 Artemi Panarin: error=HTTPError
 
-## 2026-11-06: 212 losses from 20 independent causes
+## 2026-11-06: 214 losses from 21 independent causes
 
 | # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
 |---|---|---|---|---|---|---|---|---|
@@ -160,6 +191,8 @@ Detail from the feeds:
 | 691 | Morgan Frost nhl_points under 0.5 | 2.0 | 0.4999 (Low) | pass | model 51%, market 50% (against) | correlated | **untagged** | same game script as #653 (variance); own read: model bias; we priced this side at 50%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
 | 692 | Mason Marchment nhl_sog over 1.5 | 0.0 | 0.4984 (Low) | pass | model 52%, market 49% (against) | correlated | **untagged** | same game script as #659 (variance); own read: model bias; we priced this side at 50%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
 | 693 | Valeri Nichushkin nhl_sog over 1.5 | 0.0 | 0.4883 (Low) | pass | model 52%, market 48% (against) | correlated | **untagged** | same game script as #661 (variance); own read: model bias; we priced this side at 49%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 703 | Ja'Marr Chase receptions under 7.0 | 10.0 | 0.573 (Low) | pass | model 56%, market 56%, hist 67% | variance | **untagged** | root leg of a 2-leg script loss: #703, #772; logged as a PASS: no money on it; reviewed for calibration |
+| 772 | Bijan Robinson rec_yds under 25.5 | 47.0 | 0.5242 (Low) | pass | model 52%, market 50% (against), hist 62% | correlated | **untagged** | same game script as #703 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
 | 839 | Jayson Tatum pr under 34.5 | 42.0 | 0.5596 (Medium) | pass | model 74%, market 51% | variance | **untagged** | root leg of a 20-leg script loss: #839, #840, #841, #843, #844, #846, #847, #849, #967, #968, #969, #972, #973, #1080, #1081, #1082, #1153, #1154, #1155, #1202; logged as a PASS: no money on it; reviewed for calibration |
 | 840 | Jayson Tatum pa under 33.5 | 43.0 | 0.5495 (Medium) | pass | model 71%, market 51% | correlated | **untagged** | same game script as #839 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
 | 841 | Brandon Miller pr over 26.5 | 10.0 | 0.5446 (Medium) | pass | model 65%, market 52% | correlated | **untagged** | same game script as #839 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
