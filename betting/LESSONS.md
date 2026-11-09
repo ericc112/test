@@ -161,3 +161,10 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 - 2 losses in nba:pra:under share the cause 'role/lineup': write a checklist rule for it in the table above.
 - 2 losses in nba:ra:over share the cause 'opportunity': write a checklist rule for it in the table above.
 - 2 losses in nba:ast:under share the cause 'model bias': write a checklist rule for it in the table above.
+
+### Auto-learned 2026-11-09
+- Segment nfl:rush_rec_yds:under: results run below our probabilities; now auto-adjusting -0.24 logit.
+- Segment nfl:rec_yds:under: results run below our probabilities; now auto-adjusting -0.15 logit.
+- Segment nfl:rush_att:under: results run above our probabilities; now auto-adjusting +0.19 logit.
+- Segment nfl:receptions:over: results run above our probabilities; now auto-adjusting +0.30 logit.
+- Segment nfl:rush_rec_yds:over: results run above our probabilities; now auto-adjusting +0.27 logit.
