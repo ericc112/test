@@ -217,7 +217,9 @@ def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
                             "slugs": [x.get("slug1"), x.get("slug2")], "odds": [x.get("o1"), x.get("o2")], "market_a": round(fair, 4) if fair else None,
                             "shift": round(shift, 4) if shift is not None else None, "anchor_default": bool(anchor and fair),
                             "win_model": round(win_model, 4), "elo_a": round(1 / (1 + 10 ** ((rb - ra) / 400)), 4),
-                            "lines": pp.get(k2, []), "scout": _scout(scout, ia, na, ib, nb)})
+                            "lines": pp.get(k2, []), "scout": _scout(scout, ia, na, ib, nb),
+                            "likely": {"ratings": likely_match(p1, p2, bo, win_model),
+                                       **({"market": likely_match(p1 + shift, p2 - shift, bo, fair)} if shift is not None else {})}})
     out.sort(key=lambda m: (m["start"], m["tour"]))
     try:
         save_winners(out)
@@ -298,7 +300,20 @@ def scoreline(pa: float, pb: float, best_of: int = 3) -> dict:
     fmt = lambda sc, flip=False: ", ".join(f"{b}-{a}" if flip else f"{a}-{b}" for a, b in sc) if sc else None
     return {"p_a": win_a, "line_a": fmt(a_line), "line_a_p": a_p, "line_b": fmt(b_line), "line_b_p": b_p,
             "line_b_w": fmt(b_line, True), "sets": {k: round(v, 4) for k, v in sorted(sets.items(), reverse=True)},
-            "games": [round(games[0], 1), round(games[1], 1)]}
+            "games": [round(games[0], 1), round(games[1], 1)],
+            "line_a_sets": [list(x) for x in a_line or []], "line_b_sets": [list(x) for x in b_line or []]}
+
+
+def likely_match(pa: float, pb: float, best_of: int, win_a: float) -> dict:
+    """The simulator's one most likely match (user, 2026-11-09): the projected winner (by the win chance the page
+    shows) and his single most likely exact scoreline at these serve-point rates, with the sets A-first so the page can
+    find a run that plays exactly that score."""
+    sl = scoreline(pa, pb, best_of)
+    a = win_a >= 0.5
+    need = best_of // 2 + 1
+    return {"w": 0 if a else 1, "sets": sl["line_a_sets"] if a else sl["line_b_sets"], "line": sl["line_a"] if a else sl["line_b_w"],
+            "line_p": round(sl["line_a_p"] if a else sl["line_b_p"], 4), "p_win": round(win_a if a else 1 - win_a, 3),
+            "straight": round(sl["sets"].get(f"{need}-0" if a else f"0-{need}", 0.0), 3)}
 
 
 def save_winners(matches: list[dict], now=None) -> None:

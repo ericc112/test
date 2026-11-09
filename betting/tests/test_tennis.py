@@ -312,3 +312,15 @@ class ResultsPageTables(unittest.TestCase):
         self.assertEqual(r[0]["tourn"], "Hong Kong WTA")
         self.assertEqual([x["slug2"] for x in TM.parse(s, "2026-11-06", "WTA")], ["sonm-3"])
         self.assertEqual(TM.parse(s, "2026-11-05", "WTA"), [])         # the side column's table is never read
+
+
+class LikelyMatch(unittest.TestCase):
+    """The simulator's one most likely match: the projected winner's single most likely exact scoreline, sets A-first."""
+
+    def test_sets_match_the_line(self):
+        from edge.tennis_watch import likely_match
+        a = likely_match(0.6653, 0.6142, 3, 0.70)
+        self.assertEqual((a["w"], a["line"], a["sets"]), (0, "6-4, 6-4", [[6, 4], [6, 4]]))
+        b = likely_match(0.60, 0.66, 3, 0.25)
+        self.assertEqual((b["w"], b["line"], b["sets"]), (1, "6-4, 6-4", [[4, 6], [4, 6]]))   # B wins: line written winner first
+        self.assertAlmostEqual(b["p_win"], 0.75)

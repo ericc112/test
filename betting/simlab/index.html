@@ -411,8 +411,10 @@ table.dec, #factorTbl { min-width: 600px }
         <button data-v="ratings" aria-pressed="true">Ratings</button><button data-v="market" aria-pressed="false">Matched to the market price</button></div>
       <span class="note" id="tnRatesNote"></span>
     </div>
+    <div class="note" id="tnLikely"></div>
     <div class="row">
-      <button class="btn primary" id="tnWatchBtn">Watch a match</button>
+      <button class="btn primary" id="tnWatchBtn">Watch the most likely match</button>
+      <button class="btn" id="tnRandomBtn" title="A fresh random simulation: a different match every time">Random match</button>
       <button class="btn" id="tnPause" disabled>Pause</button>
       <button class="btn" id="tnSkip" disabled>Skip to the end</button>
       <span class="label">Speed</span>
@@ -1414,6 +1416,16 @@ onmessage = (e) => {
       if (k < n) setTimeout(step, 0);
     };
     step();
+  } else if (m.cmd === "tennis_likely") {
+    // the one most likely match (user, 2026-11-09): the first run, from a seed fixed per match, whose set scores equal
+    // the most likely exact scoreline; the same match replays every time
+    const M = m.m, d = m.shift || 0, bo = M.best_of || 3, tb10 = !!M.tb10, tgt = JSON.stringify(m.sets), base = (m.base >>> 0) || 1;
+    let found = -1, k = 0;
+    for (; k < 40000; k++) { seed(base + k); const r0 = tnMatch(tnDraw(M, d), bo, tb10, null, null); if (JSON.stringify(r0.sets) === tgt) { found = k; break; } }
+    seed(base + Math.max(found, 0)); const day = tnDraw(M, d), log = [], live = tnSolver(M.pa + d, M.pb - d, bo, tb10);
+    const r = tnMatch(day, bo, tb10, log, live);
+    postMessage({ id: m.id, kind: "watch", log, day, final: r, found: found >= 0, tries: k + 1,
+      pre: live({ sa: 0, sb: 0, ga: 0, gb: 0, srv: 0, tb: false, x: 0, y: 0 }) * 0.5 + live({ sa: 0, sb: 0, ga: 0, gb: 0, srv: 1, tb: false, x: 0, y: 0 }) * 0.5 });
   } else if (m.cmd === "tennis_watch") {
     seed(m.seed || ((Date.now() ^ 0x5bd1e995) >>> 0)); const M = m.m, d = m.shift || 0;
     const day = tnDraw(M, d), log = [], live = tnSolver(M.pa + d, M.pb - d, M.best_of || 3, !!M.tb10);
@@ -1681,7 +1693,7 @@ const tnPts = (v, o) => v >= 3 && o >= 3 ? (v === o ? "40" : v > o ? "AD" : "40"
 function tnBind() {
   $("tnRates").querySelectorAll("button").forEach((b) => b.onclick = () => { if (b.disabled) return; TN.rates = b.dataset.v; tnStopWatch(); tnRatesSeg(); tnRenderHead(); tnResetBoard(); tnRun(); });
   $("tnSpeed").querySelectorAll("button").forEach((b) => b.onclick = () => { TN.speed = Number(b.dataset.sp); $("tnSpeed").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); });
-  $("tnWatchBtn").onclick = tnWatch; $("tnPause").onclick = tnPauseClick; $("tnSkip").onclick = tnSkipClick;
+  $("tnWatchBtn").onclick = () => tnWatch(true); $("tnRandomBtn").onclick = () => tnWatch(false); $("tnPause").onclick = tnPauseClick; $("tnSkip").onclick = tnSkipClick;
 }
 function tnEnter() {
   if (!TN.shown) { TN.shown = true; tnBind(); tnRenderTours(); tnRenderList(); tnSelect(tnCur() && tnCur().id); }
@@ -1718,6 +1730,7 @@ function tnRatesSeg() {
     TN.rates === "market" ? `Serve rates moved ${d >= 0 ? "+" : ""}${(100 * d).toFixed(1)} / ${d >= 0 ? "−" : "+"}${Math.abs(100 * d).toFixed(1)} points so the winner chance equals the market's (same total, so the same expected length).` +
       (m.tour === "ATP" ? " The tennis pricer does this for ATP games lines (it tested better)." : " The tennis pricer doesn't for WTA (it didn't test better there).")
     : "Opponent-adjusted ratings only." + (m.anchor_default ? " The tennis pricer matches ATP rates to the market for games lines." : "");
+  tnLikelyNote();
 }
 function tnRenderHead() {
   const m = tnCur(); if (!m) return; const d = tnShift(m), pa = m.pa + d, pb = m.pb - d;
@@ -1838,9 +1851,20 @@ function tnHold(p) { const d = p * p / (p * p + (1 - p) * (1 - p)); return p ** 
 // ---------- watch ----------
 function tnStopWatch() { const w = TN.watch; if (w) { clearTimeout(w.timer); cancelAnimationFrame(w.raf || 0); } TN.watch = null; $("tnPause").disabled = true; $("tnSkip").disabled = true; $("tnPause").textContent = "Pause"; }
 function tnResetBoard() { const m = tnCur(); if (!m) return; tnBoard({ sets: [], sa: 0, sb: 0, st: null }, null, ""); $("tnLog").innerHTML = ""; tnCourt(null); TN.wp = []; tnDrawWp(); }
-function tnWatch() {
+// the most likely match for the rates shown (ratings, or matched to the market price)
+const tnLk = (m) => m && m.likely ? (TN.rates === "market" && m.likely.market ? m.likely.market : m.likely.ratings) : null;
+function tnLikelyNote() {
+  const m = tnCur(), lk = tnLk(m), el = $("tnLikely"); if (!el) return;
+  if (!lk || !lk.line) { el.textContent = ""; return; }
+  const who = lk.w === 0 ? m.a : m.b;
+  el.innerHTML = `<b>Most likely match:</b> ${esc(who)} ${esc(lk.line)} (${(100 * lk.line_p).toFixed(1)}%, the single most likely exact score) · ${esc(tnSur(who))} wins ${Math.round(100 * lk.p_win)}% · straight sets ${Math.round(100 * lk.straight)}%. "Watch the most likely match" plays that exact score point by point, the same match every time; "Random match" plays a fresh one.`;
+}
+const tnHash = (str) => { let h = 2166136261; for (const c of String(str)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+function tnWatch(likely) {
   const m = tnCur(); if (!m) return; tnStopWatch(); tnResetBoard();
-  ask({ cmd: "tennis_watch", m, shift: tnShift(m) }, (msg) => {
+  const lk = likely ? tnLk(m) : null;
+  const req = lk && lk.sets && lk.sets.length ? { cmd: "tennis_likely", m, shift: tnShift(m), sets: lk.sets, base: tnHash(m.id + "|" + TN.rates) } : { cmd: "tennis_watch", m, shift: tnShift(m) };
+  ask(req, (msg) => {
     TN.watch = { log: msg.log, i: 0, paused: false, timer: null, day: msg.day, final: msg.final, pre: msg.pre, nPts: msg.log.filter((e) => e.k === "pt" || e.k === "tb").length, pt: 0 };
     TN.wp = [{ i: 0, p: msg.pre }]; $("tnPause").disabled = false; $("tnSkip").disabled = false; tnStep();
   });
