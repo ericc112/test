@@ -441,3 +441,20 @@ class Hockey(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FetchFallback(unittest.TestCase):
+    """A source that times out (nflverse 504, 2026-11-09) falls back to the cached copy instead of failing the run."""
+
+    def test_stale_cache_used_when_download_fails(self):
+        import os, tempfile, time
+        from unittest import mock
+        from gamesim import data as D
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "x.csv")
+            open(path, "w").write("old")
+            os.utime(path, (time.time() - 10 ** 6, time.time() - 10 ** 6))
+            with mock.patch.object(D.urllib.request, "urlopen", side_effect=OSError("504")), mock.patch.object(D.time, "sleep"):
+                self.assertEqual(D._fetch("https://example.invalid/x.csv", path, 60, tries=2), path)
+                with self.assertRaises(RuntimeError):
+                    D._fetch("https://example.invalid/y.csv", os.path.join(d, "missing.csv"), 60, tries=2)

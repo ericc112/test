@@ -52,6 +52,11 @@ def _fetch(url: str, path: str, max_age: float | None, tries: int = 4) -> str:
         except Exception as e:  # network hiccup: back off and retry
             last = e
             time.sleep(2 ** k)
+    if os.path.exists(path):        # the source is down: an older copy beats failing the whole run (said on stderr)
+        import sys
+        age_h = (time.time() - os.path.getmtime(path)) / 3600
+        print(f"warning: could not refresh {url} ({last}); using the cached copy from {age_h:.0f} h ago", file=sys.stderr)
+        return path
     raise RuntimeError(f"could not fetch {url}: {last}")
 
 
