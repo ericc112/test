@@ -288,6 +288,12 @@ ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: .8
 .picks > summary::-webkit-details-marker { display: none } .pk-title { margin: 0; font-family: var(--font-display); font-size: 1.25rem }
 .pk-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px } .pk-cols h3 { margin: 0 0 8px } .pk-cols > div { min-width: 0 } .pk-gaps table { min-width: 0 } .pk-gaps td, .pk-gaps th { padding: 5px 6px } .pk-gaps td.l { white-space: normal } .pk-gapbox { max-width: 720px } #shopKind { flex-wrap: wrap } #shopPanel { min-width: 0; max-width: 100% } #shopPanel .tbl-wrap { max-width: 100% } #shopPanel td, #shopPanel th { white-space: normal } #shopPanel .row { flex-wrap: wrap; gap: 6px 12px } .pk-gaps .sub { display: block; color: var(--muted); font-family: var(--font-body, inherit); font-size: .78rem }
 .pk-list { display: grid; gap: 8px } .pk { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); padding: 10px 12px; display: grid; gap: 4px; font-size: .86rem; min-width: 0 }
+.pk-fold { display: block; padding: 0 } .pk-fold > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-height: 44px }
+.pk-fold > summary::-webkit-details-marker { display: none } .pk-fold > summary::after { content: "▾"; color: var(--muted); font-size: .9rem; transition: transform .15s }
+.pk-fold[open] > summary::after { transform: rotate(180deg) } .pk-fold > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: var(--r) }
+.pk-who { display: grid; min-width: 0; flex: 1 } .pk-who b { overflow-wrap: anywhere; font-size: .98rem } .pk-who .note { font-size: .8rem }
+.pk-body { display: grid; gap: 4px; padding: 8px 12px 10px; border-top: 1px solid var(--line) } .pk-v { font-weight: 700; font-size: .9rem; min-width: 1.4em; text-align: center }
+.pk-v.ok { color: var(--good) } .pk-v.no { color: var(--bad) }
 .pk-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px } .pk-h b { font-size: .98rem } .pk-p { font-family: var(--font-data); font-size: 1.15rem; font-weight: 700 }
 .pk-why { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 2px } .pk-why li { display: grid; grid-template-columns: 1.2em 1fr; gap: 2px } .pk-why .m { font-weight: 700 } .pk-why .supports .m { color: var(--accent) } .pk-why .neutral .m { color: var(--muted) } .pk-why .against .m { color: var(--warn) }
 .pk .k { color: var(--muted) } .pk-warn { color: var(--warn); font-size: .8rem } .pill.High { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink) }
@@ -346,9 +352,9 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="pk-board" id="pkBoard"></div>
     <div class="note" id="pkEntry"></div>
     <div class="pk-cols">
-      <div><h3>By the model <span class="note">(50,000-run simulation + DraftKings + this season)</span></h3><div class="pk-list" id="pkModel"></div></div>
-      <div><h3>By history only <span class="note">(this season's record at the line, then last 5, then head-to-head)</span></h3><div class="pk-list" id="pkHist"></div></div>
       <div><h3>By the most likely game <span class="note" id="pkLikelyNote">(every leg where the most likely simulated game, the median, this season, DraftKings, head-to-head, the matchup and usage all support the side or are neutral; ranked by probability; legs from the same game never go in one entry together)</span></h3><div class="pk-list" id="pkLikely"></div></div>
+      <div><h3>By history only <span class="note">(this season's record at the line, then last 5, then head-to-head; up to 15, at most 3 per game, never two from one game in an entry)</span></h3><div class="pk-list" id="pkHist"></div></div>
+      <div><h3>By the model <span class="note">(50,000-run simulation + DraftKings + this season)</span></h3><div class="pk-list" id="pkModel"></div></div>
     </div>
     <div id="pkTrack"></div>
     <div class="note" id="pkNote"></div>
@@ -360,9 +366,9 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="row"><div class="seg" role="group" aria-label="Kickoff day" id="nflDays"></div><span class="note" id="nflDayNote"></span></div>
     <div class="note" id="nflEntry"></div>
     <div class="pk-cols">
-      <div><h3>By the model <span class="note">(simulation re-centred on DraftKings' line + the simulation + this season; High before Medium)</span></h3><div class="pk-list" id="nflList"></div></div>
-      <div><h3>By history only <span class="note">(this season's record at the line, then the last 3)</span></h3><div class="pk-list" id="nflHist"></div></div>
       <div><h3>By the most likely game <span class="note">(every leg where the most likely simulated game, the median, this season, DraftKings, the last 3, the matchup and usage all support the side or are neutral)</span></h3><div class="pk-list" id="nflLikely"></div></div>
+      <div><h3>By history only <span class="note">(this season's record at the line, then the last 3)</span></h3><div class="pk-list" id="nflHist"></div></div>
+      <div><h3>By the model <span class="note">(simulation re-centred on DraftKings' line + the simulation + this season; High before Medium)</span></h3><div class="pk-list" id="nflList"></div></div>
     </div>
     <h3 id="nflGapTitle">PrizePicks lines that differ from DraftKings' <span class="note">(where an edge can come from; biggest gaps first)</span></h3>
     <div id="nflGaps" class="pk-gapbox"></div>
@@ -376,9 +382,9 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="row"><div class="seg" role="group" aria-label="Game day" id="nhlDays"></div><span class="note" id="nhlDayNote"></span></div>
     <div class="note" id="nhlEntry"></div>
     <div class="pk-cols">
-      <div><h3>By the model <span class="note">(player simulation + DraftKings' milestone ladders; High before Medium)</span></h3><div class="pk-list" id="nhlList"></div></div>
-      <div><h3>By history only <span class="note">(this season's record at the line, then the last 5)</span></h3><div class="pk-list" id="nhlHist"></div></div>
       <div><h3>By the most likely game <span class="note">(every leg where the most likely simulated game, the median, this season, DraftKings, the last 5, the matchup and ice time all support the side or are neutral)</span></h3><div class="pk-list" id="nhlLikely"></div></div>
+      <div><h3>By history only <span class="note">(this season's record at the line, then the last 5)</span></h3><div class="pk-list" id="nhlHist"></div></div>
+      <div><h3>By the model <span class="note">(player simulation + DraftKings' milestone ladders; High before Medium)</span></h3><div class="pk-list" id="nhlList"></div></div>
     </div>
     <h3 id="nhlGapTitle">Lines DraftKings' ladder prices furthest from 50/50 <span class="note">(where an edge can come from)</span></h3>
     <div id="nhlGaps" class="pk-gapbox"></div>
@@ -438,8 +444,8 @@ table.dec, #factorTbl { min-width: 600px }
     <div class="row"><div class="seg" role="group" aria-label="Match day" id="tennisDays"></div><span class="note" id="tennisDayNote"></span></div>
     <div class="note" id="tennisEntry"></div>
     <div class="pk-cols">
-      <div><h3>By the model <span class="note">(point-by-point match simulation on real serve and return stats + Dabble's price; High before Medium)</span></h3><div class="pk-list" id="tennisList"></div></div>
       <div><h3>By the most likely game <span class="note">(every leg where the most likely simulated match, the simulation's median and Dabble's price agree with the side; both players need 8+ stats-covered matches)</span></h3><div class="pk-list" id="tennisLikely"></div></div>
+      <div><h3>By the model <span class="note">(point-by-point match simulation on real serve and return stats + Dabble's price; High before Medium)</span></h3><div class="pk-list" id="tennisList"></div></div>
     </div>
     <h3 id="tennisGapTitle">Lines Dabble prices furthest from 50/50 <span class="note">(where an edge can come from)</span></h3>
     <div id="tennisGaps" class="pk-gapbox"></div>
@@ -1432,6 +1438,13 @@ onmessage = (e) => {
 "use strict";
 const D = window.SIMLAB || { leagues: [], pulled: null };
 // Tonight's NBA PrizePicks top 5, by the model and by history only (written by `python -m edge nba-picks --page picks.js`)
+// Compact pick cards (user, 2026-11-08): the closed row shows the player, the prop, the hit rate, the label and the
+// back-check mark (the verdict stays next to every pick: CLAUDE.md); everything else opens on tap.
+function fold(r, inner) {
+  const v = r.verified || "", ok = /^VERIFIED/.test(v), nw = (r.warns || []).length;
+  const vm = !v ? "" : `<span class="pk-v ${ok ? "ok" : "no"}" title="${esc(v)}${nw ? ` (${nw} warning${nw > 1 ? "s" : ""}: open for details)` : ""}" aria-label="${esc(v)}">${ok ? "✓" : "✗"}${ok && nw ? "!" : ""}</span>`;
+  return `<details class="pk pk-fold"><summary><span class="pk-who"><b>${esc(r.player)}</b><span class="note">${esc(String(r.side || "").toUpperCase())} ${r.line} ${esc(r.stat)}${r.team ? ` · ${esc(r.team)}` : ""}</span></span><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${vm}</summary><div class="pk-body">${inner}</div></details>`;
+}
 function renderPicks() {
   const P = window.SIMLAB_PICKS, el = $("picksPanel"); if (!P || !el) return;
   const pc = (v) => v == null ? "—" : Math.round(100 * v) + "%";
@@ -1451,7 +1464,7 @@ function renderPicks() {
   const MARK = { supports: "✓", neutral: "–", against: "✗" };
   const why = (r, head) => (r.reasons || []).length ? `<div><span class="k">${esc(head)}</span><ul class="pk-why">${r.reasons.map((x) =>
     `<li class="${esc(x.verdict)}"><span class="m">${MARK[x.verdict] || "?"}</span><span><b>${esc(x.name)}</b> ${esc(x.text)}</span></li>`).join("")}</ul></div>` : "";
-  const card = (r, hist) => `<div class="pk">
+  const card = (r, hist) => fold(r, `
     <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)}</span></div>
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
     ${viz(r, { book: (r.dk && r.dk.book) || "DraftKings", extra: "min" })}
@@ -1465,7 +1478,7 @@ function renderPicks() {
     ${why(r, "Context check (✓ supports, – neutral, ✗ against; shown, not used to drop the leg)")}
     <div class="note">${esc(r.verdict)}</div>
     ${r.warns && r.warns.length ? `<div class="pk-warn">${r.warns.map(esc).join("; ")}</div>` : ""}
-  </div>`;
+  `);
   renderBoard("nba", $("pkBoard"));
   $("pkModel").innerHTML = (P.model || []).map((r) => card(r, false)).join("") || `<div class="note">No legs priced.</div>`;
   $("pkHist").innerHTML = (P.history || []).map((r) => card(r, true)).join("") || `<div class="note">No legs with 5+ games.</div>`;
@@ -1475,7 +1488,7 @@ function renderPicks() {
       .map(([k, v]) => v.per_100 != null && v.league_per_100
         ? `${esc(k)} ${v.per_100.toFixed(1)} per 100 possessions to ${esc(r.pos)}s (rank ${v.rank_100 || v.rank}/30, league ${v.league_per_100.toFixed(1)}; ${v.per_game.toFixed(1)} a game)`
         : `${esc(k)} ${v.per_game.toFixed(1)} to ${esc(r.pos)}s (rank ${v.rank}/30, league ${v.league_per_game.toFixed(1)})`).join(" · ");
-    return `<div class="pk">
+    return fold(r, `
     <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)}</span></div>
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
     ${viz(r, { book: (r.dk && r.dk.book) || "DraftKings", extra: "min" })}
@@ -1491,7 +1504,7 @@ function renderPicks() {
     ${u.self_absent ? `<div class="pk-warn">Missing from his team's latest box score: confirm he plays.</div>` : ""}
     <div class="note">${esc(r.verdict)}</div>
     ${r.warns && r.warns.length ? `<div class="pk-warn">${r.warns.map(esc).join("; ")}</div>` : ""}
-  </div>`; };
+  `); };
   const drop = P.likely_dropped || [];
   $("pkLikely").innerHTML = ((P.likely || []).map(lcard).join("") || `<div class="note">No leg tonight where the most likely game, the simulation's median, this season and every other reason agree.</div>`)
     + (drop.length ? `<div class="note">Dropped for a reason against them (${drop.length}): ${drop.map((d) => `${esc(d.player)} ${esc(d.side)} ${d.line} ${esc(d.stat)} (${esc(d.against.join(", "))})`).join("; ")}</div>` : "")
@@ -2132,7 +2145,7 @@ function renderSportPicks(pre) {
   const mkName = pre === "tennis" ? "Dabble" : "DraftKings";
   const src = (r) => r.book ? `${esc(r.book)} ${pc(r.market)} (${esc(r.book)} ${r.book_line}, PrizePicks ${r.line}; no DraftKings line) · simulation ${pc(r.model)}${pre === "tennis" ? "" : ` · this season ${r.hist_o ?? "—"} over / ${r.hist_u ?? "—"} under`}` : `${mkName} ${pc(r.market)}${r.dk_line != null ? ` (DraftKings ${r.dk_line}, PrizePicks ${r.line})` : r.dk_lambda != null ? ` (milestone ladder, mean ${r.dk_lambda.toFixed(2)})` : r.market == null ? ` (no ${mkName} price)` : ""} · simulation ${pc(r.model)}${pre === "tennis" ? "" : ` · this season ${r.hist_o ?? "—"} over / ${r.hist_u ?? "—"} under`}`;
   const recent = (r) => r.recent || r.last3;
-  const card = (r, kind) => `<div class="pk">
+  const card = (r, kind) => fold(r, `
     <div class="pk-h">${r.id ? `<span class="note">#${esc(r.id)}</span>` : ""}<b>${esc(r.player)}</b><span class="note">${esc(r.team)} · ${esc(r.game)}${r.event ? ` · ${esc(r.event)}` : ""} · ${esc(fmtKick(r.start))}</span></div>
     <div class="pk-h"><b>${r.side.toUpperCase()} ${r.line} ${esc(r.stat)}</b><span class="pk-p">${(100 * r.p).toFixed(1)}%</span><span class="pill ${esc(r.conf)}">${esc(r.conf)}</span>${ver(r.verified)}</div>
     ${viz(r, { book: r.book || mkName, allName: pre === "tennis" ? "Last 20" : "Season", extra: ({ tgt: "targets", car: "carries", touches: "touches", pass_att: "pass attempts", TOI: "min on ice" })[r.extra] || "" })}
@@ -2145,7 +2158,7 @@ function renderSportPicks(pre) {
     ${r.why ? `<div class="note">${esc(r.why)}</div>` : ""}
     <div class="note">${esc(r.verdict)}</div>
     ${r.warns && r.warns.length ? `<div class="pk-warn">${r.warns.map(esc).join("; ")}</div>` : ""}
-  </div>`;
+  `);
   renderBoard(pre, $(pre + "Board"));
   $(pre + "List").innerHTML = (D0.model || D0.picks || []).map((r) => card(r, "model")).join("") || `<div class="note">No lines priced.</div>`;
   if ($(pre + "Hist")) $(pre + "Hist").innerHTML = (D0.history || []).map((r) => card(r, "history")).join("") || `<div class="note">No lines with enough games.</div>`;

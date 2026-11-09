@@ -92,10 +92,15 @@ class PricingCorrectness(unittest.TestCase):
     def test_recompute_under_logic(self):
         logic = {**NM.V1, "blend": {"intercept": 0.0, "w_model": 0.2, "w_market": 0.8, "w_hist": 0.0}, "missing_market": "neutral",
                  "cap": 0.70, "gates": {"high": 0.62, "medium": 0.54, "max_spread_high": 0.16, "min_hist_n_high": 0, "no_market_min_hist_n": 99999}}
-        p, c = N.recompute(0.80, None, None, 0, "nba:pts:over", logic)
+        from unittest import mock
+        from edge import blend as B
+        real = B.load_adjustments
+        flat = lambda: {**real(), "outcome_bias_logit": {}}          # the blend and gates alone, not tonight's learned biases
+        with mock.patch.object(B, "load_adjustments", flat):
+            p, c = N.recompute(0.80, None, None, 0, "nba:pts:over", logic)
+            p2, c2 = N.recompute(0.75, 0.66, None, 0, "nba:pts:over", logic)
         self.assertLess(p, 0.6)                          # no market: the model alone can't push it far
         self.assertNotEqual(c, "High")
-        p2, c2 = N.recompute(0.75, 0.66, None, 0, "nba:pts:over", logic)
         self.assertGreater(p2, 0.66)
         self.assertEqual(c2, "High")
 
@@ -423,3 +428,22 @@ class AppBookRouting(unittest.TestCase):
         st, name, detail = rep.checks[-1]
         self.assertEqual((st, name), ("WARN", "offered"))
         self.assertIn("confirm line 39.5", detail)
+
+
+class HistoryListLength(unittest.TestCase):
+    """User (2026-11-08): more history-only picks each day: up to `per_game` legs per game, one player once."""
+
+    def test_per_game_cap(self):
+        from edge import nba_pp as N
+        rows = []
+        for g in range(2):
+            for i in range(5):
+                rows.append({"odds_type": "standard", "script": f"g{g}", "player": f"p{g}{i}", "side": "over", "over_only": False,
+                             "research": {"season": [8 - i, i, 8], "last5": [3, 2, 5], "h2h": [0, 0, 0]}})
+        from unittest import mock
+        with mock.patch.object(N, "side_numbers", lambda r, side, logic: {}), mock.patch.object(N, "board_logic", lambda: {}):
+            one = N.history_order(rows, top=15)
+            three = N.history_order(rows, top=15, per_game=3)
+        self.assertEqual(len(one), 2)
+        self.assertEqual(len(three), 6)
+        self.assertEqual(len({(r["script"], r["player"]) for r in three}), 6)

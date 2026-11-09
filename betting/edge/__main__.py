@@ -124,6 +124,7 @@ def main(argv=None):
     pb.add_argument("--log", action="store_true", help="log every priced prop to bets.csv (skips ones already logged)")
     npk = sub.add_parser("nba-picks", help="today's best NBA PrizePicks legs, back-checked, with the research write-up")
     npk.add_argument("--top", type=int, default=5)
+    npk.add_argument("--hist", type=int, default=15, help="history-only list length (up to 3 legs per game; user, 2026-11-08)")
     npk.add_argument("--n", type=int, default=50000, help="simulations per game")
     npk.add_argument("--match", help="only games whose teams contain this text")
     npk.add_argument("--no-log", action="store_true", help="don't log to bets.csv (default: log the picks, every Medium+ leg and each game's best leg)")
@@ -148,6 +149,7 @@ def main(argv=None):
     nfp = sub.add_parser("nfl-picks")
     nfp.add_argument("--week", type=int, default=None)
     nfp.add_argument("--top", type=int, default=5)
+    nfp.add_argument("--hist", type=int, default=15, help="history-only list length (up to 3 legs per game)")
     nfp.add_argument("--n", type=int, default=50000)
     nfp.add_argument("--match", default=None, help="only games with this team")
     nfp.add_argument("--no-log", action="store_true")
@@ -164,6 +166,7 @@ def main(argv=None):
     tnp.add_argument("--page", help="also write the picks for the Sim Lab page here (tennis_picks.js)")
     nhp = sub.add_parser("nhl-picks")
     nhp.add_argument("--top", type=int, default=5)
+    nhp.add_argument("--hist", type=int, default=15, help="history-only list length (up to 3 legs per game)")
     nhp.add_argument("--n", type=int, default=20000)
     nhp.add_argument("--match", default=None, help="only games with this team")
     nhp.add_argument("--no-log", action="store_true")
@@ -487,7 +490,7 @@ def _board_picks(args, sport: str):
     for label, drows in NP.days(ok):
         cap = NP.per_game_cap(drows, args.top)
         picks = NP.pick_order(drows, args.top, cap)
-        hist = NP.history_order(drows, store, args.top, per_game=cap) if sport != "tennis" else []
+        hist = NP.history_order(drows, store, getattr(args, "hist", 15), per_game=max(cap, 3)) if sport != "tennis" else []
         dropped = []
         likely = NP.likely_order(drows, store, None, dropped, per_game=99)     # every leg that passes all its reasons
         for r in picks + hist:                   # the same reasons, marked, on the other lists (shown, not used to drop legs)
@@ -628,7 +631,7 @@ def _nba_picks(args):
     with gzip.open(os.path.join(HERE, "data", "nba_boards", f"{today}.json.gz"), "wt") as f:     # the full priced board
         json.dump([{k: v for k, v in r.items() if k not in ("research", "dk")} for r in ok], f, default=float)
     picks = N.pick_order(ok, args.top)
-    hist = N.history_order(ok, args.top)
+    hist = N.history_order(ok, getattr(args, "hist", 15), per_game=3)
     for r in hist:
         r["notes"] = "history-only list; " + r["notes"]
     # the most-likely-game list: each game's most likely simulated run (the page's broadcast pick), its box line vs

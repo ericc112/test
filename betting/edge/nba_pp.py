@@ -762,9 +762,10 @@ def side_numbers(r: dict, side: str, logic: dict | None = None) -> dict:
             "confidence": "Low" if r.get("newcomer") else conf}
 
 
-def history_order(rows: list[dict], top: int = 5, min_games: int = 5) -> list[dict]:
+def history_order(rows: list[dict], top: int = 5, min_games: int = 5, per_game: int = 1) -> list[dict]:
     """The hit-rate method, for comparison: the side each standard line has cleared more often this season (5+ games),
-    ranked by that season hit rate, then the last 5, then head-to-head, then sample size; one leg per game. Each leg
+    ranked by that season hit rate, then the last 5, then head-to-head, then sample size; at most `per_game` legs per
+    game (one player once; legs from one game never go in one entry together). Each leg
     carries what the model, DraftKings and the blend say about that same side (LESSONS L27: history alone has shown no
     information beyond the price)."""
     logic = board_logic()
@@ -784,11 +785,12 @@ def history_order(rows: list[dict], top: int = 5, min_games: int = 5) -> list[di
         cand.append({**r, "side": side, **side_numbers(r, side, logic),
                      "hist_rank": (rate(rs["season"]), rate(rs["last5"]), rate(rs["h2h"]), n), "method": "history"})
     cand.sort(key=lambda r: tuple(-x for x in r["hist_rank"]))
-    seen, out = set(), []
+    seen, players, out = {}, set(), []
     for r in cand:
-        if r["script"] in seen:
+        if seen.get(r["script"], 0) >= per_game or (r["script"], r["player"]) in players:
             continue
-        seen.add(r["script"])
+        seen[r["script"]] = seen.get(r["script"], 0) + 1
+        players.add((r["script"], r["player"]))
         out.append(r)
         if len(out) == top:
             break
