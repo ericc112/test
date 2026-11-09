@@ -458,3 +458,14 @@ class FetchFallback(unittest.TestCase):
                 self.assertEqual(D._fetch("https://example.invalid/x.csv", path, 60, tries=2), path)
                 with self.assertRaises(RuntimeError):
                     D._fetch("https://example.invalid/y.csv", os.path.join(d, "missing.csv"), 60, tries=2)
+
+
+class SlateOverride(unittest.TestCase):
+    def test_env_names_the_slate(self):
+        from unittest import mock
+        from gamesim import data as D
+        with mock.patch.dict(os.environ, {"EDGE_SLATE": "2026-11-09"}):
+            self.assertEqual(D.slate_today(), "2026-11-09")
+        with mock.patch.dict(os.environ, {"EDGE_SLATE": "11/09"}):
+            with self.assertRaises(ValueError):
+                D.slate_today()

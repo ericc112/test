@@ -80,7 +80,13 @@ def cutoff(day: str) -> str:
 
 def slate_today() -> str:
     """Today's slate as a US date (YYYY-MM-DD), the same 10-hour shift as us_day: the server clock is UTC, so from 7 pm
-    ET (EST) a plain date.today() already reads tomorrow and filed the evening's NBA/NFL slate under the wrong day."""
+    ET (EST) a plain date.today() already reads tomorrow and filed the evening's NBA/NFL slate under the wrong day.
+    EDGE_SLATE=YYYY-MM-DD prices a named slate (user, 2026-11-09: the next day's board after midnight ET, before the
+    slate rolls at 5 am ET, without overwriting the finished day's files)."""
+    o = os.environ.get("EDGE_SLATE", "").strip()
+    if o:
+        dt.date.fromisoformat(o)          # a malformed date fails loudly instead of filing under it
+        return o
     return us_day(dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M"))
 
 
