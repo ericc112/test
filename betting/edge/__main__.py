@@ -158,7 +158,7 @@ def main(argv=None):
     nfp.add_argument("--page", help="also write the picks for the Sim Lab page here (nfl_picks.js)")
     tnp = sub.add_parser("tennis-picks")
     tnp.add_argument("--top", type=int, default=5)
-    tnp.add_argument("--n", type=int, default=20000)
+    tnp.add_argument("--n", type=int, default=50000)
     tnp.add_argument("--match", default=None, help="only matches with this player")
     tnp.add_argument("--no-log", action="store_true")
     tnp.add_argument("--no-verify", action="store_true")
@@ -167,7 +167,7 @@ def main(argv=None):
     nhp = sub.add_parser("nhl-picks")
     nhp.add_argument("--top", type=int, default=5)
     nhp.add_argument("--hist", type=int, default=15, help="history-only list length (up to 3 legs per game)")
-    nhp.add_argument("--n", type=int, default=20000)
+    nhp.add_argument("--n", type=int, default=50000)
     nhp.add_argument("--match", default=None, help="only games with this team")
     nhp.add_argument("--no-log", action="store_true")
     nhp.add_argument("--no-verify", action="store_true")
@@ -532,7 +532,8 @@ def _board_picks(args, sport: str):
                 "recent": rs.get("last3") or rs.get("last5"), "recent_label": "last 3" if "last3" in rs else "last 5", "event": r.get("event"),
                 "book": "Dabble" if sport != "tennis" and r.get("dabble") and r.get("dk_line") is None and r.get("dk_lambda") is None else None,
                 "book_line": (r.get("dabble") or {}).get("line") if sport != "tennis" else None,
-                "games": rs.get("games"), "extra": rs.get("extra"), "dist": r.get("dist"), "opp": r.get("opp")}
+                "games": rs.get("games"), "extra": rs.get("extra"), "dist": r.get("dist"), "opp": r.get("opp"),
+                "match": r.get("match")}
     today = _slate()
     sections, days_out = [], []
     for d in D:
@@ -579,7 +580,8 @@ def _board_picks(args, sport: str):
     with open(out, "w") as f:
         f.write(report)
     pg = {"date": today, "week": week, "pulled": f"{dt.datetime.now(dt.timezone.utc):%Y-%m-%dT%H:%MZ}", "sport": sport,
-          "lines": len(ok), "games": len({r["script"] for r in ok}), "days": days_out, "gaps": gaps, "gap_title": gap_title}
+          "lines": len(ok), "games": len({r["script"] for r in ok}), "days": days_out, "gaps": gaps, "gap_title": gap_title,
+          "n_sims": args.n}
     with open(out[:-3] + ".json", "w") as f:
         json.dump(pg, f, default=float)
     if args.page:

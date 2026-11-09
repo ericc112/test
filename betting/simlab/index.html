@@ -1440,6 +1440,15 @@ const D = window.SIMLAB || { leagues: [], pulled: null };
 // Tonight's NBA PrizePicks top 5, by the model and by history only (written by `python -m edge nba-picks --page picks.js`)
 // Compact pick cards (user, 2026-11-08): the closed row shows the player, the prop, the hit rate, the label and the
 // back-check mark (the verdict stays next to every pick: CLAUDE.md); everything else opens on tap.
+// Tennis cards: the most likely result (user, 2026-11-09): the exact most likely scoreline for the projected winner,
+// his win chance, the straight-sets share, average games, and the commonest games / sets among the 50,000 runs.
+function tnMatchLine(r) {
+  const m = r.match; if (!m || !m.line) return "";
+  const sh = (n) => { const w = String(n || "").split(" "); return w.length > 1 ? w[0][0] + ". " + w.slice(1).join(" ") : n; };
+  const mode = m.mode && m.mode.score ? Object.entries(m.mode.score).map(([k, v]) => `${esc(sh(k))} ${v}`).join("–") : "";
+  return `<div><span class="k">Most likely result</span> <b>${esc(sh(m.winner))} ${esc(m.line)}</b> (${(100 * m.line_p).toFixed(1)}%, the single most likely exact score) · ${esc(sh(m.winner))} wins ${Math.round(100 * m.p_win)}% · in straight sets ${Math.round(100 * m.straight)}% · average games ${m.games[0]}–${m.games[1]}${m.anchored ? " · rates matched to the winner price" : ""}</div>`
+    + (mode ? `<div><span class="k">Most common simulated match</span> ${mode} games in ${m.mode.sets} sets (${(100 * m.mode.share).toFixed(1)}% of runs)</div>` : "");
+}
 function fold(r, inner) {
   const v = r.verified || "", ok = /^VERIFIED/.test(v), nw = (r.warns || []).length;
   const vm = !v ? "" : `<span class="pk-v ${ok ? "ok" : "no"}" title="${esc(v)}${nw ? ` (${nw} warning${nw > 1 ? "s" : ""}: open for details)` : ""}" aria-label="${esc(v)}">${ok ? "✓" : "✗"}${ok && nw ? "!" : ""}</span>`;
@@ -2123,7 +2132,7 @@ function renderSportPicks(pre) {
   const P = window[`SIMLAB_${pre.toUpperCase()}_PICKS`]; if (!P || !$(pre + "PicksPanel")) return;
   const pc = (v) => v == null ? "—" : Math.round(100 * v) + "%";
   const ver = (v) => !v ? "" : `<span class="pill ${/NOT/.test(v) ? "no" : "ok"}">${esc(v)}</span>`;
-  $(pre + "Meta").textContent = `${P.week ? `week ${P.week} · ` : ""}${P.date} · ${Number(P.lines).toLocaleString()} lines priced across ${P.games} games · board ${P.pulled || ""}`;
+  $(pre + "Meta").textContent = `${P.week ? `week ${P.week} · ` : ""}${P.date} · ${Number(P.lines).toLocaleString()} lines priced across ${P.games} ${pre === "tennis" ? "matches" : "games"}${P.n_sims ? ` · ${Number(P.n_sims).toLocaleString()} runs per ${pre === "tennis" ? "match" : "game"}` : ""} · board ${P.pulled || ""}`;
   const days = P.days || [{ label: "This week", games: [], picks: P.picks, history: P.history, likely: P.likely, likely_dropped: P.likely_dropped, entry: P.entry }];
   const dk = pre + "Day";
   if (state[dk] == null) {                     // the next day with a game still to play
@@ -2151,6 +2160,7 @@ function renderSportPicks(pre) {
     ${viz(r, { book: r.book || mkName, allName: pre === "tennis" ? "Last 20" : "Season", extra: ({ tgt: "targets", car: "carries", touches: "touches", pass_att: "pass attempts", TOI: "min on ice" })[r.extra] || "" })}
     <div><span class="k">Sources</span> ${src(r)}</div>
     ${kind === "likely" ? mlLine(r) : ""}
+    ${tnMatchLine(r)}
     <div><span class="k">Simulation</span> median ${r.median}${r.q25 != null ? ` (25–75th ${r.q25}–${r.q75})` : ""}${r.volume ? ` · ${esc(r.volume)}` : ""}</div>
     ${kind === "history" && r.season ? `<div><span class="k">History</span> <b>${r.side === "under" ? r.season[1] : r.season[0]}/${r.season[2]}</b> this season · <b>${recent(r) ? (r.side === "under" ? recent(r)[1] : recent(r)[0]) + "/" + recent(r)[2] : "—"}</b> ${esc(r.recent_label || "last 3")}</div>` : ""}
     ${whyList(r, kind === "likely" ? "Reasons (each one supports the pick or is neutral)" : "Reasons (✓ supports, – neutral, ✗ against; shown, not used to drop the leg)")}

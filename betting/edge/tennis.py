@@ -38,7 +38,7 @@ from .blend import HERE
 TA = "https://www.tennisabstract.com"
 CACHE = os.path.join(HERE, ".cache", "tennis")
 THROTTLE = 4.0                 # seconds between Tennis Abstract requests (it answers bursts with HTTP 429)
-N_SIMS = 20000
+N_SIMS = 50000                     # the same 50,000 runs per game as NBA, NFL and NHL (user, 2026-11-09)
 MIN_MS = 8.0                   # matches of tour-average prior blended into a player's rates
 SURF_K = 10.0                  # matches of the player's other surfaces blended into a thin surface sample
 SLAMS = ("australian open", "roland garros", "french open", "wimbledon", "us open")
@@ -743,6 +743,7 @@ def price_board(props: list[dict], n: int = N_SIMS, log=print, store: dict | Non
                          "event": (f"{G['ctx']['tourn']} ({G['ctx']['surface']}, best of {G['ctx']['best_of']})" if G["ctx"]["known"] else "event not confirmed: all-surface rates"),
                          "proj": x["median"], "opp_proj": None, "notes": note,
                          "newcomer": bool(x["flags"]), "dk_line": None, "dk_lambda": None, "hist": hist_counts(me, st, p["line"]),
+                         "match": match_result(G, st),
                          "research": research(me, op, st, p["line"])})
     return rows
 
@@ -822,6 +823,33 @@ def most_likely_run(G: dict) -> dict:
     top = u[np.argmax(c)]
     run = int(np.where((keys == top).all(1))[0][0])
     return {"run": run, "score": {G["a"]["name"]: int(top[0]), G["b"]["name"]: int(top[1])}, "sets": int(top[2]), "share": float(c.max() / len(keys))}
+
+
+def match_result(G: dict, stat: str) -> dict:
+    """Every card's most likely result (user, 2026-11-09): the most likely simulated match (the commonest games and
+    sets in the runs this stat is priced from) and the exact most likely scoreline for the projected winner, set by
+    set, with his win chance and the straight-sets share (tennis_watch.scoreline at the same serve-point rates)."""
+    from .tennis_watch import scoreline
+    s = sim_for(G, stat)
+    L = most_likely_run({**G, "sim": s})
+    a, b = G["a"]["name"], G["b"]["name"]
+    bo = int(G["ctx"].get("best_of") or 3)
+    sl = scoreline(float(s["pa"]), float(s["pb"]), bo)
+    p_a = float(np.mean(s["a_wins"])) if "a_wins" in s else sl["p_a"]     # the runs' own win share (day-to-day form included)
+    a_wins = p_a >= 0.5
+    need = bo // 2 + 1
+    if "a_wins" in s:          # the runs' own straight-sets share and average games; only the set-by-set score is exact
+        w = np.asarray(s["a_wins"]) if a_wins else ~np.asarray(s["a_wins"])
+        straight = float(np.mean(w & (np.asarray(s["sets"]) == need)))
+        games = [round(float(np.mean(s["games_a"])), 1), round(float(np.mean(s["games_b"])), 1)]
+    else:
+        straight = sl["sets"].get(f"{need}-0" if a_wins else f"0-{need}", 0.0)
+        games = sl["games"]
+    return {"a": a, "b": b, "winner": a if a_wins else b, "p_win": round(p_a if a_wins else 1 - p_a, 3),
+            "line": sl["line_a"] if a_wins else sl["line_b_w"], "line_p": round(sl["line_a_p"] if a_wins else sl["line_b_p"], 3),
+            "straight": round(straight, 3), "games": games, "best_of": bo,
+            "mode": {"score": L["score"], "sets": L["sets"], "share": round(L["share"], 3)},
+            "anchored": s is not G["sim"]}
 
 
 def likely_order(rows, store, top=None, drop=None, per_game=99):
