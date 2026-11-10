@@ -334,6 +334,12 @@ def _us_date(iso: str) -> str:
     return (t.astimezone(dt.timezone.utc) - dt.timedelta(hours=10)).strftime("%Y-%m-%d")
 
 
+def slate_props(props: list[dict], slate: str) -> list[dict]:
+    """Only the slate's games: PrizePicks posts the next day's lines early, and those belong on tomorrow's page and ledger
+    date, not tonight's. A prop with no start time is kept."""
+    return [p for p in props if not p.get("start") or _us_date(p["start"]) == slate]
+
+
 # ------------------------------------------------------------------ pricing
 def research(p: dict, stat: str, line: float, opp: str, allowed: dict | None) -> dict:
     """Context for the write-up (not a blend input beyond the season history): this season's over/under count at

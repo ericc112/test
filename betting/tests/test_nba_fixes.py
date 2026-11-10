@@ -430,6 +430,15 @@ class AppBookRouting(unittest.TestCase):
         self.assertIn("confirm line 39.5", detail)
 
 
+class SlateProps(unittest.TestCase):
+    """PrizePicks posts tomorrow's lines early: they stay off tonight's page (Monday's page listed Tuesday's BOS-PHI)."""
+    def test_keeps_only_the_slate(self):
+        from edge import nba_pp as N
+        props = [{"start": "2026-11-10T00:30:00Z"}, {"start": "2026-11-11T01:00:00Z"}, {"start": "2026-11-10T03:00:00Z"}, {}]
+        self.assertEqual(N.slate_props(props, "2026-11-09"), [props[0], props[2], props[3]])
+        self.assertEqual(N.slate_props(props, "2026-11-10"), [props[1], props[3]])
+
+
 class HistoryListLength(unittest.TestCase):
     """User (2026-11-08): more history-only picks each day: up to `per_game` legs per game, one player once."""
 

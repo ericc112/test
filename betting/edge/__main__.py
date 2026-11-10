@@ -612,9 +612,14 @@ def _nba_picks(args):
     props = [p for p in P.board("NBA", ("standard", "goblin", "demon")) if p["stat"] in N.STATS]
     if args.match:
         props = [p for p in props if args.match.lower() in f"{p['team']} {p['opp']} {p['home']} {p['away']}".lower()]
+    later = len(props)
+    props = N.slate_props(props, _slate())              # tomorrow's early lines wait for tomorrow's page
+    later -= len(props)
     if not props:
-        print("No NBA props on the PrizePicks board for the stats the simulation scores.")
+        print("No NBA props on the PrizePicks board for tonight's games and the stats the simulation scores.")
         return
+    if later:
+        print(f"Left {later} prop(s) for later dates off tonight's page.")
     print(f"Pricing {len(props)} NBA prop(s) ({sum(p['odds_type'] == 'standard' for p in props)} standard) with {args.n:,} runs per game...")
     from . import nba_model as NM
     from . import nba_report as NR
