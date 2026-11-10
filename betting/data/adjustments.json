@@ -90,7 +90,8 @@
   "hist_weight_scale_note": "Postseason only (LESSONS L17): playoff hooks are quicker than regular-season history implies. Reset to {} on opening day.",
   "cap_medium_segments": {
     "cs2:cs_kills_m12:under": "3 losses tagged 'model bias'; hit 35% vs 59% predicted over 20",
-    "mlb:batter_hrr:under": "3 losses tagged 'model bias'; hit 50% vs 57% predicted over 12"
+    "mlb:batter_hrr:under": "3 losses tagged 'model bias'; hit 50% vs 57% predicted over 12",
+    "nba:pr:under": "4 losses tagged 'role/lineup'; hit 55% vs 56% predicted over 95"
   },
   "rule_flags": [
     "cs2:cs_kills_m12:under|model bias",
