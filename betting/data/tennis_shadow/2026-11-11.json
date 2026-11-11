@@ -169,11 +169,11 @@
 "bellucci-47e7e",
 "gueymard-wayenburg"
 ],
-"start": "2026-11-11T20:30:00+01:00",
-"p_ratings": 0.5946,
-"p_market": 0.6446,
-"p_shadow": 0.6673,
-"logged": "2026-11-11T06:57Z"
+"start": "2026-11-11T22:35:00+01:00",
+"p_ratings": 0.5947,
+"p_market": 0.6587,
+"p_shadow": 0.6674,
+"logged": "2026-11-11T21:03Z"
 },
 "ATP-2026-11-11-holmgren-a5794-o-connell-020b8": {
 "tour": "ATP",
@@ -265,11 +265,11 @@
 "draxl",
 "nesterov-34bdf"
 ],
-"start": "2026-11-11T21:30:00+01:00",
-"p_ratings": 0.6371,
-"p_market": 0.7092,
-"p_shadow": 0.6986,
-"logged": "2026-11-11T06:57Z"
+"start": "2026-11-11T22:55:00+01:00",
+"p_ratings": 0.637,
+"p_market": 0.7495,
+"p_shadow": 0.6985,
+"logged": "2026-11-11T21:03Z"
 },
 "ATP-2026-11-11-de-la-fuente-32aa6-alcala-gurri": {
 "tour": "ATP",
@@ -494,5 +494,21 @@
 "p_market": 0.8777,
 "p_shadow": 0.7775,
 "logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-11-pieri-b83b4-berrettini": {
+"tour": "ATP",
+"a": "Samuele Pieri",
+"b": "Jacopo Berrettini",
+"a_te": "Pieri S.",
+"b_te": "Berrettini J.",
+"slugs": [
+"pieri-b83b4",
+"berrettini"
+],
+"start": "2026-11-11T22:55:00+01:00",
+"p_ratings": 0.4775,
+"p_market": 0.6409,
+"p_shadow": 0.6296,
+"logged": "2026-11-11T21:03Z"
 }
 }
