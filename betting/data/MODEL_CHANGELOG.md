@@ -3,6 +3,13 @@
 Every change to the published NBA pricing logic is recorded here with its evidence and its rollback.
 Logic versions live in `data/nba_model.json`; `python -m edge.nba_model status | report | promote | rollback`.
 
+## 2026-11-11: tennis winner factor model registered as SHADOW (ATP; not published)
+- **What:** the opponent-adjusted ratings plus Elo (overall and surface), last-10 form against Elo's expectation, Elo trend over 90 days, minutes already at the event, matches in the last 14 days, wins at the previous event, layoff, head-to-head and deciding-set record (`edge/tennis_winner_factors.py`, coefficients in `data/tennis_bt/winner_factors.json` under `ATP.shadow`).
+- **Evidence:** walk-forward, fit 2025-01-01 to 2026-08-31, scored once on 2026-09-01 to 2026-11-10: ATP 1,941 matches, log loss 0.638 -> 0.624 (gain +0.0084, 95% CI +0.0037 to +0.0137 by event bootstrap), winners 64.6% -> 66.3%. WTA 367 matches: 0.658 -> 0.660, not registered. Against Tennis Explorer closing prices (1,892 ATP matches): price 0.606, this model 0.624, price + factors 0.612: no gain beyond the price, so the ATP default winner stays the price.
+- **Shadow:** the Tennis tab shows it labelled "in testing, not used yet" and logs every ATP match to `data/tennis_shadow/`; `python -m edge.tennis_winner_factors report` grades it against the ratings and the price.
+- **Promotion rule:** 200+ graded matches or 14 days, better than the ratings-only number on log loss AND calibration; it would then replace the ratings-only number and the winner where there is no price.
+- **Rollback:** delete `ATP.shadow` from `data/tennis_bt/winner_factors.json` (the page stops showing and logging it), or `git revert` this commit.
+
 ## 2026-11-11: tennis match picture and the tennis most-likely list (display and list choice; no probability changes)
 - **Why:** user, "all the simulated tennis scores are 6-4, 6-4". The shown score was the single most likely exact score at fixed serve rates, without the day-to-day form the 50,000 runs draw. 6-4 6-4 is also the commonest real score (4.1% of 22,038 best-of-3 matches since 2025; 6-3 6-4 4.0%), so it came out for 60 of 63 matches on Nov 10 while happening in only 2-5% of each match's runs.
 - **Display:** cards, the Tennis tab and the Winners tab now show the match picture with day-to-day form included (`tennis_watch.match_picture`): each player's chance in straight sets and in a decider, the typical length (median and middle half of the games), and the three commonest scores with their chances. With form, lengths (median 20-22 games) and the decider share (33-36%) line up with real matches (median 21, 35.5%). "Watch the most likely score" replays the projected winner's commonest score with form included.

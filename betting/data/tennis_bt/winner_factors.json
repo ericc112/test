@@ -438,6 +438,77 @@
    "name": "ratings + Elo, recent form, workload and fatigue, layoff, head-to-head",
    "registered": "2026-11-11",
    "rule": "promote only after 200+ graded matches or 14 days, better than the current winner on log loss and calibration"
+  },
+  "market_check": {
+   "matches": {
+    "fit": 1650,
+    "test": 1892
+   },
+   "test": {
+    "market": {
+     "test_log_loss": 0.606,
+     "gain_vs_market": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "accuracy": 0.6638
+    },
+    "market recalibrated": {
+     "test_log_loss": 0.6049,
+     "gain_vs_market": 0.00108,
+     "ci95": [
+      -4e-05,
+      0.00215
+     ],
+     "accuracy": 0.6638
+    },
+    "market + ratings": {
+     "test_log_loss": 0.6048,
+     "gain_vs_market": 0.00119,
+     "ci95": [
+      4e-05,
+      0.0024
+     ],
+     "accuracy": 0.6617
+    },
+    "market + factors": {
+     "test_log_loss": 0.6125,
+     "gain_vs_market": -0.00653,
+     "ci95": [
+      -0.01014,
+      -0.00285
+     ],
+     "accuracy": 0.6538
+    },
+    "market + ratings + factors": {
+     "test_log_loss": 0.6123,
+     "gain_vs_market": -0.00631,
+     "ci95": [
+      -0.01027,
+      -0.00246
+     ],
+     "accuracy": 0.6549
+    },
+    "ratings alone": {
+     "test_log_loss": 0.6399,
+     "gain_vs_market": -0.03389,
+     "ci95": [
+      -0.04363,
+      -0.02443
+     ],
+     "accuracy": 0.6432
+    },
+    "ratings + factors (the shadow model)": {
+     "test_log_loss": 0.6242,
+     "gain_vs_market": -0.01817,
+     "ci95": [
+      -0.02707,
+      -0.00986
+     ],
+     "accuracy": 0.6623
+    }
+   }
   }
  },
  "WTA": {
