@@ -179,3 +179,6 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 
 ### Auto-learned 2026-11-10
 - Segment nba:pr:under capped at Medium (no High legs) until results recover: 4 losses tagged 'role/lineup'; hit 55% vs 56% predicted over 95.
+
+### Auto-learned 2026-11-11
+- Segment nba:pr:under: Medium cap lifted, results back in line.
