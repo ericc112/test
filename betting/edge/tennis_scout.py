@@ -163,6 +163,7 @@ def from_matches(M: list[dict], tour: str, asof: dt.date, days: int = MATCH_DAYS
                 p["r1pt"] += g(f"{op}_1stIn"); p["r1won"] += g(f"{op}_1stIn") - g(f"{op}_1stWon")
                 p["r2pt"] += g(f"{op}_svpt") - g(f"{op}_1stIn"); p["r2won"] += (g(f"{op}_svpt") - g(f"{op}_1stIn")) - g(f"{op}_2ndWon")
                 p["bpo"] += g(f"{op}_bpFaced"); p["bpc"] += g(f"{op}_bpFaced") - g(f"{op}_bpSaved")
+                p["rsg"] += g(f"{op}_SvGms")                  # opponent's service games: return games played
                 p["stat_matches"] += 1
             sets = [(int(a), int(b)) for a, b, _ in re.findall(r"(\d+)-(\d+)(?:\((\d+)\))?", m.get("score") or "")] if sc else []
             for a_, b_ in sets:
@@ -196,7 +197,8 @@ def features(db: dict | None, ch: dict | None) -> dict:
                   "bp_saved": _r(db.get("bps", 0), db.get("bpf", 0)) if db.get("bpf", 0) >= 40 else None,
                   "bp_conv": _r(db.get("bpc", 0), db.get("bpo", 0)) if db.get("bpo", 0) >= 40 else None,
                   "tb_won": _r(db.get("tb_won", 0), db.get("tb", 0)) if db.get("tb", 0) >= 4 else None,
-                  "decider_won": _r(db.get("deciders_won", 0), db.get("deciders", 0)) if db.get("deciders", 0) >= 4 else None})
+                  "decider_won": _r(db.get("deciders_won", 0), db.get("deciders", 0)) if db.get("deciders", 0) >= 4 else None,
+                  "rgw": _r(db.get("bpc", 0), db.get("rsg", 0)) if db.get("rsg", 0) >= 30 else None})
     if ch and ch.get("n", 0) >= MIN_CHARTED:
         sh = ch.get("sh_shots", 0)
         pts = sum(ch.get(f"ra_{b}_pts", 0) for b in ("short", "mid", "long"))
@@ -265,6 +267,10 @@ class Scout:
         ok = [self.oi[p] for p in field if p in self.oi and self.oi[p] < self.R.P and self.R.pts_s[self.oi[p]] >= 300 and self.R.pts_r[self.oi[p]] >= 300]
         self.rating_pool = {"serve": np.sort(self.R.a[ok]), "return": np.sort(self.R.b[ok])}
         self.pool = {k: np.array(sorted(x[k] for x in feats if x.get(k) is not None)) for k in {k for x in feats for k in x}}
+        self.byp = defaultdict(list)                       # every database match per player, oldest first (form, H2H, events)
+        for m in st["matches"]:
+            if m["tour"] == tour:
+                self.byp[m["w"]].append(m); self.byp[m["l"]].append(m)
 
     def pct(self, k, v):
         a = self.pool.get(k)
@@ -272,7 +278,7 @@ class Scout:
             return None
         return float(np.searchsorted(a, v, side="right") / len(a))
 
-    def card(self, pid: str, name: str) -> dict:
+    def card(self, pid: str, name: str, surface: str | None = None, event: str | None = None) -> dict:
         d = self.db.get(pid) or {}
         ch = self.ch.get(_norm(name))
         f = features(d, ch)
@@ -309,7 +315,114 @@ class Scout:
         return {"name": name, "hand": d.get("hand"), "ht": d.get("ht"), "rank": d.get("rank"), "matches": int(d.get("matches", 0)),
                 "wins": int(d.get("wins", 0)), "stat_matches": int(d.get("stat_matches", 0)), "levels": lv,
                 "charted": int(ch["n"]) if ch else 0, "stats": stats, "read": read, "below_tour": below,
-                "style": style_label(stats)}
+                "style": style_label(stats), "core": core_lines(stats, d),
+                "context": self.context(pid, surface, event) if hasattr(self, "byp") else None}
+
+    def context(self, pid: str, surface: str | None = None, event: str | None = None) -> dict:
+        """Form, schedule and record from the database (user, 2026-11-11): this surface, the last 10 and who they came
+        against, margin, the trend, rest and fatigue, retirements and layoffs, this tournament, coming back from a set
+        down. Context: only factors that pass the walk-forward winner test (tennis_winner_factors) enter the probability."""
+        H_ = self.byp.get(pid, [])
+        hi = int(self.asof.strftime("%Y%m%d"))
+        H_ = [m for m in H_ if m["date"] <= hi]
+        day = self.asof.toordinal()
+        _o = {}
+        def od(m):                                   # the match's own date (rounds of one event differ), as an ordinal
+            k = id(m)
+            if k not in _o:
+                try:
+                    _o[k] = dt.date(m["date"] // 10000, m["date"] // 100 % 100, m["date"] % 100).toordinal()
+                except (ValueError, TypeError):
+                    _o[k] = m["day"]
+            return _o[k]
+        yr = [m for m in H_ if day - od(m) <= 365]
+        me = lambda m: "w" if m["w"] == pid else "l"
+        won = lambda m: m["w"] == pid
+        done = lambda m: bool(m.get("sc"))
+        sets_of = lambda m: [(int(a), int(b)) if me(m) == "w" else (int(b), int(a)) for a, b, _ in re.findall(r"(\d+)-(\d+)(?:\((\d+)\))?", m.get("score") or "")]
+        out = {}
+        if surface:
+            ss = [m for m in yr if m["surface"] == surface and done(m)]
+            out["surface"] = {"name": surface, "w": sum(won(m) for m in ss), "l": sum(not won(m) for m in ss)}
+        last = []
+        for m in reversed(H_[-10:]):
+            o = "l" if me(m) == "w" else "w"
+            last.append({"won": won(m), "opp": m[f"{o}_name"], "opp_rank": m.get(f"{o}_rank"), "score": m.get("score") or "",
+                         "event": m.get("tname"), "round": m.get("round"), "date": m["date"], "level": m.get("level")})
+        out["last10"] = last
+        top100 = [m for m in yr if done(m) and (m.get(("l" if me(m) == "w" else "w") + "_rank") or 9999) <= 100]
+        out["vs_top100"] = {"w": sum(won(m) for m in top100), "l": sum(not won(m) for m in top100)}
+        gw = gl = sw = sl = 0
+        for m in yr:
+            if done(m):
+                st_ = sets_of(m)
+                gw += sum(a for a, _ in st_); gl += sum(b for _, b in st_)
+                sw += sum(a > b for a, b in st_); sl += sum(b > a for a, b in st_)
+        out["games_won"] = round(gw / (gw + gl), 3) if gw + gl >= 60 else None
+        out["sets"] = {"w": sw, "l": sl}
+        rec = [m for m in yr if done(m) and day - od(m) <= 90]; old = [m for m in yr if done(m) and day - od(m) > 90]
+        out["trend"] = {"recent": [sum(won(m) for m in rec), len(rec)], "before": [sum(won(m) for m in old), len(old)]}
+        out["matches14"] = sum(1 for m in H_ if day - od(m) <= 14)
+        ev_now = [m for m in H_ if event and m.get("tname") == event and day - od(m) <= 14]
+        out["minutes_event"] = sum(m.get("minutes") or 0 for m in ev_now)
+        prev = H_[-1] if H_ else None
+        out["previous"] = ({"minutes": prev.get("minutes"), "sets": len(sets_of(prev)), "round": prev.get("round"), "event": prev.get("tname"),
+                            "date": prev["date"], "won": won(prev)} if prev else None)
+        out["days_since"] = (day - od(prev)) if prev else None
+        out["retired90"] = sum(1 for m in H_ if day - od(m) <= 90 and not done(m) and not won(m) and re.search(r"RET|W/O|DEF|ABN", m.get("score") or "", re.I))
+        if event:
+            eh = [m for m in H_ if m.get("tname") == event and day - od(m) > 14 and done(m)]
+            out["event_history"] = {"w": sum(won(m) for m in eh), "l": sum(not won(m) for m in eh), "years": len({m["date"] // 10000 for m in eh})}
+        lost1 = [m for m in yr if done(m) and sets_of(m) and sets_of(m)[0][0] < sets_of(m)[0][1]]
+        won1 = [m for m in yr if done(m) and sets_of(m) and sets_of(m)[0][0] > sets_of(m)[0][1]]
+        out["after_losing_set1"] = {"w": sum(won(m) for m in lost1), "n": len(lost1)}
+        out["after_winning_set1"] = {"w": sum(won(m) for m in won1), "n": len(won1)}
+        return out
+
+
+# The lines every player's breakdown always shows (user, 2026-11-11), whether or not they stand out; small samples say so.
+CORE = [
+    ("serve_rating", "Serve, adjusted for opponents", lambda v: f"{100 * v:+.1f} points per 100 vs an average tour player", None),
+    ("return_rating", "Return, adjusted for opponents", lambda v: f"{100 * v:+.1f} points per 100 vs an average tour player", None),
+    ("first_in", "First serves in", lambda v: f"{100 * v:.0f}%", ("svpt", 400, "serve points")),
+    ("ace_pct", "Aces", lambda v: f"{100 * v:.1f}% of service points", ("svpt", 400, "serve points")),
+    ("df_pct", "Double faults", lambda v: f"{100 * v:.1f}% of service points", ("svpt", 400, "serve points")),
+    ("second_won", "Points won behind the second serve", lambda v: f"{100 * v:.0f}%", ("svpt", 400, "serve points")),
+    ("r2_won", "Points won returning second serves", lambda v: f"{100 * v:.0f}%", ("r2pt", 150, "second-serve returns")),
+    ("rgw", "Return games won (breaks)", lambda v: f"{100 * v:.0f}%", ("rsg", 60, "return games")),
+    ("bp_saved", "Break points saved", lambda v: f"{100 * v:.0f}%", ("bpf", 100, "faced")),
+    ("bp_conv", "Break points converted", lambda v: f"{100 * v:.0f}%", ("bpo", 100, "chances")),
+    ("tb_won", "Tiebreaks won", None, ("tb", 20, "tiebreaks")),
+    ("decider_won", "Deciding sets won", None, ("deciders", 20, "deciding sets")),
+]
+
+
+def core_lines(stats: dict, d: dict) -> list[dict]:
+    out = []
+    for k, label, fmt, size in CORE:
+        s = stats.get(k)
+        n = int(d.get(size[0], 0)) if size else None
+        if k == "tb_won":
+            txt = f"{int(d.get('tb_won', 0))} of {int(d.get('tb', 0))} in 52 weeks" if d.get("tb") else None
+        elif k == "decider_won":
+            txt = f"{int(d.get('deciders_won', 0))} of {int(d.get('deciders', 0))} in 52 weeks" if d.get("deciders") else None
+        else:
+            txt = fmt(s["v"]) if s else None
+        small = bool(size) and n is not None and n < size[1]
+        out.append({"k": k, "label": label, "text": txt or "not enough recorded matches", "pct": (s or {}).get("pct") if txt else None,
+                    "n": n, "unit": size[2] if size else None, "small": small and bool(txt)})
+    return out
+
+
+def h2h(byp: dict, a: str, b: str, surface: str | None = None) -> dict:
+    """Every recorded meeting (TennisMyLife), newest first."""
+    L = [m for m in byp.get(a, []) if {m["w"], m["l"]} == {a, b}]
+    meet = [{"date": m["date"], "event": m.get("tname"), "surface": m["surface"], "round": m.get("round"),
+             "winner": m["w"], "score": m.get("score") or "", "done": bool(m.get("sc"))} for m in reversed(L)]
+    aw = sum(1 for x in meet if x["winner"] == a and x["done"]); bw = sum(1 for x in meet if x["winner"] == b and x["done"])
+    sa = sum(1 for x in meet if x["winner"] == a and x["done"] and x["surface"] == surface)
+    sb = sum(1 for x in meet if x["winner"] == b and x["done"] and x["surface"] == surface)
+    return {"a": aw, "b": bw, "surface": surface, "a_surface": sa, "b_surface": sb, "meetings": meet[:5]}
 
 
 def style_label(stats: dict) -> str | None:
@@ -376,5 +489,7 @@ def matchup(a: dict, b: dict) -> list[str]:
 def compact(card: dict) -> dict:
     """The card for the page: rounded numbers, percentiles in whole points."""
     return {**{k: card[k] for k in ("name", "hand", "ht", "rank", "matches", "wins", "stat_matches", "levels", "charted", "below_tour", "style")},
+            "core": [{**c, "pct": None if c["pct"] is None else round(100 * c["pct"])} for c in card.get("core") or []],
+            "context": card.get("context"),
             "read": [{"text": r["text"], "pct": round(100 * r["pct"])} for r in card["read"]],
             "stats": {k: [round(v["v"], 4), None if v["pct"] is None else round(100 * v["pct"])] for k, v in card["stats"].items()}}

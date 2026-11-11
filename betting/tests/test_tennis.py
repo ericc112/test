@@ -353,3 +353,29 @@ class LikelyMatch(unittest.TestCase):
         b = likely_match(0.60, 0.66, 3, 0.25)
         self.assertEqual((b["w"], b["line"], b["sets"]), (1, "6-4, 6-4", [[4, 6], [4, 6]]))   # B wins: line written winner first
         self.assertAlmostEqual(b["p_win"], 0.75)
+
+
+class EveryPlayerCore(unittest.TestCase):
+    """User, 2026-11-11: every player's breakdown shows the core lines, not only the ones that stand out."""
+
+    def test_core_lines_always_present(self):
+        from edge import tennis_scout as TS
+        stats = {"second_won": {"v": 0.49, "pct": 0.13}, "tb_won": {"v": 5 / 12, "pct": 0.18}}
+        d = {"svpt": 1200, "tb": 12, "tb_won": 5, "r2pt": 0}
+        lines = TS.core_lines(stats, d)
+        self.assertEqual([x["k"] for x in lines], [k for k, *_ in TS.CORE])        # every core line, in order
+        by = {x["k"]: x for x in lines}
+        self.assertEqual(by["second_won"]["text"], "49%")
+        self.assertEqual(by["tb_won"]["text"], "5 of 12 in 52 weeks")
+        self.assertTrue(by["tb_won"]["small"])                                     # 12 tiebreaks: noise, says so
+        self.assertEqual(by["bp_saved"]["text"], "not enough recorded matches")
+        self.assertIsNone(by["bp_saved"]["pct"])
+
+    def test_head_to_head(self):
+        from edge import tennis_scout as TS
+        mk = lambda d, w, l, s: {"date": d, "w": w, "l": l, "surface": s, "tname": "X", "round": "F", "score": "6-4 6-4", "sc": {"sets": 2}}
+        M = [mk(20240101, "A", "B", "Hard"), mk(20250101, "B", "A", "Clay"), mk(20260101, "A", "B", "Hard")]
+        byp = {"A": M, "B": M}
+        h = TS.h2h(byp, "A", "B", "Hard")
+        self.assertEqual((h["a"], h["b"], h["a_surface"], h["b_surface"]), (2, 1, 2, 0))
+        self.assertEqual(h["meetings"][0]["date"], 20260101)                        # newest first

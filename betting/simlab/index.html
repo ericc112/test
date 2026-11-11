@@ -329,6 +329,10 @@ table.dec, #factorTbl { min-width: 600px }
 .bc-ctrl .btn { background: #18222d; border-color: #33404d; color: #eef3f7 } .bc-lab { font-size: .72rem; color: #9fb0c0; text-transform: uppercase; letter-spacing: .08em }
 .bc-note { font-size: .78rem; color: #9fb0c0 } .bc-likely { margin: 0; line-height: 1.45; color: #cfd9e2 }
 @media (prefers-reduced-motion: reduce) { .bc-wp i { transition: none } }
+.tn-sub { display: block; margin: .6rem 0 .2rem; }
+.tn-ctx { list-style: none; padding: 0; margin: 0; font-size: .84rem; display: grid; gap: .25rem; }
+.tn-l10 { list-style: none; padding: 0; margin: .3rem 0 0; font-size: .82rem; display: grid; gap: .15rem; }
+.tn-l10 .ok { color: var(--good); font-weight: 700; } .tn-l10 .no { color: var(--bad); font-weight: 700; }
 </style>
 
 <div class="wrap">
@@ -1760,6 +1764,23 @@ const TN_STATS = [["serve_rating", "Serve, opponent-adjusted (pts / 100)", (v) =
   ["fh_win_share", "Winners off the forehand", (v) => Math.round(100 * v) + "%"], ["slice_per100", "Slices per 100 shots", (v) => v.toFixed(1)], ["drop_per100", "Drop shots per 100", (v) => v.toFixed(1)],
   ["bp_saved", "Break points saved", (v) => Math.round(100 * v) + "%"], ["bp_conv", "Break points converted", (v) => Math.round(100 * v) + "%"], ["tb_won", "Tiebreaks won", (v) => Math.round(100 * v) + "%"]];
 const tnOrd = (k) => k + (k % 100 >= 11 && k % 100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[k % 10] || "th"));
+// Form, schedule and record (user, 2026-11-11): from the match database; context unless the winner test says otherwise.
+function tnContext(c) {
+  const x = c.context; if (!x) return "";
+  const wl = (o) => o ? `${o.w}–${o.l}` : "—", pc = (a, b) => b ? Math.round(100 * a / b) + "%" : "—";
+  const li = [];
+  if (x.surface) li.push(`<b>On ${esc(x.surface.name.toLowerCase())}, 52 weeks:</b> ${wl(x.surface)}${x.surface.w + x.surface.l ? ` (${pc(x.surface.w, x.surface.w + x.surface.l)})` : ""}`);
+  li.push(`<b>Margin, 52 weeks:</b> ${x.games_won != null ? Math.round(100 * x.games_won) + "% of games won" : "too few completed matches"} · sets ${wl(x.sets)} · vs the top 100 ${wl(x.vs_top100)}`);
+  const t = x.trend; if (t) li.push(`<b>Trend:</b> last 90 days ${t.recent[0]}–${t.recent[1] - t.recent[0]} (${pc(t.recent[0], t.recent[1])}), the 9 months before ${t.before[0]}–${t.before[1] - t.before[0]} (${pc(t.before[0], t.before[1])})`);
+  const pv = x.previous; li.push(`<b>Schedule:</b> ${x.matches14} match${x.matches14 === 1 ? "" : "es"} in 14 days${x.minutes_event ? ` · ${Math.round(x.minutes_event)} min already at this event` : ""}${pv ? ` · last match ${x.days_since} day${x.days_since === 1 ? "" : "s"} ago (${esc(pv.event || "")} ${esc(pv.round || "")}, ${pv.won ? "won" : "lost"}${pv.minutes ? `, ${pv.minutes} min` : ""}${pv.sets ? `, ${pv.sets} sets` : ""})` : ""}${x.days_since != null && x.days_since > 45 ? ` · <span class="pk-warn" style="display:inline">back from a ${x.days_since}-day layoff</span>` : ""}`);
+  if (x.retired90) li.push(`<span class="pk-warn" style="display:inline">${x.retired90} retirement${x.retired90 > 1 ? "s" : ""} or walkover${x.retired90 > 1 ? "s" : ""} given in the last 90 days</span>`);
+  if (x.event_history) li.push(`<b>This tournament before:</b> ${x.event_history.w + x.event_history.l ? `${wl(x.event_history)} over ${x.event_history.years} year${x.event_history.years > 1 ? "s" : ""}` : "first recorded visit"}`);
+  const al = x.after_losing_set1, aw = x.after_winning_set1;
+  if (al && aw) li.push(`<b>Comebacks:</b> won ${al.w} of ${al.n} after losing the first set; won ${aw.w} of ${aw.n} after winning it${al.n < 20 ? " <span class=\"note\">(small sample)</span>" : ""}`);
+  const l10 = x.last10 || [];
+  const last = l10.length ? `<details><summary class="note">Last ${l10.length} matches: ${l10.filter((m) => m.won).length}–${l10.filter((m) => !m.won).length}, and who they came against</summary><ul class="tn-l10">${l10.map((m) => `<li><span class="${m.won ? "ok" : "no"}">${m.won ? "W" : "L"}</span> ${esc(m.opp)}${m.opp_rank ? ` <span class="note">(#${m.opp_rank})</span>` : ""} ${esc(m.score)} <span class="note">· ${esc(m.event || "")} ${esc(m.round || "")}</span></li>`).join("")}</ul></details>` : "";
+  return `<div class="label tn-sub">Form, schedule and record</div><ul class="tn-ctx">${li.map((h) => `<li>${h}</li>`).join("")}</ul>${last}`;
+}
 function tnRenderScout() {
   const el = $("tnScout"), m = tnCur(), sc = m && m.scout; if (!el) return;
   if (!sc) { el.innerHTML = ""; return; }
@@ -1769,12 +1790,15 @@ function tnRenderScout() {
     <div class="note">${[c.hand === "L" ? "left-handed" : c.hand === "R" ? "right-handed" : null, c.ht ? c.ht + " cm" : null, c.rank ? "ranked " + c.rank : null,
       `${c.wins}-${c.matches - c.wins} in 52 weeks (${lv(c.levels)})`, c.charted ? `${c.charted} charted matches since ${new Date().getFullYear() - 2}` : "no charted matches: match stats only"].filter(Boolean).map(esc).join(" · ")}</div>
     ${c.below_tour ? `<div class="pk-warn">Most of these matches were below tour level: raw numbers there come against weaker opponents (the opponent-adjusted lines account for that).</div>` : ""}
-    <ul class="tn-read">${c.read.map((r) => `<li><span class="tn-pb" title="${tnOrd(r.pct)} percentile"><i style="width:${r.pct}%"></i></span><span>${esc(r.text)} <span class="note">· ${tnOrd(r.pct)} percentile</span></span></li>`).join("")
-      || `<li><span></span><span class="note">Nothing stands out against the top 150, or too few matches with full stats.</span></li>`}</ul></div>`;
+    ${(c.core || []).length ? `<div class="label tn-sub">Core numbers (52 weeks; bar = percentile among the current top 150)</div><ul class="tn-read">${c.core.map((r) => `<li><span class="tn-pb" title="${r.pct != null ? tnOrd(r.pct) + " percentile" : "no percentile"}"><i style="width:${r.pct != null ? r.pct : 0}%"></i></span><span><b>${esc(r.label)}:</b> ${esc(r.text)}${r.pct != null ? ` <span class="note">· ${tnOrd(r.pct)} percentile</span>` : ""}${r.n != null && r.unit ? ` <span class="note">· ${r.n.toLocaleString()} ${esc(r.unit)}</span>` : ""}${r.small ? ` <span class="pk-warn" style="display:inline">small sample: noise more than signal</span>` : ""}</span></li>`).join("")}</ul>` : ""}
+    ${c.read.length ? `<div class="label tn-sub">What stands out</div><ul class="tn-read">${c.read.map((r) => `<li><span class="tn-pb" title="${tnOrd(r.pct)} percentile"><i style="width:${r.pct}%"></i></span><span>${esc(r.text)} <span class="note">· ${tnOrd(r.pct)} percentile</span></span></li>`).join("")}</ul>` : ""}
+    ${tnContext(c)}</div>`;
   const rows = TN_STATS.filter(([k]) => sc.a.stats[k] || sc.b.stats[k]).map(([k, lab, f]) => {
     const A = sc.a.stats[k], B = sc.b.stats[k], bar = (x, c) => `<div class="mb ${c}"><i style="width:${x && x[1] != null ? x[1] : 0}%"></i></div>`;
     return `<tr><td class="v">${A ? f(A[0]) : "—"}</td><td>${bar(A, "a")}</td><td class="l">${esc(lab)}</td><td>${bar(B, "b")}</td><td class="v">${B ? f(B[0]) : "—"}</td></tr>`; }).join("");
-  el.innerHTML = `<h3>How they play</h3><div class="tn-scg">${side(sc.a, "a")}${side(sc.b, "b")}</div>`
+  const hh = sc.h2h, A = tnSur(sc.a.name), B = tnSur(sc.b.name);
+  const h2hHtml = hh ? `<div class="tn-mu"><span class="label">Head to head</span> ${hh.a + hh.b ? `<b>${esc(A)} ${hh.a}–${hh.b} ${esc(B)}</b>${hh.surface ? ` · on ${esc(hh.surface.toLowerCase())} ${hh.a_surface}–${hh.b_surface}` : ""}<ul>${hh.meetings.map((x) => `<li>${String(x.date).slice(0, 4)} ${esc(x.event || "")} ${esc(x.round || "")} (${esc(x.surface)}): ${esc(x.winner === "a" ? A : B)} ${esc(x.score)}</li>`).join("")}</ul>` : "no recorded meetings"}<div class="note">Context, not a reason: head-to-head added nothing beyond the ratings in the walk-forward tests (LESSONS L30).</div></div>` : "";
+  el.innerHTML = `<h3>How they play</h3><div class="tn-scg">${side(sc.a, "a")}${side(sc.b, "b")}</div>` + h2hHtml
     + (sc.matchup.length ? `<div class="tn-mu"><span class="label">Matchup</span><ul>${sc.matchup.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : "")
     + `<details><summary class="note">Every number side by side (bars: percentile against the top 150)</summary><div class="tbl-wrap"><table class="tn-cmp"><tbody>${rows}</tbody></table></div></details>`
     + `<p class="note">Read from the Match Charting Project (volunteers chart every shot of a match from video; Tennis Abstract, CC BY-NC-SA 4.0) and every recorded match's serve and return stats in the last 52 weeks. Tested on matches from September on (data/tennis_bt/style_test.json): style matchups added a small but real improvement for ATP (big servers win slightly fewer serve points than the ratings say against strong first-serve returners) and nothing for WTA, so most of how a player plays is already in the opponent-adjusted serve and return numbers. Shown as context; not in the win probability.</p>`;

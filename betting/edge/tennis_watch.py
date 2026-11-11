@@ -119,15 +119,20 @@ def _short_wta(st: dict, rows: list[dict], pp: dict) -> list[str]:
     return names
 
 
-def _scout(scout, ia, na, ib, nb):
-    """Both players' scouting cards and the matchup notes (edge/tennis_scout.py), or None."""
+def _scout(scout, ia, na, ib, nb, surface=None, event=None):
+    """Both players' scouting cards (the core lines every player shows, the stand-out notes, form, schedule and record),
+    the head-to-head and the matchup notes (edge/tennis_scout.py), or None."""
     if not scout:
         return None
     from . import tennis_scout as TS
     try:
-        ca, cb = scout.card(ia, na), scout.card(ib, nb)
-        return {"a": TS.compact(ca), "b": TS.compact(cb), "matchup": TS.matchup(ca, cb)}
-    except Exception:
+        ca, cb = scout.card(ia, na, surface, event), scout.card(ib, nb, surface, event)
+        hh = TS.h2h(scout.byp, ia, ib, surface)
+        for x in hh["meetings"]:
+            x["winner"] = "a" if x["winner"] == ia else "b"
+        return {"a": TS.compact(ca), "b": TS.compact(cb), "matchup": TS.matchup(ca, cb), "h2h": hh}
+    except Exception as e:
+        print(f"  tennis watch: scouting card failed for {na} v {nb} ({type(e).__name__}: {e})")
         return None
 
 
@@ -217,7 +222,7 @@ def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
                             "slugs": [x.get("slug1"), x.get("slug2")], "odds": [x.get("o1"), x.get("o2")], "market_a": round(fair, 4) if fair else None,
                             "shift": round(shift, 4) if shift is not None else None, "anchor_default": bool(anchor and fair),
                             "win_model": round(win_model, 4), "elo_a": round(1 / (1 + 10 ** ((rb - ra) / 400)), 4),
-                            "lines": pp.get(k2, []), "scout": _scout(scout, ia, na, ib, nb),
+                            "lines": pp.get(k2, []), "scout": _scout(scout, ia, na, ib, nb, surf, ev),
                             "likely": {"ratings": likely_match(p1, p2, bo, win_model, form["sd"], form["rho"]),
                                        **({"market": likely_match(p1 + shift, p2 - shift, bo, fair, form["sd"], form["rho"])} if shift is not None else {})}})
     out.sort(key=lambda m: (m["start"], m["tour"]))
