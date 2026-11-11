@@ -17,6 +17,8 @@ or would have caught, a real mistake on 2026-10-12/13:
 from __future__ import annotations
 
 import datetime as dt
+import json
+import os
 import re
 from dataclasses import dataclass, field
 
@@ -25,6 +27,9 @@ from .blend import final_probability, load_adjustments
 TOL_P = 0.005      # recompute must match the logged number
 TOL_HIST = 0.05    # recount within 5 pts of the logged history
 TOL_MODEL = 0.04   # re-run model within 4 pts, else re-price before publishing
+TOL_ENTRY = 0.02   # Fix 7: an ENTRY leg (action "bet") must reprice and recount within 2 pts
+DRIFT_N, DRIFT_MAX = 50, 0.05   # trailing published NBA legs: predicted vs realized gap past 5 pts = WARN on new legs
+STALE_MIN = 60     # market data older than this inside the last hour before tip FAILS (re-price first)
 
 
 def _f(x):
@@ -55,13 +60,54 @@ class Report:
 
 
 # ------------------------------------------------------------------ individual checks
+def _no_market(notes: str) -> bool:
+    """The pricer found no market: no DraftKings line and (since 2026-11-06) no Dabble line either."""
+    return "no DraftKings or Dabble line" in notes or ("no DraftKings line" in notes and "Dabble" not in notes)
+
+
+def expected(r: dict, adj: dict):
+    """The leg's probability and label rebuilt from its stored components the way its pricer builds them (NBA: the
+    logic version that priced it; tennis and NHL: their own blends and Low holds). None without components."""
+    pm, pk, ph = _f(r.get("p_model")), _f(r.get("p_market")), _f(r.get("p_hist"))
+    if pm is None and pk is None and ph is None:
+        return None
+    e = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), adj)
+    if r.get("sport") == "nba":                  # NBA legs: rebuild under the logic version that priced them
+        from . import nba_model, nba_pp
+        mv = re.search(r"logic v(\d+)", r.get("notes") or "")
+        lg_ = nba_model.params_for(int(mv.group(1)) if mv else 1)
+        p_, c_ = nba_pp.recompute(pm, pk, ph, int(_f(r.get("hist_n")) or 0), r.get("segment", ""), lg_)
+        if "role unconfirmed" in (r.get("notes") or ""):
+            c_ = "Low"
+        c_, _ = nba_pp.gate_label(c_, pm, pk, r.get("notes") or "", r.get("market", ""))     # High needs agreement
+        e = type(e)(p=p_, confidence=c_, agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
+    elif r.get("sport") == "tennis":
+        from . import tennis as T
+        a2 = dict(adj); a2["blend_by_sport"] = {**(adj.get("blend_by_sport") or {}), "tennis": T.BLEND}
+        e = final_probability(pm, pk, None, r.get("segment", ""), 0, a2)
+        if e.confidence in ("High", "Medium") and ("no market price" in (r.get("notes") or "") or "flags:" in (r.get("notes") or "")):
+            e = type(e)(p=e.p, confidence="Low", agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
+    elif r.get("sport") == "nhl" and str(r.get("market", "")).startswith("nhl_"):
+        from . import nhl_pp
+        a2 = dict(adj); a2["blend_by_sport"] = {**(adj.get("blend_by_sport") or {}), "nhl": nhl_pp.BLEND}
+        e = final_probability(pm, 0.5 if pk is None else pk, None, r.get("segment", ""), 0, a2)
+        if e.confidence in ("High", "Medium") and (_no_market(r.get("notes") or "") or "flags:" in (r.get("notes") or "")):
+            e = type(e)(p=e.p, confidence="Low", agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
+    elif r.get("sport") == "nfl" and "nfl sim median" in (r.get("notes") or "") and e.confidence in ("High", "Medium") and \
+            (_no_market(r["notes"]) or "flags:" in r["notes"] or "heavily juiced" in r["notes"]):
+        # edge nfl-picks holds a leg at Low without a DraftKings line (the simulation alone has no edge), with a role flag,
+        # or on a TD/interception line (often heavily juiced; the feed has no prices)
+        e = type(e)(p=e.p, confidence="Low", agreement=e.agreement, spread=e.spread, components=e.components, notes=e.notes)
+    return e
+
+
 def check_recompute(rep: Report, adj: dict):
     r = rep.row
     pm, pk, ph = _f(r.get("p_model")), _f(r.get("p_market")), _f(r.get("p_hist"))
-    if pm is None and pk is None and ph is None:
+    e = expected(r, adj)
+    if e is None:
         rep.add("FAIL", "recompute", "no model, market or history stored: nothing to check the number against")
         return
-    e = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), adj)
     logged, conf = _f(r.get("p_final")), r.get("confidence")
     if (logged is None or abs(e.p - logged) > TOL_P or e.confidence != conf) and getattr(rep, "locked", False):
         rep.add("WARN", "recompute", f"today's weights give {e.p:.3f} {e.confidence}; logged {logged} {conf} (event under way: logged number stands)")
@@ -114,9 +160,19 @@ def started(row: dict) -> bool | None:
         if row.get("sport") == "cs2":
             m = _get(f"https://api.bo3.gg/api/v1/matches?filter%5Bmatches.id%5D%5Beq%5D={row['event_id']}")["results"]
             return bool(m) and m[0].get("status") in ("current", "finished")
+        if row.get("sport") in ("nfl", "cfb"):
+            lg = "college-football" if row["sport"] == "cfb" else "nfl"
+            s = _get(f"https://site.api.espn.com/apis/site/v2/sports/football/{lg}/summary?event={row['event_id']}")
+            return s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_SCHEDULED"
         if row.get("sport") == "mlb":
             g = _get(f"https://statsapi.mlb.com/api/v1/schedule?gamePk={row['event_id']}")["dates"][0]["games"][0]
             return g["status"]["abstractGameState"] != "Preview"
+        if row.get("sport") == "nba":
+            s = _get(f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={row['event_id']}")
+            return s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_SCHEDULED"
+        if row.get("sport") == "nhl" and str(row.get("market", "")).startswith("nhl_"):     # edge nhl-picks legs: ESPN event ids
+            s = _get(f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/summary?event={row['event_id']}")
+            return s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_SCHEDULED"
     except Exception:
         return None
     return None
@@ -130,7 +186,7 @@ def check_offered(rep: Report):
     book = (r.get("book") or "").lower()
     if "prizepicks" in book:
         from . import pp
-        lg = {"cs2": "CS2", "lol": "LoL", "mlb": "MLB", "nhl": "NHL", "nfl": "NFL", "soccer": "UCL"}.get(r.get("sport"))
+        lg = {"cs2": "CS2", "lol": "LoL", "mlb": "MLB", "nhl": "NHL", "nfl": "NFL", "soccer": "UCL", "nba": "NBA", "tennis": "TENNIS"}.get(r.get("sport"))
         try:
             board = pp.board(lg, ("standard", "goblin", "demon")) if lg else []
         except Exception as e:
@@ -208,6 +264,308 @@ def check_cs2(rep: Report, adj: dict):
             f"model now {pm:.2f}, logged {lm}" + (" (event under way: live data, pre-game number stands)" if off and getattr(rep, "locked", False) else ""))
 
 
+APP_BOOKS = ("prizepicks", "underdog")      # pick'em apps: an NFL leg on one is priced off DraftKings' line, not as a DraftKings line
+
+
+def _app_book(row: dict) -> bool:
+    """A pick'em app line (PrizePicks, Underdog): re-priced the way the app pricer prices it (simulation re-centred on
+    DraftKings' current line), not checked as a DraftKings line. Underdog has no public board, so 'offered' is a WARN
+    to confirm the line on screen (check_offered)."""
+    return any(b in (row.get("book") or "").lower() for b in APP_BOOKS)
+
+
+def check_nfl(rep: Report, adj: dict):
+    """Re-run the simulator (same seed, fresh lines and injury report), recount history at this line, and
+    confirm DraftKings still posts this line (the NFL feed has lines but no prices)."""
+    from . import nfl
+    r = rep.row
+    if getattr(rep, "locked", False):
+        rep.add("WARN", "offered", "game under way or over: pick is locked; audit only (never rewritten)")
+    res = nfl.price_game(str(r["event_id"]), n=50000)
+    if _app_book(r):
+        return check_nfl_pp(rep, res)
+    hit = [x for x in res["rows"] if str(x["player_id"]) == str(r["player_id"]) and x["market"] == r["market"]]
+    if not hit:
+        rep.add("FAIL", "offered", f"DraftKings no longer posts {r['player']} {r['market']}: pulled (injury/role?)")
+        return
+    x = hit[0]
+    if abs(x["line"] - float(r["line"])) > 1e-9:
+        rep.add("WARN" if getattr(rep, "locked", False) else "FAIL", "offered", f"DraftKings line moved {r['line']} -> {x['line']}")
+    else:
+        rep.add("PASS", "offered", f"DraftKings still at {x['line']} (no price in the feed: confirm the odds on screen)")
+    line = float(r["line"])
+    o, u = nfl.player_history(str(r["player_id"]), None, res["history"], r["market"], line)
+    ph = (o if r["side"] == "over" else u) / max(o + u, 1) if o + u else None
+    logged = _f(r.get("p_hist"))
+    if ph is None and logged is None:
+        rep.add("PASS", "recount", "no history component used")
+    else:
+        bad = ph is None or logged is None or abs(ph - logged) > TOL_HIST
+        rep.add("FAIL" if bad else "PASS", "recount", f"2026 games recount to {ph if ph is None else round(ph, 2)} over {o + u} (logged {logged})")
+    pm = x["p_model"] if x["side"] == r["side"] else nfl.calibrated(1 - x["p_sim"], r["market"])
+    lm = _f(r.get("p_model"))
+    off = lm is None or abs(pm - lm) > TOL_MODEL
+    rep.add("WARN" if off and getattr(rep, "locked", False) else "FAIL" if off else "PASS", "reprice",
+            f"simulator now {pm:.3f} (calibrated), logged {lm}")
+    if x["flags"]:
+        rep.add("WARN", "role", "; ".join(x["flags"]))
+
+
+def check_tennis_pp(rep: Report):
+    """A PrizePicks tennis leg (edge tennis-picks): refetch both players' Tennis Abstract records and Dabble, re-run
+    the match simulation (same seed), re-price the leg on its side and rebuild the label."""
+    from . import tennis as T
+    r = rep.row
+    slugs = str(r["event_id"])[:-11].split("-")
+    me = r["player_id"]
+    opp = next((x for x in slugs if x != me), None)
+    pa, pb = T.player_by_slug(me), T.player_by_slug(opp) if opp else None
+    if not pa or not pb:
+        rep.add("FAIL", "reprice", "a player's Tennis Abstract record isn't available now")
+        return
+    pa["name"], pb["name"] = r["player"], r.get("event", "").split(" vs ")[-1] if " vs " in r.get("event", "") else pb["name"]
+    start = str(r["event_id"])[-10:] + "T12:00:00"
+    try:
+        G = T.game(pa, pb, start, [pa, pb] + [x for x in [T.player_by_slug(s) for s in slugs] if x], T._dabble_board())
+    except T.NoStats as e:
+        rep.add("FAIL", "reprice", str(e))
+        return
+    x = T.price_leg(G, r["player"], r["market"][len("tennis_"):], float(r["line"]), side=r["side"])
+    if not x:
+        rep.add("FAIL", "reprice", "player not matched in the rebuilt match")
+        return
+    o, u = T.hist_counts(pa, r["market"][len("tennis_"):], float(r["line"]))
+    rep.add("PASS", "recount", f"recent record recounted from Tennis Abstract: {o} over / {u} under at {float(r['line']):g} (context only: tennis history carries no weight)")
+    fm = G.get("form")
+    rep.add("PASS" if fm else "WARN", "form", (f"rates: {G.get('source', 'Tennis Abstract')}; day-to-day variation sd {fm['sd']:.3f}, correlation {fm['rho']:+.2f}"
+                                                + (f" (measured on {fm['matches']} matches)" if fm.get("matches") else " (measured on the tuning period)")
+                                                if fm else "too few matches to measure day-to-day variation: fixed rates"))
+    if G.get("winner_market"):
+        rep.add("PASS", "winner price", f"market {G['winner_market'][1]}" + (" anchors this line" if T.sim_for(G, r["market"][len("tennis_"):]) is not G["sim"] else " (context: not used for this stat)"))
+    lm = _f(r.get("p_model"))
+    off = lm is None or abs(x["p_model"] - lm) > TOL_MODEL
+    rep.add("FAIL" if off else "PASS", "reprice", f"simulation now {x['p_model']:.3f}, logged {lm}")
+    lk = _f(r.get("p_market"))
+    moved = (x["p_market"] is None) != (lk is None) or (lk is not None and abs(x["p_market"] - lk) > TOL_MODEL)
+    rep.add("WARN" if moved else "PASS", "market", (f"Dabble now {x['p_market']} (logged {lk})" if x["p_market"] is not None else f"no Dabble price now (logged {lk})"))
+    rep.fresh = {"p_model": x["p_model"], "p_market": "" if x["p_market"] is None else x["p_market"], "p_hist": "", "hist_n": 0,
+                 "p_final": round(x["p_final"], 4), "confidence": x["confidence"],
+                 "side_note": f"fresh {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%MZ}: tennis simulation re-run"}
+    conf = r.get("confidence")
+    rep.add("PASS" if x["confidence"] == conf else "FAIL", "fresh label", f"rebuilt {x['p_final']:.3f} {x['confidence']}" + ("" if x["confidence"] == conf else f" (logged {conf})"))
+    if x["flags"]:
+        rep.add("WARN", "sample", "; ".join(x["flags"]))
+
+
+def check_nhl_pp(rep: Report):
+    """A PrizePicks NHL leg (edge nhl-picks): rebuild the game (same seed, fresh injury report, DraftKings ladders and
+    box scores), re-price the leg on its side, compare each component and rebuild the label."""
+    from . import nhl_pp
+    r = rep.row
+    locked = getattr(rep, "locked", False)
+    G = nhl_pp.game_for(str(r["event_id"]))
+    if not G:
+        rep.add("WARN" if locked else "FAIL", "reprice", "game not on ESPN's schedule now (started, postponed?): can't re-run")
+        return
+    m = r["market"][len("nhl_"):]
+    x = nhl_pp.price_leg(G, r["player"], m, float(r["line"]), side=r["side"])
+    if not x:
+        rep.add("WARN" if locked else "FAIL", "reprice", f"{r['player']} is out of the projected rotation now (scratched or injured?)")
+        return
+    rep.add("PASS", "recount", f"this season {x['hist'][0]} over / {x['hist'][1]} under at {r['line']} (context only: history isn't blended for NHL)")
+    lm = _f(r.get("p_model"))
+    off = lm is None or abs(x["p_model"] - lm) > TOL_MODEL
+    rep.add("WARN" if off and locked else "FAIL" if off else "PASS", "reprice", f"simulation now {x['p_model']:.3f}, logged {lm}")
+    lk = _f(r.get("p_market"))
+    moved = (x["p_market"] is None) != (lk is None) or (lk is not None and abs(x["p_market"] - lk) > TOL_MODEL)
+    rep.add("WARN" if moved else "PASS", "market",
+            (f"DraftKings ladder now {x['p_market']} (logged {lk})" if x["p_market"] is not None else f"no DraftKings ladder now (logged {lk})")
+            + (": the ladder moved, re-price before publishing" if moved else ""))
+    rep.fresh = {"p_model": x["p_model"], "p_market": "" if x["p_market"] is None else x["p_market"], "p_hist": "", "hist_n": 0,
+                 "p_final": round(x["p_final"], 4), "confidence": x["confidence"],
+                 "side_note": f"fresh {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%MZ}: NHL simulation re-run"}
+    conf = r.get("confidence")
+    rep.add("PASS" if x["confidence"] == conf else "FAIL", "fresh label",
+            f"rebuilt {x['p_final']:.3f} {x['confidence']}" + ("" if x["confidence"] == conf else f" (logged {conf})"))
+    if x["flags"]:
+        rep.add("WARN", "role", "; ".join(x["flags"]))
+
+
+def check_nfl_pp(rep: Report, res: dict):
+    """A PrizePicks NFL leg (edge nfl-picks): re-price it the same way (simulation re-centred on DraftKings' current
+    line, the shrunk simulation, this season's count), compare each component and rebuild the label. The board check
+    (offered) runs separately."""
+    from . import nfl_pp
+    r = rep.row
+    locked = getattr(rep, "locked", False)
+    x = nfl_pp.price_leg(res, r["player"], r["market"], float(r["line"]), side=r["side"])
+    if not x:
+        rep.add("WARN" if locked else "FAIL", "reprice", f"{r['player']} {r['market']} is not in the simulation now (inactive? role?)")
+        return
+    lh, ln = _f(r.get("p_hist")), int(_f(r.get("hist_n")) or 0)
+    bad = (x["p_hist"] is None) != (lh is None) or (lh is not None and abs(x["p_hist"] - lh) > TOL_HIST) or abs(x["hist_n"] - ln) > 1
+    rep.add("FAIL" if bad else "PASS", "recount", f"2026 games recount to {x['hist'][0]} over / {x['hist'][1]} under at {r['line']} (logged {lh} over {ln})")
+    lm = _f(r.get("p_model"))
+    off = lm is None or abs(x["p_model"] - lm) > TOL_MODEL
+    rep.add("WARN" if off and locked else "FAIL" if off else "PASS", "reprice", f"simulation now {x['p_model']:.3f} (shrunk), logged {lm}")
+    lk = _f(r.get("p_market"))
+    moved = (x["p_market"] is None) != (lk is None) or (lk is not None and abs(x["p_market"] - lk) > TOL_MODEL)
+    rep.add("WARN" if moved else "PASS", "market",
+            (f"DraftKings line {x['dk_line']}: anchored {x['p_market']} (logged {lk})" if x["dk_line"] is not None else f"no DraftKings line now (logged {lk})")
+            + (": the line moved, re-price before publishing" if moved else ""))
+    rep.fresh = {"p_model": x["p_model"], "p_market": "" if x["p_market"] is None else x["p_market"],
+                 "p_hist": "" if x["p_hist"] is None else x["p_hist"], "hist_n": x["hist_n"], "p_final": round(x["p_final"], 4),
+                 "confidence": x["confidence"], "side_note": f"fresh {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%MZ}: NFL simulation re-run"}
+    conf = r.get("confidence")
+    rep.add("PASS" if x["confidence"] == conf else "FAIL", "fresh label",
+            f"rebuilt {x['p_final']:.3f} {x['confidence']}" + ("" if x["confidence"] == conf else f" (logged {conf})"))
+    if x["flags"]:
+        rep.add("WARN", "role", "; ".join(x["flags"]))
+
+
+def minutes_gap(side: str, proj_min: float | None, last_mins: list[float], tol: float = 3.0) -> str | None:
+    """L28: an over projected on 3+ more minutes than his last-5 average, or an under on 3+ fewer, rests on the
+    minutes projection rather than his rate. Needs 3+ recent games."""
+    if proj_min is None or len(last_mins) < 3:
+        return None
+    l5 = sum(last_mins) / len(last_mins)
+    if side == "over" and proj_min > l5 + tol:
+        return f"projected {proj_min:.0f} min vs {l5:.0f} in his last {len(last_mins)}: the over needs minutes he hasn't been getting (L28)"
+    if side == "under" and proj_min < l5 - tol:
+        return f"projected {proj_min:.0f} min vs {l5:.0f} in his last {len(last_mins)}: the under leans on fewer minutes than he's been playing (L28)"
+    return None
+
+
+def last_priced(notes: str):
+    """When a leg was last priced: the latest of the pricer's "pulled" stamp and any "fresh" stamp a verify --fix
+    re-price added (UTC), or None."""
+    stamps = re.findall(r"(?:pulled|fresh) (\d{4}-\d\d-\d\d)[T ](\d\d:\d\d)Z", notes)
+    return max(dt.datetime.fromisoformat(f"{d}T{t}+00:00") for d, t in stamps) if stamps else None
+
+
+def check_nba(rep: Report, adj: dict):
+    """Recount this season's games at the line from the box scores, re-run the simulation (50,000 runs, fresh injury
+    report and DraftKings lines) and rebuild the label from fresh components."""
+    from . import nba_pp
+    from gamesim import nba as gnba, nba_research as gres
+    r = rep.row
+    line, stat, side = float(r["line"]), r["market"], r["side"]
+    entry = r.get("action") == "bet"
+    tol_m, tol_h = (TOL_ENTRY, TOL_ENTRY) if entry else (TOL_MODEL, TOL_HIST)
+    mv0 = re.search(r"logic v(\d+)", r.get("notes") or "")      # re-run under the simulation settings that priced it
+    ctx = nba_pp.build(gids={str(r["event_id"])}, sim=nba_pp.current_sim(int(mv0.group(1)) if mv0 else 1))
+    g = ctx["games"].get(str(r["event_id"]))
+    if not g or str(r["event_id"]) not in ctx["sims"]:
+        rep.add("WARN" if getattr(rep, "locked", False) else "FAIL", "reprice", "game not on ESPN's schedule now (started, postponed?): can't re-run")
+        return
+    y = gnba.season_of(g["start"][:10])
+    key = ("nba_research", y)
+    if key not in nba_pp._MEMO:
+        nba_pp._MEMO[key] = gres.Research("nba", gnba.season_games("nba", f"{y}1018", dt.date.today().strftime("%Y%m%d")), y)
+    RS = nba_pp._MEMO[key]
+    cut = g["start"]
+    cur = [e for e in RS.before(str(r["player_id"]), cut) if e["season"] == y]
+    vals = [sum(e[k] for k in nba_pp.PARTS_KEYS[stat]) for e in cur]
+    o, u = sum(v > line for v in vals), sum(v < line for v in vals)
+    ph = (o if side == "over" else u) / max(o + u, 1) if o + u else None
+    logged, ln = _f(r.get("p_hist")), int(_f(r.get("hist_n")) or 0)
+    mv = re.search(r"logic v(\d+)", r.get("notes") or "")
+    logic = nba_pp.nba_model_params(int(mv.group(1)) if mv else 1)
+    hist_off = logic.get("history") == "off"
+    if hist_off and logged is None:
+        rep.add("PASS", "recount", f"history not used by logic v{mv.group(1) if mv else 1}; box scores recount to {o} over / {u} under at {line} in {len(vals)} games")
+    elif ph is None and logged is None:
+        rep.add("PASS", "recount", "no games this season: no history component")
+    else:
+        bad = ph is None or logged is None or abs(ph - logged) > tol_h or abs((o + u) - ln) > 1
+        rep.add("FAIL" if bad else "PASS", "recount", f"box scores recount to {o} over / {u} under at {line} in {len(vals)} games (logged {logged} over {ln})"
+                + (f"; ENTRY tolerance {tol_h:.0%}" if entry else ""))
+    sim = ctx["sims"][str(r["event_id"])]["players"].get(str(r["player_id"]))
+    if not sim:
+        rep.add("WARN" if getattr(rep, "locked", False) else "FAIL", "reprice", f"{r['player']} is out of tonight's projected rotation now (injury report?)")
+        return
+    # L28: a pick that needs minutes he hasn't been playing (bench overs, starter unders lost on minutes, Nov 4)
+    gid_ = str(r["event_id"])
+    prof = next((p for s_ in ("home", "away") for p in ctx["eng"]["sides"][gid_]["players"][s_]["players"]
+                 if str(p["id"]) == str(r["player_id"])), None)
+    w = minutes_gap(side, prof["min"] if prof else None, [e["min"] for e in cur[-5:]])
+    if w:
+        rep.add("WARN", "minutes", w)
+    po, pu, pp_ = nba_pp.sides_at(sim["hist"][stat], line)
+    m = re.search(r"model de-biased ([+-]\d+\.\d+) logit", r.get("notes") or "")
+    if m and 0 < po < 1 - pp_:                 # the same per-scan bias fix the pricer applied (L7)
+        q = nba_pp._sg(nba_pp._lg(po / (1 - pp_)) + float(m.group(1))) * (1 - pp_)
+        po, pu = q, 1 - pp_ - q                # (not `o`: o and u are the season's over/under counts used below)
+    pm = (po if side == "over" else pu) / max(1 - pp_, 1e-9)
+    lm = _f(r.get("p_model"))
+    off = lm is None or abs(pm - lm) > tol_m
+    rep.add("WARN" if off and getattr(rep, "locked", False) else "FAIL" if off else "PASS", "reprice",
+            f"simulation now {pm:.3f} (50,000 runs, current injury report), logged {lm}" + (f"; ENTRY tolerance {tol_m:.0%}" if entry else ""))
+    # Fix 7: tilt monitor and stale market data
+    mt = re.search(r"raw tilt ([+-]\d+\.\d+)", r.get("notes") or "")
+    causes = json.load(open(nba_pp.TILT_CAUSES)) if os.path.exists(nba_pp.TILT_CAUSES) else {}
+    if mt and abs(float(mt.group(1))) > nba_pp.TILT_MAX and stat not in causes:
+        rep.add("FAIL" if entry else "WARN", "tilt", f"tonight's raw simulation-vs-DraftKings tilt on {stat} is {mt.group(1)} logit (limit "
+                f"{nba_pp.TILT_MAX}) with no cause logged in data/nba_tilt_causes.json" + (": no ENTRY leg in this stat" if entry else ""))
+    last = last_priced(r.get("notes") or "")
+    if last and g.get("start") and not getattr(rep, "locked", False):
+        now = dt.datetime.now(dt.timezone.utc)
+        tip = dt.datetime.fromisoformat(g["start"].replace("Z", "+00:00"))
+        age = (now - last).total_seconds() / 60
+        if (tip - now).total_seconds() / 60 <= 60 and age > STALE_MIN:
+            rep.add("FAIL", "freshness", f"market and injury data pulled {age:.0f} min ago, inside the last hour before tip: re-price (edge verify --fix)")
+    mks_, _ = nba_pp.markets_for(ctx["eng"]["sides"][str(r["event_id"])]["players"].get("lines"), str(r["player_id"]), r["player"], stat, line)
+    mk_ = mks_[0] if mks_ else None
+    if mk_ and abs(mk_["line"] - line) >= nba_pp.GAP_2ND:     # a big gap from the book needs a second book that agrees
+        h_ = sim["hist"][stat]
+        if len(mks_) < 2:
+            rep.add("WARN" if getattr(rep, "locked", False) else "FAIL", "second book",
+                    f"PrizePicks {line} is {abs(mk_['line'] - line):g} from {mk_['book']}'s {mk_['line']} and no second book posts it: not verified on one source")
+        else:
+            m2 = mks_[1]
+            q2 = m2["q"] if abs(m2["line"] - line) < 1e-9 else nba_pp.market_at(h_, m2["line"], m2["q"], line)[0]
+            s2 = q2 if side == "over" else 1 - q2
+            rep.add("PASS" if s2 >= 0.5 else ("WARN" if getattr(rep, "locked", False) else "FAIL"), "second book",
+                    f"{m2['book']} {m2['line']} at {m2['over']}/{m2['under']}: {s2:.0%} for the {side} at {line}" + ("" if s2 >= 0.5 else " (disagrees)"))
+    pk = None
+    if mk_:                                    # the same market the pricer uses: DraftKings, else Dabble
+        q = mk_["q"] if abs(mk_["line"] - line) < 1e-9 else nba_pp.market_at(sim["hist"][stat], mk_["line"], mk_["q"], line)[0]
+        pk = q if side == "over" else 1 - q
+    lk = _f(r.get("p_market"))
+    bk = mk_["book"] if mk_ else "DraftKings / Dabble"
+    if (pk is None) != (lk is None) or (pk is not None and abs(pk - lk) > TOL_MODEL):
+        rep.add("WARN", "market", f"{bk} now {'none' if pk is None else f'{pk:.3f}'} (logged {lk}): the line or price moved, re-price before publishing")
+    ph_l, n_l = (None, 0) if hist_off else (ph, o + u)        # history only if the leg's logic uses it
+    fp, fc = nba_pp.recompute(pm, pk, ph_l, n_l, r.get("segment", ""), logic)     # the fresh label under the leg's own logic
+    if "role unconfirmed" in (r.get("notes") or ""):
+        fc = "Low"
+    notes_now = (r.get("notes") or "") + (f"; minutes gap: {w}" if w and "minutes gap:" not in (r.get("notes") or "") else "")
+    fc, _ = nba_pp.gate_label(fc, pm, pk, notes_now, stat)
+    rep.fresh = {"p_model": round(pm, 3), "p_market": "" if pk is None else round(pk, 3), "p_hist": "" if ph_l is None else round(ph_l, 3),
+                 "hist_n": n_l, "p_final": round(fp, 4), "confidence": fc,
+                 "side_note": f"fresh {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%MZ}: simulation re-run, {o + u} games of history"}
+    conf = r.get("confidence")
+    if "role unconfirmed" in (r.get("notes") or "") and conf == "Low":
+        rep.add("PASS", "fresh label", f"rebuilt {fp:.3f} {fc}; stays Low (role or minutes unconfirmed, L5)")
+    else:
+        rep.add("PASS" if fc == conf else "FAIL", "fresh label", f"rebuilt from fresh data: {fp:.3f} {fc}" + ("" if fc == conf else f" (logged {conf})"))
+
+
+def check_drift(rep: Report, rows: list[dict]):
+    """Fix 7: calibration drift on the trailing DRIFT_N published, graded legs of the same sport."""
+    r = rep.row
+    pub = [x for x in rows if x.get("sport") == r.get("sport") and x.get("action") in ("bet", "lean") and x.get("status") in ("won", "lost")
+           and _f(x.get("p_final")) is not None]
+    pub.sort(key=lambda x: (x.get("date", ""), int(x["id"]) if str(x.get("id", "")).isdigit() else 0))
+    tail = pub[-DRIFT_N:]
+    if len(tail) < DRIFT_N:
+        rep.add("PASS", "drift", f"{len(tail)} graded published {r.get('sport')} legs so far (drift check starts at {DRIFT_N})")
+        return
+    pred = sum(_f(x["p_final"]) for x in tail) / len(tail); real = sum(x["status"] == "won" for x in tail) / len(tail)
+    rep.add("WARN" if abs(pred - real) > DRIFT_MAX else "PASS", "drift",
+            f"last {DRIFT_N} published legs: predicted {pred:.1%}, realized {real:.1%}" + (" (calibration drift past 5 pts)" if abs(pred - real) > DRIFT_MAX else ""))
+
+
 def check_mlb_history(rep: Report):
     from .grade import MLB_STATS, _get
     r = rep.row
@@ -236,10 +594,9 @@ def refresh(rows: list[dict], adj: dict | None = None) -> list[tuple]:
     for r in rows:
         if r.get("status") not in ("pending", "") or started(r):
             continue
-        pm, pk, ph = _f(r.get("p_model")), _f(r.get("p_market")), _f(r.get("p_hist"))
-        if pm is None and pk is None and ph is None:
+        e = expected(r, adj)                   # the same rebuild verify checks against (each leg's own logic)
+        if e is None:
             continue
-        e = final_probability(pm, pk, ph, r.get("segment", ""), int(_f(r.get("hist_n")) or 0), adj)
         if _f(r.get("p_final")) is None or abs(e.p - _f(r["p_final"])) > TOL_P or e.confidence != r.get("confidence"):
             changed.append((r["id"], r["player"], r.get("p_final"), r.get("confidence"), round(e.p, 4), e.confidence))
             r["notes"] = (r.get("notes", "") + f" | re-scored {dt.date.today()}: {r.get('p_final')} {r.get('confidence')} -> {e.p:.4f} {e.confidence}").strip(" |")
@@ -256,6 +613,8 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
     check_recompute(rep, adj)
     check_rules(rep)
     check_correlation(rep, rows)
+    if row.get("sport") == "nba":
+        check_drift(rep, rows)
     if fetch:
         sport = row.get("sport")
         try:
@@ -265,12 +624,22 @@ def verify(row: dict, rows: list[dict], adj: dict | None = None, fetch: bool = T
                 check_cs2(rep, adj)
             elif sport == "mlb":
                 check_mlb_history(rep)
+            elif sport == "nfl":
+                check_nfl(rep, adj)
+            elif sport == "nba":
+                check_nba(rep, adj)
+            elif sport == "nhl" and str(row.get("market", "")).startswith("nhl_"):
+                check_nhl_pp(rep)
+            elif sport == "tennis":
+                check_tennis_pp(rep)
             else:
                 rep.add("WARN", "recount", f"no automatic recount for {sport} yet: recount history by hand before publishing")
         except Exception as e:
             rep.add("FAIL", "recount", f"back-check crashed ({type(e).__name__}: {str(e)[:60]}): not verified")
-        check_offered(rep)
+        if sport != "nfl" or _app_book(row):     # a DraftKings NFL leg: check_nfl reads that board
+            check_offered(rep)
     repriced = any(n == "reprice" and st == "PASS" for st, n, _ in rep.checks)
-    if row.get("date") and row["date"] < dt.date.today().isoformat() and not repriced:
+    from gamesim.data import slate_today
+    if row.get("date") and row["date"] < slate_today() and not repriced:
         rep.add("WARN", "freshness", f"priced on {row['date']} and not re-run today: odds, lineups and lines may have moved")
     return rep

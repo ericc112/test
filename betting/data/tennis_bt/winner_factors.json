@@ -1,0 +1,841 @@
+{
+ "_factors": {
+  "elo_overall": "Elo win chance, all surfaces (logit)",
+  "elo_surface": "Elo win chance on this surface only (logit)",
+  "surface_win52": "win share on this surface, last 52 weeks",
+  "form10_vs_expected": "last 10 matches: wins minus what Elo expected against those opponents",
+  "dominance52": "share of games won, last 52 weeks",
+  "trend90": "Elo change over the last 90 days (improving or declining)",
+  "minutes_event": "minutes already played at this event",
+  "matches14": "matches in the last 14 days",
+  "deep_run_prev": "matches won at the previous event, if it started within 14 days",
+  "layoff": "no match in the previous 45 days",
+  "retired90": "retirements or walkovers given in the last 90 days",
+  "h2h": "head-to-head wins minus losses",
+  "h2h_surface": "head-to-head wins minus losses on this surface",
+  "event_history": "win share at this tournament in earlier years",
+  "lefty": "left-handed against a right-hander",
+  "bp_saved": "break points saved, last 52 weeks",
+  "bp_converted": "break points converted, last 52 weeks",
+  "tiebreaks": "tiebreaks won, last 52 weeks",
+  "deciders": "deciding sets won, last 52 weeks",
+  "comeback": "matches won after losing the first set, last 52 weeks",
+  "first_in": "first serves in, last 52 weeks",
+  "ace_minus_df": "aces minus double faults per service point, last 52 weeks"
+ },
+ "_method": "The user listed what decides a tennis match beyond serve and return: surface, form against who they beat, margin,\nimproving or declining, fatigue and rest, recent retirements and layoffs, head-to-head, event history, handedness,\npressure (break points saved and converted, tiebreaks, deciding sets, coming back from a set down), first serves, aces\nand double faults. Each one that the TennisMyLife match database records is built here walk-forward: for every match,\nfrom that player's matches before it (earlier rounds of the same event included), and tested as a term on the\nratings' winner probability (tennis_hist.Ratings with the pricer's settings, refitted as of each event, day-to-day form\nincluded): fitted on 2025-01-01 to 2026-08-31, scored once on 2026-09-01 on. A factor earns a place only if it lowers\nthe test log loss with a 95% bootstrap interval that excludes zero; then it runs in shadow before it is published\n(user rule: 200+ graded matches or 14 days, better on log loss and calibration).",
+ "ATP": {
+  "matches": {
+   "tune": 14801,
+   "test": 1941
+  },
+  "test_log_loss": {
+   "ratings": 0.638,
+   "ratings_recalibrated": 0.6326,
+   "coin": 0.6931
+  },
+  "test_accuracy_ratings": 0.6461,
+  "single": {
+   "elo_overall": {
+    "coef_per_sd": 0.3448,
+    "z_tune": 10.48,
+    "test_gain": 0.00335,
+    "ci95": [
+     -0.00039,
+     0.00707
+    ],
+    "helps": false
+   },
+   "elo_surface": {
+    "coef_per_sd": 0.2441,
+    "z_tune": 7.57,
+    "test_gain": 0.0018,
+    "ci95": [
+     -0.0011,
+     0.00468
+    ],
+    "helps": false
+   },
+   "surface_win52": {
+    "coef_per_sd": 0.019,
+    "z_tune": 0.9,
+    "test_gain": -0.00017,
+    "ci95": [
+     -0.0005,
+     0.00018
+    ],
+    "helps": false
+   },
+   "form10_vs_expected": {
+    "coef_per_sd": 0.0933,
+    "z_tune": 5.35,
+    "test_gain": 0.00154,
+    "ci95": [
+     -0.00061,
+     0.0037
+    ],
+    "helps": false
+   },
+   "dominance52": {
+    "coef_per_sd": 0.0099,
+    "z_tune": 0.43,
+    "test_gain": -4e-05,
+    "ci95": [
+     -0.0002,
+     9e-05
+    ],
+    "helps": false
+   },
+   "trend90": {
+    "coef_per_sd": 0.0531,
+    "z_tune": 3.05,
+    "test_gain": 0.00125,
+    "ci95": [
+     -0.00021,
+     0.00265
+    ],
+    "helps": false
+   },
+   "minutes_event": {
+    "coef_per_sd": -0.0759,
+    "z_tune": -4.17,
+    "test_gain": 0.00172,
+    "ci95": [
+     0.00031,
+     0.00322
+    ],
+    "helps": true
+   },
+   "matches14": {
+    "coef_per_sd": 0.1107,
+    "z_tune": 6.24,
+    "test_gain": 0.00338,
+    "ci95": [
+     0.00114,
+     0.00539
+    ],
+    "helps": true
+   },
+   "deep_run_prev": {
+    "coef_per_sd": 0.1216,
+    "z_tune": 6.72,
+    "test_gain": 0.00011,
+    "ci95": [
+     -0.0024,
+     0.00274
+    ],
+    "helps": false
+   },
+   "layoff": {
+    "coef_per_sd": -0.078,
+    "z_tune": -4.37,
+    "test_gain": 0.00141,
+    "ci95": [
+     -2e-05,
+     0.00285
+    ],
+    "helps": false
+   },
+   "retired90": {
+    "coef_per_sd": -0.0152,
+    "z_tune": -0.88,
+    "test_gain": -0.00032,
+    "ci95": [
+     -0.00077,
+     8e-05
+    ],
+    "helps": false
+   },
+   "h2h": {
+    "coef_per_sd": 0.0536,
+    "z_tune": 2.94,
+    "test_gain": 0.00079,
+    "ci95": [
+     -0.00029,
+     0.00188
+    ],
+    "helps": false
+   },
+   "h2h_surface": {
+    "coef_per_sd": 0.0313,
+    "z_tune": 1.75,
+    "test_gain": 0.00055,
+    "ci95": [
+     -0.00026,
+     0.00126
+    ],
+    "helps": false
+   },
+   "event_history": {
+    "coef_per_sd": 0.0362,
+    "z_tune": 1.92,
+    "test_gain": -0.00037,
+    "ci95": [
+     -0.00092,
+     0.00012
+    ],
+    "helps": false
+   },
+   "lefty": {
+    "coef_per_sd": 0.0264,
+    "z_tune": 1.52,
+    "test_gain": 0.00022,
+    "ci95": [
+     -0.00031,
+     0.00076
+    ],
+    "helps": false
+   },
+   "bp_saved": {
+    "coef_per_sd": 0.0279,
+    "z_tune": 1.55,
+    "test_gain": 0.00052,
+    "ci95": [
+     -2e-05,
+     0.00112
+    ],
+    "helps": false
+   },
+   "bp_converted": {
+    "coef_per_sd": 0.0073,
+    "z_tune": 0.42,
+    "test_gain": -0.00013,
+    "ci95": [
+     -0.00032,
+     3e-05
+    ],
+    "helps": false
+   },
+   "tiebreaks": {
+    "coef_per_sd": 0.0064,
+    "z_tune": 0.37,
+    "test_gain": 7e-05,
+    "ci95": [
+     -4e-05,
+     0.00017
+    ],
+    "helps": false
+   },
+   "deciders": {
+    "coef_per_sd": 0.0503,
+    "z_tune": 2.87,
+    "test_gain": -0.00086,
+    "ci95": [
+     -0.00181,
+     4e-05
+    ],
+    "helps": false
+   },
+   "comeback": {
+    "coef_per_sd": 0.0268,
+    "z_tune": 1.46,
+    "test_gain": -0.00047,
+    "ci95": [
+     -0.001,
+     5e-05
+    ],
+    "helps": false
+   },
+   "first_in": {
+    "coef_per_sd": -0.0187,
+    "z_tune": -1.07,
+    "test_gain": 0.0,
+    "ci95": [
+     -0.00035,
+     0.00037
+    ],
+    "helps": false
+   },
+   "ace_minus_df": {
+    "coef_per_sd": 0.036,
+    "z_tune": 1.99,
+    "test_gain": 0.00047,
+    "ci95": [
+     -0.0001,
+     0.00109
+    ],
+    "helps": false
+   }
+  },
+  "all_factors": {
+   "test_gain": 0.00733,
+   "ci95": [
+    0.00201,
+    0.01278
+   ],
+   "test_log_loss": 0.6252,
+   "test_accuracy": 0.6579,
+   "coef_per_sd": {
+    "elo_overall": 0.2758,
+    "elo_surface": 0.1904,
+    "surface_win52": -0.0797,
+    "form10_vs_expected": 0.0618,
+    "dominance52": -0.007,
+    "trend90": -0.0506,
+    "minutes_event": -0.0706,
+    "matches14": 0.0571,
+    "deep_run_prev": 0.0364,
+    "layoff": -0.0553,
+    "retired90": -0.0473,
+    "h2h": 0.0619,
+    "h2h_surface": -0.021,
+    "event_history": 0.0384,
+    "lefty": 0.0203,
+    "bp_saved": -0.0177,
+    "bp_converted": 0.008,
+    "tiebreaks": -0.0385,
+    "deciders": -0.011,
+    "comeback": 0.0021,
+    "first_in": -0.0092,
+    "ace_minus_df": 0.0286
+   },
+   "ratings_weight": 0.66
+  },
+  "selected_on_tune": {
+   "factors": [
+    "elo_overall",
+    "elo_surface",
+    "form10_vs_expected",
+    "trend90",
+    "minutes_event",
+    "matches14",
+    "deep_run_prev",
+    "layoff",
+    "h2h",
+    "deciders"
+   ],
+   "test_gain": 0.0084,
+   "ci95": [
+    0.00365,
+    0.01365
+   ],
+   "test_log_loss": 0.6242,
+   "test_accuracy": 0.6625,
+   "coef_per_sd": {
+    "elo_overall": 0.2739,
+    "elo_surface": 0.111,
+    "form10_vs_expected": 0.0513,
+    "trend90": -0.052,
+    "minutes_event": -0.0699,
+    "matches14": 0.0559,
+    "deep_run_prev": 0.0389,
+    "layoff": -0.054,
+    "h2h": 0.0467,
+    "deciders": -0.0302
+   },
+   "scaler": {
+    "elo_overall": [
+     -0.01182,
+     0.93809
+    ],
+    "elo_surface": [
+     -0.01291,
+     0.95564
+    ],
+    "form10_vs_expected": [
+     -0.03369,
+     1.95653
+    ],
+    "trend90": [
+     -0.01176,
+     0.8181
+    ],
+    "minutes_event": [
+     -0.0019,
+     1.02168
+    ],
+    "matches14": [
+     -0.01432,
+     2.36597
+    ],
+    "deep_run_prev": [
+     -0.02588,
+     1.61062
+    ],
+    "layoff": [
+     0.00034,
+     0.30055
+    ],
+    "h2h": [
+     -0.02203,
+     1.61869
+    ],
+    "deciders": [
+     0.00055,
+     0.13329
+    ]
+   },
+   "ratings_weight": 0.712
+  },
+  "shadow": {
+   "factors": [
+    "elo_overall",
+    "elo_surface",
+    "form10_vs_expected",
+    "trend90",
+    "minutes_event",
+    "matches14",
+    "deep_run_prev",
+    "layoff",
+    "h2h",
+    "deciders"
+   ],
+   "coef_per_sd": {
+    "elo_overall": 0.2739,
+    "elo_surface": 0.111,
+    "form10_vs_expected": 0.0513,
+    "trend90": -0.052,
+    "minutes_event": -0.0699,
+    "matches14": 0.0559,
+    "deep_run_prev": 0.0389,
+    "layoff": -0.054,
+    "h2h": 0.0467,
+    "deciders": -0.0302
+   },
+   "scaler": {
+    "elo_overall": [
+     -0.01182,
+     0.93809
+    ],
+    "elo_surface": [
+     -0.01291,
+     0.95564
+    ],
+    "form10_vs_expected": [
+     -0.03369,
+     1.95653
+    ],
+    "trend90": [
+     -0.01176,
+     0.8181
+    ],
+    "minutes_event": [
+     -0.0019,
+     1.02168
+    ],
+    "matches14": [
+     -0.01432,
+     2.36597
+    ],
+    "deep_run_prev": [
+     -0.02588,
+     1.61062
+    ],
+    "layoff": [
+     0.00034,
+     0.30055
+    ],
+    "h2h": [
+     -0.02203,
+     1.61869
+    ],
+    "deciders": [
+     0.00055,
+     0.13329
+    ]
+   },
+   "ratings_weight": 0.712,
+   "name": "ratings + Elo, recent form, workload and fatigue, layoff, head-to-head",
+   "registered": "2026-11-11",
+   "rule": "promote only after 200+ graded matches or 14 days, better than the current winner on log loss and calibration"
+  },
+  "market_check": {
+   "matches": {
+    "fit": 1650,
+    "test": 1892
+   },
+   "test": {
+    "market": {
+     "test_log_loss": 0.606,
+     "gain_vs_market": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "accuracy": 0.6638
+    },
+    "market recalibrated": {
+     "test_log_loss": 0.6049,
+     "gain_vs_market": 0.00108,
+     "ci95": [
+      -4e-05,
+      0.00215
+     ],
+     "accuracy": 0.6638
+    },
+    "market + ratings": {
+     "test_log_loss": 0.6048,
+     "gain_vs_market": 0.00119,
+     "ci95": [
+      4e-05,
+      0.0024
+     ],
+     "accuracy": 0.6617
+    },
+    "market + factors": {
+     "test_log_loss": 0.6125,
+     "gain_vs_market": -0.00653,
+     "ci95": [
+      -0.01014,
+      -0.00285
+     ],
+     "accuracy": 0.6538
+    },
+    "market + ratings + factors": {
+     "test_log_loss": 0.6123,
+     "gain_vs_market": -0.00631,
+     "ci95": [
+      -0.01027,
+      -0.00246
+     ],
+     "accuracy": 0.6549
+    },
+    "ratings alone": {
+     "test_log_loss": 0.6399,
+     "gain_vs_market": -0.03389,
+     "ci95": [
+      -0.04363,
+      -0.02443
+     ],
+     "accuracy": 0.6432
+    },
+    "ratings + factors (the shadow model)": {
+     "test_log_loss": 0.6242,
+     "gain_vs_market": -0.01817,
+     "ci95": [
+      -0.02707,
+      -0.00986
+     ],
+     "accuracy": 0.6623
+    }
+   }
+  }
+ },
+ "WTA": {
+  "matches": {
+   "tune": 3960,
+   "test": 367
+  },
+  "test_log_loss": {
+   "ratings": 0.6581,
+   "ratings_recalibrated": 0.6673,
+   "coin": 0.6931
+  },
+  "test_accuracy_ratings": 0.6076,
+  "single": {
+   "elo_overall": {
+    "coef_per_sd": 0.3833,
+    "z_tune": 4.31,
+    "test_gain": 0.00176,
+    "ci95": [
+     -0.00048,
+     0.00486
+    ],
+    "helps": false
+   },
+   "elo_surface": {
+    "coef_per_sd": 0.2324,
+    "z_tune": 3.23,
+    "test_gain": 0.0008,
+    "ci95": [
+     -0.00211,
+     0.00449
+    ],
+    "helps": false
+   },
+   "surface_win52": {
+    "coef_per_sd": 0.0461,
+    "z_tune": 0.92,
+    "test_gain": 0.0006,
+    "ci95": [
+     -0.00052,
+     0.00228
+    ],
+    "helps": false
+   },
+   "form10_vs_expected": {
+    "coef_per_sd": 0.105,
+    "z_tune": 3.04,
+    "test_gain": 0.0006,
+    "ci95": [
+     -0.00258,
+     0.0045
+    ],
+    "helps": false
+   },
+   "dominance52": {
+    "coef_per_sd": 0.1001,
+    "z_tune": 1.52,
+    "test_gain": 0.00158,
+    "ci95": [
+     -0.00148,
+     0.00518
+    ],
+    "helps": false
+   },
+   "trend90": {
+    "coef_per_sd": 0.0833,
+    "z_tune": 2.38,
+    "test_gain": -0.00182,
+    "ci95": [
+     -0.00493,
+     0.00147
+    ],
+    "helps": false
+   },
+   "minutes_event": {
+    "coef_per_sd": 0.013,
+    "z_tune": 0.34,
+    "test_gain": 0.00091,
+    "ci95": [
+     0.00016,
+     0.00163
+    ],
+    "helps": true
+   },
+   "matches14": {
+    "coef_per_sd": 0.1615,
+    "z_tune": 4.51,
+    "test_gain": 0.00502,
+    "ci95": [
+     -0.0012,
+     0.01251
+    ],
+    "helps": false
+   },
+   "deep_run_prev": {
+    "coef_per_sd": 0.1235,
+    "z_tune": 3.3,
+    "test_gain": 0.00129,
+    "ci95": [
+     -0.00394,
+     0.0071
+    ],
+    "helps": false
+   },
+   "layoff": {
+    "coef_per_sd": -0.0714,
+    "z_tune": -2.05,
+    "test_gain": 0.00088,
+    "ci95": [
+     -0.00148,
+     0.00404
+    ],
+    "helps": false
+   },
+   "retired90": {
+    "coef_per_sd": 0.0357,
+    "z_tune": 1.04,
+    "test_gain": -0.00066,
+    "ci95": [
+     -0.00269,
+     0.00064
+    ],
+    "helps": false
+   },
+   "h2h": {
+    "coef_per_sd": 0.0264,
+    "z_tune": 0.72,
+    "test_gain": 0.00104,
+    "ci95": [
+     0.00024,
+     0.00182
+    ],
+    "helps": true
+   },
+   "h2h_surface": {
+    "coef_per_sd": 0.0333,
+    "z_tune": 0.92,
+    "test_gain": 0.00123,
+    "ci95": [
+     -0.0001,
+     0.00285
+    ],
+    "helps": false
+   },
+   "event_history": {
+    "coef_per_sd": 0.0186,
+    "z_tune": 0.46,
+    "test_gain": 0.00061,
+    "ci95": [
+     9e-05,
+     0.0013
+    ],
+    "helps": true
+   },
+   "lefty": {
+    "coef_per_sd": -0.0545,
+    "z_tune": -1.6,
+    "test_gain": -0.00292,
+    "ci95": [
+     -0.00774,
+     0.00118
+    ],
+    "helps": false
+   },
+   "bp_saved": {
+    "coef_per_sd": 0.0047,
+    "z_tune": 0.12,
+    "test_gain": 0.00039,
+    "ci95": [
+     9e-05,
+     0.00071
+    ],
+    "helps": true
+   },
+   "bp_converted": {
+    "coef_per_sd": -0.0159,
+    "z_tune": -0.43,
+    "test_gain": -0.00038,
+    "ci95": [
+     -0.00152,
+     0.00061
+    ],
+    "helps": false
+   },
+   "tiebreaks": {
+    "coef_per_sd": 0.0327,
+    "z_tune": 0.93,
+    "test_gain": -0.00093,
+    "ci95": [
+     -0.00209,
+     0.00077
+    ],
+    "helps": false
+   },
+   "deciders": {
+    "coef_per_sd": 0.0245,
+    "z_tune": 0.68,
+    "test_gain": 9e-05,
+    "ci95": [
+     -0.0009,
+     0.00103
+    ],
+    "helps": false
+   },
+   "comeback": {
+    "coef_per_sd": 0.0364,
+    "z_tune": 0.92,
+    "test_gain": 0.00098,
+    "ci95": [
+     -0.00106,
+     0.00226
+    ],
+    "helps": false
+   },
+   "first_in": {
+    "coef_per_sd": -0.0661,
+    "z_tune": -1.93,
+    "test_gain": 0.00241,
+    "ci95": [
+     -0.00205,
+     0.00583
+    ],
+    "helps": false
+   },
+   "ace_minus_df": {
+    "coef_per_sd": 0.0623,
+    "z_tune": 1.69,
+    "test_gain": 0.00139,
+    "ci95": [
+     -0.00021,
+     0.00374
+    ],
+    "helps": false
+   }
+  },
+  "all_factors": {
+   "test_gain": 0.00813,
+   "ci95": [
+    0.00117,
+    0.01746
+   ],
+   "test_log_loss": 0.6591,
+   "test_accuracy": 0.6158,
+   "coef_per_sd": {
+    "elo_overall": 0.2434,
+    "elo_surface": 0.2831,
+    "surface_win52": -0.1305,
+    "form10_vs_expected": 0.0642,
+    "dominance52": 0.169,
+    "trend90": 0.0001,
+    "minutes_event": -0.0237,
+    "matches14": 0.1949,
+    "deep_run_prev": -0.0728,
+    "layoff": -0.0232,
+    "retired90": 0.0089,
+    "h2h": 0.0113,
+    "h2h_surface": 0.0373,
+    "event_history": 0.0197,
+    "lefty": -0.0301,
+    "bp_saved": -0.0401,
+    "bp_converted": -0.0198,
+    "tiebreaks": 0.0077,
+    "deciders": -0.0317,
+    "comeback": 0.0227,
+    "first_in": -0.0393,
+    "ace_minus_df": 0.0692
+   },
+   "ratings_weight": 0.589
+  },
+  "selected_on_tune": {
+   "factors": [
+    "elo_overall",
+    "elo_surface",
+    "form10_vs_expected",
+    "trend90",
+    "matches14",
+    "deep_run_prev",
+    "layoff"
+   ],
+   "test_gain": 0.00729,
+   "ci95": [
+    0.00131,
+    0.01558
+   ],
+   "test_log_loss": 0.66,
+   "test_accuracy": 0.6049,
+   "coef_per_sd": {
+    "elo_overall": 0.2999,
+    "elo_surface": 0.1403,
+    "form10_vs_expected": 0.0554,
+    "trend90": -0.0023,
+    "matches14": 0.1965,
+    "deep_run_prev": -0.0773,
+    "layoff": -0.0229
+   },
+   "scaler": {
+    "elo_overall": [
+     0.02204,
+     1.11881
+    ],
+    "elo_surface": [
+     0.02363,
+     1.11632
+    ],
+    "form10_vs_expected": [
+     -0.01459,
+     1.99531
+    ],
+    "trend90": [
+     -0.01905,
+     0.79843
+    ],
+    "matches14": [
+     0.02071,
+     1.98303
+    ],
+    "deep_run_prev": [
+     0.01894,
+     1.43351
+    ],
+    "layoff": [
+     -0.00707,
+     0.30227
+    ]
+   },
+   "ratings_weight": 0.839
+  }
+ },
+ "_note": "test_gain = test log loss of the calibrated ratings minus the ratings plus the factor (per match; positive = the factor helps). A factor earns a shadow run only if its 95% interval (bootstrap over events) is above zero."
+}
