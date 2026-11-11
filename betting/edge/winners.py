@@ -200,6 +200,7 @@ def _tennis_games(nights: dict, today: str) -> None:
                  "p_home": None if pa is None else round(1 - float(pa), 3),
                  "market_home": None if ma is None else round(1 - float(ma), 3),
                  "proj": r.get("games"), "line": r.get("line"), "line_p": r.get("line_p"), "sets": r.get("sets"),
+                 "length": r.get("length"), "top": r.get("top"),
                  "rates": r.get("rates"), "best_of": r.get("best_of", 3),
                  "p_home_ratings": None if r.get("p_a_ratings") is None else round(1 - float(r["p_a_ratings"]), 3)}
             if f.get("final"):

@@ -826,46 +826,47 @@ def most_likely_run(G: dict) -> dict:
 
 
 def match_result(G: dict, stat: str) -> dict:
-    """Every card's most likely result (user, 2026-11-09): the most likely simulated match (the commonest games and
-    sets in the runs this stat is priced from) and the exact most likely scoreline for the projected winner, set by
-    set, with his win chance and the straight-sets share (tennis_watch.scoreline at the same serve-point rates)."""
-    from .tennis_watch import scoreline
+    """Every card's match picture (user, 2026-11-11: every match showed 6-4, 6-4): who wins and how often (from the
+    runs this stat is priced from), straight sets or a decider for each player, the length in games (median and middle
+    half of the runs), and the commonest exact scores with their chances, with day-to-day form included as in the runs
+    (tennis_watch.match_picture). No single score comes up in more than about 5% of matches, here or in real tennis."""
+    from .tennis_watch import match_picture
     s = sim_for(G, stat)
-    L = most_likely_run({**G, "sim": s})
     a, b = G["a"]["name"], G["b"]["name"]
     bo = int(G["ctx"].get("best_of") or 3)
-    sl = scoreline(float(s["pa"]), float(s["pb"]), bo)
-    p_a = float(np.mean(s["a_wins"])) if "a_wins" in s else sl["p_a"]     # the runs' own win share (day-to-day form included)
-    a_wins = p_a >= 0.5
+    fm = G.get("form") or {}
+    p_a = float(np.mean(s["a_wins"])) if "a_wins" in s else None
+    mp = match_picture(float(s["pa"]), float(s["pb"]), bo, fm.get("sd") or 0.0, fm.get("rho") or 0.0, p_a)
+    a_wins = mp["w"] == 0
     need = bo // 2 + 1
-    if "a_wins" in s:          # the runs' own straight-sets share and average games; only the set-by-set score is exact
-        w = np.asarray(s["a_wins"]) if a_wins else ~np.asarray(s["a_wins"])
-        straight = float(np.mean(w & (np.asarray(s["sets"]) == need)))
+    if "a_wins" in s:          # the runs' own split and lengths; only the exact scores come from the exact distribution
+        aw, ns = np.asarray(s["a_wins"]), np.asarray(s["sets"])
+        mp["split"] = {"a_straight": round(float(np.mean(aw & (ns == need))), 3), "a_long": round(float(np.mean(aw & (ns > need))), 3),
+                       "b_straight": round(float(np.mean(~aw & (ns == need))), 3), "b_long": round(float(np.mean(~aw & (ns > need))), 3)}
+        mp["straight"] = mp["split"]["a_straight" if a_wins else "b_straight"]
+        g = np.asarray(s["games"])
+        mp["length"] = [int(np.percentile(g, 25)), int(np.median(g)), int(np.percentile(g, 75))]
         games = [round(float(np.mean(s["games_a"])), 1), round(float(np.mean(s["games_b"])), 1)]
     else:
-        straight = sl["sets"].get(f"{need}-0" if a_wins else f"0-{need}", 0.0)
-        games = sl["games"]
-    return {"a": a, "b": b, "winner": a if a_wins else b, "p_win": round(p_a if a_wins else 1 - p_a, 3),
-            "line": sl["line_a"] if a_wins else sl["line_b_w"], "line_p": round(sl["line_a_p"] if a_wins else sl["line_b_p"], 3),
-            "straight": round(straight, 3), "games": games, "best_of": bo,
-            "mode": {"score": L["score"], "sets": L["sets"], "share": round(L["share"], 3)},
-            "anchored": s is not G["sim"]}
+        games = None
+    return {**mp, "a": a, "b": b, "winner": a if a_wins else b, "games": games, "best_of": bo, "anchored": s is not G["sim"]}
 
 
 def likely_order(rows, store, top=None, drop=None, per_game=99):
-    runs = {e: most_likely_run(G) for e, G in store.items()}
+    """The tennis most-likely list: each leg's side in the typical simulated match, kept only where nothing tested is
+    against it. The typical match is the runs' median for the stat (user, 2026-11-11). Until then the list compared each
+    line with the commonest games total, a straight-sets blowout (e.g. 12-5): shorter than a typical match, so all 27
+    legs it listed from Nov 6 to Nov 10 were unders (2-4 graded). One match can't stand for a count that adds up two
+    sets 65% of the time and three sets 35% of the time."""
     cand = []
     for r in rows:
-        if not _rankable(r) or r["event_id"] not in runs or not r.get("research"):
+        if not _rankable(r) or r["event_id"] not in store or not r.get("research"):
             continue
-        G, L = store[r["event_id"]], runs[r["event_id"]]
-        s = G["sim"]
-        if sim_for(G, r["stat_key"]) is not G["sim"]:          # the market-anchored run has its own most likely match
-            s = G["sim_win"]
-            L = most_likely_run({**G, "sim": s})
+        G = store[r["event_id"]]
+        s = sim_for(G, r["stat_key"])                         # the market-anchored runs where the stat is priced from them
         arr = {"games": s["games"], "sets": s["sets"], "tiebreaks": s["tiebreaks"], "first_set": s["first_set"],
                "games_won": s["games_a"] if r["a_side"] else s["games_b"]}[r["stat_key"]]
-        val = float(arr[L["run"]])
+        val = float(np.median(arr))
         gap = val - r["line"]
         if gap == 0:
             continue
@@ -875,7 +876,7 @@ def likely_order(rows, store, top=None, drop=None, per_game=99):
         x = r if side == r["side"] else {**r, **price_leg(G, r["player"], r["stat_key"], r["line"], side=side)}
         if x["p_final"] < 0.5:
             continue
-        cand.append({**x, "method": "likely", "ml": {"score": L["score"], "sets": L["sets"], "value": val, "gap": gap, "box": {}}})
+        cand.append({**x, "method": "likely", "ml": {"typical": True, "value": val, "gap": gap, "box": {}}})
     cand.sort(key=lambda r: (RANK.get(r["confidence"], 3), -r["p_final"]))
 
     def accept(r):
@@ -903,11 +904,7 @@ def reasons(r: dict, G: dict) -> list[dict]:
     cmp = lambda a, b: (a > b) - (a < b)
     out = []
     add = lambda name, verdict, text: out.append({"name": name, "verdict": verdict, "text": text})
-    ml = r.get("ml")
-    if ml:
-        sc = ", ".join(f"{k} {v}" for k, v in ml["score"].items())
-        add("most likely match", vd(cmp(ml["value"], r["line"])), f"{ml['value']:g} in the most likely match ({sc} games, {ml['sets']} sets) vs a {r['line']} line")
-    s = G["sim"]
+    s = G["sim"]                     # the typical match (the median) is the simulation reason below: no separate line
     anchored = sim_for(G, r["stat_key"]) is not G["sim"]
     s = sim_for(G, r["stat_key"])
     mk_txt = f"; winner set to the market's price ({G['winner_market'][1]})" if anchored else ""
@@ -954,8 +951,12 @@ def write_up(r: dict, verified: str = "", warns: list | None = None) -> str:
              f"- Sources: simulation {f(r['p_model'])} · Dabble {f(r['p_market'])}",
              f"- Simulation: median {r['median']:g}, 25–75th {r['q25']:.0f}–{r['q75']:.0f}"]
     if r.get("ml"):
-        sc = ", ".join(f"{k} {v}" for k, v in r["ml"]["score"].items())
-        lines.insert(2, f"- Most likely match ({sc} games, {r['ml']['sets']} sets): {r['ml']['value']:g} ({r['ml']['gap']:+.1f} vs the line)")
+        lines.insert(2, f"- Typical simulated match (the median of the runs): {r['ml']['value']:g} ({r['ml']['gap']:+.1f} vs the line)")
+    if r.get("match"):
+        mp = r["match"]
+        tops = ", ".join(f"{(mp['a'] if t['w'] == 0 else mp['b'])} {t['line']} {t['p']:.1%}" for t in mp.get("top", []))
+        lines.insert(3, f"- Match picture: {mp['winner']} wins {mp['p_win']:.0%} ({mp['straight']:.0%} in straight sets); length {mp['length'][1]} games "
+                        f"(middle half {mp['length'][0]}-{mp['length'][2]}); commonest scores: {tops}")
     if r["flags"]:
         lines.append("- Flags: " + "; ".join(r["flags"]))
     if r.get("reasons"):

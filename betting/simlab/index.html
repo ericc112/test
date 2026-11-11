@@ -413,7 +413,7 @@ table.dec, #factorTbl { min-width: 600px }
     </div>
     <div class="note" id="tnLikely"></div>
     <div class="row">
-      <button class="btn primary" id="tnWatchBtn">Watch the most likely match</button>
+      <button class="btn primary" id="tnWatchBtn">Watch the most likely score</button>
       <button class="btn" id="tnRandomBtn" title="A fresh random simulation: a different match every time">Random match</button>
       <button class="btn" id="tnPause" disabled>Pause</button>
       <button class="btn" id="tnSkip" disabled>Skip to the end</button>
@@ -1418,7 +1418,7 @@ onmessage = (e) => {
     step();
   } else if (m.cmd === "tennis_likely") {
     // the one most likely match (user, 2026-11-09): the first run, from a seed fixed per match, whose set scores equal
-    // the most likely exact scoreline; the same match replays every time
+    // the projected winner's commonest exact score (day-to-day form included); the same match replays every time
     const M = m.m, d = m.shift || 0, bo = M.best_of || 3, tb10 = !!M.tb10, tgt = JSON.stringify(m.sets), base = (m.base >>> 0) || 1;
     let found = -1, k = 0;
     for (; k < 40000; k++) { seed(base + k); const r0 = tnMatch(tnDraw(M, d), bo, tb10, null, null); if (JSON.stringify(r0.sets) === tgt) { found = k; break; } }
@@ -1452,14 +1452,21 @@ const D = window.SIMLAB || { leagues: [], pulled: null };
 // Tonight's NBA PrizePicks top 5, by the model and by history only (written by `python -m edge nba-picks --page picks.js`)
 // Compact pick cards (user, 2026-11-08): the closed row shows the player, the prop, the hit rate, the label and the
 // back-check mark (the verdict stays next to every pick: CLAUDE.md); everything else opens on tap.
-// Tennis cards: the most likely result (user, 2026-11-09): the exact most likely scoreline for the projected winner,
-// his win chance, the straight-sets share, average games, and the commonest games / sets among the 50,000 runs.
+// Tennis cards: the match picture (user, 2026-11-11: "all the simulated scores are 6-4, 6-4"). One exact score is a thin
+// slice (6-4 6-4 is the commonest real score too, at 4.1%), so the card shows what differs between matches: who wins
+// and how (straight sets or a decider), the length in games, and the commonest scores with their chances.
+const tnShort = (n) => { const w = String(n || "").split(" "); return w.length > 1 ? w[0][0] + ". " + w.slice(1).join(" ") : n; };
+function tnPicture(m, a, b) {
+  if (!m) return "";
+  const S = m.split || {}, pc = (x) => Math.round(100 * (x || 0)) + "%", A = tnShort(a), B = tnShort(b);
+  const how = S.a_straight != null ? `${esc(A)} ${pc(S.a_straight + S.a_long)} (straight sets ${pc(S.a_straight)}, decider ${pc(S.a_long)}) · ${esc(B)} ${pc(S.b_straight + S.b_long)} (${pc(S.b_straight)}, ${pc(S.b_long)})` : "";
+  const len = m.length ? `typical length <b>${m.length[1]} games</b> (middle half ${m.length[0]}–${m.length[2]})` : "";
+  const tops = (m.top || []).map((t) => `${esc(t.w === 0 ? A : B)} ${esc(t.line)} ${(100 * t.p).toFixed(1)}%`).join(" · ");
+  return [how, len, tops ? `commonest scores: ${tops}` : ""].filter(Boolean).join(" · ");
+}
 function tnMatchLine(r) {
   const m = r.match; if (!m || !m.line) return "";
-  const sh = (n) => { const w = String(n || "").split(" "); return w.length > 1 ? w[0][0] + ". " + w.slice(1).join(" ") : n; };
-  const mode = m.mode && m.mode.score ? Object.entries(m.mode.score).map(([k, v]) => `${esc(sh(k))} ${v}`).join("–") : "";
-  return `<div><span class="k">Most likely result</span> <b>${esc(sh(m.winner))} ${esc(m.line)}</b> (${(100 * m.line_p).toFixed(1)}%, the single most likely exact score) · ${esc(sh(m.winner))} wins ${Math.round(100 * m.p_win)}% · in straight sets ${Math.round(100 * m.straight)}% · average games ${m.games[0]}–${m.games[1]}${m.anchored ? " · rates matched to the winner price" : ""}</div>`
-    + (mode ? `<div><span class="k">Most common simulated match</span> ${mode} games in ${m.mode.sets} sets (${(100 * m.mode.share).toFixed(1)}% of runs)</div>` : "");
+  return `<div><span class="k">How the match goes</span> ${tnPicture(m, m.a, m.b)}${m.anchored ? " · rates matched to the winner price" : ""}. No single score comes up in more than about 5% of runs (real matches are the same), so the score alone isn't the forecast.</div>`;
 }
 function fold(r, inner) {
   const v = r.verified || "", ok = /^VERIFIED/.test(v), nw = (r.warns || []).length;
@@ -1815,7 +1822,7 @@ function renderWinners() {
         ${dis ? `<span class="wn-res pd" style="color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 25%,transparent)">disagrees with the market</span>` : ""}
         ${g.final && g.market_right != null ? `<span class="note">favorite ${g.market_right ? "✓" : "✗"}</span>` : ""}</div></div>`; }).join("") || `<div class="note">No projections saved for this night.</div>`;
   $("wnNote").textContent = "The simulation's pick is the side it gives over 50% from its last pre-tip run (tennis: its last run before the first serve)."
-    + " Tennis: the win chance includes day-to-day form; the score is the projected winner's single most likely exact scoreline, worked out exactly from both players' serve-point rates (no single scoreline is likely: even the top one is usually under 10%), with the straight-sets / three-sets split and average games. ATP rates are matched to the betting price, as the simulator does by default; WTA uses ratings only.\n"
+    + " Tennis: the win chance includes day-to-day form; the score is the projected winner's commonest exact score, worked out exactly from both players' serve-point rates with the same day-to-day form as the runs (no single score is likely: the top one is usually 2-5%, as in real matches, where 6-4 6-4 is the commonest at 4.1%), with the straight-sets / three-sets split, the typical length and the next commonest scores. ATP rates are matched to the betting price, as the simulator does by default; WTA uses ratings only.\n"
     + "Team sports: the score shown is the average of all 50,000 runs, not one game: every run has a winner (NBA overtime until decided), so a close game can average out nearly level. "
     + "NBA comes from the possession engine's own team ratings; the NHL and NFL simulations start from the betting line, so their winners mostly follow the favorite. "
     + "Earlier nights rebuilt from saved boards carry the win chance only (no projected score). Picking winners is not the same as beating the price: the favorite's record is shown for that reason.";
@@ -1837,7 +1844,8 @@ function wnTennis(g) {
     <div class="wn-head"><span>Player</span><span>Avg games</span><span>Sets</span></div>
     <div class="wn-teams">${row(g.away, true)}${row(g.home, false)}</div>
     ${pa != null ? `<div class="wn-bar" title="Simulation: ${esc(g.away)} ${Math.round(100 * pa)}% / ${esc(g.home)} ${Math.round(100 * (1 - pa))}%"><i style="width:${100 * pa}%"></i><i style="width:${100 * (1 - pa)}%"></i></div>` : ""}
-    ${g.line ? `<div style="font-size:.86rem">Projected score: <b>${esc(short(fav))} ${esc(g.line)}</b> <span class="note">(${(100 * (g.line_p || 0)).toFixed(1)}%, the most likely exact score)</span></div>` : ""}
+    ${g.line ? `<div style="font-size:.86rem">Commonest score: <b>${esc(short(fav))} ${esc(g.line)}</b> <span class="note">(${(100 * (g.line_p || 0)).toFixed(1)}% of runs${g.length ? ` · typical length ${g.length[1]} games, middle half ${g.length[0]}–${g.length[2]}` : ""})</span></div>` : ""}
+    ${(g.top || []).length > 1 ? `<div class="note" style="font-size:.78rem">Next commonest: ${g.top.slice(1).map((t) => `${esc(short(t.w === 0 ? g.away : g.home))} ${esc(t.line)} ${(100 * t.p).toFixed(1)}%`).join(" · ")}. No single score is the forecast: the bar and the set split are.</div>` : ""}
     ${straight != null ? `<div class="note" style="font-size:.78rem">${esc(short(fav))} in straight sets ${Math.round(100 * straight)}% · in ${bo3 ? "three" : "five"} sets ${Math.round(100 * (longest || 0))}%${winP != null && winP < 0.55 ? " · close to a coin flip" : ""}</div>` : ""}
     ${g.rates === "market" && g.p_home_ratings != null ? (() => { const r = 1 - g.p_home_ratings, rA = r > 0.5;
       return `<div class="note" style="font-size:.78rem">Matched to the betting price (the ATP default). Player ratings alone: ${esc(short(rA ? g.away : g.home))} ${Math.round(100 * Math.max(r, 1 - r))}%${rA !== aFav ? " (the other side)" : ""}.</div>`; })() : ""}
@@ -1857,7 +1865,7 @@ function tnLikelyNote() {
   const m = tnCur(), lk = tnLk(m), el = $("tnLikely"); if (!el) return;
   if (!lk || !lk.line) { el.textContent = ""; return; }
   const who = lk.w === 0 ? m.a : m.b;
-  el.innerHTML = `<b>Most likely match:</b> ${esc(who)} ${esc(lk.line)} (${(100 * lk.line_p).toFixed(1)}%, the single most likely exact score) · ${esc(tnSur(who))} wins ${Math.round(100 * lk.p_win)}% · straight sets ${Math.round(100 * lk.straight)}%. "Watch the most likely match" plays that exact score point by point, the same match every time; "Random match" plays a fresh one.`;
+  el.innerHTML = `<b>How the match goes:</b> ${tnPicture(lk, m.a, m.b)}. "Watch the most likely score" plays ${esc(tnSur(who))}'s commonest score, ${esc(lk.line)} (${(100 * lk.line_p).toFixed(1)}% of runs), point by point and the same every time; "Random match" plays a fresh one.`;
 }
 const tnHash = (str) => { let h = 2166136261; for (const c of String(str)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
 function tnWatch(likely) {
@@ -2172,7 +2180,9 @@ function renderSportPicks(pre) {
   const whyList = (r, head) => (r.reasons || []).length ? `<div><span class="k">${esc(head)}</span><ul class="pk-why">${r.reasons.map((x) =>
     `<li class="${esc(x.verdict)}"><span class="m">${MK[x.verdict] || "?"}</span><span><b>${esc(x.name)}</b> ${esc(x.text)}</span></li>`).join("")}</ul></div>` : "";
   const fmtV = (k, v) => k === "toi" ? v.toFixed(1) : String(Math.round(v));
-  const mlLine = (r) => { const m = r.ml; if (!m) return ""; const sc = Object.entries(m.score).map(([k, v]) => `${esc(k)} ${v}`).join(", ");
+  const mlLine = (r) => { const m = r.ml; if (!m) return "";
+    if (m.typical) return `<div><span class="k">Typical simulated match</span> <b>${Math.round(10 * m.value) / 10} ${esc(r.stat)}</b>, the median of the runs (${m.gap > 0 ? "+" : ""}${m.gap.toFixed(1)} vs the line)</div>`;
+    const sc = Object.entries(m.score).map(([k, v]) => `${esc(k)} ${v}`).join(", ");
     const parts = Object.entries(m.box || {}).filter(([k, v]) => v > 0 && BOX_LABEL[k]).map(([k, v]) => `${fmtV(k, v)} ${BOX_LABEL[k]}`).join(" · ");
     return `<div><span class="k">Most likely game</span> ${sc}: <b>${/time on ice/.test(r.stat) ? m.value.toFixed(1) : Math.round(m.value)} ${esc(r.stat)}</b> (${m.gap > 0 ? "+" : ""}${m.gap.toFixed(1)} vs the line)${parts ? ` · ${parts}` : ""}</div>`; };
   const mkName = pre === "tennis" ? "Dabble" : "DraftKings";
@@ -2197,7 +2207,7 @@ function renderSportPicks(pre) {
   $(pre + "List").innerHTML = (D0.model || D0.picks || []).map((r) => card(r, "model")).join("") || `<div class="note">No lines priced.</div>`;
   if ($(pre + "Hist")) $(pre + "Hist").innerHTML = (D0.history || []).map((r) => card(r, "history")).join("") || `<div class="note">No lines with enough games.</div>`;
   const dr = D0.likely_dropped || [];
-  $(pre + "Likely").innerHTML = ((D0.likely || []).map((r) => card(r, "likely")).join("") || (pre === "tennis" ? `<div class="note">No leg on ${esc(D0.label)} where the most likely game, the median and the market agree with nothing against it.</div>` : `<div class="note">No leg on ${esc(D0.label)} where the most likely game, the median, this season and every other reason agree.</div>`))
+  $(pre + "Likely").innerHTML = ((D0.likely || []).map((r) => card(r, "likely")).join("") || (pre === "tennis" ? `<div class="note">No leg on ${esc(D0.label)} where the typical simulated match and the market agree with nothing against it.</div>` : `<div class="note">No leg on ${esc(D0.label)} where the most likely game, the median, this season and every other reason agree.</div>`))
     + (dr.length ? `<div class="note">Dropped for a reason against them (${dr.length}): ${dr.map((d) => `${esc(d.player)} ${esc(d.side)} ${d.line} ${esc(d.stat)} (${esc(d.against.join(", "))})`).join("; ")}</div>` : "")
     + ((D0.withdrawn || []).length ? `<div class="note">Withdrawn, failed the back-check (line moved or pulled): ${D0.withdrawn.map(esc).join("; ")}</div>` : "");
   const dayGames = new Set(D0.games || []), gAll = (P.gaps || []).filter((x) => !dayGames.size || !x.game || dayGames.has(x.game)), g = gAll.slice(0, 20);
@@ -2205,7 +2215,7 @@ function renderSportPicks(pre) {
   $(pre + "Gaps").innerHTML = g.length ? `<div class="tbl-wrap pk-gaps"><table><thead><tr><th class="l">Player · stat</th><th title="PrizePicks line">PP</th><th title="DraftKings">DK</th><th>Side · p</th></tr></thead><tbody>${
     g.map((x) => `<tr><td class="l">${esc(x.player)}<span class="sub">${esc(x.stat)}</span></td><td>${x.pp}</td><td>${esc(String(x.dk))}</td><td>${esc(x.side)} ${pc(x.p)}<span class="sub">${esc(x.conf)}</span></td></tr>`).join("")}</tbody></table></div>
     <div class="note">${gAll.length} lines on ${esc(D0.label)}${gAll.length > 20 ? "; the top 20 shown" : ""}.${pre === "nfl" ? " Where PrizePicks posts DraftKings' line, the market part is 50/50 (the feed carries lines, not prices)." : " DK is the mean of the Poisson fitted to DraftKings' de-vigged milestone ladder."}</div>` : `<div class="note">No DraftKings comparison for ${esc(D0.label)}.</div>`;
-  if (pre === "tennis") $(pre + "Note").innerHTML = "Most-likely-game list: one simulated game per matchup (the most common final score, then the run closest to every player's median), kept only where that run and the simulation's median agree on the side and no reason shown (the market, a role or sample flag) points the other way; one run is a single draw, so the order comes from the probability. Hit rates, last 5, head-to-head records and opponent allowances aren't shown: they carried no information beyond the price and the simulation (LESSONS L27, L30). " + SPORT_NOTE[pre] + " Every pick passed <span class=\"num\">edge verify</span> before it was listed.";
+  if (pre === "tennis") $(pre + "Note").innerHTML = "Typical-match list: each line's side in the typical simulated match (the median of the 50,000 runs), kept only where nothing tested (the market, a sample flag) points the other way. Until Nov 11 this list compared each line with the commonest games total, a straight-sets blowout shorter than a typical match, so all 27 legs it listed were unders; one match can't stand for a count that adds up two sets 65% of the time and three 35%. Hit rates, last 5, head-to-head records and opponent allowances aren't shown: they carried no information beyond the price and the simulation (LESSONS L27, L30). " + SPORT_NOTE[pre] + " Every pick passed <span class=\"num\">edge verify</span> before it was listed.";
   else $(pre + "Note").innerHTML = "Most-likely-game list: one simulated game per matchup (the most common final score, then the run closest to every player's median), kept only where that run, the simulation's median and this season's record agree on the side and no reason shown points the other way; one run is a single draw, so the order comes from the probability. History list: the hit-rate method, for comparison. " + SPORT_NOTE[pre] + " Every pick passed <span class=\"num\">edge verify</span> before it was listed.";
 }
 const renderNflPicks = () => renderSportPicks("nfl");

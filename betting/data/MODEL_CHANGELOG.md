@@ -3,6 +3,12 @@
 Every change to the published NBA pricing logic is recorded here with its evidence and its rollback.
 Logic versions live in `data/nba_model.json`; `python -m edge.nba_model status | report | promote | rollback`.
 
+## 2026-11-11: tennis match picture and the tennis most-likely list (display and list choice; no probability changes)
+- **Why:** user, "all the simulated tennis scores are 6-4, 6-4". The shown score was the single most likely exact score at fixed serve rates, without the day-to-day form the 50,000 runs draw. 6-4 6-4 is also the commonest real score (4.1% of 22,038 best-of-3 matches since 2025; 6-3 6-4 4.0%), so it came out for 60 of 63 matches on Nov 10 while happening in only 2-5% of each match's runs.
+- **Display:** cards, the Tennis tab and the Winners tab now show the match picture with day-to-day form included (`tennis_watch.match_picture`): each player's chance in straight sets and in a decider, the typical length (median and middle half of the games), and the three commonest scores with their chances. With form, lengths (median 20-22 games) and the decider share (33-36%) line up with real matches (median 21, 35.5%). "Watch the most likely score" replays the projected winner's commonest score with form included.
+- **Most-likely list (tennis only):** each line is now compared with the typical simulated match (the median of the runs) instead of the commonest games total, which is a straight-sets blowout (e.g. 12-5) shorter than a typical match: all 27 legs it listed from Nov 6 to Nov 10 were unders (2-4 graded). The separate "most likely match" reason is gone; it was never one of the tested tennis reasons (LESSONS L30). NBA, NFL and NHL lists are unchanged.
+- **Rollback:** `git revert` the commit that adds this entry (edge/tennis.py, edge/tennis_watch.py, edge/winners.py, simlab/index.html, tests/test_tennis.py).
+
 ## 2026-11-04: v2 registered as SHADOW (not promoted)
 - **Published logic stays v1.** v2 scores every board alongside v1 and is logged to `data/nba_shadow/`, never published.
 - **v2 contents:**

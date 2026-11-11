@@ -314,6 +314,35 @@ class ResultsPageTables(unittest.TestCase):
         self.assertEqual(TM.parse(s, "2026-11-05", "WTA"), [])         # the side column's table is never read
 
 
+class MatchPicture(unittest.TestCase):
+    """User, 2026-11-11: every match showed 6-4, 6-4. The picture now includes day-to-day form (as the runs do) and shows
+    how the match goes: the split by sets, the length and the commonest scores with their chances."""
+
+    def test_form_matches_the_runs_and_real_matches(self):
+        from edge import tennis_hist as TH
+        from edge.tennis_watch import match_picture
+        sd, rho = 0.057, -0.76
+        fixed, form = match_picture(0.63, 0.63, 3), match_picture(0.63, 0.63, 3, sd, rho)
+        self.assertLess(form["length"][1], fixed["length"][1])               # form makes blowouts: shorter, as real matches are
+        self.assertAlmostEqual(sum(form["split"].values()), 1.0, places=2)
+        self.assertAlmostEqual(form["p_a_exact"], float(TH.match_win_form(0.63, 0.63, 3, sd, rho)[0]), places=3)
+        long = form["split"]["a_long"] + form["split"]["b_long"]
+        self.assertTrue(0.28 < long < 0.42, long)                            # real best-of-3: 35.5% go to a decider
+        p = [t["p"] for t in form["top"]]
+        self.assertEqual(p, sorted(p, reverse=True))
+        self.assertLess(p[0], 0.06)                                          # no single score is likely
+
+    def test_not_the_same_score_for_every_match(self):
+        from edge.tennis_watch import match_picture
+        sd, rho = 0.057, -0.76
+        lines = {match_picture(pa, pb, 3, sd, rho)["line"] for pa, pb in ((0.63, 0.63), (0.70, 0.58), (0.60, 0.60), (0.66, 0.66))}
+        self.assertGreater(len(lines), 1)
+        heavy = match_picture(0.72, 0.55, 3, sd, rho)
+        even = match_picture(0.63, 0.63, 3, sd, rho)
+        self.assertLess(heavy["length"][1], even["length"][1])               # a mismatch is a shorter match
+        self.assertGreater(heavy["straight"], even["straight"])
+
+
 class LikelyMatch(unittest.TestCase):
     """The simulator's one most likely match: the projected winner's single most likely exact scoreline, sets A-first."""
 

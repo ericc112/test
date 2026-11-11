@@ -218,8 +218,8 @@ def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
                             "shift": round(shift, 4) if shift is not None else None, "anchor_default": bool(anchor and fair),
                             "win_model": round(win_model, 4), "elo_a": round(1 / (1 + 10 ** ((rb - ra) / 400)), 4),
                             "lines": pp.get(k2, []), "scout": _scout(scout, ia, na, ib, nb),
-                            "likely": {"ratings": likely_match(p1, p2, bo, win_model),
-                                       **({"market": likely_match(p1 + shift, p2 - shift, bo, fair)} if shift is not None else {})}})
+                            "likely": {"ratings": likely_match(p1, p2, bo, win_model, form["sd"], form["rho"]),
+                                       **({"market": likely_match(p1 + shift, p2 - shift, bo, fair, form["sd"], form["rho"])} if shift is not None else {})}})
     out.sort(key=lambda m: (m["start"], m["tour"]))
     try:
         save_winners(out)
@@ -304,16 +304,87 @@ def scoreline(pa: float, pb: float, best_of: int = 3) -> dict:
             "line_a_sets": [list(x) for x in a_line or []], "line_b_sets": [list(x) for x in b_line or []]}
 
 
-def likely_match(pa: float, pb: float, best_of: int, win_a: float) -> dict:
-    """The simulator's one most likely match (user, 2026-11-09): the projected winner (by the win chance the page
-    shows) and his single most likely exact scoreline at these serve-point rates, with the sets A-first so the page can
-    find a run that plays exactly that score."""
-    sl = scoreline(pa, pb, best_of)
-    a = win_a >= 0.5
+def _lines(pa: float, pb: float, best_of: int = 3) -> dict:
+    """{scoreline (tuple of (A games, B games) per set): probability} at fixed serve-point rates, coin toss to serve."""
     need = best_of // 2 + 1
-    return {"w": 0 if a else 1, "sets": sl["line_a_sets"] if a else sl["line_b_sets"], "line": sl["line_a"] if a else sl["line_b_w"],
-            "line_p": round(sl["line_a_p"] if a else sl["line_b_p"], 4), "p_win": round(win_a if a else 1 - win_a, 3),
-            "straight": round(sl["sets"].get(f"{need}-0" if a else f"0-{need}", 0.0), 3)}
+    S = (_sets(pa, pb, 0), _sets(pa, pb, 1))
+    out = {}
+
+    def go(sa, sb, srv, score, pr):
+        if sa == need or sb == need:
+            out[score] = out.get(score, 0) + pr
+            return
+        for (a, b, nxt), q in S[srv].items():
+            go(sa + (a > b), sb + (b > a), nxt, score + ((a, b),), pr * q)
+    for first in (0, 1):
+        go(0, 0, first, (), 0.5)
+    return out
+
+
+def _lines_form(pa: float, pb: float, best_of: int = 3, sd: float = 0.0, rho: float = 0.0) -> dict:
+    """The scoreline distribution with each match's serve rates drawn for day-to-day form, as the simulator's runs draw
+    them (sd, correlation rho; 7 x 7 Gauss-Hermite as tennis_hist.match_win_form). Without the form draws the exact
+    distribution makes every match longer and closer than the runs and real matches are."""
+    if not sd:
+        return _lines(pa, pb, best_of)
+    from .tennis_hist import _GH
+    x, wq = _GH
+    wq = wq / wq.sum()
+    r2 = (1 - rho * rho) ** 0.5
+    out = {}
+    for x1, w1 in zip(x, wq):
+        for x2, w2 in zip(x, wq):
+            qa = min(max(pa + sd * x1, 0.3), 0.95)
+            qb = min(max(pb + sd * (rho * x1 + r2 * x2), 0.3), 0.95)
+            for sc, p in _lines(qa, qb, best_of).items():
+                out[sc] = out.get(sc, 0) + w1 * w2 * p
+    return out
+
+
+def _quantile(pairs, f):
+    c, tot = 0.0, sum(p for _, p in pairs)
+    for v, p in sorted(pairs):
+        c += p
+        if c >= f * tot - 1e-12:
+            return v
+
+
+def match_picture(pa: float, pb: float, best_of: int = 3, sd: float = 0.0, rho: float = 0.0, win_a: float | None = None,
+                  top: int = 3) -> dict:
+    """What the simulation says about how a match goes (user, 2026-11-11: "all the simulated scores are 6-4, 6-4").
+    One exact score is a thin slice: 6-4 6-4 is also the commonest score in 22,038 real best-of-3 matches since 2025,
+    at 4.1%, so naming only the single most likely score shows the same thing for most matches. What differs between
+    matches is who wins and how: each player's chance in straight sets and in a decider, the length in games, and the
+    few commonest scores with their chances. `line` is the projected winner's commonest score (winner's games first),
+    `sets` the same score A-first for the page to replay. Day-to-day form is included, as in the runs."""
+    L = _lines_form(pa, pb, best_of, sd, rho)
+    need = best_of // 2 + 1
+    a_won = lambda sc: sum(a > b for a, b in sc) == need
+    p_a = sum(p for sc, p in L.items() if a_won(sc))
+    win_a = p_a if win_a is None else win_a
+    A = win_a >= 0.5
+    split = {"a_straight": 0.0, "a_long": 0.0, "b_straight": 0.0, "b_long": 0.0}
+    for sc, p in L.items():
+        split[("a" if a_won(sc) else "b") + ("_straight" if len(sc) == need else "_long")] += p
+    tot = [(sum(a + b for a, b in sc), p) for sc, p in L.items()]
+    fmt = lambda sc, a_first: ", ".join(f"{a}-{b}" if a_first else f"{b}-{a}" for a, b in sc)
+    ranked = sorted(L.items(), key=lambda x: -x[1])
+    best = next(x for x in ranked if a_won(x[0]) == A)
+    return {"w": 0 if A else 1, "p_win": round(win_a if A else 1 - win_a, 3), "p_a_exact": round(p_a, 4),
+            "line": fmt(best[0], A), "line_p": round(best[1], 4), "sets": [list(x) for x in best[0]],
+            "straight": round(split["a_straight" if A else "b_straight"], 3),
+            "split": {k: round(v, 3) for k, v in split.items()},
+            "length": [_quantile(tot, 0.25), _quantile(tot, 0.5), _quantile(tot, 0.75)],
+            "top": [{"w": 0 if a_won(sc) else 1, "line": fmt(sc, a_won(sc)), "p": round(p, 4)} for sc, p in ranked[:top]],
+            "form": bool(sd)}
+
+
+def likely_match(pa: float, pb: float, best_of: int, win_a: float, sd: float = 0.0, rho: float = 0.0) -> dict:
+    """The Tennis tab's match picture for the rates shown (ratings, or matched to the market's price): the projected
+    winner (by the win chance the page shows), the commonest score for him with day-to-day form included (the score
+    "Watch the most likely score" replays), how he wins (straight sets or a decider), the length, and the commonest
+    scores with their chances (match_picture)."""
+    return match_picture(pa, pb, best_of, sd, rho, win_a)
 
 
 def save_winners(matches: list[dict], now=None) -> None:
@@ -332,13 +403,14 @@ def save_winners(matches: list[dict], now=None) -> None:
         sl = scoreline(m["pa"] + d, m["pb"] - d, m.get("best_of", 3))
         win = m["win_model"] if not d else (m.get("market_a") or sl["p_a"])
         a_wins = win > 0.5
+        mp = match_picture(m["pa"] + d, m["pb"] - d, m.get("best_of", 3), m.get("sd") or 0.0, m.get("rho") or 0.0, win)
         by_day.setdefault(start.astimezone(TE_TZ).date().isoformat(), {})[m["id"]] = {
             "gid": m["id"], "sport": "tennis", "tour": m["tour"], "event": m.get("event") or m.get("tourn"), "away": m["a"], "home": m["b"],
             "a_te": m.get("a_te"), "b_te": m.get("b_te"), "start": m["start"], "pulled": now.strftime("%Y-%m-%dT%H:%MZ"),
             "slugs": m.get("slugs"), "best_of": m.get("best_of", 3), "surface": m.get("surface"),
             "p_a": round(float(win), 4), "p_a_ratings": m.get("win_model"), "market_a": m.get("market_a"), "winner": "a" if a_wins else "b",
-            "line": sl["line_a"] if a_wins else sl["line_b_w"],            # the projected winner's most likely scoreline, winner's games first
-            "line_p": round(sl["line_a_p"] if a_wins else sl["line_b_p"], 3), "sets": sl["sets"], "games": sl["games"],
+            "line": mp["line"], "line_p": round(mp["line_p"], 3),       # the projected winner's commonest score (form included), winner's games first
+            "sets": sl["sets"], "games": sl["games"], "split": mp["split"], "length": mp["length"], "top": mp["top"],
             "rates": "market" if d else "ratings"}
     for day, recs in by_day.items():
         dd = os.path.join(WIN_DIR, "tennis"); os.makedirs(dd, exist_ok=True)
