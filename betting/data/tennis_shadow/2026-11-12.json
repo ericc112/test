@@ -1,0 +1,402 @@
+{
+"ATP-2026-11-12-svrcina-virtanen-7d161": {
+"tour": "ATP",
+"a": "Dalibor Svrcina",
+"b": "Otto Virtanen",
+"a_te": "Svrcina D.",
+"b_te": "Virtanen O.",
+"slugs": [
+"svrcina",
+"virtanen-7d161"
+],
+"start": "2026-11-12T11:00:00+01:00",
+"p_ratings": 0.4867,
+"p_market": 0.4406,
+"p_shadow": 0.5149,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-baez-a8fb1-hemery": {
+"tour": "ATP",
+"a": "Sebastian Baez",
+"b": "Calvin Hemery",
+"a_te": "Baez S.",
+"b_te": "Hemery C.",
+"slugs": [
+"baez-a8fb1",
+"hemery"
+],
+"start": "2026-11-12T11:00:00+01:00",
+"p_ratings": 0.5833,
+"p_market": 0.7127,
+"p_shadow": 0.7006,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-basavareddy-jacquet-d2059": {
+"tour": "ATP",
+"a": "Nishesh Basavareddy",
+"b": "Kyrian Jacquet",
+"a_te": "Basavareddy N.",
+"b_te": "Jacquet K.",
+"slugs": [
+"basavareddy",
+"jacquet-d2059"
+],
+"start": "2026-11-12T11:00:00+01:00",
+"p_ratings": 0.5516,
+"p_market": 0.5591,
+"p_shadow": 0.5443,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-overbeck-shang": {
+"tour": "ATP",
+"a": "Carl Emil Overbeck",
+"b": "Juncheng Shang",
+"a_te": "Overbeck C.",
+"b_te": "Shang J.",
+"slugs": [
+"overbeck",
+"shang"
+],
+"start": "2026-11-12T01:00:00+01:00",
+"p_ratings": 0.3618,
+"p_market": 0.262,
+"p_shadow": 0.2121,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-hewitt-d8622-santillan-29bed": {
+"tour": "ATP",
+"a": "Cruz Hewitt",
+"b": "Akira Santillan",
+"a_te": "Hewitt C.",
+"b_te": "Santillan A.",
+"slugs": [
+"hewitt-d8622",
+"santillan-29bed"
+],
+"start": "2026-11-12T01:00:00+01:00",
+"p_ratings": 0.4902,
+"p_market": 0.56,
+"p_shadow": 0.5458,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-langmo-mccabe-b71c6": {
+"tour": "ATP",
+"a": "Christian Langmo",
+"b": "James McCabe",
+"a_te": "Langmo C.",
+"b_te": "McCabe J.",
+"slugs": [
+"langmo",
+"mccabe-b71c6"
+],
+"start": "2026-11-12T01:00:00+01:00",
+"p_ratings": 0.4118,
+"p_market": 0.4427,
+"p_shadow": 0.3525,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-mejia-a7d27-rehberg-2d8d7": {
+"tour": "ATP",
+"a": "Nicolas Mejia",
+"b": "Max Hans Rehberg",
+"a_te": "Mejia N.",
+"b_te": "Rehberg M.",
+"slugs": [
+"mejia-a7d27",
+"rehberg-2d8d7"
+],
+"start": "2026-11-12T00:30:00+01:00",
+"p_ratings": 0.468,
+"p_market": 0.4545,
+"p_shadow": 0.4189,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-baris-zheng-c91db": {
+"tour": "ATP",
+"a": "Ozan Baris",
+"b": "Michael Zheng",
+"a_te": "Baris O.",
+"b_te": "Zheng M.",
+"slugs": [
+"baris",
+"zheng-c91db"
+],
+"start": "2026-11-12T16:00:00+01:00",
+"p_ratings": 0.2646,
+"p_market": 0.2851,
+"p_shadow": 0.2201,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-kozlov-shick-9f067": {
+"tour": "ATP",
+"a": "Stefan Kozlov",
+"b": "Braden Shick",
+"a_te": "Kozlov S.",
+"b_te": "Shick B.",
+"slugs": [
+"kozlov",
+"shick-9f067"
+],
+"start": "2026-11-12T16:00:00+01:00",
+"p_ratings": 0.6255,
+"p_market": 0.6307,
+"p_shadow": 0.6685,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-giron-49e97-shelbayh": {
+"tour": "ATP",
+"a": "Marcos Giron",
+"b": "Abdullah Shelbayh",
+"a_te": "Giron M.",
+"b_te": "Shelbayh A.",
+"slugs": [
+"giron-49e97",
+"shelbayh"
+],
+"start": "2026-11-12T16:00:00+01:00",
+"p_ratings": 0.6675,
+"p_market": 0.6741,
+"p_shadow": 0.7059,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-midon-tobon-f2488": {
+"tour": "ATP",
+"a": "Lautaro Midon",
+"b": "Miguel Tobon",
+"a_te": "Midon L.",
+"b_te": "Tobon M.",
+"slugs": [
+"midon",
+"tobon-f2488"
+],
+"start": "2026-11-12T01:00:00+01:00",
+"p_ratings": 0.6062,
+"p_market": 0.632,
+"p_shadow": 0.6815,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-magadan-68c65-barrena-f6642": {
+"tour": "ATP",
+"a": "Alan Magadan",
+"b": "Alex Barrena",
+"a_te": "Magadan A.",
+"b_te": "Barrena A.",
+"slugs": [
+"magadan-68c65",
+"barrena-f6642"
+],
+"start": "2026-11-12T16:00:00+01:00",
+"p_ratings": 0.4496,
+"p_market": 0.1843,
+"p_shadow": 0.4491,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-roncadelli-comesana-c17e0": {
+"tour": "ATP",
+"a": "Franco Roncadelli",
+"b": "Francisco Comesana",
+"a_te": "Roncadelli F.",
+"b_te": "Comesana F.",
+"slugs": [
+"roncadelli",
+"comesana-c17e0"
+],
+"start": "2026-11-12T16:00:00+01:00",
+"p_ratings": 0.4086,
+"p_market": 0.1852,
+"p_shadow": 0.3295,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-olivieri-ff875-varillas": {
+"tour": "ATP",
+"a": "Genaro Alberto Olivieri",
+"b": "Juan Pablo Varillas",
+"a_te": "Olivieri G.",
+"b_te": "Varillas J.",
+"slugs": [
+"olivieri-ff875",
+"varillas"
+],
+"start": "2026-11-12T16:00:00+01:00",
+"p_ratings": 0.4886,
+"p_market": 0.4687,
+"p_shadow": 0.4787,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-reis-da-silva-bueno-01b7e": {
+"tour": "ATP",
+"a": "Joao Lucas Reis Da Silva",
+"b": "Gonzalo Bueno",
+"a_te": "Reis Da Silva J.",
+"b_te": "Bueno G.",
+"slugs": [
+"reis-da-silva",
+"bueno-01b7e"
+],
+"start": "2026-11-12T16:00:00+01:00",
+"p_ratings": 0.5533,
+"p_market": 0.5802,
+"p_shadow": 0.5862,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-noguchi-08bde-zhou-472f7": {
+"tour": "ATP",
+"a": "Rio Noguchi",
+"b": "Yi Zhou",
+"a_te": "Noguchi R.",
+"b_te": "Zhou Y.",
+"slugs": [
+"noguchi-08bde",
+"zhou-472f7"
+],
+"start": "2026-11-12T03:00:00+01:00",
+"p_ratings": 0.4833,
+"p_market": 0.3414,
+"p_shadow": 0.4474,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-sakamoto-9c9d5-samrej-f05ce": {
+"tour": "ATP",
+"a": "Rei Sakamoto",
+"b": "Kasidit Samrej",
+"a_te": "Sakamoto R.",
+"b_te": "Samrej K.",
+"slugs": [
+"sakamoto-9c9d5",
+"samrej-f05ce"
+],
+"start": "2026-11-12T04:30:00+01:00",
+"p_ratings": 0.7019,
+"p_market": 0.8326,
+"p_shadow": 0.7703,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-schoenhaus-daniel-2dd17": {
+"tour": "ATP",
+"a": "Max Schoenhaus",
+"b": "Taro Daniel",
+"a_te": "Schoenhaus M.",
+"b_te": "Daniel T.",
+"slugs": [
+"schoenhaus",
+"daniel-2dd17"
+],
+"start": "2026-11-12T04:30:00+01:00",
+"p_ratings": 0.4152,
+"p_market": 0.358,
+"p_shadow": 0.3301,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-moeller-322bf-ouakaa": {
+"tour": "ATP",
+"a": "Marvin Moeller",
+"b": "Aziz Ouakaa",
+"a_te": "Moeller M.",
+"b_te": "Ouakaa A.",
+"slugs": [
+"moeller-322bf",
+"ouakaa"
+],
+"start": "2026-11-12T11:00:00+01:00",
+"p_ratings": 0.8084,
+"p_market": 0.7107,
+"p_shadow": 0.8786,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-blanch-5d667-giustino-1d545": {
+"tour": "ATP",
+"a": "Darwin Blanch",
+"b": "Lorenzo Giustino",
+"a_te": "Blanch D.",
+"b_te": "Giustino L.",
+"slugs": [
+"blanch-5d667",
+"giustino-1d545"
+],
+"start": "2026-11-12T11:00:00+01:00",
+"p_ratings": 0.547,
+"p_market": 0.4501,
+"p_shadow": 0.5888,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-echargui-petkovic-11864": {
+"tour": "ATP",
+"a": "Moez Echargui",
+"b": "Mika Petkovic",
+"a_te": "Echargui M.",
+"b_te": "Petkovic M.",
+"slugs": [
+"echargui",
+"petkovic-11864"
+],
+"start": "2026-11-12T11:00:00+01:00",
+"p_ratings": 0.6144,
+"p_market": 0.6031,
+"p_shadow": 0.6505,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-carboni-ecd4c-xilas": {
+"tour": "ATP",
+"a": "Lorenzo Carboni",
+"b": "Ioannis Xilas",
+"a_te": "Carboni L.",
+"b_te": "Xilas I.",
+"slugs": [
+"carboni-ecd4c",
+"xilas"
+],
+"start": "2026-11-12T09:00:00+01:00",
+"p_ratings": 0.3763,
+"p_market": 0.4244,
+"p_shadow": 0.3323,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-andreev-8a7ee-brancaccio": {
+"tour": "ATP",
+"a": "Adrian Andreev",
+"b": "Raul Brancaccio",
+"a_te": "Andreev A.",
+"b_te": "Brancaccio R.",
+"slugs": [
+"andreev-8a7ee",
+"brancaccio"
+],
+"start": "2026-11-12T09:00:00+01:00",
+"p_ratings": 0.4651,
+"p_market": 0.4611,
+"p_shadow": 0.469,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-cretu-93488-henning-421d6": {
+"tour": "ATP",
+"a": "Cezar Cretu",
+"b": "Philip Henning",
+"a_te": "Cretu C.",
+"b_te": "Henning P.",
+"slugs": [
+"cretu-93488",
+"henning-421d6"
+],
+"start": "2026-11-12T09:00:00+01:00",
+"p_ratings": 0.3862,
+"p_market": 0.348,
+"p_shadow": 0.4232,
+"logged": "2026-11-11T06:57Z"
+},
+"ATP-2026-11-12-ribecai-caniato": {
+"tour": "ATP",
+"a": "Michele Ribecai",
+"b": "Carlo Alberto Caniato",
+"a_te": "Ribecai M.",
+"b_te": "Caniato C.",
+"slugs": [
+"ribecai",
+"caniato"
+],
+"start": "2026-11-12T09:00:00+01:00",
+"p_ratings": 0.4596,
+"p_market": 0.445,
+"p_shadow": 0.5464,
+"logged": "2026-11-11T06:57Z"
+}
+}
