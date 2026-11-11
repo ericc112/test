@@ -71,62 +71,72 @@ class _Player:
         self.hist, self.elo_hist = [], []
 
 
-def features(matches: list[dict], tour: str) -> dict:
-    """{id(match): {"w": {...}, "l": {...}, "elo": (overall p for the winner, surface p for the winner)}} walk-forward."""
+def features(matches: list[dict], tour: str, upcoming: list | None = None) -> dict:
+    """{id(match): {"w": {...}, "l": {...}, "elo": (overall p for the winner, surface p, mixed p)}} walk-forward. With
+    `upcoming` [(key, a, b, surface, event name, hand a, hand b, ordinal day)], also {key: {"a": ..., "b": ..., "elo": ...}}
+    for matches still to play, from every match in the database."""
     M = sorted([m for m in matches if m["tour"] == tour], key=lambda m: (m["start"], m["ro"], m["date"]))
     P = defaultdict(_Player)
     R, Rs, N, Ns = {}, {}, {}, {}
     h2h = defaultdict(list)                       # frozenset(pair) -> [(day, winner, surface)]
     out = {}
+
+    def pfeat(me, op, day, surf, ev, tname, hand_me, hand_op):
+        H_ = P[me].hist
+        yr = [x for x in H_ if day - x["day"] <= 365]
+        f = {}
+        ss = [x for x in yr if x["surf"] == surf and x["done"]]
+        f["surface_win52"] = (sum(x["won"] for x in ss) + 3) / (len(ss) + 6)
+        done = [x for x in H_ if x["done"]][-10:]
+        f["form10_vs_expected"] = sum(x["won"] - x["exp"] for x in done)
+        gw = sum(x["gw"] for x in yr); gt = sum(x["gw"] + x["gl"] for x in yr)
+        f["dominance52"] = (gw + 30) / (gt + 60)
+        eh = P[me].elo_hist
+        old = next((e for d, e in reversed(eh) if day - d >= 90), 1500.0)
+        f["trend90"] = (R.get(me, 1500.0) - old) / 100
+        same_ev = (lambda x: x["ev"] == ev) if ev else (lambda x: x["tname"] == tname and day - x["day"] <= 14)
+        f["minutes_event"] = sum((x["min"] or 0) for x in H_ if same_ev(x)) / 60
+        f["matches14"] = sum(1 for x in H_ if day - x["day"] <= 14)
+        prev_ev = next((x for x in reversed(H_) if not same_ev(x)), None)
+        f["deep_run_prev"] = (sum(x["won"] for x in H_ if prev_ev and x["ev"] == prev_ev["ev"] and x["done"])
+                              if prev_ev and day - prev_ev["day"] <= 14 else 0)
+        last = H_[-1]["day"] if H_ else None
+        f["layoff"] = float(last is None or day - last > 45)
+        f["retired90"] = sum(1 for x in H_ if day - x["day"] <= 90 and x["retired"])
+        pair = h2h.get(frozenset((me, op)), [])
+        f["h2h"] = max(-3, min(3, sum(1 if x[1] == me else -1 for x in pair)))
+        f["h2h_surface"] = max(-3, min(3, sum(1 if x[1] == me else -1 for x in pair if x[2] == surf)))
+        evh = [x for x in H_ if x["tname"] == tname and not same_ev(x) and x["done"]]
+        f["event_history"] = (sum(x["won"] for x in evh) + 2) / (len(evh) + 4)
+        f["lefty"] = float(hand_me == "L" and hand_op == "R")
+        bps = sum(x["bps"] for x in yr); bpf = sum(x["bpf"] for x in yr)
+        bpc = sum(x["bpc"] for x in yr); bpo = sum(x["bpo"] for x in yr)
+        f["bp_saved"] = (bps + 0.60 * 40) / (bpf + 40)
+        f["bp_converted"] = (bpc + 0.40 * 40) / (bpo + 40)
+        tbw = sum(x["tbw"] for x in yr); tb = sum(x["tb"] for x in yr)
+        f["tiebreaks"] = (tbw + 3) / (tb + 6)
+        dw = sum(x["dw"] for x in yr); dn = sum(x["dn"] for x in yr)
+        f["deciders"] = (dw + 3) / (dn + 6)
+        cw = sum(x["cw"] for x in yr); cl = sum(x["cl"] for x in yr)
+        f["comeback"] = (cw + 0.3 * 6) / (cl + 6)
+        sv = sum(x["svpt"] for x in yr)
+        f["first_in"] = (sum(x["in1"] for x in yr) + 0.62 * 300) / (sv + 300)
+        f["ace_minus_df"] = (sum(x["ace"] for x in yr) - sum(x["df"] for x in yr)) / (sv + 300)
+        return f
+
+    def elo3(a, b, surf):
+        ra, rb = R.get(a, 1500.0), R.get(b, 1500.0)
+        sa, sb = Rs.get((a, surf), 1500.0), Rs.get((b, surf), 1500.0)
+        return (1 / (1 + 10 ** ((rb - ra) / 400)), 1 / (1 + 10 ** ((sb - sa) / 400)),
+                1 / (1 + 10 ** ((0.5 * (rb + sb) - 0.5 * (ra + sa)) / 400)))
+
     for m in M:
         day, surf, w, l = m["day"], m["surface"], m["w"], m["l"]
         rw, rl = R.get(w, 1500.0), R.get(l, 1500.0)
         sw, sl = Rs.get((w, surf), 1500.0), Rs.get((l, surf), 1500.0)
-        e_all = 1 / (1 + 10 ** ((rl - rw) / 400))
-        e_surf = 1 / (1 + 10 ** ((sl - sw) / 400))
-        e_mix = 1 / (1 + 10 ** ((0.5 * (rl + sl) - 0.5 * (rw + sw)) / 400))
-        feats = {}
-        for me, op in ((w, l), (l, w)):
-            H_ = P[me].hist
-            yr = [x for x in H_ if day - x["day"] <= 365]
-            f = {}
-            ss = [x for x in yr if x["surf"] == surf and x["done"]]
-            f["surface_win52"] = (sum(x["won"] for x in ss) + 3) / (len(ss) + 6)
-            done = [x for x in H_ if x["done"]][-10:]
-            f["form10_vs_expected"] = sum(x["won"] - x["exp"] for x in done)
-            gw = sum(x["gw"] for x in yr); gt = sum(x["gw"] + x["gl"] for x in yr)
-            f["dominance52"] = (gw + 30) / (gt + 60)
-            eh = P[me].elo_hist
-            old = next((e for d, e in reversed(eh) if day - d >= 90), 1500.0)
-            f["trend90"] = (R.get(me, 1500.0) - old) / 100
-            f["minutes_event"] = sum((x["min"] or 0) for x in H_ if x["ev"] == m["ev"]) / 60
-            f["matches14"] = sum(1 for x in H_ if day - x["day"] <= 14)
-            prev_ev = next((x for x in reversed(H_) if x["ev"] != m["ev"]), None)
-            f["deep_run_prev"] = (sum(x["won"] for x in H_ if prev_ev and x["ev"] == prev_ev["ev"] and x["done"])
-                                  if prev_ev and day - prev_ev["day"] <= 14 else 0)
-            last = H_[-1]["day"] if H_ else None
-            f["layoff"] = float(last is None or day - last > 45)
-            f["retired90"] = sum(1 for x in H_ if day - x["day"] <= 90 and x["retired"])
-            pair = h2h.get(frozenset((me, op)), [])
-            f["h2h"] = max(-3, min(3, sum(1 if x[1] == me else -1 for x in pair)))
-            f["h2h_surface"] = max(-3, min(3, sum(1 if x[1] == me else -1 for x in pair if x[2] == surf)))
-            evh = [x for x in H_ if x["tname"] == m["tname"] and x["ev"] != m["ev"] and x["done"]]
-            f["event_history"] = (sum(x["won"] for x in evh) + 2) / (len(evh) + 4)
-            f["lefty"] = float(m[f"{'w' if me == w else 'l'}_hand"] == "L" and m[f"{'l' if me == w else 'w'}_hand"] == "R")
-            bps = sum(x["bps"] for x in yr); bpf = sum(x["bpf"] for x in yr)
-            bpc = sum(x["bpc"] for x in yr); bpo = sum(x["bpo"] for x in yr)
-            f["bp_saved"] = (bps + 0.60 * 40) / (bpf + 40)
-            f["bp_converted"] = (bpc + 0.40 * 40) / (bpo + 40)
-            tbw = sum(x["tbw"] for x in yr); tb = sum(x["tb"] for x in yr)
-            f["tiebreaks"] = (tbw + 3) / (tb + 6)
-            dw = sum(x["dw"] for x in yr); dn = sum(x["dn"] for x in yr)
-            f["deciders"] = (dw + 3) / (dn + 6)
-            cw = sum(x["cw"] for x in yr); cl = sum(x["cl"] for x in yr)
-            f["comeback"] = (cw + 0.3 * 6) / (cl + 6)
-            sv = sum(x["svpt"] for x in yr)
-            f["first_in"] = (sum(x["in1"] for x in yr) + 0.62 * 300) / (sv + 300)
-            f["ace_minus_df"] = (sum(x["ace"] for x in yr) - sum(x["df"] for x in yr)) / (sv + 300)
-            feats[me] = f
+        e_all, e_surf, e_mix = elo3(w, l, surf)
+        feats = {w: pfeat(w, l, day, surf, m["ev"], m["tname"], m["w_hand"], m["l_hand"]),
+                 l: pfeat(l, w, day, surf, m["ev"], m["tname"], m["l_hand"], m["w_hand"])}
         out[id(m)] = {"w": feats[w], "l": feats[l], "elo": (e_all, e_surf, e_mix)}
         # ---- record the match for both players
         sets = _sets(m["score"])
@@ -159,7 +169,20 @@ def features(matches: list[dict], tour: str) -> dict:
             N[w], N[l] = N.get(w, 0) + 1, N.get(l, 0) + 1
             Ns[(w, surf)], Ns[(l, surf)] = Ns.get((w, surf), 0) + 1, Ns.get((l, surf), 0) + 1
             P[w].elo_hist.append((day, R[w])); P[l].elo_hist.append((day, R[l]))
+    for key, a, b, surf, tname, ha, hb, day in upcoming or []:
+        out[key] = {"a": pfeat(a, b, day, surf, None, tname, ha, hb), "b": pfeat(b, a, day, surf, None, tname, hb, ha), "elo": elo3(a, b, surf)}
     return out
+
+
+def shadow_p(model: dict, p_ratings: float, fa: dict, fb: dict, elo: tuple) -> float:
+    """The shadow winner chance for A: the ratings' logit times its weight plus each selected factor (A minus B,
+    standardized with the tuning period's scaler), as fitted in the walk-forward test."""
+    z = model["ratings_weight"] * float(_logit(p_ratings))
+    for k, c in model["coef_per_sd"].items():
+        x = float(_logit(elo[0])) if k == "elo_overall" else float(_logit(elo[1])) if k == "elo_surface" else fa[k] - fb[k]
+        mu, sd = model["scaler"][k]
+        z += c * (x - mu) / sd
+    return float(1 / (1 + np.exp(-z)))
 
 
 def _fit(X, y, off, ridge=1.0):
@@ -280,5 +303,136 @@ def run(out: str | None = None, log=print) -> dict:
     return res
 
 
+
+
+def market_check(log=print) -> dict:
+    """ATP: do the selected factors add anything beyond the betting market's closing price (the ATP default winner)?
+    Fit on July-August 2026, scored on September 2026 on (Tennis Explorer closing odds, de-vigged)."""
+    from . import tennis as T
+    from . import tennis_hist as H
+    from .tennis_factor_study import attach_odds, predict
+    st = T.tml_state(refresh=False)
+    study = json.load(open(T.STUDY))
+    res = json.load(open(OUT))
+    model = res["ATP"]["selected_on_tune"]
+    keys = model["factors"]
+    ch, fm = study["ATP"]["chosen"], study["ATP"]["form"]["B1"]
+    F = features(st["matches"], "ATP")
+    sel, Pp, pts = predict(st["matches"], "ATP", {"B1": H.Ratings(H=ch["H"], lam=ch["lam"])}, 20260701, TEST[1], log=log)
+    mk = attach_odds(sel, T.TE_DIR, "ATP")
+    rng = np.random.default_rng(5)
+    data = {"fit": [], "test": []}
+    for i, m in enumerate(sel):
+        if not m["sc"] or mk[i] is None or min(pts["B1"][i]) < 400 or id(m) not in F:
+            continue
+        pw, pl = Pp["B1"][i]
+        pr = float(H.win_by_bo(np.array([pw]), np.array([pl]), [m["bo"] or 3], fm["sd"], fm["rho"])[0])
+        fw, fl, elo = F[id(m)]["w"], F[id(m)]["l"], F[id(m)]["elo"]
+        x = [float(_logit(elo[0])) if k == "elo_overall" else float(_logit(elo[1])) if k == "elo_surface" else fw[k] - fl[k] for k in keys]
+        x = [(v - model["scaler"][k][0]) / model["scaler"][k][1] for v, k in zip(x, keys)]
+        ps = shadow_p(model, pr, fw, fl, elo)
+        data["fit" if m["start"] <= 20260831 else "test"].append((float(_logit(mk[i])), float(_logit(pr)), float(_logit(ps)), x, m["ev"]))
+    out = {"matches": {k: len(v) for k, v in data.items()}}
+    arr = {}
+    for k, rows in data.items():
+        om = np.array([r[0] for r in rows]); orr = np.array([r[1] for r in rows]); osh = np.array([r[2] for r in rows])
+        X = np.array([r[3] for r in rows]); ev = np.array([r[4] for r in rows])
+        fl = rng.random(len(om)) < 0.5
+        sgn = np.where(fl, -1.0, 1.0)
+        arr[k] = (om * sgn, orr * sgn, osh * sgn, X * sgn[:, None], (~fl).astype(float), ev)
+    om_a, or_a, os_a, X_a, y_a, _ = arr["fit"]; om_b, or_b, os_b, X_b, y_b, ev_b = arr["test"]
+    sig = lambda z: 1 / (1 + np.exp(-z))
+    variants = {
+        "market": (None, None),
+        "market recalibrated": (np.c_[om_a], np.c_[om_b]),
+        "market + ratings": (np.c_[om_a, or_a], np.c_[om_b, or_b]),
+        "market + factors": (np.c_[om_a, X_a], np.c_[om_b, X_b]),
+        "market + ratings + factors": (np.c_[om_a, or_a, X_a], np.c_[om_b, or_b, X_b]),
+    }
+    ll_m = _ll(sig(om_b), y_b)
+    u, inv = np.unique(ev_b, return_inverse=True)
+
+    def boot(d):
+        tot, cnt = np.bincount(inv, d, len(u)), np.bincount(inv, None, len(u))
+        bs = [tot[s].sum() / cnt[s].sum() for s in (rng.integers(0, len(u), len(u)) for _ in range(1000))]
+        return [round(float(np.percentile(bs, 2.5)), 5), round(float(np.percentile(bs, 97.5)), 5)]
+    tab = {}
+    for name, (Xa, Xb) in variants.items():
+        if Xa is None:
+            p = sig(om_b)
+        else:
+            b, _ = _fit(Xa, y_a, np.zeros(len(y_a)), ridge=2.0)
+            p = sig(Xb @ b)
+        d = ll_m - _ll(p, y_b)
+        tab[name] = {"test_log_loss": round(float(_ll(p, y_b).mean()), 4), "gain_vs_market": round(float(d.mean()), 5), "ci95": boot(d),
+                     "accuracy": round(float(((p > 0.5) == (y_b == 1)).mean()), 4)}
+    for name, z in (("ratings alone", or_b), ("ratings + factors (the shadow model)", os_b)):
+        p = sig(z); d = ll_m - _ll(p, y_b)
+        tab[name] = {"test_log_loss": round(float(_ll(p, y_b).mean()), 4), "gain_vs_market": round(float(d.mean()), 5), "ci95": boot(d),
+                     "accuracy": round(float(((p > 0.5) == (y_b == 1)).mean()), 4)}
+    out["test"] = tab
+    res["ATP"]["market_check"] = out
+    json.dump(res, open(OUT, "w"), indent=1)
+    return out
+
+
+def register(tour: str = "ATP") -> dict:
+    """Put the tune-selected factor model in shadow for a tour (the Tennis tab scores and logs it; nothing published)."""
+    import datetime as dt
+    res = json.load(open(OUT))
+    sel = res[tour]["selected_on_tune"]
+    res[tour]["shadow"] = {**{k: sel[k] for k in ("factors", "coef_per_sd", "scaler", "ratings_weight")},
+                           "name": "ratings + Elo, recent form, workload and fatigue, layoff, head-to-head",
+                           "registered": dt.date.today().isoformat(),
+                           "rule": "promote only after 200+ graded matches or 14 days, better than the current winner on log loss and calibration"}
+    json.dump(res, open(OUT, "w"), indent=1)
+    return res[tour]["shadow"]
+
+
+def report(log=print) -> dict:
+    """Grade the shadow log (data/tennis_shadow) against Tennis Explorer results: log loss and calibration of the shadow
+    model, the ratings and the market on the same finished matches."""
+    import datetime as dt
+    import glob
+    from . import tennis as T, tennis_market as TM
+    from .tennis_watch import SHADOW_DIR
+    rows = []
+    for path in sorted(glob.glob(os.path.join(SHADOW_DIR, "*.json"))):
+        day = dt.date.fromisoformat(os.path.basename(path)[:10])
+        recs = json.load(open(path))
+        res_rows = {}
+        for d in (day, day + dt.timedelta(days=1)):
+            if d > dt.date.today():
+                continue
+            for tour in {r["tour"] for r in recs.values()}:
+                for x in TM.day(d, tour, T.TE_DIR, max_age=6 * 3600):
+                    if x.get("p2") and len(x.get("s1") or "") and (max(int(x.get("s1") or 0), int(x.get("s2") or 0)) >= 2):
+                        res_rows[frozenset((TM.surname_key(x["p1"]), TM.surname_key(x["p2"])))] = TM.surname_key(x["p1"])   # results: winner first
+        for r in recs.values():
+            ka, kb = TM.surname_key(r.get("a_te") or r["a"]), TM.surname_key(r.get("b_te") or r["b"])
+            w = res_rows.get(frozenset((ka, kb)))
+            if w is None:
+                continue
+            rows.append({**r, "a_won": w == ka})
+    out = {"graded": len(rows)}
+    if rows:
+        y = np.array([r["a_won"] for r in rows], float)
+        for k in ("p_shadow", "p_ratings", "p_market"):
+            ok = [i for i, r in enumerate(rows) if r.get(k) is not None]
+            if not ok:
+                continue
+            p = np.array([rows[i][k] for i in ok]); yy = y[ok]
+            fav = np.maximum(p, 1 - p); won = np.where(p >= 0.5, yy, 1 - yy)
+            out[k] = {"n": len(ok), "log_loss": round(float(_ll(p, yy).mean()), 4), "winners_right": round(float(won.mean()), 3),
+                      "favourite_predicted": round(float(fav.mean()), 3)}
+        first = min(r["logged"] for r in rows)[:10]
+        out["days"] = (dt.date.today() - dt.date.fromisoformat(first)).days
+        out["eligible"] = out["graded"] >= 200 or out["days"] >= 14
+    log(json.dumps(out, indent=1))
+    return out
+
+
 if __name__ == "__main__":
-    print(json.dumps(run(), indent=1))
+    import sys
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
+    print(json.dumps({"run": run, "market": market_check, "register": register, "report": report}[cmd](), indent=1))

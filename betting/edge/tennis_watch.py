@@ -136,6 +136,52 @@ def _scout(scout, ia, na, ib, nb, surface=None, event=None):
         return None
 
 
+SHADOW_DIR = os.path.join(HERE, "data", "tennis_shadow")
+
+
+def _shadow(st, out, queue, log=print) -> None:
+    """The winner model in testing (user, 2026-11-11): the ratings plus the factors that passed the walk-forward test
+    (data/tennis_bt/winner_factors.json, "shadow" per tour). Shown on the page as "in testing", never used for a pick,
+    and logged to data/tennis_shadow/<date>.json so `python -m edge.tennis_winner_factors report` grades it against the
+    ratings and the market. Promotion needs 200+ graded matches or 14 days, better on log loss and calibration."""
+    from . import tennis_winner_factors as TW
+    try:
+        res = json.load(open(TW.OUT))
+    except (OSError, ValueError):
+        return
+    by_tour = {}
+    for item in queue:
+        by_tour.setdefault(item[1], []).append(item)
+    now = dt.datetime.now(dt.timezone.utc)
+    logs = {}
+    for tour, items in by_tour.items():
+        model = (res.get(tour) or {}).get("shadow")
+        if not model:
+            continue
+        F = TW.features(st["matches"], tour, [(i, ia, ib, s_, ev, ha, hb, day) for i, (_m, _t, ia, ib, s_, ev, ha, hb, day) in enumerate(items)])
+        for i, item in enumerate(items):
+            m, f = item[0], F.get(i)
+            if not f:
+                continue
+            p = TW.shadow_p(model, m["win_model"], f["a"], f["b"], f["elo"])
+            m["shadow"] = {"p_a": round(p, 4), "name": model.get("name", "ratings + factors")}
+            day = dt.datetime.fromisoformat(m["start"]).astimezone(TE_TZ).date().isoformat()
+            logs.setdefault(day, {})[m["id"]] = {"tour": tour, "a": m["a"], "b": m["b"], "a_te": m.get("a_te"), "b_te": m.get("b_te"),
+                                                 "slugs": m.get("slugs"), "start": m["start"], "p_ratings": m["win_model"],
+                                                 "p_market": m.get("market_a"), "p_shadow": round(p, 4), "logged": now.strftime("%Y-%m-%dT%H:%MZ")}
+    os.makedirs(SHADOW_DIR, exist_ok=True)
+    for day, recs in logs.items():
+        path = os.path.join(SHADOW_DIR, f"{day}.json")
+        cur = json.load(open(path)) if os.path.exists(path) else {}
+        for k, v in recs.items():
+            if k not in cur or dt.datetime.fromisoformat(v["start"]) > now:     # keep the last pre-match number
+                cur[k] = v
+        json.dump(cur, open(path, "w"), indent=0)
+    n = sum(len(v) for v in logs.values())
+    if n:
+        log(f"  tennis watch: shadow winner model scored {n} matches (in testing, not published)")
+
+
 def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
     from . import tennis as T, tennis_hist as TH, tennis_market as TM
     now = now or dt.datetime.now(dt.timezone.utc)
@@ -159,7 +205,7 @@ def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
     if short:
         log(f"  tennis watch: WTA 125 top-up for {len(short)} player(s): {', '.join(short[:6])}{'...' if len(short) > 6 else ''}")
         st = T.tml_state(wta_topup=tuple(short)) or st
-    out, skipped = [], {"ATP": 0, "WTA": 0}
+    out, skipped, shadow_q = [], {"ATP": 0, "WTA": 0}, []
     from . import tennis_scout as TS
     try:
         TS.download()                       # the Match Charting Project files (weekly)
@@ -225,6 +271,8 @@ def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
                             "lines": pp.get(k2, []), "scout": _scout(scout, ia, na, ib, nb, surf, ev),
                             "likely": {"ratings": likely_match(p1, p2, bo, win_model, form["sd"], form["rho"]),
                                        **({"market": likely_match(p1 + shift, p2 - shift, bo, fair, form["sd"], form["rho"])} if shift is not None else {})}})
+                shadow_q.append((out[-1], tour, ia, ib, s_, ev or x["tourn"] or "", ha, hb, d.toordinal()))
+    _shadow(st, out, shadow_q, log)
     out.sort(key=lambda m: (m["start"], m["tour"]))
     try:
         save_winners(out)

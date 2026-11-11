@@ -379,3 +379,26 @@ class EveryPlayerCore(unittest.TestCase):
         h = TS.h2h(byp, "A", "B", "Hard")
         self.assertEqual((h["a"], h["b"], h["a_surface"], h["b_surface"]), (2, 1, 2, 0))
         self.assertEqual(h["meetings"][0]["date"], 20260101)                        # newest first
+
+
+class WinnerShadow(unittest.TestCase):
+    """The factor model in testing: the formula the walk-forward test fitted, and upcoming matches scored from history."""
+
+    def test_shadow_formula(self):
+        from edge.tennis_winner_factors import shadow_p
+        model = {"ratings_weight": 1.0, "coef_per_sd": {"matches14": 0.5}, "scaler": {"matches14": [0.0, 2.0]}}
+        p0 = shadow_p(model, 0.6, {"matches14": 1}, {"matches14": 1}, (0.5, 0.5, 0.5))
+        self.assertAlmostEqual(p0, 0.6, places=6)                       # no difference between the players: the ratings
+        p1 = shadow_p(model, 0.6, {"matches14": 3}, {"matches14": 1}, (0.5, 0.5, 0.5))
+        self.assertGreater(p1, p0)
+
+    def test_upcoming_uses_history(self):
+        from edge.tennis_winner_factors import features
+        def mk(start, ro, w, l, score="6-4 6-4"):
+            return {"tour": "ATP", "start": start, "ro": ro, "date": start, "day": 739000 + start % 100, "surface": "Hard", "w": w, "l": l,
+                    "w_hand": "R", "l_hand": "L", "ev": f"E{start}", "tname": "Town", "score": score, "sc": {"sets": 2}, "bo": 3, "minutes": 80, "raw": {}}
+        M = [mk(20260101, 6, "A", "B"), mk(20260105, 6, "A", "B"), mk(20260110, 6, "B", "A")]
+        F = features(M, "ATP", [("k", "A", "B", "Hard", "Town", "R", "L", 739012)])
+        self.assertEqual(F["k"]["a"]["h2h"], 1)                         # A won 2 of 3 meetings
+        self.assertEqual(F["k"]["b"]["h2h"], -1)
+        self.assertEqual(F["k"]["a"]["matches14"], 3)
