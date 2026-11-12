@@ -151,3 +151,4 @@
 {"at": "2026-11-11T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_blocks:under", "before": -0.239, "after": -0.15, "window": ["2026-10-12", "2026-11-10"], "n": 1644}
 {"at": "2026-11-11T20:45Z", "kind": "outcome_bias", "key": "nba:tpm:under", "before": -0.095, "after": -0.183, "window": ["2026-10-12", "2026-11-10"], "n": 1644}
 {"at": "2026-11-11T20:45Z", "kind": "cap_medium", "key": "nba:pr:under", "before": true, "after": false, "window": ["2026-10-12", "2026-11-10"], "n": 1644}
+{"at": "2026-11-12T20:44Z", "kind": "outcome_bias", "key": "tennis:tennis_games_won:under", "before": 0.003, "after": 0.05, "window": ["2026-10-12", "2026-11-10"], "n": 1648}

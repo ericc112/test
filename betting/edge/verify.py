@@ -436,6 +436,20 @@ def minutes_gap(side: str, proj_min: float | None, last_mins: list[float], tol: 
     return None
 
 
+def minutes_outlier(side: str, proj_min: float | None, last_mins: list[float], season_min: float | None, tol: float = 3.0) -> str | None:
+    """L35: a starter-sized under projected 3+ minutes below his season average while his last 5 hold a game under 12
+    minutes (an early exit, foul trouble, a blowout): the projection is pulled down by that one game. Zubac (projected
+    11 and 17, played 28 and 31) and Jarrett Allen (projected 20, played 32), Nov 9-11; such unders went 4-6. A warning
+    shown next to the pick; it doesn't change the probability or the label."""
+    if side != "under" or proj_min is None or not season_min or len(last_mins) < 3:
+        return None
+    short = min(last_mins)
+    if proj_min < season_min - tol and short < 12:
+        return (f"projected {proj_min:.0f} min vs {season_min:.0f} this season, pulled down by a {short:.0f}-minute game in his last "
+                f"{len(last_mins)}: the under leans on that one short game (L35)")
+    return None
+
+
 def last_priced(notes: str):
     """When a leg was last priced: the latest of the pricer's "pulled" stamp and any "fresh" stamp a verify --fix
     re-price added (UTC), or None."""
@@ -491,6 +505,9 @@ def check_nba(rep: Report, adj: dict):
     w = minutes_gap(side, prof["min"] if prof else None, [e["min"] for e in cur[-5:]])
     if w:
         rep.add("WARN", "minutes", w)
+    w2 = minutes_outlier(side, prof["min"] if prof else None, [e["min"] for e in cur[-5:]], ((prof or {}).get("season") or {}).get("min"))
+    if w2:
+        rep.add("WARN", "minutes outlier", w2)
     po, pu, pp_ = nba_pp.sides_at(sim["hist"][stat], line)
     m = re.search(r"model de-biased ([+-]\d+\.\d+) logit", r.get("notes") or "")
     if m and 0 < po < 1 - pp_:                 # the same per-scan bias fix the pricer applied (L7)

@@ -274,6 +274,17 @@ class NflAnchoring(unittest.TestCase):
         self.assertLess(nfl_pp.anchored_count(arr, 1.5, 2.0), 0.5)                         # DK at 1.5: 3+ is less likely than not
 
 
+class MinutesOutlier(unittest.TestCase):
+    """L35: one short game in the last 5 pulls a starter's projection below his season (Zubac, Allen, Nov 9-11)."""
+    def test_flags_the_pulled_down_under(self):
+        from edge import verify as V
+        self.assertIn("pulled down by a 7-minute game", V.minutes_outlier("under", 17.2, [24, 7, 19, 19, 28], 21.8))    # Zubac, Nov 11
+        self.assertIn("(L35)", V.minutes_outlier("under", 19.6, [30, 24, 28, 7, 19], 24.4))                               # Allen, Nov 11
+        self.assertIsNone(V.minutes_outlier("under", 20.1, [19, 10, 23, 19, 31], 21.6))      # within 3 of his season
+        self.assertIsNone(V.minutes_outlier("under", 17.0, [20, 18, 19, 21, 18], 22.0))      # no short game: the L28 check's job
+        self.assertIsNone(V.minutes_outlier("over", 17.2, [24, 7, 19, 19, 28], 21.8))
+
+
 class MinutesGap(unittest.TestCase):
     def test_l28(self):
         from edge import verify as V
