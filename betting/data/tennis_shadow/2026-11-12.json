@@ -153,11 +153,11 @@
 "giron-49e97",
 "shelbayh"
 ],
-"start": "2026-11-12T16:00:00+01:00",
-"p_ratings": 0.6615,
-"p_market": 0.695,
-"p_shadow": 0.7114,
-"logged": "2026-11-11T21:03Z"
+"start": "2026-11-12T23:00:00+01:00",
+"p_ratings": 0.6617,
+"p_market": 0.7168,
+"p_shadow": 0.7116,
+"logged": "2026-11-12T21:01Z"
 },
 "ATP-2026-11-12-midon-tobon-f2488": {
 "tour": "ATP",
@@ -233,11 +233,11 @@
 "reis-da-silva",
 "bueno-01b7e"
 ],
-"start": "2026-11-12T16:00:00+01:00",
-"p_ratings": 0.5527,
-"p_market": 0.6016,
-"p_shadow": 0.5778,
-"logged": "2026-11-11T21:03Z"
+"start": "2026-11-12T23:45:00+01:00",
+"p_ratings": 0.5528,
+"p_market": 0.5885,
+"p_shadow": 0.5779,
+"logged": "2026-11-12T21:01Z"
 },
 "ATP-2026-11-12-noguchi-08bde-zhou-472f7": {
 "tour": "ATP",
@@ -510,5 +510,37 @@
 "p_market": 0.7298,
 "p_shadow": 0.3936,
 "logged": "2026-11-11T21:03Z"
+},
+"ATP-2026-11-12-hemery-baez-a8fb1": {
+"tour": "ATP",
+"a": "Calvin Hemery",
+"b": "Sebastian Baez",
+"a_te": "Hemery C.",
+"b_te": "Baez S.",
+"slugs": [
+"hemery",
+"baez-a8fb1"
+],
+"start": "2026-11-12T19:10:00+01:00",
+"p_ratings": 0.4162,
+"p_market": 0.2832,
+"p_shadow": 0.3019,
+"logged": "2026-11-12T21:01Z"
+},
+"ATP-2026-11-12-torres-dc0bf-rodriguez-b9b54": {
+"tour": "ATP",
+"a": "Juan Bautista Torres",
+"b": "Lorenzo Joaquin Rodriguez",
+"a_te": "Torres J.",
+"b_te": "Rodriguez L.",
+"slugs": [
+"torres-dc0bf",
+"rodriguez-b9b54"
+],
+"start": "2026-11-12T20:00:00+01:00",
+"p_ratings": 0.5897,
+"p_market": 0.692,
+"p_shadow": 0.6638,
+"logged": "2026-11-12T21:01Z"
 }
 }
