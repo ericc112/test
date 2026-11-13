@@ -187,3 +187,7 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 ### Auto-learned 2026-11-12
 - 2 losses in nba:pts:under share the cause 'role/lineup': write a checklist rule for it in the table above.
 - 2 losses in nba:ra:under share the cause 'role/lineup': write a checklist rule for it in the table above.
+
+### Auto-learned 2026-11-13
+- 2 losses in nba:reb:over share the cause 'opportunity': write a checklist rule for it in the table above.
+- 2 losses in nba:pa:under share the cause 'role/lineup': write a checklist rule for it in the table above.
