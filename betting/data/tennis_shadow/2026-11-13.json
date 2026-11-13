@@ -217,11 +217,11 @@
 "sanchez-izquierdo-99add",
 "tobon-f2488"
 ],
-"start": "2026-11-13T16:00:00+01:00",
-"p_ratings": 0.6516,
-"p_market": 0.6651,
-"p_shadow": 0.6764,
-"logged": "2026-11-12T21:01Z"
+"start": "2026-11-13T22:45:00+01:00",
+"p_ratings": 0.6511,
+"p_market": 0.6578,
+"p_shadow": 0.6761,
+"logged": "2026-11-13T21:05Z"
 },
 "ATP-2026-11-13-hsu-b2ce0-friend": {
 "tour": "ATP",
@@ -542,5 +542,37 @@
 "p_market": 0.6391,
 "p_shadow": 0.5791,
 "logged": "2026-11-12T21:01Z"
+},
+"ATP-2026-11-13-virtanen-7d161-gueymard-wayenburg": {
+"tour": "ATP",
+"a": "Otto Virtanen",
+"b": "Sascha Gueymard Wayenburg",
+"a_te": "Virtanen O.",
+"b_te": "Gueymard Wayenburg S.",
+"slugs": [
+"virtanen-7d161",
+"gueymard-wayenburg"
+],
+"start": "2026-11-13T19:15:00+01:00",
+"p_ratings": 0.5964,
+"p_market": 0.6309,
+"p_shadow": 0.6603,
+"logged": "2026-11-13T21:05Z"
+},
+"ATP-2026-11-13-shelbayh-gray-0bd9f": {
+"tour": "ATP",
+"a": "Abdullah Shelbayh",
+"b": "Alastair Gray",
+"a_te": "Shelbayh A.",
+"b_te": "Gray A.",
+"slugs": [
+"shelbayh",
+"gray-0bd9f"
+],
+"start": "2026-11-13T22:45:00+01:00",
+"p_ratings": 0.5284,
+"p_market": 0.5241,
+"p_shadow": 0.5442,
+"logged": "2026-11-13T21:05Z"
 }
 }
