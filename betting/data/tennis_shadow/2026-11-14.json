@@ -254,5 +254,69 @@
 "p_market": 0.5653,
 "p_shadow": 0.4167,
 "logged": "2026-11-13T21:05Z"
+},
+"ATP-2026-11-14-chidekh-zheng-c91db": {
+"tour": "ATP",
+"a": "Clement Chidekh",
+"b": "Michael Zheng",
+"a_te": "Chidekh C.",
+"b_te": "Zheng M.",
+"slugs": [
+"chidekh",
+"zheng-c91db"
+],
+"start": "2026-11-14T19:55:00+01:00",
+"p_ratings": 0.4921,
+"p_market": 0.5491,
+"p_shadow": 0.5554,
+"logged": "2026-11-14T21:03Z"
+},
+"ATP-2026-11-14-roncadelli-alcala-gurri": {
+"tour": "ATP",
+"a": "Franco Roncadelli",
+"b": "Max Alcala Gurri",
+"a_te": "Roncadelli F.",
+"b_te": "Alcala Gurri M.",
+"slugs": [
+"roncadelli",
+"alcala-gurri"
+],
+"start": "2026-11-14T20:35:00+01:00",
+"p_ratings": 0.4506,
+"p_market": 0.2762,
+"p_shadow": 0.3972,
+"logged": "2026-11-14T21:03Z"
+},
+"ATP-2026-11-14-sanchez-izquierdo-99add-reis-da-silva": {
+"tour": "ATP",
+"a": "Nikolas Sanchez Izquierdo",
+"b": "Joao Lucas Reis Da Silva",
+"a_te": "Sanchez Izquierdo N.",
+"b_te": "Reis Da Silva J.",
+"slugs": [
+"sanchez-izquierdo-99add",
+"reis-da-silva"
+],
+"start": "2026-11-14T22:05:00+01:00",
+"p_ratings": 0.5733,
+"p_market": 0.4342,
+"p_shadow": 0.5205,
+"logged": "2026-11-14T21:03Z"
+},
+"ATP-2026-11-14-perot-artnak": {
+"tour": "ATP",
+"a": "Raphael Perot",
+"b": "Bor Artnak",
+"a_te": "Perot R.",
+"b_te": "Artnak B.",
+"slugs": [
+"perot",
+"artnak"
+],
+"start": "2026-11-14T19:55:00+01:00",
+"p_ratings": 0.5937,
+"p_market": 0.5547,
+"p_shadow": 0.5575,
+"logged": "2026-11-14T21:03Z"
 }
 }
