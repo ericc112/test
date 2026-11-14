@@ -191,3 +191,8 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 ### Auto-learned 2026-11-13
 - 2 losses in nba:reb:over share the cause 'opportunity': write a checklist rule for it in the table above.
 - 2 losses in nba:pa:under share the cause 'role/lineup': write a checklist rule for it in the table above.
+
+### Auto-learned 2026-11-14
+- Segment nhl:nhl_blocks:over: results run below our probabilities; now auto-adjusting -0.31 logit.
+- Segment nba:ra:under capped at Medium (no High legs) until results recover: 3 losses tagged 'role/lineup'; hit 54% vs 56% predicted over 118.
+- Segment nba:pts:under capped at Medium (no High legs) until results recover: 3 losses tagged 'role/lineup'; hit 54% vs 57% predicted over 239.

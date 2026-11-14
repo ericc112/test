@@ -2,7 +2,90 @@
 
 Every graded loss is examined here, including passes and Low-confidence legs. `python -m edge review` writes the diagnosis; `python -m edge tag ID "tag" --lesson "..."` confirms the cause. Tags: `variance`, `opportunity`, `correlated`, `role/lineup`, `model bias`, `market info`, `stale line`, `data error`, `format misread`.
 
-## 2026-11-12: 41 losses from 11 independent causes
+## 2026-11-13: 51 losses from 13 independent causes
+
+| # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
+|---|---|---|---|---|---|---|---|---|
+| 2367 | Ivica Zubac reb under 10.0 | 13.0 | 0.5479 (Medium) | pass | model 84%, market 55% | variance | **untagged** | root leg of a 5-leg script loss: #2367, #2369, #2433, #2438, #2442; logged as a PASS: no money on it; reviewed for calibration |
+| 2369 | Kelly Oubre Jr. reb under 4.0 | 5.0 | 0.5957 (Medium) | pass | model 89%, market 60% | correlated | **untagged** | same game script as #2367 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2372 | Franz Wagner pra under 38.5 | 56.0 | 0.5405 (Medium) | pass | model 50%, market 52% | variance | **untagged** | root leg of a 6-leg script loss: #2372, #2374, #2375, #2376, #2379, #2440; logged as a PASS: no money on it; reviewed for calibration |
+| 2374 | Jaime Jaquez Jr. pra under 21.5 | 32.0 | 0.5518 (Medium) | pass | model 52%, market 53% | correlated | **untagged** | same game script as #2372 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2375 | Kyle Kuzma pra under 18.5 | 20.0 | 0.5474 (Medium) | pass | model 56%, market 51% | correlated | **untagged** | same game script as #2372 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2376 | Myles Turner pts under 9.5 | 14.0 | 0.551 (Medium) | pass | model 59%, market 52% | correlated | **untagged** | same game script as #2372 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2379 | Anthony Black tpm over 1.5 | 1.0 | 0.5402 (Medium) | pass | model 55%, market 53% | correlated | **untagged** | same game script as #2372 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2381 | Jerami Grant pts under 11.5 | 22.0 | 0.5446 (Medium) | pass | model 55%, market 52% | variance | **untagged** | root leg of a 2-leg script loss: #2381, #2426; logged as a PASS: no money on it; reviewed for calibration |
+| 2385 | Josh Giddey pra under 28.5 | 39.0 | 0.5696 (Medium) | pass | model 60%, market 53% | variance | **untagged** | root leg of a 7-leg script loss: #2385, #2387, #2388, #2389, #2392, #2431, #2432; logged as a PASS: no money on it; reviewed for calibration |
+| 2387 | Jalen Johnson ra under 16.5 | 21.0 | 0.5413 (Medium) | pass | model 60%, market 53% | correlated | **untagged** | same game script as #2385 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2388 | Josh Giddey pts under 13.5 | 15.0 | 0.5524 (Medium) | pass | model 58%, market 52% | correlated | **untagged** | same game script as #2385 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2389 | Josh Giddey ast under 8.5 | 14.0 | 0.6252 (Medium) | lean | model 54%, market 54% | correlated | role/lineup | same game script as #2385 (variance); own read: variance |
+| 2392 | Aaron Wiggins ast under 2.5 | 3.0 | 0.612 (Medium) | pass | model 58%, market 51% | correlated | **untagged** | same game script as #2385 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2393 | James Harden pra under 28.5 | 34.0 | 0.544 (Medium) | pass | model 54%, market 51% | variance | **untagged** | root leg of a 5-leg script loss: #2393, #2395, #2425, #2439, #2441; logged as a PASS: no money on it; reviewed for calibration |
+| 2395 | Donovan Mitchell ast under 5.5 | 7.0 | 0.6019 (Low) | pass | model 48% (against), market 52% | correlated | **untagged** | same game script as #2393 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2399 | Keyonte George ast under 5.5 | 7.0 | 0.5525 (Medium) | pass | model 41% (against), market 48% (against) | variance | **untagged** | root leg of a 5-leg script loss: #2399, #2400, #2403, #2404, #2436; logged as a PASS: no money on it; reviewed for calibration |
+| 2400 | Ace Bailey reb over 5.0 | 3.0 | 0.5734 (Medium) | pass | model 61%, market 54% | correlated | **untagged** | same game script as #2399 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2403 | Isaiah Collier ast under 3.5 | 5.0 | 0.5607 (Medium) | pass | model 44% (against), market 48% (against) | correlated | **untagged** | same game script as #2399 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2404 | Reed Sheppard ast under 2.5 | 3.0 | 0.6173 (Medium) | lean | model 57%, market 52% | correlated | variance | same game script as #2399 (variance); own read: variance; closest possible loss (missed by the minimum) |
+| 2406 | Stephon Castle pts under 16.5 | 32.0 | 0.5551 (Medium) | pass | model 68%, market 56% | variance | **untagged** | root leg of a 3-leg script loss: #2406, #2409, #2430; logged as a PASS: no money on it; reviewed for calibration |
+| 2409 | Stephon Castle ast under 5.5 | 6.0 | 0.5959 (Medium) | pass | model 57%, market 50% (against) | correlated | variance | same game script as #2406 (variance); own read: model bias; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 2411 | Deni Avdija pra under 37.5 | 44.0 | 0.5417 (Medium) | pass | model 52%, market 52% | variance | **untagged** | root leg of a 4-leg script loss: #2411, #2416, #2445, #2446; logged as a PASS: no money on it; reviewed for calibration |
+| 2416 | De'Andre Hunter ast under 1.5 | 2.0 | 0.6032 (Medium) | lean | model 54%, market 51% | correlated | role/lineup | same game script as #2411 (variance); own read: variance; closest possible loss (missed by the minimum) |
+| 2417 | Jared McCain pr under 18.5 | 27.0 | 0.5624 (Medium) | pass | model 61%, market 55% | variance | **untagged** | root leg of a 8-leg script loss: #2417, #2418, #2419, #2420, #2421, #2424, #2435, #2447; logged as a PASS: no money on it; reviewed for calibration |
+| 2418 | Jared McCain pts under 14.5 | 23.0 | 0.5439 (Medium) | pass | model 58%, market 51% | correlated | **untagged** | same game script as #2417 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2419 | Brook Lopez pts under 11.5 | 26.0 | 0.5555 (Medium) | pass | model 54%, market 53% | correlated | **untagged** | same game script as #2417 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2420 | Keaton Wagler pts under 10.5 | 14.0 | 0.5542 (Medium) | pass | model 56%, market 53% | correlated | **untagged** | same game script as #2417 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2421 | Derrick Jones Jr. pts under 10.5 | 14.0 | 0.5539 (Medium) | pass | model 59%, market 52% | correlated | **untagged** | same game script as #2417 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2424 | Alex Caruso ast under 2.5 | 4.0 | 0.6014 (Medium) | pass | model 51%, market 52% | correlated | **untagged** | same game script as #2417 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2425 | Jaylon Tyson pr under 16.5 | 19.0 | 0.5212 (Low) | pass | model 67%, market 52% | correlated | role/lineup | same game script as #2393 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2426 | Saddiq Bey ra under 7.5 | 10.0 | 0.453 (Low) | pass | model 61%, market 45% (against) | correlated | variance | same game script as #2381 (variance); own read: model bias; we priced this side at 45%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 2430 | Draymond Green ast over 5.5 | 3.0 | 0.5077 (Low) | pass | model 56%, market 54% | correlated | opportunity | same game script as #2406 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2431 | Josh Giddey pr under 19.5 | 25.0 | 0.5122 (Low) | pass | model 60%, market 51% | correlated | role/lineup | same game script as #2385 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2432 | Jalen Johnson reb under 9.5 | 11.0 | 0.5162 (Low) | pass | model 68%, market 52% | correlated | role/lineup | same game script as #2385 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2433 | Obi Toppin pra over 15.5 | 13.0 | 0.3908 (Low) | pass | model 37% (against) | correlated | variance | same game script as #2367 (variance); own read: variance; we priced this side at 39%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 2435 | Isaiah Hartenstein pa under 13.5 | 27.0 | 0.4614 (Low) | pass | model 59% | correlated | role/lineup | same game script as #2417 (variance); own read: variance; we priced this side at 46%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 2436 | Isaiah Collier pr over 8.5 | 5.0 | 0.4963 (Low) | pass | model 57%, market 50% (against) | correlated | variance | same game script as #2399 (variance); own read: model bias; we priced this side at 50%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 2438 | Jalen Brunson ra under 9.5 | 12.0 | 0.495 (Low) | pass | model 65%, market 50% (against) | correlated | role/lineup | same game script as #2367 (variance); own read: model bias; we priced this side at 50%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 2439 | Bam Adebayo ra under 12.5 | 17.0 | 0.4883 (Low) | pass | model 47% (against) | correlated | variance | same game script as #2393 (variance); own read: variance; we priced this side at 49%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 2440 | Anthony Black reb over 5.0 | 2.0 | 0.537 (Low) | pass | model 58%, market 50% | correlated | variance | same game script as #2372 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2441 | Mario Hezonja reb over 4.5 | 4.0 | 0.5362 (Low) | pass | model 55%, market 51% | correlated | role/lineup | same game script as #2393 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2442 | Mikal Bridges pts under 8.5 | 18.0 | 0.526 (Low) | pass | model 63%, market 53% | correlated | role/lineup | same game script as #2367 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2445 | Robert Williams III ra under 7.5 | 8.0 | 0.5205 (Low) | pass | model 52%, market 53% | correlated | variance | same game script as #2411 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2446 | Keegan Murray pa under 12.5 | 20.0 | 0.5192 (Low) | pass | model 68%, market 55% | correlated | role/lineup | same game script as #2411 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2447 | Darius Garland reb under 2.5 | 4.0 | 0.5162 (Low) | pass | model 70%, market 52% | correlated | role/lineup | same game script as #2417 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2456 | Trevor Connelly nhl_sog under 2.0 | 4.0 | 0.5627 (Low) | pass | model 68%, market 62% | variance | **untagged** | root leg of a 2-leg script loss: #2456, #2466; logged as a PASS: no money on it; reviewed for calibration |
+| 2458 | Tye Kartye nhl_points over 0.5 | 0.0 | 0.5341 (Low) | pass | model 53%, market 48% (against) | model bias | **untagged** | logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 2466 | Nick Perbix nhl_blocks over 1.5 | 0.0 | 0.4739 (Low) | pass | model 51%, market 46% (against) | correlated | **untagged** | same game script as #2456 (variance); own read: model bias; we priced this side at 47%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 2484 | Aryna Sabalenka tennis_games_won over 12.5 | 10.0 | 0.4071 (Low) | pass | model 41% (against) | variance | **untagged** | we priced this side at 41%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 2485 | Taylor Fritz tennis_games under 22.5 | 31.0 | 0.5215 (Low) | pass | model 61%, market 50% (against) | variance | **untagged** | root leg of a 2-leg script loss: #2485, #2486; logged as a PASS: no money on it; reviewed for calibration |
+| 2486 | Thiago Agustin Tirante tennis_games_won under 9.5 | 14.0 | 0.547 (Low) | pass | model 55% | correlated | **untagged** | same game script as #2485 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+
+Lessons:
+- #2389: Giddey 39 min vs 28 projected; 14 ast
+- #2404: 3 vs 2.5 in 19 min (as projected)
+- #2409: 6 vs 5.5 in 25 min of a 38-point win
+- #2416: Hunter 42 min vs 28 projected (L28 minutes warning fired); 2 ast
+- #2425: Tyson 30 min vs 22 projected (Mobley out)
+- #2426: 35 min, 10 reb; priced 45%
+- #2430: Draymond 16 min vs 25 projected in a 38-point loss
+- #2431: Giddey 39 min vs 28 projected; 14 ast
+- #2432: Jalen Johnson 40 min vs 32 projected
+- #2433: 13 in 16 min; priced 39%
+- #2435: Hartenstein 30 min vs 23 projected; 16 reb
+- #2436: 1-4 FG in 16 min (as projected)
+- #2438: Brunson 36 min vs 30 projected; 11 ast
+- #2439: 38 min vs 34 projected; 14 reb
+- #2440: 2 reb in 37 min
+- #2441: Hezonja 9 min vs 19 projected
+- #2442: Mikal Bridges 29 min vs 20 projected
+- #2445: 8 vs 7.5 at projected minutes
+- #2446: Murray 40 min vs 21 projected (L28 minutes warning fired)
+- #2447: Garland 37 min vs 29 projected; 4 reb
+
+Detail from the feeds:
+- #2456 Trevor Connelly: error=HTTPError
+- #2458 Tye Kartye: error=HTTPError
+- #2466 Nick Perbix: error=HTTPError
+
+## 2026-11-12: 42 losses from 12 independent causes
 
 | # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
 |---|---|---|---|---|---|---|---|---|
@@ -47,6 +130,7 @@ Every graded loss is examined here, including passes and Low-confidence legs. `p
 | 2350 | Jack Hughes nhl_assists over 0.5 | 0.0 | 0.5393 (Low) | pass | model 59%, market 51% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
 | 2351 | Artturi Lehkonen nhl_sog over 1.5 | 1.0 | 0.514 (Low) | pass | model 61%, market 52% | correlated | **untagged** | same game script as #2332 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
 | 2354 | Matthew Knies nhl_sog under 1.5 | 3.0 | 0.47 (Low) | pass | model 60%, market 51% | correlated | **untagged** | same game script as #2340 (variance); own read: variance; we priced this side at 47%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 2362 | Aryna Sabalenka tennis_games under 22.5 | 25.0 | 0.5232 (Low) | pass | model 61%, market 50% (against) | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration |
 
 Lessons:
 - #2289: 8 assists in 35 min (as projected)
