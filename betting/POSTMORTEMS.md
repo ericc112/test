@@ -2,7 +2,75 @@
 
 Every graded loss is examined here, including passes and Low-confidence legs. `python -m edge review` writes the diagnosis; `python -m edge tag ID "tag" --lesson "..."` confirms the cause. Tags: `variance`, `opportunity`, `correlated`, `role/lineup`, `model bias`, `market info`, `stale line`, `data error`, `format misread`.
 
-## 2026-11-13: 51 losses from 13 independent causes
+## 2026-11-14: 32 losses from 15 independent causes
+
+| # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
+|---|---|---|---|---|---|---|---|---|
+| 2493 | Christian Braun pr under 16.5 | 24.0 | 0.5413 (Medium) | pass | model 57%, market 53% | variance | **untagged** | root leg of a 3-leg script loss: #2493, #2494, #2532; logged as a PASS: no money on it; reviewed for calibration |
+| 2494 | Cameron Johnson ra under 5.5 | 7.0 | 0.5419 (Medium) | pass | model 51%, market 57% | correlated | **untagged** | same game script as #2493 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2498 | Kyrie Irving ast under 4.0 | 5.0 | 0.5664 (Medium) | lean | model 49% (against), market 48% (against) | variance | role/lineup | root leg of a 2-leg script loss: #2498, #2530 |
+| 2507 | Julius Randle ast under 4.5 | 5.0 | 0.5863 (Medium) | lean | model 53%, market 50% (against) | model bias | variance | root leg of a 4-leg script loss: #2507, #2508, #2519, #2534; model was on our side, the market was against it, and the market was right |
+| 2508 | Day'Ron Sharpe ast under 4.0 | 5.0 | 0.5425 (Medium) | pass | model 64%, market 54% | correlated | **untagged** | same game script as #2507 (model bias); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2513 | LaMelo Ball ra under 11.5 | 14.0 | 0.5464 (Medium) | pass | model 59%, market 55% | variance | variance | root leg of a 3-leg script loss: #2513, #2515, #2518; logged as a PASS: no money on it; reviewed for calibration |
+| 2515 | Matas Buzelis ra under 7.5 | 11.0 | 0.547 (Medium) | pass | model 66%, market 55% | correlated | **untagged** | same game script as #2513 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2518 | Jonathan Kuminga ast under 2.5 | 3.0 | 0.5581 (Medium) | pass | model 45% (against), market 48% (against) | correlated | **untagged** | same game script as #2513 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2519 | Cam Spencer pra under 24.5 | 26.0 | 0.5061 (Low) | pass | model 76%, market 51% | correlated | role/lineup | same game script as #2507 (model bias); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2523 | Kevin Huerter reb under 3.5 | 4.0 | 0.4627 (Low) | pass | model 55%, market 52% | variance | role/lineup | we priced this side at 46%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2530 | Kyrie Irving ra under 8.0 | 11.0 | 0.491 (Low) | pass | model 53%, market 50% (against) | correlated | role/lineup | same game script as #2498 (variance); own read: model bias; we priced this side at 49%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 2532 | Jordan Poole pts under 10.5 | 14.0 | 0.5286 (Low) | pass | model 57% | correlated | variance | same game script as #2493 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2534 | Day'Ron Sharpe pr under 16.5 | 27.0 | 0.5162 (Low) | pass | model 60%, market 52% | correlated | role/lineup | same game script as #2507 (model bias); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2536 | Zach Benson nhl_points over 0.5 | 0.0 | 0.5834 (Low) | pass | model 46% (against), market 54% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2538 | Jack Roslovic nhl_points over 0.5 | 0.0 | 0.582 (Medium) | lean | model 49% (against), market 53% | variance | **untagged** | root leg of a 2-leg script loss: #2538, #2555; closest possible loss (missed by the minimum) |
+| 2539 | Jordan Kyrou nhl_points over 0.5 | 0.0 | 0.5927 (Low) | pass | model 44% (against), market 56% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2540 | Evgeni Malkin nhl_points over 0.5 | 0.0 | 0.5947 (Medium) | lean | model 56%, market 53% | variance | **untagged** | root leg of a 4-leg script loss: #2540, #2541, #2566, #2571; closest possible loss (missed by the minimum) |
+| 2541 | Jake Sanderson nhl_points over 0.5 | 0.0 | 0.5915 (Medium) | pass | model 50%, market 54% | correlated | **untagged** | same game script as #2540 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2544 | Jackson LaCombe nhl_assists over 0.5 | 0.0 | 0.5431 (Low) | pass | model 49% (against), market 53% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2547 | Andrew Peeke nhl_blocks under 1.5 | 2.0 | 0.4656 (Low) | pass | model 57%, market 50% | variance | **untagged** | root leg of a 2-leg script loss: #2547, #2569; we priced this side at 47%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2549 | Ross Johnston nhl_hits over 3.5 | 1.0 | 0.4574 (Low) | pass | model 30% (against) | variance | **untagged** | we priced this side at 46%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 2550 | Elias Lindholm nhl_points over 0.5 | 0.0 | 0.5543 (Low) | pass | model 47% (against), market 50% | variance | **untagged** | root leg of a 2-leg script loss: #2550, #2563; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2551 | Adam Fantilli nhl_points under 0.5 | 1.0 | 0.4999 (Low) | pass | model 62%, market 46% (against) | model bias | **untagged** | root leg of a 4-leg script loss: #2551, #2553, #2560, #2567; we priced this side at 50%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 2553 | Zach Werenski nhl_toi over 27.75 | 24.55 | 0.3982 (Low) | pass | model 24% (against) | correlated | **untagged** | same game script as #2551 (model bias); own read: variance; we priced this side at 40%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 2555 | Colton Dach nhl_sog over 1.5 | 0.0 | 0.5301 (Low) | pass | model 55%, market 52% | correlated | **untagged** | same game script as #2538 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2560 | Tyson Foerster nhl_sog over 1.5 | 1.0 | 0.5189 (Low) | pass | model 59%, market 50% (against) | correlated | **untagged** | same game script as #2551 (model bias); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2562 | Alex DeBrincat nhl_hits over 0.5 | 0.0 | 0.515 (Low) | pass | model 57% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2563 | Matt Boldy nhl_sog over 3.5 | 3.0 | 0.5138 (Low) | pass | model 56%, market 50% | correlated | **untagged** | same game script as #2550 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2566 | Tim Stutzle nhl_toi over 21.5 | 19.72 | 0.504 (Low) | pass | model 73% | correlated | **untagged** | same game script as #2540 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2567 | Owen Tippett nhl_blocks under 0.5 | 1.0 | 0.4757 (Low) | pass | model 64% | correlated | **untagged** | same game script as #2551 (model bias); own read: variance; we priced this side at 48%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2569 | Macklin Celebrini nhl_blocks over 0.5 | 0.0 | 0.441 (Low) | pass | model 59% | correlated | **untagged** | same game script as #2547 (variance); own read: variance; we priced this side at 44%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2571 | Thomas Chabot nhl_blocks over 1.5 | 0.0 | 0.4396 (Low) | pass | model 62%, market 49% (against) | correlated | **untagged** | same game script as #2540 (variance); own read: model bias; we priced this side at 44%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+
+Lessons:
+- #2498: Irving 37 min vs 30 projected; 5 vs 4
+- #2507: minutes warning fired (28 vs 32 last 5); 31 min, 5 vs 4.5
+- #2513: 30 min as projected; 8 reb
+- #2519: Spencer 34 min vs 23 projected
+- #2523: Huerter 38 min vs 28 projected; 4 vs 3.5
+- #2530: Irving 37 min vs 30 projected
+- #2532: 24 min vs 20 projected; 14 on 3-7 FG
+- #2534: Sharpe 28 min vs 20 projected; 11 reb
+
+Detail from the feeds:
+- #2536 Zach Benson: error=HTTPError
+- #2538 Jack Roslovic: error=HTTPError
+- #2539 Jordan Kyrou: error=HTTPError
+- #2540 Evgeni Malkin: error=HTTPError
+- #2541 Jake Sanderson: error=HTTPError
+- #2544 Jackson LaCombe: error=HTTPError
+- #2547 Andrew Peeke: error=HTTPError
+- #2549 Ross Johnston: error=HTTPError
+- #2550 Elias Lindholm: error=HTTPError
+- #2551 Adam Fantilli: error=HTTPError
+- #2553 Zach Werenski: error=HTTPError
+- #2555 Colton Dach: error=HTTPError
+- #2560 Tyson Foerster: error=HTTPError
+- #2562 Alex DeBrincat: error=HTTPError
+- #2563 Matt Boldy: error=HTTPError
+- #2566 Tim Stutzle: error=HTTPError
+- #2567 Owen Tippett: error=HTTPError
+- #2569 Macklin Celebrini: error=HTTPError
+- #2571 Thomas Chabot: error=HTTPError
+
+## 2026-11-13: 60 losses from 18 independent causes
 
 | # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
 |---|---|---|---|---|---|---|---|---|
@@ -51,9 +119,18 @@ Every graded loss is examined here, including passes and Low-confidence legs. `p
 | 2445 | Robert Williams III ra under 7.5 | 8.0 | 0.5205 (Low) | pass | model 52%, market 53% | correlated | variance | same game script as #2411 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
 | 2446 | Keegan Murray pa under 12.5 | 20.0 | 0.5192 (Low) | pass | model 68%, market 55% | correlated | role/lineup | same game script as #2411 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
 | 2447 | Darius Garland reb under 2.5 | 4.0 | 0.5162 (Low) | pass | model 70%, market 52% | correlated | role/lineup | same game script as #2417 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 2452 | Brandt Clarke nhl_sog over 1.5 | 1.0 | 0.501 (Low) | pass | model 58% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2454 | Jack Hughes nhl_sog over 3.5 | 2.0 | 0.4981 (Low) | pass | model 56% | variance | **untagged** | root leg of a 2-leg script loss: #2454, #2480; we priced this side at 50%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
 | 2456 | Trevor Connelly nhl_sog under 2.0 | 4.0 | 0.5627 (Low) | pass | model 68%, market 62% | variance | **untagged** | root leg of a 2-leg script loss: #2456, #2466; logged as a PASS: no money on it; reviewed for calibration |
 | 2458 | Tye Kartye nhl_points over 0.5 | 0.0 | 0.5341 (Low) | pass | model 53%, market 48% (against) | model bias | **untagged** | logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 2461 | Josh Morrissey nhl_assists under 0.5 | 1.0 | 0.5202 (Low) | pass | model 60% | variance | **untagged** | root leg of a 3-leg script loss: #2461, #2470, #2472; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
 | 2466 | Nick Perbix nhl_blocks over 1.5 | 0.0 | 0.4739 (Low) | pass | model 51%, market 46% (against) | correlated | **untagged** | same game script as #2456 (variance); own read: model bias; we priced this side at 47%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 2470 | Kyle Connor nhl_assists under 0.5 | 1.0 | 0.5188 (Low) | pass | model 59% | correlated | **untagged** | same game script as #2461 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2472 | Frank Nazar nhl_sog over 1.5 | 1.0 | 0.5024 (Low) | pass | model 58% | correlated | **untagged** | same game script as #2461 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2474 | Viktor Arvidsson nhl_sog over 2.5 | 1.0 | 0.4789 (Low) | pass | model 47% (against) | variance | **untagged** | root leg of a 2-leg script loss: #2474, #2475; we priced this side at 48%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 2475 | Jake Guentzel nhl_sog under 2.5 | 3.0 | 0.4344 (Low) | pass | model 52% | correlated | **untagged** | same game script as #2474 (variance); own read: variance; we priced this side at 43%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 2476 | William Nylander nhl_sog over 2.5 | 1.0 | 0.4759 (Low) | pass | model 45% (against) | variance | **untagged** | we priced this side at 48%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 2480 | Jakob Chychrun nhl_sog over 2.5 | 2.0 | 0.4884 (Low) | pass | model 51% | correlated | **untagged** | same game script as #2454 (variance); own read: variance; we priced this side at 49%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
 | 2484 | Aryna Sabalenka tennis_games_won over 12.5 | 10.0 | 0.4071 (Low) | pass | model 41% (against) | variance | **untagged** | we priced this side at 41%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
 | 2485 | Taylor Fritz tennis_games under 22.5 | 31.0 | 0.5215 (Low) | pass | model 61%, market 50% (against) | variance | **untagged** | root leg of a 2-leg script loss: #2485, #2486; logged as a PASS: no money on it; reviewed for calibration |
 | 2486 | Thiago Agustin Tirante tennis_games_won under 9.5 | 14.0 | 0.547 (Low) | pass | model 55% | correlated | **untagged** | same game script as #2485 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
@@ -81,9 +158,18 @@ Lessons:
 - #2447: Garland 37 min vs 29 projected; 4 reb
 
 Detail from the feeds:
+- #2452 Brandt Clarke: error=HTTPError
+- #2454 Jack Hughes: error=HTTPError
 - #2456 Trevor Connelly: error=HTTPError
 - #2458 Tye Kartye: error=HTTPError
+- #2461 Josh Morrissey: error=HTTPError
 - #2466 Nick Perbix: error=HTTPError
+- #2470 Kyle Connor: error=HTTPError
+- #2472 Frank Nazar: error=HTTPError
+- #2474 Viktor Arvidsson: error=HTTPError
+- #2475 Jake Guentzel: error=HTTPError
+- #2476 William Nylander: error=HTTPError
+- #2480 Jakob Chychrun: error=HTTPError
 
 ## 2026-11-12: 42 losses from 12 independent causes
 

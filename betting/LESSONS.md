@@ -196,3 +196,11 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 - Segment nhl:nhl_blocks:over: results run below our probabilities; now auto-adjusting -0.31 logit.
 - Segment nba:ra:under capped at Medium (no High legs) until results recover: 3 losses tagged 'role/lineup'; hit 54% vs 56% predicted over 118.
 - Segment nba:pts:under capped at Medium (no High legs) until results recover: 3 losses tagged 'role/lineup'; hit 54% vs 57% predicted over 239.
+
+### Auto-learned 2026-11-15
+- Segment nhl:nhl_sog:over: results run below our probabilities; now auto-adjusting -0.17 logit.
+- Segment nhl:nhl_points:over: results run above our probabilities; now auto-adjusting +0.02 logit.
+- Segment nba:pr:under capped at Medium (no High legs) until results recover: 6 losses tagged 'role/lineup'; hit 55% vs 55% predicted over 113.
+- 2 losses in nba:ast:over share the cause 'opportunity': write a checklist rule for it in the table above.
+- 2 losses in nba:reb:under share the cause 'role/lineup': write a checklist rule for it in the table above.
+- 2 losses in nba:ast:under share the cause 'role/lineup': write a checklist rule for it in the table above.
