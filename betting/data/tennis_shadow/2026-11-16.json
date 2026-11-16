@@ -169,11 +169,11 @@
 "dietrich-fa350",
 "nesterov-34bdf"
 ],
-"start": "2026-11-16T22:00:00+01:00",
-"p_ratings": 0.7133,
-"p_market": 0.8131,
-"p_shadow": 0.772,
-"logged": "2026-11-15T21:14Z"
+"start": "2026-11-16T22:15:00+01:00",
+"p_ratings": 0.7129,
+"p_market": 0.8267,
+"p_shadow": 0.7718,
+"logged": "2026-11-16T21:09Z"
 },
 "ATP-2026-11-16-honda-48d1d-broady-9ff27": {
 "tour": "ATP",
@@ -329,11 +329,11 @@
 "tarvet",
 "poling"
 ],
-"start": "2026-11-16T17:00:00+01:00",
-"p_ratings": 0.6726,
-"p_market": 0.8684,
-"p_shadow": 0.7629,
-"logged": "2026-11-15T21:14Z"
+"start": "2026-11-16T23:30:00+01:00",
+"p_ratings": 0.6731,
+"p_market": 0.8878,
+"p_shadow": 0.7632,
+"logged": "2026-11-16T21:09Z"
 },
 "ATP-2026-11-16-baris-miyoshi-1fb72": {
 "tour": "ATP",
@@ -393,11 +393,11 @@
 "kennedy-81205",
 "krueger-d6035"
 ],
-"start": "2026-11-16T17:00:00+01:00",
-"p_ratings": 0.3167,
-"p_market": 0.339,
-"p_shadow": 0.3547,
-"logged": "2026-11-15T21:14Z"
+"start": "2026-11-16T22:15:00+01:00",
+"p_ratings": 0.3175,
+"p_market": 0.3512,
+"p_shadow": 0.3553,
+"logged": "2026-11-16T21:09Z"
 },
 "ATP-2026-11-16-nagal-vrbensky": {
 "tour": "ATP",
@@ -558,5 +558,37 @@
 "p_market": 0.4173,
 "p_shadow": 0.3154,
 "logged": "2026-11-15T21:14Z"
+},
+"ATP-2026-11-16-roca-batalla-nijboer": {
+"tour": "ATP",
+"a": "Oriol Roca Batalla",
+"b": "Ryan Nijboer",
+"a_te": "Roca Batalla O.",
+"b_te": "Nijboer R.",
+"slugs": [
+"roca-batalla",
+"nijboer"
+],
+"start": "2026-11-16T19:10:00+01:00",
+"p_ratings": 0.5977,
+"p_market": 0.6868,
+"p_shadow": 0.642,
+"logged": "2026-11-16T21:09Z"
+},
+"ATP-2026-11-16-boscardin-dias-3afa8-cigarran": {
+"tour": "ATP",
+"a": "Pedro Boscardin Dias",
+"b": "Thiago Cigarran",
+"a_te": "Boscardin Dias P.",
+"b_te": "Cigarran T.",
+"slugs": [
+"boscardin-dias-3afa8",
+"cigarran"
+],
+"start": "2026-11-16T20:45:00+01:00",
+"p_ratings": 0.5366,
+"p_market": 0.7832,
+"p_shadow": 0.5878,
+"logged": "2026-11-16T21:09Z"
 }
 }
