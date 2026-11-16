@@ -605,7 +605,7 @@ def price_leg(G: dict, name: str, stat: str, line: float, over_only: bool = Fals
             continue
         pm = (over if sd == "over" else 1 - over - push) / max(1 - push, 1e-9)
         pk = None if pmk is None else (pmk if sd == "over" else 1 - pmk)
-        e = final_probability(pm, pk, None, f"tennis:{stat}:{sd}", 0, adj)
+        e = final_probability(pm, pk, None, f"tennis:tennis_{stat}:{sd}", 0, adj)   # the logged segment (market key), so learned biases apply
         conf, why = e.confidence, []
         if pk is None and conf in ("High", "Medium"):
             conf, why = "Low", ["no market price for this line: the simulation alone can't carry a leg"]
