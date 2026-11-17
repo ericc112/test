@@ -569,11 +569,11 @@
 "aboian-f7ddc",
 "kolar-d6d52"
 ],
-"start": "2026-11-17T22:00:00+01:00",
-"p_ratings": 0.4521,
-"p_market": 0.5054,
-"p_shadow": 0.4541,
-"logged": "2026-11-16T21:09Z"
+"start": "2026-11-17T23:45:00+01:00",
+"p_ratings": 0.4513,
+"p_market": 0.4893,
+"p_shadow": 0.4535,
+"logged": "2026-11-17T21:09Z"
 },
 "ATP-2026-11-17-la-serna-comesana-c17e0": {
 "tour": "ATP",
@@ -814,5 +814,117 @@
 "p_market": null,
 "p_shadow": 0.2968,
 "logged": "2026-11-16T21:09Z"
+},
+"ATP-2026-11-17-moller-6ea06-cigarran": {
+"tour": "ATP",
+"a": "Elmer Moller",
+"b": "Thiago Cigarran",
+"a_te": "Moller E.",
+"b_te": "Cigarran T.",
+"slugs": [
+"moller-6ea06",
+"cigarran"
+],
+"start": "2026-11-17T19:25:00+01:00",
+"p_ratings": 0.6402,
+"p_market": 0.8788,
+"p_shadow": 0.7587,
+"logged": "2026-11-17T21:09Z"
+},
+"ATP-2026-11-17-olivieri-ff875-villanueva-55ff0": {
+"tour": "ATP",
+"a": "Genaro Alberto Olivieri",
+"b": "Gonzalo Villanueva",
+"a_te": "Olivieri G.",
+"b_te": "Villanueva G.",
+"slugs": [
+"olivieri-ff875",
+"villanueva-55ff0"
+],
+"start": "2026-11-17T20:30:00+01:00",
+"p_ratings": 0.536,
+"p_market": 0.6404,
+"p_shadow": 0.6357,
+"logged": "2026-11-17T21:09Z"
+},
+"ATP-2026-11-17-aguilar-cardozo-sanchez-jover": {
+"tour": "ATP",
+"a": "Joaquin Aguilar Cardozo",
+"b": "Carlos Sanchez Jover",
+"a_te": "Aguilar Cardozo J.",
+"b_te": "Sanchez Jover C.",
+"slugs": [
+"aguilar-cardozo",
+"sanchez-jover"
+],
+"start": "2026-11-17T22:05:00+01:00",
+"p_ratings": 0.6003,
+"p_market": 0.7127,
+"p_shadow": 0.6416,
+"logged": "2026-11-17T21:09Z"
+},
+"ATP-2026-11-17-kicker-seyboth-wild": {
+"tour": "ATP",
+"a": "Nicolas Kicker",
+"b": "Thiago Seyboth Wild",
+"a_te": "Kicker N.",
+"b_te": "Seyboth Wild T.",
+"slugs": [
+"kicker",
+"seyboth-wild"
+],
+"start": "2026-11-17T22:15:00+01:00",
+"p_ratings": 0.4091,
+"p_market": 0.1795,
+"p_shadow": 0.302,
+"logged": "2026-11-17T21:09Z"
+},
+"ATP-2026-11-17-alcala-gurri-roca-batalla": {
+"tour": "ATP",
+"a": "Max Alcala Gurri",
+"b": "Oriol Roca Batalla",
+"a_te": "Alcala Gurri M.",
+"b_te": "Roca Batalla O.",
+"slugs": [
+"alcala-gurri",
+"roca-batalla"
+],
+"start": "2026-11-17T22:30:00+01:00",
+"p_ratings": 0.5237,
+"p_market": 0.5785,
+"p_shadow": 0.5886,
+"logged": "2026-11-17T21:09Z"
+},
+"ATP-2026-11-17-wendelken-hussey-d2863": {
+"tour": "ATP",
+"a": "Harry Wendelken",
+"b": "Giles Hussey",
+"a_te": "Wendelken H.",
+"b_te": "Hussey G.",
+"slugs": [
+"wendelken",
+"hussey-d2863"
+],
+"start": "2026-11-17T20:05:00+01:00",
+"p_ratings": 0.601,
+"p_market": 0.5646,
+"p_shadow": 0.5664,
+"logged": "2026-11-17T21:09Z"
+},
+"ATP-2026-11-17-perot-vales": {
+"tour": "ATP",
+"a": "Raphael Perot",
+"b": "Amit Vales",
+"a_te": "Perot R.",
+"b_te": "Vales A.",
+"slugs": [
+"perot",
+"vales"
+],
+"start": "2026-11-17T20:10:00+01:00",
+"p_ratings": 0.448,
+"p_market": 0.7759,
+"p_shadow": 0.4316,
+"logged": "2026-11-17T21:09Z"
 }
 }
