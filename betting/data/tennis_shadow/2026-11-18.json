@@ -489,11 +489,11 @@
 "kennedy-81205",
 "maxted"
 ],
-"start": "2026-11-18T17:00:00+01:00",
-"p_ratings": 0.4546,
-"p_market": 0.3722,
-"p_shadow": 0.4675,
-"logged": "2026-11-17T21:09Z"
+"start": "2026-11-18T23:30:00+01:00",
+"p_ratings": 0.4552,
+"p_market": 0.3716,
+"p_shadow": 0.4679,
+"logged": "2026-11-18T21:09Z"
 },
 "ATP-2026-11-18-torres-dc0bf-pereira-9b0a8": {
 "tour": "ATP",
@@ -574,5 +574,37 @@
 "p_market": 0.6785,
 "p_shadow": 0.2972,
 "logged": "2026-11-17T21:09Z"
+},
+"ATP-2026-11-18-passaro-5f6f1-basilashvili": {
+"tour": "ATP",
+"a": "Francesco Passaro",
+"b": "Nikoloz Basilashvili",
+"a_te": "Passaro F.",
+"b_te": "Basilashvili N.",
+"slugs": [
+"passaro-5f6f1",
+"basilashvili"
+],
+"start": "2026-11-18T19:55:00+01:00",
+"p_ratings": 0.4359,
+"p_market": 0.3098,
+"p_shadow": 0.4043,
+"logged": "2026-11-18T21:09Z"
+},
+"ATP-2026-11-18-olivieri-ff875-boyer-64ede": {
+"tour": "ATP",
+"a": "Genaro Alberto Olivieri",
+"b": "Tristan Boyer",
+"a_te": "Olivieri G.",
+"b_te": "Boyer T.",
+"slugs": [
+"olivieri-ff875",
+"boyer-64ede"
+],
+"start": "2026-11-18T22:30:00+01:00",
+"p_ratings": 0.3818,
+"p_market": 0.3438,
+"p_shadow": 0.3392,
+"logged": "2026-11-18T21:09Z"
 }
 }
