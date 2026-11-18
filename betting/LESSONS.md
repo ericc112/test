@@ -212,3 +212,6 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 - Segment tennis:tennis_games_won:over: results run below our probabilities; now auto-adjusting -0.04 logit.
 - Segment nba:pr:under: Medium cap lifted, results back in line.
 - 2 losses in nba:ast:under share the cause 'opportunity': write a checklist rule for it in the table above.
+
+### Auto-learned 2026-11-18
+- Segment nhl:nhl_assists:under: results run below our probabilities; now auto-adjusting -0.22 logit.
