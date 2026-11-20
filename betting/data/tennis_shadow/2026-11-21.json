@@ -1,0 +1,290 @@
+{
+"ATP-2026-11-21-alcaraz-5ab70-shelton-38989": {
+"tour": "ATP",
+"a": "Carlos Alcaraz",
+"b": "Ben Shelton",
+"a_te": "Alcaraz C.",
+"b_te": "Shelton B.",
+"slugs": [
+"alcaraz-5ab70",
+"shelton-38989"
+],
+"start": "2026-11-21T14:00:00+01:00",
+"p_ratings": 0.733,
+"p_market": 0.7297,
+"p_shadow": 0.8267,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-samuel-371b3-djere": {
+"tour": "ATP",
+"a": "Toby Samuel",
+"b": "Laslo Djere",
+"a_te": "Samuel T.",
+"b_te": "Djere L.",
+"slugs": [
+"samuel-371b3",
+"djere"
+],
+"start": "2026-11-21T12:00:00+01:00",
+"p_ratings": 0.5973,
+"p_market": 0.6036,
+"p_shadow": 0.607,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-basavareddy-virtanen-7d161": {
+"tour": "ATP",
+"a": "Nishesh Basavareddy",
+"b": "Otto Virtanen",
+"a_te": "Basavareddy N.",
+"b_te": "Virtanen O.",
+"slugs": [
+"basavareddy",
+"virtanen-7d161"
+],
+"start": "2026-11-21T13:30:00+01:00",
+"p_ratings": 0.5141,
+"p_market": 0.5014,
+"p_shadow": 0.5228,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-kwon-b3d34-gueymard-wayenburg": {
+"tour": "ATP",
+"a": "Soonwoo Kwon",
+"b": "Sascha Gueymard Wayenburg",
+"a_te": "Kwon S.",
+"b_te": "Gueymard Wayenburg S.",
+"slugs": [
+"kwon-b3d34",
+"gueymard-wayenburg"
+],
+"start": "2026-11-21T15:00:00+01:00",
+"p_ratings": 0.6317,
+"p_market": 0.56,
+"p_shadow": 0.6175,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-blanch-748a3-draxl": {
+"tour": "ATP",
+"a": "Darwin Blanch",
+"b": "Liam Draxl",
+"a_te": "Blanch D.",
+"b_te": "Draxl L.",
+"slugs": [
+"blanch-748a3",
+"draxl"
+],
+"start": "2026-11-21T00:00:00+01:00",
+"p_ratings": 0.3992,
+"p_market": 0.4679,
+"p_shadow": 0.3754,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-trotter-mayo-58e8a": {
+"tour": "ATP",
+"a": "James Trotter",
+"b": "Aidan Mayo",
+"a_te": "Trotter J.",
+"b_te": "Mayo A.",
+"slugs": [
+"trotter",
+"mayo-58e8a"
+],
+"start": "2026-11-21T01:30:00+01:00",
+"p_ratings": 0.4051,
+"p_market": 0.3255,
+"p_shadow": 0.4041,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-broady-9ff27-friend": {
+"tour": "ATP",
+"a": "Liam Broady",
+"b": "Jay Friend",
+"a_te": "Broady L.",
+"b_te": "Friend J.",
+"slugs": [
+"broady-9ff27",
+"friend"
+],
+"start": "2026-11-21T03:00:00+01:00",
+"p_ratings": 0.5275,
+"p_market": 0.4613,
+"p_shadow": 0.4404,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-hassan-1d510-watanuki-223ad": {
+"tour": "ATP",
+"a": "Benjamin Hassan",
+"b": "Yosuke Watanuki",
+"a_te": "Hassan B.",
+"b_te": "Watanuki Y.",
+"slugs": [
+"hassan-1d510",
+"watanuki-223ad"
+],
+"start": "2026-11-21T04:30:00+01:00",
+"p_ratings": 0.3664,
+"p_market": 0.157,
+"p_shadow": 0.2944,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-justo-roncadelli": {
+"tour": "ATP",
+"a": "Guido Ivan Justo",
+"b": "Franco Roncadelli",
+"a_te": "Justo G.",
+"b_te": "Roncadelli F.",
+"slugs": [
+"justo",
+"roncadelli"
+],
+"start": "2026-11-21T00:00:00+01:00",
+"p_ratings": 0.5209,
+"p_market": 0.5896,
+"p_shadow": 0.5519,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-jasika-sekulic-13abc": {
+"tour": "ATP",
+"a": "Omar Jasika",
+"b": "Philip Sekulic",
+"a_te": "Jasika O.",
+"b_te": "Sekulic P.",
+"slugs": [
+"jasika",
+"sekulic-13abc"
+],
+"start": "2026-11-21T02:30:00+01:00",
+"p_ratings": 0.4662,
+"p_market": 0.5505,
+"p_shadow": 0.4651,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-gorzny-tu-41622": {
+"tour": "ATP",
+"a": "Sebastian Gorzny",
+"b": "Li Tu",
+"a_te": "Gorzny S.",
+"b_te": "Tu L.",
+"slugs": [
+"gorzny",
+"tu-41622"
+],
+"start": "2026-11-21T04:00:00+01:00",
+"p_ratings": 0.4857,
+"p_market": 0.5505,
+"p_shadow": 0.53,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-searle-78f04-xilas": {
+"tour": "ATP",
+"a": "Henry Searle",
+"b": "Ioannis Xilas",
+"a_te": "Searle H.",
+"b_te": "Xilas I.",
+"slugs": [
+"searle-78f04",
+"xilas"
+],
+"start": "2026-11-21T09:00:00+01:00",
+"p_ratings": 0.5332,
+"p_market": 0.7495,
+"p_shadow": 0.6556,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-bailly-a8c26-krutykh": {
+"tour": "ATP",
+"a": "Gilles Arnaud Bailly",
+"b": "Oleksii Krutykh",
+"a_te": "Bailly G.",
+"b_te": "Krutykh O.",
+"slugs": [
+"bailly-a8c26",
+"krutykh"
+],
+"start": "2026-11-21T09:00:00+01:00",
+"p_ratings": 0.5562,
+"p_market": 0.527,
+"p_shadow": 0.6157,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-rodriguez-b9b54-zarate-fab15": {
+"tour": "ATP",
+"a": "Lorenzo Joaquin Rodriguez",
+"b": "Carlos Maria Zarate",
+"a_te": "Rodriguez L.",
+"b_te": "Zarate C.",
+"slugs": [
+"rodriguez-b9b54",
+"zarate-fab15"
+],
+"start": "2026-11-21T14:00:00+01:00",
+"p_ratings": 0.5195,
+"p_market": 0.4784,
+"p_shadow": 0.4435,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-rodriguez-taverna-alves-4adf9": {
+"tour": "ATP",
+"a": "Santiago Rodriguez Taverna",
+"b": "Mateus Alves",
+"a_te": "Rodriguez Taverna S.",
+"b_te": "Alves M.",
+"slugs": [
+"rodriguez-taverna",
+"alves-4adf9"
+],
+"start": "2026-11-21T14:00:00+01:00",
+"p_ratings": 0.538,
+"p_market": 0.5559,
+"p_shadow": 0.6559,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-sakamoto-b1d5b-barranco-cosano": {
+"tour": "ATP",
+"a": "Pedro Sakamoto",
+"b": "Javier Barranco Cosano",
+"a_te": "Sakamoto P.",
+"b_te": "Barranco Cosano J.",
+"slugs": [
+"sakamoto-b1d5b",
+"barranco-cosano"
+],
+"start": "2026-11-21T15:00:00+01:00",
+"p_ratings": 0.4127,
+"p_market": 0.4226,
+"p_shadow": 0.4028,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-torres-dc0bf-dutra-da-silva": {
+"tour": "ATP",
+"a": "Juan Bautista Torres",
+"b": "Daniel Dutra da Silva",
+"a_te": "Torres J.",
+"b_te": "Dutra da Silva D.",
+"slugs": [
+"torres-dc0bf",
+"dutra-da-silva"
+],
+"start": "2026-11-21T15:00:00+01:00",
+"p_ratings": 0.5488,
+"p_market": 0.7907,
+"p_shadow": 0.6196,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-shin-72677-kirkin": {
+"tour": "ATP",
+"a": "Sanhui Shin",
+"b": "Ergi Kirkin",
+"a_te": "Shin S.",
+"b_te": "Kirkin E.",
+"slugs": [
+"shin-72677",
+"kirkin"
+],
+"start": "2026-11-21T04:00:00+01:00",
+"p_ratings": 0.4595,
+"p_market": 0.3506,
+"p_shadow": 0.498,
+"logged": "2026-11-20T21:09Z"
+}
+}
