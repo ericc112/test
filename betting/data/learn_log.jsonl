@@ -281,3 +281,4 @@
 {"at": "2026-11-18T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_pm:under", "before": 0.237, "after": 0.209, "window": ["2026-10-12", "2026-11-17"], "n": 2217}
 {"at": "2026-11-18T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_blocks:over", "before": -0.351, "after": -0.391, "window": ["2026-10-12", "2026-11-17"], "n": 2217}
 {"at": "2026-11-18T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_assists:under", "before": null, "after": -0.221, "window": ["2026-10-12", "2026-11-17"], "n": 2217}
+{"at": "2026-11-20T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_sog:under", "before": -0.279, "after": -0.258, "window": ["2026-10-12", "2026-11-17"], "n": 2220}
