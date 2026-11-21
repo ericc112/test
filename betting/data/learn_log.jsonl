@@ -282,3 +282,14 @@
 {"at": "2026-11-18T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_blocks:over", "before": -0.351, "after": -0.391, "window": ["2026-10-12", "2026-11-17"], "n": 2217}
 {"at": "2026-11-18T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_assists:under", "before": null, "after": -0.221, "window": ["2026-10-12", "2026-11-17"], "n": 2217}
 {"at": "2026-11-20T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_sog:under", "before": -0.279, "after": -0.258, "window": ["2026-10-12", "2026-11-17"], "n": 2220}
+{"at": "2026-11-21T20:45Z", "kind": "outcome_bias", "key": "nba:pr:under", "before": 0.013, "after": -0.008, "window": ["2026-10-12", "2026-11-20"], "n": 2287}
+{"at": "2026-11-21T20:45Z", "kind": "outcome_bias", "key": "nba:pra:under", "before": 0.1, "after": 0.141, "window": ["2026-10-12", "2026-11-20"], "n": 2287}
+{"at": "2026-11-21T20:45Z", "kind": "outcome_bias", "key": "nba:pa:over", "before": -0.124, "after": -0.096, "window": ["2026-10-12", "2026-11-20"], "n": 2287}
+{"at": "2026-11-21T20:45Z", "kind": "outcome_bias", "key": "nba:pra:over", "before": -0.359, "after": -0.383, "window": ["2026-10-12", "2026-11-20"], "n": 2287}
+{"at": "2026-11-21T20:45Z", "kind": "outcome_bias", "key": "nba:pa:under", "before": -0.228, "after": -0.174, "window": ["2026-10-12", "2026-11-20"], "n": 2287}
+{"at": "2026-11-21T20:45Z", "kind": "outcome_bias", "key": "nba:pts:under", "before": 0.046, "after": 0.033, "window": ["2026-10-12", "2026-11-20"], "n": 2287}
+{"at": "2026-11-21T20:45Z", "kind": "outcome_bias", "key": "nba:ast:under", "before": 0.205, "after": 0.188, "window": ["2026-10-12", "2026-11-20"], "n": 2287}
+{"at": "2026-11-21T20:45Z", "kind": "outcome_bias", "key": "nba:tpm:over", "before": 0.081, "after": 0.038, "window": ["2026-10-12", "2026-11-20"], "n": 2287}
+{"at": "2026-11-21T20:45Z", "kind": "outcome_bias", "key": "nba:ra:under", "before": -0.123, "after": -0.103, "window": ["2026-10-12", "2026-11-20"], "n": 2287}
+{"at": "2026-11-21T20:45Z", "kind": "outcome_bias", "key": "tennis:tennis_games:over", "before": 0.071, "after": 0.021, "window": ["2026-10-12", "2026-11-20"], "n": 2287}
+{"at": "2026-11-21T20:45Z", "kind": "outcome_bias", "key": "tennis:tennis_games:under", "before": -0.13, "after": -0.094, "window": ["2026-10-12", "2026-11-20"], "n": 2287}

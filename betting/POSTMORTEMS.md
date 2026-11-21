@@ -2,6 +2,52 @@
 
 Every graded loss is examined here, including passes and Low-confidence legs. `python -m edge review` writes the diagnosis; `python -m edge tag ID "tag" --lesson "..."` confirms the cause. Tags: `variance`, `opportunity`, `correlated`, `role/lineup`, `model bias`, `market info`, `stale line`, `data error`, `format misread`.
 
+## 2026-11-20: 29 losses from 10 independent causes
+
+| # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
+|---|---|---|---|---|---|---|---|---|
+| 3039 | Dyson Daniels pra under 24.0 | 29.0 | 0.5557 (Medium) | pass | model 52%, market 53% | variance | **untagged** | root leg of a 4-leg script loss: #3039, #3041, #3043, #3045; logged as a PASS: no money on it; reviewed for calibration |
+| 3041 | Aaron Wiggins pra under 19.5 | 24.0 | 0.5461 (Medium) | pass | model 56%, market 51% | correlated | **untagged** | same game script as #3039 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3043 | Dyson Daniels ast under 5.5 | 10.0 | 0.5492 (Medium) | pass | model 47% (against), market 50% | correlated | **untagged** | same game script as #3039 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3045 | Luguentz Dort tpm over 1.5 | 0.0 | 0.5418 (Medium) | pass | model 54%, market 52% | correlated | **untagged** | same game script as #3039 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3051 | Desmond Bane pts under 19.5 | 21.0 | 0.5516 (Medium) | pass | model 59%, market 53% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration |
+| 3060 | Kelly Oubre Jr. pts under 12.5 | 17.0 | 0.5517 (Medium) | pass | model 60%, market 53% | variance | **untagged** | root leg of a 3-leg script loss: #3060, #3093, #3096; logged as a PASS: no money on it; reviewed for calibration |
+| 3061 | Shai Gilgeous-Alexander pts under 32.5 | 40.0 | 0.5407 (Medium) | pass | model 59%, market 52% | variance | **untagged** | root leg of a 5-leg script loss: #3061, #3062, #3065, #3066, #3068; logged as a PASS: no money on it; reviewed for calibration |
+| 3062 | Jeremiah Fears pra under 27.5 | 33.0 | 0.5592 (Medium) | pass | model 59%, market 52% | correlated | **untagged** | same game script as #3061 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3065 | Herbert Jones pr under 11.5 | 16.0 | 0.5443 (Medium) | pass | model 54%, market 54% | correlated | **untagged** | same game script as #3061 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3066 | Herbert Jones pts under 8.5 | 14.0 | 0.5456 (Medium) | pass | model 53%, market 54% | correlated | **untagged** | same game script as #3061 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3068 | Kenrich Williams ast under 1.5 | 4.0 | 0.564 (Medium) | pass | model 50%, market 52% | correlated | **untagged** | same game script as #3061 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3071 | Nic Claxton pr under 16.5 | 18.0 | 0.6078 (Medium) | lean | model 71%, market 61% | variance | role/lineup | root leg of a 4-leg script loss: #3071, #3073, #3074, #3076 |
+| 3073 | Isaac Okoro pra under 15.5 | 17.0 | 0.5451 (Medium) | pass | model 54%, market 52% | correlated | **untagged** | same game script as #3071 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3074 | Kyshawn George ast under 4.5 | 5.0 | 0.5839 (Medium) | pass | model 50%, market 54% | correlated | **untagged** | same game script as #3071 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3076 | AJ Dybantsa ast under 2.5 | 6.0 | 0.5723 (Medium) | pass | model 51%, market 52% | correlated | **untagged** | same game script as #3071 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3081 | Khaman Maluach pra under 13.5 | 16.0 | 0.5435 (Medium) | pass | model 55%, market 51% | variance | **untagged** | root leg of a 4-leg script loss: #3081, #3095, #3102, #3103; logged as a PASS: no money on it; reviewed for calibration |
+| 3085 | Keegan Murray ast under 1.5 | 4.0 | 0.5668 (Low) | pass | model 58% | variance | **untagged** | root leg of a 3-leg script loss: #3085, #3101, #3104; logged as a PASS: no money on it; reviewed for calibration |
+| 3086 | Jamal Murray ast under 5.5 | 7.0 | 0.574 (Low) | pass | model 49% (against), market 53% | variance | **untagged** | root leg of a 2-leg script loss: #3086, #3088; logged as a PASS: no money on it; reviewed for calibration |
+| 3088 | Jamal Murray tpm over 2.5 | 1.0 | 0.5419 (Medium) | pass | model 57%, market 51% | correlated | **untagged** | same game script as #3086 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3091 | Kevin Huerter pra under 19.5 | 26.0 | 0.4939 (Low) | pass | model 59%, market 49% (against) | model bias | role/lineup | root leg of a 2-leg script loss: #3091, #3099; we priced this side at 49%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 3093 | Kelly Oubre Jr. ra under 5.5 | 6.0 | 0.5333 (Low) | pass | model 67%, market 54% | correlated | variance | same game script as #3060 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3095 | Svi Mykhailiuk pts under 7.5 | 11.0 | 0.4965 (Low) | pass | model 43% (against), market 50% (against) | correlated | variance | same game script as #3081 (variance); own read: variance; we priced this side at 50%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 3096 | Sam Merrill pra over 10.5 | 8.0 | 0.4459 (Low) | pass | model 64%, market 51% | correlated | variance | same game script as #3060 (variance); own read: variance; we priced this side at 45%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 3099 | Javonte Green pr under 10.5 | 13.0 | 0.5217 (Low) | pass | model 57%, market 50% | correlated | role/lineup | same game script as #3091 (model bias); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3101 | Luka Dončić tpm over 4.5 | 2.0 | 0.4667 (Low) | pass | model 47% (against), market 44% (against) | correlated | variance | same game script as #3085 (variance); own read: variance; we priced this side at 47%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 3102 | Collin Gillespie ra under 6.5 | 9.0 | 0.5215 (Low) | pass | model 50% (against), market 56% | correlated | variance | same game script as #3081 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3103 | Jordan Goodwin pts over 7.5 | 5.0 | 0.5139 (Low) | pass | model 55%, market 55% | correlated | variance | same game script as #3081 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3104 | Keegan Murray pts under 11.5 | 13.0 | 0.5134 (Low) | pass | model 67%, market 51% | correlated | role/lineup | same game script as #3085 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3126 | Laura Samson tennis_games over 21.5 | 17.0 | 0.5047 (Low) | pass | model 44% (against), market 50% (against) | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration |
+
+Lessons:
+- #3071: Claxton 29 min vs 18.5 projected
+- #3091: Huerter 36 min vs 28 projected (L28 minutes warning fired)
+- #3093: 6 vs 5.5 at projected minutes (warning fired)
+- #3095: 28 min vs 24 projected; 3-4 from three
+- #3096: 2-7 FG; priced 45%
+- #3099: Javonte Green 23 min vs 19 projected; 3-4 from three
+- #3101: 2-9 from three
+- #3102: 27 min vs 24.5 projected; 5 ast
+- #3103: 2-8 FG in 28 min (more than projected)
+- #3104: Murray 40 min vs 24 projected
+
 ## 2026-11-18: 60 losses from 19 independent causes
 
 | # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
