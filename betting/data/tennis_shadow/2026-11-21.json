@@ -286,5 +286,117 @@
 "p_market": 0.3506,
 "p_shadow": 0.498,
 "logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-21-zverev-6f768-medvedev-e0d2d": {
+"tour": "ATP",
+"a": "Alexander Zverev",
+"b": "Daniil Medvedev",
+"a_te": "Zverev A.",
+"b_te": "Medvedev D.",
+"slugs": [
+"zverev-6f768",
+"medvedev-e0d2d"
+],
+"start": "2026-11-21T20:45:00+01:00",
+"p_ratings": 0.5512,
+"p_market": 0.5975,
+"p_shadow": 0.5593,
+"logged": "2026-11-21T21:02Z"
+},
+"ATP-2026-11-21-dietrich-fa350-chidekh": {
+"tour": "ATP",
+"a": "Dylan Dietrich",
+"b": "Clement Chidekh",
+"a_te": "Dietrich D.",
+"b_te": "Chidekh C.",
+"slugs": [
+"dietrich-fa350",
+"chidekh"
+],
+"start": "2026-11-21T20:10:00+01:00",
+"p_ratings": 0.5615,
+"p_market": 0.4799,
+"p_shadow": 0.5157,
+"logged": "2026-11-21T21:02Z"
+},
+"ATP-2026-11-21-trotter-draxl": {
+"tour": "ATP",
+"a": "James Trotter",
+"b": "Liam Draxl",
+"a_te": "Trotter J.",
+"b_te": "Draxl L.",
+"slugs": [
+"trotter",
+"draxl"
+],
+"start": "2026-11-21T22:00:00+01:00",
+"p_ratings": 0.3458,
+"p_market": 0.3186,
+"p_shadow": 0.2742,
+"logged": "2026-11-21T21:02Z"
+},
+"ATP-2026-11-21-moller-6ea06-seyboth-wild": {
+"tour": "ATP",
+"a": "Elmer Moller",
+"b": "Thiago Seyboth Wild",
+"a_te": "Moller E.",
+"b_te": "Seyboth Wild T.",
+"slugs": [
+"moller-6ea06",
+"seyboth-wild"
+],
+"start": "2026-11-21T21:05:00+01:00",
+"p_ratings": 0.4506,
+"p_market": 0.343,
+"p_shadow": 0.4232,
+"logged": "2026-11-21T21:02Z"
+},
+"ATP-2026-11-21-mitsui-086f9-artnak": {
+"tour": "ATP",
+"a": "Shunsuke Mitsui",
+"b": "Bor Artnak",
+"a_te": "Mitsui S.",
+"b_te": "Artnak B.",
+"slugs": [
+"mitsui-086f9",
+"artnak"
+],
+"start": "2026-11-21T19:15:00+01:00",
+"p_ratings": 0.7193,
+"p_market": 0.5711,
+"p_shadow": 0.7366,
+"logged": "2026-11-21T21:02Z"
+},
+"ATP-2026-11-21-rodriguez-b9b54-alves-4adf9": {
+"tour": "ATP",
+"a": "Lorenzo Joaquin Rodriguez",
+"b": "Mateus Alves",
+"a_te": "Rodriguez L.",
+"b_te": "Alves M.",
+"slugs": [
+"rodriguez-b9b54",
+"alves-4adf9"
+],
+"start": "2026-11-21T19:50:00+01:00",
+"p_ratings": 0.508,
+"p_market": 0.5107,
+"p_shadow": 0.5357,
+"logged": "2026-11-21T21:02Z"
+},
+"ATP-2026-11-21-torres-dc0bf-barranco-cosano": {
+"tour": "ATP",
+"a": "Juan Bautista Torres",
+"b": "Javier Barranco Cosano",
+"a_te": "Torres J.",
+"b_te": "Barranco Cosano J.",
+"slugs": [
+"torres-dc0bf",
+"barranco-cosano"
+],
+"start": "2026-11-21T21:40:00+01:00",
+"p_ratings": 0.5008,
+"p_market": 0.6338,
+"p_shadow": 0.5506,
+"logged": "2026-11-21T21:02Z"
 }
 }
