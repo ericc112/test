@@ -78,5 +78,37 @@
 "p_market": 0.7495,
 "p_shadow": 0.7507,
 "logged": "2026-11-21T21:02Z"
+},
+"ATP-2026-11-22-pucinelli-de-almeida-seyboth-wild": {
+"tour": "ATP",
+"a": "Matheus Pucinelli De Almeida",
+"b": "Thiago Seyboth Wild",
+"a_te": "Pucinelli De Almeida M.",
+"b_te": "Seyboth Wild T.",
+"slugs": [
+"pucinelli-de-almeida",
+"seyboth-wild"
+],
+"start": "2026-11-22T21:10:00+01:00",
+"p_ratings": 0.4905,
+"p_market": 0.3657,
+"p_shadow": 0.4597,
+"logged": "2026-11-22T21:04Z"
+},
+"ATP-2026-11-22-tarvet-mitsui-086f9": {
+"tour": "ATP",
+"a": "Oliver Tarvet",
+"b": "Shunsuke Mitsui",
+"a_te": "Tarvet O.",
+"b_te": "Mitsui S.",
+"slugs": [
+"tarvet",
+"mitsui-086f9"
+],
+"start": "2026-11-22T19:10:00+01:00",
+"p_ratings": 0.5017,
+"p_market": 0.777,
+"p_shadow": 0.5503,
+"logged": "2026-11-22T21:04Z"
 }
 }
