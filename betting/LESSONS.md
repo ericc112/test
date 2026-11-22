@@ -215,3 +215,6 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 
 ### Auto-learned 2026-11-18
 - Segment nhl:nhl_assists:under: results run below our probabilities; now auto-adjusting -0.22 logit.
+
+### Auto-learned 2026-11-22
+- Segment nhl:nhl_fow:under: results run below our probabilities; now auto-adjusting -0.05 logit.
