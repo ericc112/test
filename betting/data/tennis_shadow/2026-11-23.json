@@ -286,5 +286,21 @@
 "p_market": 0.3878,
 "p_shadow": 0.3694,
 "logged": "2026-11-22T21:04Z"
+},
+"ATP-2026-11-23-barranco-cosano-pereira-9b0a8": {
+"tour": "ATP",
+"a": "Javier Barranco Cosano",
+"b": "Jose Pereira",
+"a_te": "Barranco Cosano J.",
+"b_te": "Pereira J.",
+"slugs": [
+"barranco-cosano",
+"pereira-9b0a8"
+],
+"start": "2026-11-23T21:40:00+01:00",
+"p_ratings": 0.5774,
+"p_market": 0.7566,
+"p_shadow": 0.6216,
+"logged": "2026-11-23T21:06Z"
 }
 }
