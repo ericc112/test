@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-22",
+  "updated": "2026-11-23",
   "blend_prior": {
     "intercept": 0.0,
     "w_model": 0.45,
@@ -37,9 +37,9 @@
     "cs2:cs_kills_m12:over": -0.128,
     "cfb:rec_yds:over": 0.073,
     "nba:ast:over": -0.078,
-    "nba:pr:under": -0.008,
-    "nba:reb:over": 0.06,
-    "nba:pra:under": 0.17,
+    "nba:pr:under": -0.016,
+    "nba:reb:over": -0.009,
+    "nba:pra:under": 0.172,
     "nba:pa:over": -0.174,
     "nfl:receptions:under": 0.048,
     "nfl:rush_rec_yds:under": -0.27,
@@ -48,38 +48,38 @@
     "nfl:rush_yds:over": 0.006,
     "nfl:rush_att:under": 0.165,
     "nfl:rush_rec_yds:over": 0.256,
-    "nhl:nhl_toi:over": -0.182,
-    "nhl:nhl_sog:over": -0.259,
-    "nhl:nhl_hits:under": -0.015,
-    "nhl:nhl_assists:over": -0.069,
-    "nhl:nhl_points:over": 0.108,
-    "nhl:nhl_fow:under": -0.046,
+    "nhl:nhl_toi:over": -0.173,
+    "nhl:nhl_sog:over": -0.144,
+    "nhl:nhl_hits:under": 0.072,
+    "nhl:nhl_assists:over": 0.004,
+    "nhl:nhl_points:over": 0.223,
+    "nhl:nhl_fow:under": -0.04,
     "nfl:receptions:over": 0.294,
-    "nhl:nhl_points:under": -0.069,
+    "nhl:nhl_points:under": 0.064,
     "nba:pra:over": -0.355,
     "nba:pr:over": -0.106,
-    "nba:reb:under": -0.32,
-    "nba:pa:under": -0.174,
-    "nba:pts:under": 0.039,
-    "nba:ast:under": 0.221,
+    "nba:reb:under": -0.274,
+    "nba:pa:under": -0.146,
+    "nba:pts:under": 0.041,
+    "nba:ast:under": 0.208,
     "nba:tpm:over": 0.038,
-    "nba:ra:under": -0.117,
+    "nba:ra:under": -0.125,
     "nba:ra:over": -0.205,
-    "nba:pts:over": -0.138,
+    "nba:pts:over": -0.158,
     "tennis:tennis_games:over": 0.021,
     "tennis:tennis_games:under": 0.016,
     "tennis:tennis_games_won:under": 0.094,
     "tennis:tennis_games_won:over": -0.043,
-    "nhl:nhl_fow:over": -0.061,
-    "nhl:nhl_toi:under": -0.032,
-    "nhl:nhl_sog:under": -0.175,
-    "nhl:nhl_pm:under": 0.212,
-    "nhl:nhl_blocks:under": -0.31,
+    "nhl:nhl_fow:over": -0.029,
+    "nhl:nhl_toi:under": 0.055,
+    "nhl:nhl_sog:under": -0.031,
+    "nhl:nhl_pm:under": 0.353,
+    "nhl:nhl_blocks:under": -0.245,
     "nfl:rush_att:over": -0.003,
     "nba:tpm:under": -0.183,
-    "nhl:nhl_blocks:over": -0.4,
-    "nhl:nhl_hits:over": -0.013,
-    "nhl:nhl_assists:under": -0.347
+    "nhl:nhl_blocks:over": -0.396,
+    "nhl:nhl_hits:over": -0.041,
+    "nhl:nhl_assists:under": -0.287
   },
   "avoid_segments": [
     "cs2:cs_kills_m12:under"
@@ -100,9 +100,9 @@
   "cap_medium_segments": {
     "cs2:cs_kills_m12:under": "3 losses tagged 'model bias'; hit 35% vs 59% predicted over 20",
     "mlb:batter_hrr:under": "3 losses tagged 'model bias'; hit 50% vs 57% predicted over 12",
-    "nba:ra:under": "8 losses tagged 'role/lineup'; hit 53% vs 55% predicted over 146",
-    "nba:pts:under": "7 losses tagged 'role/lineup'; hit 54% vs 56% predicted over 290",
-    "nba:reb:under": "3 losses tagged 'role/lineup'; hit 46% vs 54% predicted over 59"
+    "nba:ra:under": "9 losses tagged 'role/lineup'; hit 53% vs 55% predicted over 150",
+    "nba:pts:under": "7 losses tagged 'role/lineup'; hit 54% vs 56% predicted over 295",
+    "nba:reb:under": "3 losses tagged 'role/lineup'; hit 48% vs 54% predicted over 63"
   },
   "rule_flags": [
     "cs2:cs_kills_m12:under|model bias",
@@ -163,6 +163,18 @@
         "w_market": 0.1608,
         "w_hist": 0.1727
       }
+    },
+    "nhl": {
+      "intercept": -0.1235,
+      "w_model": 0.3468,
+      "w_market": 0.3899,
+      "w_hist": 0.127,
+      "se": {
+        "intercept": 0.1191,
+        "w_model": 0.1814,
+        "w_market": 0.1968,
+        "w_hist": 0.1968
+      }
     }
   },
   "blend_by_sport_fit": {
@@ -180,6 +192,14 @@
       "window": [
         "2026-10-12",
         "2026-11-09"
+      ]
+    },
+    "nhl": {
+      "date": "2026-11-23",
+      "n_fit": 201,
+      "window": [
+        "2026-10-12",
+        "2026-11-22"
       ]
     }
   }

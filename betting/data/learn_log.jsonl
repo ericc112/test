@@ -312,3 +312,21 @@
 {"at": "2026-11-22T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_blocks:under", "before": -0.232, "after": -0.31, "window": ["2026-10-12", "2026-11-21"], "n": 2386}
 {"at": "2026-11-22T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_hits:over", "before": -0.066, "after": -0.013, "window": ["2026-10-12", "2026-11-21"], "n": 2386}
 {"at": "2026-11-22T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_assists:under", "before": -0.221, "after": -0.347, "window": ["2026-10-12", "2026-11-21"], "n": 2386}
+{"at": "2026-11-23T20:45Z", "kind": "blend", "key": "nhl", "before": null, "after": {"intercept": -0.1235, "w_model": 0.3468, "w_market": 0.3899, "w_hist": 0.127}, "window": ["2026-10-12", "2026-11-22"], "n": 201}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nba:reb:over", "before": 0.06, "after": -0.009, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_sog:over", "before": -0.259, "after": -0.144, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_hits:under", "before": -0.015, "after": 0.072, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_assists:over", "before": -0.069, "after": 0.004, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_points:over", "before": 0.108, "after": 0.223, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_points:under", "before": -0.069, "after": 0.064, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nba:reb:under", "before": -0.32, "after": -0.274, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nba:pa:under", "before": -0.174, "after": -0.146, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nba:ast:under", "before": 0.221, "after": 0.208, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nba:pts:over", "before": -0.138, "after": -0.158, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_fow:over", "before": -0.061, "after": -0.029, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_toi:under", "before": -0.032, "after": 0.055, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_sog:under", "before": -0.175, "after": -0.031, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_pm:under", "before": 0.212, "after": 0.353, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_blocks:under", "before": -0.31, "after": -0.245, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_hits:over", "before": -0.013, "after": -0.041, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
+{"at": "2026-11-23T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_assists:under", "before": -0.347, "after": -0.287, "window": ["2026-10-12", "2026-11-22"], "n": 2464}
