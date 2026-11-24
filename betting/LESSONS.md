@@ -218,3 +218,7 @@ Two losses in a segment with the same tag (other than `variance` or `correlated`
 
 ### Auto-learned 2026-11-22
 - Segment nhl:nhl_fow:under: results run below our probabilities; now auto-adjusting -0.05 logit.
+
+### Auto-learned 2026-11-24
+- Segment nhl:nhl_pm:over: results run above our probabilities; now auto-adjusting +0.39 logit.
+- Segment nba:ast:under capped at Medium (no High legs) until results recover: 8 losses tagged 'role/lineup'; hit 56% vs 58% predicted over 187.
