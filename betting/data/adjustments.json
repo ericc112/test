@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-25",
+  "updated": "2026-11-26",
   "blend_prior": {
     "intercept": 0.0,
     "w_model": 0.45,
@@ -49,7 +49,7 @@
     "nfl:rush_att:under": 0.165,
     "nfl:rush_rec_yds:over": 0.256,
     "nhl:nhl_toi:over": -0.12,
-    "nhl:nhl_sog:over": -0.155,
+    "nhl:nhl_sog:over": -0.108,
     "nhl:nhl_hits:under": 0.061,
     "nhl:nhl_assists:over": 0.08,
     "nhl:nhl_points:over": 0.19,
@@ -72,7 +72,7 @@
     "tennis:tennis_games_won:over": -0.043,
     "nhl:nhl_fow:over": -0.082,
     "nhl:nhl_toi:under": 0.109,
-    "nhl:nhl_sog:under": 0.044,
+    "nhl:nhl_sog:under": 0.02,
     "nhl:nhl_pm:under": 0.377,
     "nhl:nhl_blocks:under": -0.277,
     "nfl:rush_att:over": -0.003,
@@ -104,7 +104,8 @@
     "nba:ra:under": "10 losses tagged 'role/lineup'; hit 53% vs 55% predicted over 156",
     "nba:ast:under": "8 losses tagged 'role/lineup'; hit 56% vs 57% predicted over 191",
     "nba:pts:under": "10 losses tagged 'role/lineup'; hit 54% vs 56% predicted over 314",
-    "nba:reb:under": "4 losses tagged 'role/lineup'; hit 47% vs 54% predicted over 64"
+    "nba:reb:under": "5 losses tagged 'role/lineup'; hit 47% vs 54% predicted over 64",
+    "nba:pa:under": "3 losses tagged 'role/lineup'; hit 49% vs 52% predicted over 51"
   },
   "rule_flags": [
     "cs2:cs_kills_m12:under|model bias",

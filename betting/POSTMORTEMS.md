@@ -2,7 +2,96 @@
 
 Every graded loss is examined here, including passes and Low-confidence legs. `python -m edge review` writes the diagnosis; `python -m edge tag ID "tag" --lesson "..."` confirms the cause. Tags: `variance`, `opportunity`, `correlated`, `role/lineup`, `model bias`, `market info`, `stale line`, `data error`, `format misread`.
 
-## 2026-11-24: 15 losses from 5 independent causes
+## 2026-11-25: 50 losses from 18 independent causes
+
+| # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
+|---|---|---|---|---|---|---|---|---|
+| 3484 | LeBron James pra under 32.5 | 47.0 | 0.59 (Medium) | pass | model 63%, market 55% | variance | role/lineup | root leg of a 8-leg script loss: #3484, #3485, #3486, #3488, #3490, #3491, #3493, #3494; logged as a PASS: no money on it; reviewed for calibration |
+| 3485 | LeBron James pr under 25.5 | 35.0 | 0.5444 (Medium) | pass | model 63%, market 54% | correlated | **untagged** | same game script as #3484 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3486 | VJ Edgecombe pra under 24.5 | 29.0 | 0.5785 (Medium) | pass | model 51%, market 56% | correlated | **untagged** | same game script as #3484 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3488 | VJ Edgecombe pr under 20.5 | 24.0 | 0.5411 (Medium) | pass | model 54%, market 54% | correlated | **untagged** | same game script as #3484 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3490 | LeBron James pts under 18.5 | 25.0 | 0.557 (Medium) | pass | model 59%, market 53% | correlated | **untagged** | same game script as #3484 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3491 | LeBron James ast under 7.0 | 12.0 | 0.6118 (Medium) | lean | model 61%, market 57% | correlated | role/lineup | same game script as #3484 (variance); own read: variance |
+| 3493 | Jabari Walker reb over 5.0 | 2.0 | 0.5459 (Medium) | pass | model 50%, market 57% | correlated | **untagged** | same game script as #3484 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3494 | VJ Edgecombe ast under 4.0 | 5.0 | 0.634 (Low) | pass | model 47% (against), market 63% | correlated | **untagged** | same game script as #3484 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3499 | LaMelo Ball pra under 29.5 | 34.0 | 0.5454 (Medium) | pass | model 51%, market 52% | variance | **untagged** | root leg of a 5-leg script loss: #3499, #3500, #3505, #3506, #3537; logged as a PASS: no money on it; reviewed for calibration |
+| 3500 | Rudy Gobert pts under 8.5 | 9.0 | 0.5445 (Medium) | pass | model 59%, market 52% | correlated | **untagged** | same game script as #3499 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3504 | Jalen Brunson tpm over 2.5 | 2.0 | 0.5612 (Low) | pass | model 52%, market 53% | variance | **untagged** | root leg of a 4-leg script loss: #3504, #3528, #3530, #3534; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3505 | LaMelo Ball ast under 6.0 | 8.0 | 0.5787 (Medium) | lean | model 56%, market 54% | correlated | variance | same game script as #3499 (variance); own read: variance |
+| 3506 | Isaiah Hartenstein ast under 4.0 | 6.0 | 0.5765 (Medium) | pass | model 60%, market 53% | correlated | **untagged** | same game script as #3499 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3507 | Julius Randle pra under 33.5 | 40.0 | 0.5517 (Medium) | pass | model 55%, market 52% | variance | **untagged** | root leg of a 4-leg script loss: #3507, #3508, #3509, #3513; logged as a PASS: no money on it; reviewed for calibration |
+| 3508 | Day'Ron Sharpe pra under 22.5 | 30.0 | 0.5514 (Medium) | pass | model 52%, market 52% | correlated | **untagged** | same game script as #3507 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3509 | Jaime Jaquez Jr. pra under 19.5 | 30.0 | 0.5702 (Medium) | pass | model 60%, market 53% | correlated | **untagged** | same game script as #3507 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3513 | Tyler Herro reb over 4.0 | 2.0 | 0.5928 (Low) | pass | model 39% (against), market 65% | correlated | **untagged** | same game script as #3507 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3514 | Rui Hachimura pra under 19.5 | 31.0 | 0.5462 (Medium) | pass | model 55%, market 51% | variance | **untagged** | root leg of a 6-leg script loss: #3514, #3516, #3517, #3518, #3519, #3544; logged as a PASS: no money on it; reviewed for calibration |
+| 3516 | Kris Murray pra under 10.5 | 15.0 | 0.5459 (Medium) | pass | model 79%, market 55% | correlated | role/lineup | same game script as #3514 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3517 | Keaton Wagler pts under 9.5 | 12.0 | 0.5541 (Medium) | pass | model 57%, market 54% | correlated | **untagged** | same game script as #3514 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3518 | Javon Small ast over 3.5 | 1.0 | 0.5421 (Medium) | pass | model 75%, market 54% | correlated | variance | same game script as #3514 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3519 | Kris Dunn tpm over 0.5 | 0.0 | 0.5854 (Medium) | lean | model 50% (against), market 58% | correlated | variance | same game script as #3514 (variance); own read: variance; closest possible loss (missed by the minimum) |
+| 3521 | Jalen Green pra under 20.5 | 25.0 | 0.5525 (Medium) | pass | model 54%, market 52% | variance | **untagged** | root leg of a 2-leg script loss: #3521, #3522; logged as a PASS: no money on it; reviewed for calibration |
+| 3522 | Khaman Maluach pts under 6.5 | 12.0 | 0.5518 (Medium) | pass | model 57%, market 53% | correlated | **untagged** | same game script as #3521 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3523 | Devin Vassell pts under 13.5 | 18.0 | 0.5519 (Medium) | pass | model 59%, market 53% | variance | **untagged** | root leg of a 3-leg script loss: #3523, #3524, #3538; logged as a PASS: no money on it; reviewed for calibration |
+| 3524 | Deni Avdija ast under 6.0 | 7.0 | 0.5545 (Medium) | lean | model 56%, market 51% | correlated | role/lineup | same game script as #3523 (variance); own read: variance |
+| 3526 | De'Anthony Melton pr under 16.5 | 28.0 | 0.5441 (Medium) | pass | model 69%, market 54% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration |
+| 3528 | Meleek Thomas pts over 8.5 | 8.0 | 0.4542 (Low) | pass | model 58%, market 47% (against) | correlated | variance | same game script as #3504 (variance); own read: model bias; we priced this side at 45%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 3530 | Mikal Bridges pra under 19.5 | 29.0 | 0.5162 (Low) | pass | model 65%, market 52% | correlated | role/lineup | same game script as #3504 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3534 | Josh Hart pa under 15.5 | 26.0 | 0.4851 (Low) | pass | model 63%, market 50% (against) | correlated | role/lineup | same game script as #3504 (variance); own read: variance; we priced this side at 49%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 3537 | Isaiah Hartenstein pa under 13.5 | 14.0 | 0.479 (Low) | pass | model 56%, market 51% | correlated | variance | same game script as #3499 (variance); own read: variance; we priced this side at 48%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3538 | Stephon Castle pra under 32.5 | 35.0 | 0.4939 (Low) | pass | model 64%, market 49% (against) | correlated | variance | same game script as #3523 (variance); own read: model bias; we priced this side at 49%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 3540 | Brandon Miller tpm under 3.5 | 4.0 | 0.5114 (Low) | pass | model 69%, market 52% | variance | variance | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3544 | Max Strus pts over 7.5 | 0.0 | 0.5027 (Low) | pass | model 63%, market 52% | correlated | variance | same game script as #3514 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3548 | Dylan Cozens nhl_sog under 2.0 | 6.0 | 0.5934 (Medium) | pass | model 57%, market 59% | variance | **untagged** | root leg of a 2-leg script loss: #3548, #3586; logged as a PASS: no money on it; reviewed for calibration |
+| 3553 | Joel Hanley nhl_hits over 0.5 | 0.0 | 0.5319 (Low) | pass | model 61% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3554 | Taylor Hall nhl_sog over 1.5 | 0.0 | 0.4943 (Low) | pass | model 52%, market 54% | variance | **untagged** | root leg of a 4-leg script loss: #3554, #3563, #3564, #3570; we priced this side at 49%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 3555 | Clayton Keller nhl_assists over 0.5 | 0.0 | 0.5467 (Low) | pass | model 50%, market 53% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3563 | Logan Stankoven nhl_sog over 2.0 | 0.0 | 0.5122 (Low) | pass | model 58%, market 54% | correlated | **untagged** | same game script as #3554 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3564 | Jalen Chatfield nhl_blocks under 1.5 | 2.0 | 0.5082 (Low) | pass | model 70%, market 55% | correlated | **untagged** | same game script as #3554 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3565 | Filip Chytil nhl_blocks over 0.5 | 0.0 | 0.4078 (Low) | pass | model 53% | variance | **untagged** | root leg of a 2-leg script loss: #3565, #3578; we priced this side at 41%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3566 | Martin Necas nhl_toi under 20.0 | 20.07 | 0.5807 (Low) | pass | model 75% | variance | **untagged** | root leg of a 2-leg script loss: #3566, #3581; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3570 | Jaccob Slavin nhl_toi under 21.5 | 24.8 | 0.5468 (Low) | pass | model 60% | correlated | **untagged** | same game script as #3554 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3574 | Josh Doan nhl_hits over 0.5 | 0.0 | 0.5312 (Low) | pass | model 61% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3577 | Cutter Gauthier nhl_sog over 4.0 | 2.0 | 0.5217 (Low) | pass | model 66%, market 53% | variance | **untagged** | root leg of a 2-leg script loss: #3577, #3585; logged as a PASS: no money on it; reviewed for calibration |
+| 3578 | Andrew Copp nhl_hits over 0.5 | 0.0 | 0.5184 (Low) | pass | model 55% | correlated | **untagged** | same game script as #3565 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3581 | Brent Burns nhl_sog under 1.5 | 2.0 | 0.5094 (Low) | pass | model 52%, market 49% (against) | correlated | **untagged** | same game script as #3566 (variance); own read: model bias; logged as a PASS: no money on it; reviewed for calibration; model was on our side, the market was against it, and the market was right |
+| 3582 | Timo Meier nhl_sog over 3.0 | 2.0 | 0.4934 (Low) | pass | model 66%, market 50% (against) | variance | **untagged** | we priced this side at 49%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 3585 | Alexander Wennberg nhl_blocks over 0.5 | 0.0 | 0.4156 (Low) | pass | model 57% | correlated | **untagged** | same game script as #3577 (variance); own read: variance; we priced this side at 42%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3586 | Tim Stutzle nhl_blocks over 0.5 | 0.0 | 0.4066 (Low) | pass | model 53% | correlated | **untagged** | same game script as #3548 (variance); own read: variance; we priced this side at 41%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+
+Lessons:
+- #3484: LeBron 35 min vs 28 projected (L28 minutes warning fired): 25-10-12
+- #3491: LeBron 35 min vs 28 projected (warning fired): 12 ast
+- #3505: 8 ast in 29 min (as projected)
+- #3516: Kris Murray 32 min vs 14 projected
+- #3518: 1 ast in 17 min (fewer than projected)
+- #3519: 0-1 from three in 22 min
+- #3524: Avdija 36 min vs 30 projected; 7 ast
+- #3528: 8 vs 8.5 in 16 min; priced 45%
+- #3530: Mikal Bridges 37 min vs 30 projected
+- #3534: Hart 36 min vs 30 projected; 11 ast
+- #3537: 14 vs 13.5 in 31 min (vs 25 projected)
+- #3538: 35 vs 32.5 in 34 min
+- #3540: 4-9 from three in 34 min
+- #3544: 0 pts on 0-5 in 21 min
+
+Detail from the feeds:
+- #3548 Dylan Cozens: error=HTTPError
+- #3553 Joel Hanley: error=HTTPError
+- #3554 Taylor Hall: error=HTTPError
+- #3555 Clayton Keller: error=HTTPError
+- #3563 Logan Stankoven: error=HTTPError
+- #3564 Jalen Chatfield: error=HTTPError
+- #3565 Filip Chytil: error=HTTPError
+- #3566 Martin Necas: error=HTTPError
+- #3570 Jaccob Slavin: error=HTTPError
+- #3574 Josh Doan: error=HTTPError
+- #3577 Cutter Gauthier: error=HTTPError
+- #3578 Andrew Copp: error=HTTPError
+- #3581 Brent Burns: error=HTTPError
+- #3582 Timo Meier: error=HTTPError
+- #3585 Alexander Wennberg: error=HTTPError
+- #3586 Tim Stutzle: error=HTTPError
+
+## 2026-11-24: 23 losses from 12 independent causes
 
 | # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
 |---|---|---|---|---|---|---|---|---|
@@ -19,6 +108,14 @@ Every graded loss is examined here, including passes and Low-confidence legs. `p
 | 3453 | Cameron Johnson pa under 15.5 | 20.0 | 0.501 (Low) | pass | model 52%, market 55% | correlated | role/lineup | same game script as #3440 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
 | 3454 | Jamal Murray pts over 22.5 | 20.0 | 0.5139 (Low) | pass | model 63%, market 52% | correlated | variance | same game script as #3440 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
 | 3455 | Isaiah Joe pra under 15.5 | 25.0 | 0.5 (Low) | pass | model 63%, market 50% (against) | correlated | role/lineup | same game script as #3428 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+| 3456 | Nikita Kucherov nhl_sog under 2.5 | 3.0 | 0.5233 (Low) | pass | model 59% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3458 | Filip Forsberg nhl_sog under 2.5 | 3.0 | 0.5155 (Low) | pass | model 55% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3470 | Tage Thompson nhl_sog over 3.5 | 2.0 | 0.4695 (Low) | pass | model 54% | variance | **untagged** | root leg of a 2-leg script loss: #3470, #3474; we priced this side at 47%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration |
+| 3472 | Dylan Guenther nhl_sog under 2.5 | 3.0 | 0.5115 (Low) | pass | model 53% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3473 | Bobby McMann nhl_sog under 2.5 | 3.0 | 0.5071 (Low) | pass | model 51% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3474 | Rasmus Dahlin nhl_sog over 2.5 | 2.0 | 0.4564 (Low) | pass | model 48% (against) | correlated | **untagged** | same game script as #3470 (variance); own read: variance; we priced this side at 46%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3477 | Fraser Minten nhl_sog under 1.5 | 2.0 | 0.508 (Low) | pass | model 51% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3478 | Jakob Chychrun nhl_sog over 2.5 | 2.0 | 0.4693 (Low) | pass | model 54% | variance | **untagged** | we priced this side at 47%: losing was the more likely outcome; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
 | 3479 | Anton Shepp tennis_games under 22.5 | 23.0 | 0.5818 (Low) | pass | model 58% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
 | 3481 | Matthew Dellavedova tennis_games under 21.5 | 29.0 | 0.5479 (Low) | pass | model 54% | variance | **untagged** | logged as a PASS: no money on it; reviewed for calibration |
 
@@ -30,6 +127,16 @@ Lessons:
 - #3453: Cameron Johnson 34 min vs 28 projected
 - #3454: 6-17 FG in 36 min (as projected)
 - #3455: Isaiah Joe 30 min vs 17 projected; 21 pts
+
+Detail from the feeds:
+- #3456 Nikita Kucherov: error=HTTPError
+- #3458 Filip Forsberg: error=HTTPError
+- #3470 Tage Thompson: error=HTTPError
+- #3472 Dylan Guenther: error=HTTPError
+- #3473 Bobby McMann: error=HTTPError
+- #3474 Rasmus Dahlin: error=HTTPError
+- #3477 Fraser Minten: error=HTTPError
+- #3478 Jakob Chychrun: error=HTTPError
 
 ## 2026-11-23: 60 losses from 20 independent causes
 
