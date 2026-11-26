@@ -302,5 +302,21 @@
 "p_market": 0.4147,
 "p_shadow": 0.5475,
 "logged": "2026-11-25T21:07Z"
+},
+"ATP-2026-11-26-jodar-rodionov-f5e38": {
+"tour": "ATP",
+"a": "Rafael Jodar",
+"b": "Jurij Rodionov",
+"a_te": "Jodar R.",
+"b_te": "Rodionov J.",
+"slugs": [
+"jodar",
+"rodionov-f5e38"
+],
+"start": "2026-11-26T19:15:00+01:00",
+"p_ratings": 0.6478,
+"p_market": 0.8275,
+"p_shadow": 0.7309,
+"logged": "2026-11-26T20:58Z"
 }
 }
