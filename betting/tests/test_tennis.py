@@ -392,6 +392,25 @@ class WinnerShadow(unittest.TestCase):
         p1 = shadow_p(model, 0.6, {"matches14": 3}, {"matches14": 1}, (0.5, 0.5, 0.5))
         self.assertGreater(p1, p0)
 
+    def test_live_model_is_the_winner_without_a_price(self):
+        import datetime as dt, tempfile, json, os
+        from unittest import mock
+        from edge import tennis_watch as TWa
+        start = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1)).isoformat()
+        m = {"id": "x", "tour": "ATP", "a": "A", "b": "B", "start": start, "pa": 0.64, "pb": 0.62, "best_of": 3,
+             "win_model": 0.55, "market_a": None, "shift": None, "anchor_default": False, "sd": 0.0, "rho": 0.0,
+             "shadow": {"p_a": 0.40, "live": True}}
+        with tempfile.TemporaryDirectory() as td, mock.patch("edge.winners.WIN_DIR", td):
+            TWa.save_winners([m])
+            rec = next(iter(json.load(open(os.path.join(td, "tennis", os.listdir(os.path.join(td, "tennis"))[0]))).values()))
+        self.assertEqual(rec["winner"], "b")                              # live factor model (40% for A), not the ratings (55%)
+        self.assertEqual(rec["rates"], "ratings + factors")
+        m["shadow"]["live"] = False
+        with tempfile.TemporaryDirectory() as td, mock.patch("edge.winners.WIN_DIR", td):
+            TWa.save_winners([m])
+            rec = next(iter(json.load(open(os.path.join(td, "tennis", os.listdir(os.path.join(td, "tennis"))[0]))).values()))
+        self.assertEqual(rec["winner"], "a")                              # in testing: the ratings still decide
+
     def test_upcoming_uses_history(self):
         from edge.tennis_winner_factors import features
         def mk(start, ro, w, l, score="6-4 6-4"):

@@ -396,7 +396,7 @@ def report(log=print) -> dict:
     import glob
     from . import tennis as T, tennis_market as TM
     from .tennis_watch import SHADOW_DIR
-    rows = []
+    by_match = {}
     for path in sorted(glob.glob(os.path.join(SHADOW_DIR, "*.json"))):
         day = dt.date.fromisoformat(os.path.basename(path)[:10])
         recs = json.load(open(path))
@@ -413,7 +413,8 @@ def report(log=print) -> dict:
             w = res_rows.get(frozenset((ka, kb)))
             if w is None:
                 continue
-            rows.append({**r, "a_won": w == ka})
+            by_match[frozenset((ka, kb))] = {**r, "a_won": w == ka}     # one row per match: a later day's log overwrites
+    rows = list(by_match.values())
     out = {"graded": len(rows)}
     if rows:
         y = np.array([r["a_won"] for r in rows], float)
@@ -423,8 +424,16 @@ def report(log=print) -> dict:
                 continue
             p = np.array([rows[i][k] for i in ok]); yy = y[ok]
             fav = np.maximum(p, 1 - p); won = np.where(p >= 0.5, yy, 1 - yy)
+            buckets, gap = [], 0.0
+            for lo, hi in ((0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 1.01)):
+                m = (fav >= lo) & (fav < hi)
+                if m.sum():
+                    buckets.append({"band": f"{int(lo * 100)}-{int(min(hi, 1) * 100)}%", "n": int(m.sum()),
+                                    "won": round(float(won[m].mean()), 3), "predicted": round(float(fav[m].mean()), 3)})
+                    gap += m.sum() * abs(won[m].mean() - fav[m].mean())
             out[k] = {"n": len(ok), "log_loss": round(float(_ll(p, yy).mean()), 4), "winners_right": round(float(won.mean()), 3),
-                      "favourite_predicted": round(float(fav.mean()), 3)}
+                      "favourite_predicted": round(float(fav.mean()), 3), "calibration_gap_pts": round(100 * gap / len(ok), 1),
+                      "buckets": buckets}
         first = min(r["logged"] for r in rows)[:10]
         out["days"] = (dt.date.today() - dt.date.fromisoformat(first)).days
         out["eligible"] = out["graded"] >= 200 or out["days"] >= 14
@@ -432,7 +441,39 @@ def report(log=print) -> dict:
     return out
 
 
+def promote(tour: str = "ATP") -> dict:
+    """Make the factor model the live model-only winner for a tour (it replaces the ratings-only number; the betting
+    price stays the default where there is one). Only when the graded shadow log shows it better than the ratings on
+    log loss AND calibration (user's shadow rule: 200+ graded matches or 14 days). Rollback: `rollback`."""
+    import datetime as dt
+    rep = report(log=lambda *_: None)
+    s, r = rep.get("p_shadow"), rep.get("p_ratings")
+    if not (s and r and rep.get("eligible")):
+        raise SystemExit("not eligible yet: " + json.dumps(rep))
+    if not (s["log_loss"] < r["log_loss"] and s["calibration_gap_pts"] < r["calibration_gap_pts"]):
+        raise SystemExit("the shadow model does not beat the ratings on both log loss and calibration: " + json.dumps(rep))
+    res = json.load(open(OUT))
+    model = res[tour].get("shadow") or res[tour].get("live")
+    res[tour]["live"] = {**model, "promoted": dt.date.today().isoformat(),
+                         "evidence": {k: rep[k] for k in ("graded", "days", "p_shadow", "p_ratings", "p_market") if k in rep}}
+    res[tour]["shadow"] = None
+    json.dump(res, open(OUT, "w"), indent=1)
+    return res[tour]["live"]
+
+
+def rollback(tour: str = "ATP") -> dict:
+    """Undo `promote`: the factor model goes back to shadow and the ratings-only number is the model winner again."""
+    res = json.load(open(OUT))
+    live = res[tour].get("live")
+    if not live:
+        raise SystemExit("nothing live to roll back")
+    res[tour]["shadow"] = {k: v for k, v in live.items() if k not in ("promoted", "evidence")}
+    res[tour]["live"] = None
+    json.dump(res, open(OUT, "w"), indent=1)
+    return res[tour]["shadow"]
+
+
 if __name__ == "__main__":
     import sys
     cmd = sys.argv[1] if len(sys.argv) > 1 else "run"
-    print(json.dumps({"run": run, "market": market_check, "register": register, "report": report}[cmd](), indent=1))
+    print(json.dumps({"run": run, "market": market_check, "register": register, "report": report, "promote": promote, "rollback": rollback}[cmd](), indent=1))

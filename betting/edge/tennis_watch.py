@@ -141,8 +141,9 @@ SHADOW_DIR = os.path.join(HERE, "data", "tennis_shadow")
 
 def _shadow(st, out, queue, log=print) -> None:
     """The winner model in testing (user, 2026-11-11): the ratings plus the factors that passed the walk-forward test
-    (data/tennis_bt/winner_factors.json, "shadow" per tour). Shown on the page as "in testing", never used for a pick,
-    and logged to data/tennis_shadow/<date>.json so `python -m edge.tennis_winner_factors report` grades it against the
+    (data/tennis_bt/winner_factors.json, "shadow" or, once promoted, "live" per tour). In testing it is never used for a pick;
+    live (ATP since 2026-11-27) it replaces the ratings-only winner where there is no betting price. Either way it is
+    logged to data/tennis_shadow/<date>.json so `python -m edge.tennis_winner_factors report` grades it against the
     ratings and the market. Promotion needs 200+ graded matches or 14 days, better on log loss and calibration."""
     from . import tennis_winner_factors as TW
     try:
@@ -155,7 +156,8 @@ def _shadow(st, out, queue, log=print) -> None:
     now = dt.datetime.now(dt.timezone.utc)
     logs = {}
     for tour, items in by_tour.items():
-        model = (res.get(tour) or {}).get("shadow")
+        live = (res.get(tour) or {}).get("live")            # promoted 2026-11-27: replaces the ratings-only number
+        model = live or (res.get(tour) or {}).get("shadow")
         if not model:
             continue
         F = TW.features(st["matches"], tour, [(i, ia, ib, s_, ev, ha, hb, day) for i, (_m, _t, ia, ib, s_, ev, ha, hb, day) in enumerate(items)])
@@ -164,7 +166,8 @@ def _shadow(st, out, queue, log=print) -> None:
             if not f:
                 continue
             p = TW.shadow_p(model, m["win_model"], f["a"], f["b"], f["elo"])
-            m["shadow"] = {"p_a": round(p, 4), "name": model.get("name", "ratings + factors")}
+            m["shadow"] = {"p_a": round(p, 4), "name": model.get("name", "ratings + factors"), "live": bool(live),
+                           "since": (live or {}).get("promoted")}
             day = dt.datetime.fromisoformat(m["start"]).astimezone(TE_TZ).date().isoformat()
             logs.setdefault(day, {})[m["id"]] = {"tour": tour, "a": m["a"], "b": m["b"], "a_te": m.get("a_te"), "b_te": m.get("b_te"),
                                                  "slugs": m.get("slugs"), "start": m["start"], "p_ratings": m["win_model"],
@@ -179,7 +182,7 @@ def _shadow(st, out, queue, log=print) -> None:
         json.dump(cur, open(path, "w"), indent=0)
     n = sum(len(v) for v in logs.values())
     if n:
-        log(f"  tennis watch: shadow winner model scored {n} matches (in testing, not published)")
+        log(f"  tennis watch: factor winner model scored {n} matches ({'live for ' + ', '.join(t for t in by_tour if (res.get(t) or {}).get('live')) if any((res.get(t) or {}).get('live') for t in by_tour) else 'in testing, not published'})")
 
 
 def export(days: int = 2, now: dt.datetime | None = None, log=print) -> dict:
@@ -454,7 +457,9 @@ def save_winners(matches: list[dict], now=None) -> None:
             continue
         d = m["shift"] if (m.get("anchor_default") and m.get("shift") is not None) else 0.0
         sl = scoreline(m["pa"] + d, m["pb"] - d, m.get("best_of", 3))
-        win = m["win_model"] if not d else (m.get("market_a") or sl["p_a"])
+        f = m.get("shadow") or {}
+        model_win = f["p_a"] if f.get("live") else m["win_model"]   # the factor model once promoted (ATP, 2026-11-27)
+        win = model_win if not d else (m.get("market_a") or sl["p_a"])
         a_wins = win > 0.5
         mp = match_picture(m["pa"] + d, m["pb"] - d, m.get("best_of", 3), m.get("sd") or 0.0, m.get("rho") or 0.0, win)
         by_day.setdefault(start.astimezone(TE_TZ).date().isoformat(), {})[m["id"]] = {
@@ -464,7 +469,7 @@ def save_winners(matches: list[dict], now=None) -> None:
             "p_a": round(float(win), 4), "p_a_ratings": m.get("win_model"), "market_a": m.get("market_a"), "winner": "a" if a_wins else "b",
             "line": mp["line"], "line_p": round(mp["line_p"], 3),       # the projected winner's commonest score (form included), winner's games first
             "sets": sl["sets"], "games": sl["games"], "split": mp["split"], "length": mp["length"], "top": mp["top"],
-            "rates": "market" if d else "ratings"}
+            "p_a_factors": f.get("p_a"), "rates": "market" if d else ("ratings + factors" if f.get("live") else "ratings")}
     for day, recs in by_day.items():
         dd = os.path.join(WIN_DIR, "tennis"); os.makedirs(dd, exist_ok=True)
         path = os.path.join(dd, f"{day}.json")

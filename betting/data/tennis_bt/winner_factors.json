@@ -367,7 +367,79 @@
    },
    "ratings_weight": 0.712
   },
-  "shadow": {
+  "shadow": null,
+  "market_check": {
+   "matches": {
+    "fit": 1650,
+    "test": 1892
+   },
+   "test": {
+    "market": {
+     "test_log_loss": 0.606,
+     "gain_vs_market": 0.0,
+     "ci95": [
+      0.0,
+      0.0
+     ],
+     "accuracy": 0.6638
+    },
+    "market recalibrated": {
+     "test_log_loss": 0.6049,
+     "gain_vs_market": 0.00108,
+     "ci95": [
+      -4e-05,
+      0.00215
+     ],
+     "accuracy": 0.6638
+    },
+    "market + ratings": {
+     "test_log_loss": 0.6048,
+     "gain_vs_market": 0.00119,
+     "ci95": [
+      4e-05,
+      0.0024
+     ],
+     "accuracy": 0.6617
+    },
+    "market + factors": {
+     "test_log_loss": 0.6125,
+     "gain_vs_market": -0.00653,
+     "ci95": [
+      -0.01014,
+      -0.00285
+     ],
+     "accuracy": 0.6538
+    },
+    "market + ratings + factors": {
+     "test_log_loss": 0.6123,
+     "gain_vs_market": -0.00631,
+     "ci95": [
+      -0.01027,
+      -0.00246
+     ],
+     "accuracy": 0.6549
+    },
+    "ratings alone": {
+     "test_log_loss": 0.6399,
+     "gain_vs_market": -0.03389,
+     "ci95": [
+      -0.04363,
+      -0.02443
+     ],
+     "accuracy": 0.6432
+    },
+    "ratings + factors (the shadow model)": {
+     "test_log_loss": 0.6242,
+     "gain_vs_market": -0.01817,
+     "ci95": [
+      -0.02707,
+      -0.00986
+     ],
+     "accuracy": 0.6623
+    }
+   }
+  },
+  "live": {
    "factors": [
     "elo_overall",
     "elo_surface",
@@ -437,76 +509,109 @@
    "ratings_weight": 0.712,
    "name": "ratings + Elo, recent form, workload and fatigue, layoff, head-to-head",
    "registered": "2026-11-11",
-   "rule": "promote only after 200+ graded matches or 14 days, better than the current winner on log loss and calibration"
-  },
-  "market_check": {
-   "matches": {
-    "fit": 1650,
-    "test": 1892
-   },
-   "test": {
-    "market": {
-     "test_log_loss": 0.606,
-     "gain_vs_market": 0.0,
-     "ci95": [
-      0.0,
-      0.0
-     ],
-     "accuracy": 0.6638
+   "rule": "promote only after 200+ graded matches or 14 days, better than the current winner on log loss and calibration",
+   "promoted": "2026-11-27",
+   "evidence": {
+    "graded": 415,
+    "days": 16,
+    "p_shadow": {
+     "n": 415,
+     "log_loss": 0.6382,
+     "winners_right": 0.631,
+     "favourite_predicted": 0.63,
+     "calibration_gap_pts": 2.7,
+     "buckets": [
+      {
+       "band": "50-60%",
+       "n": 182,
+       "won": 0.544,
+       "predicted": 0.549
+      },
+      {
+       "band": "60-70%",
+       "n": 142,
+       "won": 0.62,
+       "predicted": 0.647
+      },
+      {
+       "band": "70-80%",
+       "n": 70,
+       "won": 0.829,
+       "predicted": 0.746
+      },
+      {
+       "band": "80-100%",
+       "n": 21,
+       "won": 0.81,
+       "predicted": 0.829
+      }
+     ]
     },
-    "market recalibrated": {
-     "test_log_loss": 0.6049,
-     "gain_vs_market": 0.00108,
-     "ci95": [
-      -4e-05,
-      0.00215
-     ],
-     "accuracy": 0.6638
+    "p_ratings": {
+     "n": 415,
+     "log_loss": 0.6436,
+     "winners_right": 0.646,
+     "favourite_predicted": 0.589,
+     "calibration_gap_pts": 5.7,
+     "buckets": [
+      {
+       "band": "50-60%",
+       "n": 266,
+       "won": 0.598,
+       "predicted": 0.549
+      },
+      {
+       "band": "60-70%",
+       "n": 117,
+       "won": 0.701,
+       "predicted": 0.641
+      },
+      {
+       "band": "70-80%",
+       "n": 30,
+       "won": 0.833,
+       "predicted": 0.729
+      },
+      {
+       "band": "80-100%",
+       "n": 2,
+       "won": 1.0,
+       "predicted": 0.805
+      }
+     ]
     },
-    "market + ratings": {
-     "test_log_loss": 0.6048,
-     "gain_vs_market": 0.00119,
-     "ci95": [
-      4e-05,
-      0.0024
-     ],
-     "accuracy": 0.6617
-    },
-    "market + factors": {
-     "test_log_loss": 0.6125,
-     "gain_vs_market": -0.00653,
-     "ci95": [
-      -0.01014,
-      -0.00285
-     ],
-     "accuracy": 0.6538
-    },
-    "market + ratings + factors": {
-     "test_log_loss": 0.6123,
-     "gain_vs_market": -0.00631,
-     "ci95": [
-      -0.01027,
-      -0.00246
-     ],
-     "accuracy": 0.6549
-    },
-    "ratings alone": {
-     "test_log_loss": 0.6399,
-     "gain_vs_market": -0.03389,
-     "ci95": [
-      -0.04363,
-      -0.02443
-     ],
-     "accuracy": 0.6432
-    },
-    "ratings + factors (the shadow model)": {
-     "test_log_loss": 0.6242,
-     "gain_vs_market": -0.01817,
-     "ci95": [
-      -0.02707,
-      -0.00986
-     ],
-     "accuracy": 0.6623
+    "p_market": {
+     "n": 411,
+     "log_loss": 0.6057,
+     "winners_right": 0.676,
+     "favourite_predicted": 0.653,
+     "calibration_gap_pts": 2.3,
+     "buckets": [
+      {
+       "band": "50-60%",
+       "n": 142,
+       "won": 0.556,
+       "predicted": 0.553
+      },
+      {
+       "band": "60-70%",
+       "n": 140,
+       "won": 0.686,
+       "predicted": 0.648
+      },
+      {
+       "band": "70-80%",
+       "n": 94,
+       "won": 0.777,
+       "predicted": 0.741
+      },
+      {
+       "band": "80-100%",
+       "n": 35,
+       "won": 0.857,
+       "predicted": 0.844
+      }
+     ]
     }
    }
   }
