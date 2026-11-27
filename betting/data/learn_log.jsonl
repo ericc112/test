@@ -372,3 +372,9 @@
 {"at": "2026-11-26T20:44Z", "kind": "outcome_bias", "key": "nhl:nhl_sog:over", "before": -0.155, "after": -0.108, "window": ["2026-10-12", "2026-11-24"], "n": 2644}
 {"at": "2026-11-26T20:44Z", "kind": "outcome_bias", "key": "nhl:nhl_sog:under", "before": 0.044, "after": 0.02, "window": ["2026-10-12", "2026-11-24"], "n": 2644}
 {"at": "2026-11-26T20:44Z", "kind": "cap_medium", "key": "nba:pa:under", "before": false, "after": true, "window": ["2026-10-12", "2026-11-24"], "n": 2644}
+{"at": "2026-11-27T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_sog:over", "before": -0.108, "after": -0.093, "window": ["2026-10-12", "2026-11-26"], "n": 2653}
+{"at": "2026-11-27T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_assists:over", "before": 0.08, "after": 0.046, "window": ["2026-10-12", "2026-11-26"], "n": 2653}
+{"at": "2026-11-27T20:45Z", "kind": "outcome_bias", "key": "tennis:tennis_games:under", "before": -0.041, "after": -0.131, "window": ["2026-10-12", "2026-11-26"], "n": 2653}
+{"at": "2026-11-27T20:45Z", "kind": "outcome_bias", "key": "tennis:tennis_games_won:under", "before": 0.094, "after": 0.08, "window": ["2026-10-12", "2026-11-26"], "n": 2653}
+{"at": "2026-11-27T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_sog:under", "before": 0.02, "after": 0.062, "window": ["2026-10-12", "2026-11-26"], "n": 2653}
+{"at": "2026-11-27T20:45Z", "kind": "outcome_bias", "key": "nhl:nhl_pm:under", "before": 0.377, "after": 0.338, "window": ["2026-10-12", "2026-11-26"], "n": 2653}

@@ -2,6 +2,27 @@
 
 Every graded loss is examined here, including passes and Low-confidence legs. `python -m edge review` writes the diagnosis; `python -m edge tag ID "tag" --lesson "..."` confirms the cause. Tags: `variance`, `opportunity`, `correlated`, `role/lineup`, `model bias`, `market info`, `stale line`, `data error`, `format misread`.
 
+## 2026-11-26: 5 losses from 3 independent causes
+
+| # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
+|---|---|---|---|---|---|---|---|---|
+| 3594 | Timo Meier nhl_pm under 0.5 | 3.0 | 0.6128 (Low) | pass | model 60% | variance | variance | root leg of a 2-leg script loss: #3594, #3595; logged as a PASS: no money on it; reviewed for calibration |
+| 3595 | Jesper Bratt nhl_assists over 0.5 | 0.0 | 0.5147 (Low) | pass | model 47% (against) | correlated | variance | same game script as #3594 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration; closest possible loss (missed by the minimum) |
+| 3606 | Dane Sweeny tennis_games under 22.5 | 29.0 | 0.5867 (Low) | pass | model 60% | variance | variance | logged as a PASS: no money on it; reviewed for calibration |
+| 3607 | Tristan Schoolkate tennis_games under 21.5 | 34.0 | 0.5883 (Low) | pass | model 60% | variance | variance | root leg of a 2-leg script loss: #3607, #3608; logged as a PASS: no money on it; reviewed for calibration |
+| 3608 | Tristan Schoolkate tennis_games_won under 12.5 | 18.0 | 0.5812 (Low) | pass | model 56% | correlated | correlated | same game script as #3607 (variance); own read: variance; logged as a PASS: no money on it; reviewed for calibration |
+
+Lessons:
+- #3594: Meier was +3 in NJ's 5-3 win over CGY (1 G, 1 A, 16:37 TOI vs 18.5 projected): on ice for three net even-strength goals. Minutes were below projection, so no volume miss; a +/- under at 0.5 loses to any good night. Pass, no change.
+- #3595: Bratt 0 points in a 5-goal NJ game: 16:17 TOI (17.0 projected), 2:27 PP, 0 shots on goal. Volume held; he just wasn't on the scoresheet. Logged at 51% against a 47% model read, so it was a coin flip either way. Pass, no change.
+- #3606: Sweeny (1.20 favorite) beat Overbeck 6-4 4-6 6-3 = 29 games. The under needed straight sets; the match went to a decider, about a 1-in-3 event even for a heavy favorite. Tennis games unders are 14-15 vs 54.7% predicted on 29 legs: not enough to call bias; edge learn holds the segment bias.
+- #3607: Schoolkate (1.23 favorite) beat Bouzige 5-7 6-3 7-6(5) = 34 games: lost the first set and needed a deciding tiebreak. Same decider cause as #3606; it is already priced (the decider share is in the match simulation), so no new rule. Watch tennis games unders at 40 graded legs.
+- #3608: Same match as #3607: Schoolkate won 18 games because the match went 3 sets with a tiebreak. Both unders on one match ride on straight sets; linked legs, one cause.
+
+Detail from the feeds:
+- #3594 Timo Meier: error=HTTPError
+- #3595 Jesper Bratt: error=HTTPError
+
 ## 2026-11-25: 50 losses from 18 independent causes
 
 | # | Leg | Result | Our p | Action | Sources | Auto tag | Confirmed | Evidence |
