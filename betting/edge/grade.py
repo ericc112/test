@@ -68,7 +68,37 @@ def mlb_value(event_id: str, player_id: str, market: str, cache: dict):
 NHL_STATS = {"skater_sog": "sog", "skater_points": "points", "skater_goals": "goals", "goalie_saves": "saves"}
 
 
+NHL_ESPN = {"nhl_sog": ("S",), "nhl_hits": ("HT",), "nhl_fow": ("FW",), "nhl_points": ("G", "A"), "nhl_assists": ("A",),
+            "nhl_goals": ("G",), "nhl_blocks": ("BS",), "nhl_toi": ("TOI",), "nhl_pm": ("+/-",)}
+
+
+def nhl_espn_value(event_id: str, player_id: str, market: str, cache: dict):
+    """edge nhl-picks legs (ESPN event and athlete ids): the stat from ESPN's final box score; DNP voids."""
+    key = ("nhl_espn", event_id)
+    if key not in cache:
+        cache[key] = _get(f"https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/summary?event={event_id}")
+    s = cache[key]
+    if s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_FINAL":
+        return "pending", None
+    for t in (s.get("boxscore") or {}).get("players", []):
+        for cat in t.get("statistics", []):
+            if cat.get("name") not in ("forwards", "defenses"):
+                continue
+            for a in cat["athletes"]:
+                if str(a["athlete"]["id"]) != str(player_id):
+                    continue
+                st = dict(zip(cat["labels"], a.get("stats", [])))
+                if market == "nhl_toi":
+                    mm, ss = (str(st.get("TOI", "0:0")).split(":") + ["0"])[:2]
+                    v = float(mm) + float(ss) / 60
+                    return ("final", round(v, 2)) if v > 0 else ("void", None)
+                return "final", float(sum(float(st.get(k, 0) or 0) for k in NHL_ESPN[market]))
+    return "void", None
+
+
 def nhl_value(event_id: str, player_id: str, market: str, cache: dict):
+    if market.startswith("nhl_"):
+        return nhl_espn_value(event_id, player_id, market, cache)
     key = ("nhl", event_id)
     if key not in cache:
         cache[key] = _get(f"https://api-web.nhle.com/v1/gamecenter/{event_id}/boxscore")
@@ -87,6 +117,7 @@ def nhl_value(event_id: str, player_id: str, market: str, cache: dict):
 NFL_STATS = {
     "pass_yds": ("passing", "YDS"), "rush_yds": ("rushing", "YDS"), "rush_att": ("rushing", "CAR"),
     "rec_yds": ("receiving", "YDS"), "receptions": ("receiving", "REC"),
+    "completions": ("passing", "C/ATT"), "pass_td": ("passing", "TD"), "pass_int": ("passing", "INT"),
 }
 
 
@@ -114,6 +145,11 @@ def nfl_value(event_id: str, player_id: str, market: str, cache: dict, league: s
         if all(t is None for t in tds):
             return "void", None
         return "final", sum(t or 0 for t in tds)
+    if market == "rush_rec_yds":
+        parts = [stat("rushing", "YDS"), stat("receiving", "YDS")]
+        if all(t is None for t in parts):
+            return "void", None
+        return "final", sum(t or 0 for t in parts)
     if market == "pass_att":
         for team in s["boxscore"].get("players", []):
             for cat in team["statistics"]:
@@ -190,7 +226,54 @@ def cfb_value(event_id: str, player_id: str, market: str, cache: dict):
     return nfl_value(event_id, player_id, market, cache, league="college-football")
 
 
-GRADERS = {"mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value}
+# ------------------------------------------------------------------ NBA (event_id = ESPN event, player_id = ESPN athlete id)
+NBA_PARTS = {"pts": ("pts",), "reb": ("reb",), "ast": ("ast",), "tpm": ("tpm",), "pra": ("pts", "reb", "ast"),
+             "pr": ("pts", "reb"), "pa": ("pts", "ast"), "ra": ("reb", "ast")}
+
+
+def nba_value(event_id: str, player_id: str, market: str, cache: dict):
+    """A player who doesn't play is voided, as PrizePicks does."""
+    from gamesim import nba as gnba
+    key = ("nba", event_id)
+    if key not in cache:
+        cache[key] = _get(f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={event_id}")
+    s = cache[key]
+    if s["header"]["competitions"][0]["status"]["type"]["name"] != "STATUS_FINAL":
+        return "pending", None
+    for rows in gnba._box_players(s).values():
+        for r in rows:
+            if str(r["id"]) == str(player_id):
+                if r["dnp"] or r["min"] <= 0:
+                    return "void", None
+                val = {"pts": r["pts"], "reb": r["oreb"] + r["dreb"], "ast": r["ast"], "tpm": r["tpm"]}
+                return "final", float(sum(val[k] for k in NBA_PARTS[market]))
+    return "void", None
+
+
+def tennis_value(event_id: str, player_id: str, market: str, cache: dict):
+    """edge tennis-picks legs: event_id '<slugA>-<slugB>-<date>', player_id the player's Tennis Abstract slug. The
+    stat comes from the final score on the player's Tennis Abstract page (retirements and walkovers void)."""
+    from . import tennis as T
+    d = event_id[-10:]                                  # '<slugA>-<slugB>-YYYY-MM-DD'
+    slugs = event_id[: -11].split("-")
+    opp = next((x for x in slugs if x != player_id), None)
+    key = ("tennis", player_id)
+    if key not in cache:
+        cache[key] = T.player_by_slug(player_id, max_age=3 * 3600)
+    p = cache[key]
+    if not p:
+        return "pending", None
+    row = T._player_row(p, opp, d)
+    if not row:
+        return "pending", None
+    sc = T.parse_score(row["score"])
+    if not sc:
+        return "void", None
+    return "final", float(T._stat(sc, market[len("tennis_"):], row["won"]))
+
+
+GRADERS = {"tennis": tennis_value, "mlb": mlb_value, "nhl": nhl_value, "nfl": nfl_value, "cfb": cfb_value, "cs2": cs2_value, "soccer": soccer_value,
+           "nba": nba_value}
 
 
 def settle(value: float, line: float, side: str) -> str:

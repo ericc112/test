@@ -4,6 +4,8 @@ The partner API (partner-api.prizepicks.com) serves every board without a captch
 routed to a pricer:
   CS2     MAPS 1-2 Kills / Headshots      cs2.py model (bo3.gg) + series history
   soccer  Passes Attempted                soccer.py model (ESPN) + recent starts
+  NBA     Points / Rebounds / Assists /   nba_pp.py: Sim Lab engine (50,000 runs) + DraftKings no-vig
+          3-PT Made / the four combos     + this season's games
           Shots / Shots On Target /       DraftKings milestone ladder (Poisson fit, ~7% vig removed)
           Goalie Saves                    + recent matches
 Everything else is listed as unpriced. Probabilities go through blend.final_probability, so the
@@ -289,4 +291,7 @@ def price_board(props: list[dict]) -> list[dict]:
         return price_cs2(props)
     if props[0]["league"] in SOCCER:
         return price_soccer(props)
+    if props[0]["league"] == "NBA":
+        from .nba_pp import price_nba
+        return price_nba(props)
     return [{**p, "error": "league not priced yet"} for p in props]

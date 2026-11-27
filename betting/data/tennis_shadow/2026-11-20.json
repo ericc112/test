@@ -1,0 +1,82 @@
+{
+"ATP-2026-11-20-medvedev-e0d2d-tiafoe": {
+"tour": "ATP",
+"a": "Daniil Medvedev",
+"b": "Frances Tiafoe",
+"a_te": "Medvedev D.",
+"b_te": "Tiafoe F.",
+"slugs": [
+"medvedev-e0d2d",
+"tiafoe"
+],
+"start": "2026-11-20T20:45:00+01:00",
+"p_ratings": 0.6733,
+"p_market": 0.7087,
+"p_shadow": 0.7004,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-20-passaro-5f6f1-herbert-fa5ad": {
+"tour": "ATP",
+"a": "Francesco Passaro",
+"b": "Pierre-Hugues Herbert",
+"a_te": "Passaro F.",
+"b_te": "Herbert P.",
+"slugs": [
+"passaro-5f6f1",
+"herbert-fa5ad"
+],
+"start": "2026-11-20T19:50:00+01:00",
+"p_ratings": 0.4674,
+"p_market": 0.4067,
+"p_shadow": 0.5154,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-20-kozlov-chidekh": {
+"tour": "ATP",
+"a": "Stefan Kozlov",
+"b": "Clement Chidekh",
+"a_te": "Kozlov S.",
+"b_te": "Chidekh C.",
+"slugs": [
+"kozlov",
+"chidekh"
+],
+"start": "2026-11-20T19:45:00+01:00",
+"p_ratings": 0.4178,
+"p_market": 0.3011,
+"p_shadow": 0.3649,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-20-dietrich-fa350-chan-0fbe0": {
+"tour": "ATP",
+"a": "Dylan Dietrich",
+"b": "Duncan Chan",
+"a_te": "Dietrich D.",
+"b_te": "Chan D.",
+"slugs": [
+"dietrich-fa350",
+"chan-0fbe0"
+],
+"start": "2026-11-20T22:10:00+01:00",
+"p_ratings": 0.7596,
+"p_market": 0.7864,
+"p_shadow": 0.8068,
+"logged": "2026-11-20T21:09Z"
+},
+"ATP-2026-11-20-roca-batalla-seyboth-wild": {
+"tour": "ATP",
+"a": "Oriol Roca Batalla",
+"b": "Thiago Seyboth Wild",
+"a_te": "Roca Batalla O.",
+"b_te": "Seyboth Wild T.",
+"slugs": [
+"roca-batalla",
+"seyboth-wild"
+],
+"start": "2026-11-20T19:35:00+01:00",
+"p_ratings": 0.4931,
+"p_market": 0.2114,
+"p_shadow": 0.4099,
+"logged": "2026-11-20T21:09Z"
+}
+}

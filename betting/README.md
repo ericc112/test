@@ -71,6 +71,8 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 | `edge/pp.py` | PrizePicks board fetch and routing to pricers; More-only and goblin/demon handling |
 | `edge/cs2.py` | CS2 maps 1-2 kills/headshots model from bo3.gg, with roster-era detection and newcomer flags |
 | `edge/soccer.py` | Soccer passes attempted: possession × match passes × share × minutes, from ESPN |
+| `gamesim/` | One-game NFL model: ridge EPA ratings, drive-by-drive clocked simulation, out-of-sample backtest, error bars and decision rule (`python -m gamesim --game ID`) |
+| `edge/nfl.py` | NFL game simulator (drives → points → volume → shares → per-play yards), DraftKings-line pricing, backtest |
 | `edge/review.py` | Post-mortem for every loss: feed detail, linked legs, suggested root cause |
 | `edge/card.py` | One leg per game script, best entry, entry-leg pricing check |
 | `data/postmortems.csv` | One diagnosis per loss, with the lesson recorded for it |
@@ -80,7 +82,7 @@ Missing sources hand their weight to the ones present. Confidence comes from the
 ## Market keys the grader understands
 - **mlb** (`event_id` = gamePk, `player_id` = MLBAM id): `pitcher_strikeouts`, `pitcher_outs`, `pitcher_hits_allowed`, `pitcher_earned_runs`, `pitcher_walks`, `pitcher_pitches`, `first_inning_pitches`, `batter_hits`, `batter_walks`, `batter_strikeouts`, `batter_total_bases`, `batter_home_runs`, `batter_singles`, `batter_hrr`
 - **nhl** (`event_id` = NHL gameId, `player_id` = NHL id): `skater_sog`, `skater_points`, `skater_goals`, `goalie_saves`
-- **nfl** and **cfb** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `pass_yds`, `pass_att`, `rush_yds`, `rush_att`, `rec_yds`, `receptions`, `anytime_td`
+- **nfl** and **cfb** (`event_id` = ESPN event, `player_id` = ESPN athlete id): `pass_yds`, `pass_att`, `completions`, `pass_td`, `pass_int`, `rush_yds`, `rush_att`, `rec_yds`, `receptions`, `rush_rec_yds`, `anytime_td`
 - **cs2** (`event_id` = bo3.gg match id, `player_id` = nickname): `cs_kills_m12`, `cs_headshots_m12`
 - **soccer** (`event_id` = ESPN event, `player_id` = ESPN athlete id; any league): `passes_att`, `gk_saves`, `shots`, `sot`, `tackles`, `fouls`. A player who doesn't play is voided, as the apps do.
 
@@ -123,6 +125,53 @@ python -m edge passes --player 393432 --team 175 --event 401915418 --line 50.5  
 The backtest covered 250 top-four-league matches, using each team's other matches only. Team-pass error was 70.6, against 74.2 for possession × tempo and 81.1 for the team average.
 
 It also flags a team that played 3 or fewer days ago (rotation risk). Confirm the lineup about an hour before kickoff.
+
+## NFL game simulator (`edge/nfl.py`)
+```bash
+python -m edge nfl --week 9                         # games, ESPN event ids, DraftKings spread/total
+python -m edge nfl --event 401873037                # 50,000 simulations, every DraftKings prop line priced
+python -m edge nfl --event 401873037 --alt "Henry:rush_yds:72.5" --log   # price an app line; log every prop
+python -m edge nfl --backtest 3-8                   # replay finished weeks against DraftKings closing lines
+```
+**One simulated game:**
+- **Drives.** About 10 per team. Each ends in a TD, a FG or nothing, at rates solved so expected points equal the DraftKings implied team total. That gives points, margin and each team's opening drive.
+- **Volume.** Plays and dropback rate shift with the simulated margin, at slopes fitted on this season (a team leading by 14 drops back about 7 points less).
+- **Shares.** Targets and carries come from the games each player played for this team, recency-weighted. Each game they wobble (Dirichlet) and split by multinomial. Inactive players' volume goes to their teammates.
+- **Yards and TDs.**
+  - Each catch is a Gamma draw and each carry a shifted Gamma, scaled by the opponent and by a team efficiency shock tied to its scoring.
+  - QB yards are the sum of his receivers' yards; INTs are a Binomial draw.
+  - Each TD goes half by this game's work and half by season TD share.
+- **Who plays.** The injury report (Out/Doubtful) removes players. A player DraftKings posts a prop for counts as active, which is how a back-from-injury player re-enters before he has a box score. A listed player with no 2026 games gets a role read off his line so his teammates' shares are right, but he is never priced.
+
+**What the backtest says (2026 weeks 3–8, 5,354 DraftKings closing props, only earlier games used):**
+
+| | Simulation | DraftKings line |
+|---|---|---|
+| Avg miss, receiving yards | 22.6 | 20.8 |
+| Avg miss, rushing yards | 19.5 | 18.0 |
+| Avg miss, passing yards | 60.0 | 56.2 |
+| Spread of outcomes (PIT sd, ideal 0.289) | 0.28–0.29 on yardage | — |
+| Raw "83%" sides at the line | hit 71% | — |
+| Calibrated, out of sample (fit wk 3–5, test 6–8) | Brier 0.2488 vs 0.2500; 55%+ leans hit 52.8% of 286 | — |
+| Alt lines ±10/20 yds, centred on the DK line | Brier 0.196, buckets within ~5 pts | — |
+
+- **The line is the better centre.** The simulation's medians miss by more than the DraftKings line on every yardage market, and alone it shows no edge over the closing line. That's why `MODEL_SHRINK` pulls its P(over) most of the way to the line before the blend (weight 0.15 on yardage, 0.3 on receptions, 0.5 on pass TDs).
+- **The simulation is the better shape.** Use `--alt` to price a PrizePicks or alt line that differs from DraftKings: it re-centres the simulated distribution on the DK line (`anchored_over`).
+- **No prices.** The NFL prop feed carries lines but no prices, so there is no market component and no label above Medium.
+- **Role flags cap a leg at Low:** back from injury, under 3 games with the team, or a line far from the model (the book likely knows something).
+
+## Sim Lab: the browser simulator (`simlab/index.html`, `edge/simlab.py`)
+A published page that runs 50,000 simulations per game in the viewer's browser, so it costs no Claude usage to run.
+- **Leagues:** NFL with every player prop (a JavaScript port of `edge/nfl.py`), plus game-level models for college football (drives), NBA and college basketball (margin/total), NHL and soccer (Poisson goals fitted to the no-vig moneyline and total; soccer adds a Dixon-Coles low-score fix), and a custom form for any game, baseball included.
+- **What you can watch:** the run counting up to 50,000 with the probabilities converging (±2 SE band); live re-simulation from a score and clock you type in; a simulated game played out event by event, with win probability re-simulated 50,000 times at every event.
+- **gamesim engines in the page:** NFL play by play, NBA possession by possession and NHL event clock (ports of `gamesim/`), each with its backtest, a market comparison (PLAY only if edge ≥ 2 points and edge − 1.5 × total error > 0) and a broadcast view.
+- **NBA players:** rotation, per-minute rates and the injury report from this season's box scores (`gamesim.nba.player_profiles`). Each simulated possession is attributed to a shooter, assister, rebounder or ball-loser *after* the engine decides the outcome, so team results don't change and player points add up to the team's. The page shows points, rebounds, assists, 3s and PRA (average and 10th–90th percentile), where each team's points come from (2s, 3s, free throws, assisted share), a prop-line checker, and names plus a live box score in the broadcast. Backtest (`player_backtest`): the minutes-times-rates projection is no more accurate than a season average so far (points MAE 4.9 vs 4.9), and there are no NBA prop lines in the feed to compare with.
+- **Tennis match simulator (ATP + WTA):** the next two days' matches from Tennis Explorer's schedule (`edge/tennis_watch.py`, shipped in `data.js`), each player's serve-point probability against that opponent from the opponent-adjusted ratings the tennis pricer uses, the tour's measured day-to-day form, Elo and the market's no-vig winner price. You can watch a match point by point (scoreboard, serve side on a court, breaks and set/match points, the exact live win chance after every point) or run 50,000 matches (winner, set scores, total games against the PrizePicks line, games won, tiebreaks). "Matched to the market price" moves the two serve rates so the winner chance equals the market's while keeping the expected length. Players without at least 5 stats-covered matches in 52 weeks (most Futures, UTR and ITF) aren't simulated. The page engine matches `edge/tennis.py` (63.25% vs 63.26% on the same inputs; mean total games 23.61 vs 23.65).
+- **Data:** the page can't fetch anything itself (artifact CSP), so lines, injuries and NFL player inputs ship in `data.js`. Refresh with:
+```bash
+python -m edge simlab --out simlab/data.js     # then republish index.html with data.js beside it
+```
+- **Same honesty as the kit:** the backtest table and the calibration weights ship with the data. Its numbers are model output, not picks: `edge verify` still applies before naming one.
 
 ## Limitations
 - Entry grading assumes power-style entries, where every leg must hit. Flex and Squad Ride payouts need manual entry for now.

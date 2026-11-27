@@ -1,0 +1,5 @@
+{
+ "_note": "Chosen from the walk-forward tests (data/tennis_bt/factor_study.json, market_test.json): test period 2026-09-01 on, tuning before. Ratings: opponent-adjusted (both tours). Winner anchoring to the market's closing price improved ATP games-won lines (0.680 -> 0.673 log loss, 1723 matches) and ATP total games slightly (0.694 -> 0.692); for WTA (350 matches) it did not (games won 0.667 -> 0.670, totals 0.692 -> 0.702), so WTA uses the ratings alone. Elo, fatigue, indoor and handedness did not earn a place.",
+ "ATP": {"anchor": "market", "props": ["games", "games_won"]},
+ "WTA": {"anchor": null, "props": []}
+}

@@ -1,0 +1,114 @@
+{
+"ATP-2026-11-22-virtanen-7d161-samuel-371b3": {
+"tour": "ATP",
+"a": "Otto Virtanen",
+"b": "Toby Samuel",
+"a_te": "Virtanen O.",
+"b_te": "Samuel T.",
+"slugs": [
+"virtanen-7d161",
+"samuel-371b3"
+],
+"start": "2026-11-22T12:00:00+01:00",
+"p_ratings": 0.4784,
+"p_market": 0.5523,
+"p_shadow": 0.5435,
+"logged": "2026-11-21T21:02Z"
+},
+"ATP-2026-11-22-passaro-5f6f1-kwon-b3d34": {
+"tour": "ATP",
+"a": "Francesco Passaro",
+"b": "Soonwoo Kwon",
+"a_te": "Passaro F.",
+"b_te": "Kwon S.",
+"slugs": [
+"passaro-5f6f1",
+"kwon-b3d34"
+],
+"start": "2026-11-22T15:30:00+01:00",
+"p_ratings": 0.3884,
+"p_market": 0.4378,
+"p_shadow": 0.3986,
+"logged": "2026-11-21T21:02Z"
+},
+"ATP-2026-11-22-broady-9ff27-watanuki-223ad": {
+"tour": "ATP",
+"a": "Liam Broady",
+"b": "Yosuke Watanuki",
+"a_te": "Broady L.",
+"b_te": "Watanuki Y.",
+"slugs": [
+"broady-9ff27",
+"watanuki-223ad"
+],
+"start": "2026-11-22T05:00:00+01:00",
+"p_ratings": 0.4837,
+"p_market": 0.2237,
+"p_shadow": 0.3841,
+"logged": "2026-11-21T21:02Z"
+},
+"ATP-2026-11-22-gorzny-jasika": {
+"tour": "ATP",
+"a": "Sebastian Gorzny",
+"b": "Omar Jasika",
+"a_te": "Gorzny S.",
+"b_te": "Jasika O.",
+"slugs": [
+"gorzny",
+"jasika"
+],
+"start": "2026-11-22T03:00:00+01:00",
+"p_ratings": 0.5509,
+"p_market": 0.5696,
+"p_shadow": 0.6124,
+"logged": "2026-11-21T21:02Z"
+},
+"ATP-2026-11-22-searle-78f04-krutykh": {
+"tour": "ATP",
+"a": "Henry Searle",
+"b": "Oleksii Krutykh",
+"a_te": "Searle H.",
+"b_te": "Krutykh O.",
+"slugs": [
+"searle-78f04",
+"krutykh"
+],
+"start": "2026-11-22T08:00:00+01:00",
+"p_ratings": 0.5942,
+"p_market": 0.7495,
+"p_shadow": 0.7507,
+"logged": "2026-11-21T21:02Z"
+},
+"ATP-2026-11-22-pucinelli-de-almeida-seyboth-wild": {
+"tour": "ATP",
+"a": "Matheus Pucinelli De Almeida",
+"b": "Thiago Seyboth Wild",
+"a_te": "Pucinelli De Almeida M.",
+"b_te": "Seyboth Wild T.",
+"slugs": [
+"pucinelli-de-almeida",
+"seyboth-wild"
+],
+"start": "2026-11-22T21:10:00+01:00",
+"p_ratings": 0.4905,
+"p_market": 0.3657,
+"p_shadow": 0.4597,
+"logged": "2026-11-22T21:04Z"
+},
+"ATP-2026-11-22-tarvet-mitsui-086f9": {
+"tour": "ATP",
+"a": "Oliver Tarvet",
+"b": "Shunsuke Mitsui",
+"a_te": "Tarvet O.",
+"b_te": "Mitsui S.",
+"slugs": [
+"tarvet",
+"mitsui-086f9"
+],
+"start": "2026-11-22T19:10:00+01:00",
+"p_ratings": 0.5017,
+"p_market": 0.777,
+"p_shadow": 0.5503,
+"logged": "2026-11-22T21:04Z"
+}
+}
