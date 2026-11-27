@@ -334,5 +334,21 @@
 "p_market": 0.5378,
 "p_shadow": 0.406,
 "logged": "2026-11-26T20:58Z"
+},
+"ATP-2026-11-27-legout-heredia-f10e3": {
+"tour": "ATP",
+"a": "Timo Legout",
+"b": "Samuel Heredia",
+"a_te": "Legout T.",
+"b_te": "Heredia S.",
+"slugs": [
+"legout",
+"heredia-f10e3"
+],
+"start": "2026-11-27T21:35:00+01:00",
+"p_ratings": 0.7137,
+"p_market": 0.8489,
+"p_shadow": 0.7664,
+"logged": "2026-11-27T21:08Z"
 }
 }

@@ -1,0 +1,178 @@
+{
+"ATP-2026-11-28-sweeny-langmo": {
+"tour": "ATP",
+"a": "Dane Sweeny",
+"b": "Christian Langmo",
+"a_te": "Sweeny D.",
+"b_te": "Langmo C.",
+"slugs": [
+"sweeny",
+"langmo"
+],
+"start": "2026-11-28T00:30:00+01:00",
+"p_ratings": 0.6212,
+"p_market": 0.6722,
+"p_shadow": 0.5883,
+"logged": "2026-11-27T21:08Z"
+},
+"ATP-2026-11-28-jasika-schoolkate": {
+"tour": "ATP",
+"a": "Omar Jasika",
+"b": "Tristan Schoolkate",
+"a_te": "Jasika O.",
+"b_te": "Schoolkate T.",
+"slugs": [
+"jasika",
+"schoolkate"
+],
+"start": "2026-11-28T03:00:00+01:00",
+"p_ratings": 0.3648,
+"p_market": 0.3691,
+"p_shadow": 0.3461,
+"logged": "2026-11-27T21:08Z"
+},
+"ATP-2026-11-28-honda-48d1d-matsuoka-5fe86": {
+"tour": "ATP",
+"a": "Naoya Honda",
+"b": "Hayato Matsuoka",
+"a_te": "Honda N.",
+"b_te": "Matsuoka H.",
+"slugs": [
+"honda-48d1d",
+"matsuoka-5fe86"
+],
+"start": "2026-11-28T03:00:00+01:00",
+"p_ratings": 0.4736,
+"p_market": 0.2907,
+"p_shadow": 0.4681,
+"logged": "2026-11-27T21:08Z"
+},
+"ATP-2026-11-28-imamura-da963-uchida-ea757": {
+"tour": "ATP",
+"a": "Masamichi Imamura",
+"b": "Kaichi Uchida",
+"a_te": "Imamura M.",
+"b_te": "Uchida K.",
+"slugs": [
+"imamura-da963",
+"uchida-ea757"
+],
+"start": "2026-11-28T03:00:00+01:00",
+"p_ratings": 0.5238,
+"p_market": 0.5387,
+"p_shadow": 0.5624,
+"logged": "2026-11-27T21:08Z"
+},
+"ATP-2026-11-28-duran-a44ae-donald-1f277": {
+"tour": "ATP",
+"a": "Tuncay Duran",
+"b": "Matthew William Donald",
+"a_te": "Duran T.",
+"b_te": "Donald M.",
+"slugs": [
+"duran-a44ae",
+"donald-1f277"
+],
+"start": "2026-11-28T09:00:00+01:00",
+"p_ratings": 0.4584,
+"p_market": 0.4274,
+"p_shadow": 0.3837,
+"logged": "2026-11-27T21:08Z"
+},
+"ATP-2026-11-28-coppejans-debru-5353d": {
+"tour": "ATP",
+"a": "Kimmer Coppejans",
+"b": "Gabriel Debru",
+"a_te": "Coppejans K.",
+"b_te": "Debru G.",
+"slugs": [
+"coppejans",
+"debru-5353d"
+],
+"start": "2026-11-28T11:00:00+01:00",
+"p_ratings": 0.5055,
+"p_market": 0.5217,
+"p_shadow": 0.4868,
+"logged": "2026-11-27T21:08Z"
+},
+"ATP-2026-11-28-pankin-tabacco-3fc98": {
+"tour": "ATP",
+"a": "Semen Pankin",
+"b": "Giorgio Tabacco",
+"a_te": "Pankin S.",
+"b_te": "Tabacco G.",
+"slugs": [
+"pankin",
+"tabacco-3fc98"
+],
+"start": "2026-11-28T12:30:00+01:00",
+"p_ratings": 0.3334,
+"p_market": 0.448,
+"p_shadow": 0.3817,
+"logged": "2026-11-27T21:08Z"
+},
+"ATP-2026-11-28-martin-e6e6e-ovcharenko-bb3a3": {
+"tour": "ATP",
+"a": "Andres Martin",
+"b": "Oleksandr Ovcharenko",
+"a_te": "Martin A.",
+"b_te": "Ovcharenko O.",
+"slugs": [
+"martin-e6e6e",
+"ovcharenko-bb3a3"
+],
+"start": "2026-11-28T09:00:00+01:00",
+"p_ratings": 0.5471,
+"p_market": 0.6253,
+"p_shadow": 0.5508,
+"logged": "2026-11-27T21:08Z"
+},
+"ATP-2026-11-28-bailly-a8c26-henning-421d6": {
+"tour": "ATP",
+"a": "Gilles Arnaud Bailly",
+"b": "Philip Henning",
+"a_te": "Bailly G.",
+"b_te": "Henning P.",
+"slugs": [
+"bailly-a8c26",
+"henning-421d6"
+],
+"start": "2026-11-28T10:30:00+01:00",
+"p_ratings": 0.4346,
+"p_market": 0.4412,
+"p_shadow": 0.4006,
+"logged": "2026-11-27T21:08Z"
+},
+"ATP-2026-11-28-singh-e3612-sureshkumar": {
+"tour": "ATP",
+"a": "Karan Singh",
+"b": "Manish Sureshkumar",
+"a_te": "Singh K.",
+"b_te": "Sureshkumar M.",
+"slugs": [
+"singh-e3612",
+"sureshkumar"
+],
+"start": "2026-11-28T07:30:00+01:00",
+"p_ratings": 0.3795,
+"p_market": 0.755,
+"p_shadow": 0.3796,
+"logged": "2026-11-27T21:08Z"
+},
+"ATP-2026-11-28-siniakov-pieczonka-07acc": {
+"tour": "ATP",
+"a": "Daniel Siniakov",
+"b": "Filip Pieczonka",
+"a_te": "Siniakov D.",
+"b_te": "Pieczonka F.",
+"slugs": [
+"siniakov",
+"pieczonka-07acc"
+],
+"start": "2026-11-28T13:00:00+01:00",
+"p_ratings": 0.5054,
+"p_market": 0.4597,
+"p_shadow": 0.4174,
+"logged": "2026-11-27T21:08Z"
+}
+}
